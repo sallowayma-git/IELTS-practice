@@ -3837,25 +3837,41 @@ function createFallbackExamCard(exam, options = {}) {
         });
         actions.appendChild(selectBtn);
     } else {
-        const startBtn = document.createElement('button');
-        startBtn.className = 'btn exam-item-action-btn';
-        startBtn.type = 'button';
-        startBtn.textContent = '开始练习';
-        startBtn.addEventListener('click', function () {
-            openExam(exam.id);
-        });
-        actions.appendChild(startBtn);
+        const isListeningExam = !!(window.ResourceCore
+            && typeof window.ResourceCore.isListeningExam === 'function'
+            && window.ResourceCore.isListeningExam(exam));
+        const pdfAvailable = isListeningExam || !!(window.ResourceCore
+            && typeof window.ResourceCore.isPdfAvailable === 'function'
+            && window.ResourceCore.isPdfAvailable(exam));
 
-        const pdfBtn = document.createElement('button');
-        pdfBtn.className = 'btn btn-outline exam-item-action-btn';
-        pdfBtn.type = 'button';
-        pdfBtn.textContent = 'PDF';
-        pdfBtn.addEventListener('click', function () {
-            viewPDF(exam.id);
-        });
-        actions.appendChild(pdfBtn);
+        if (exam.hasHtml !== false || pdfAvailable) {
+            const startBtn = document.createElement('button');
+            startBtn.className = 'btn exam-item-action-btn';
+            startBtn.type = 'button';
+            startBtn.textContent = '开始练习';
+            startBtn.addEventListener('click', function () {
+                openExam(exam.id);
+            });
+            actions.appendChild(startBtn);
+        }
 
-        const isReading = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
+        if (pdfAvailable) {
+            const pdfBtn = document.createElement('button');
+            pdfBtn.className = 'btn btn-outline exam-item-action-btn';
+            pdfBtn.type = 'button';
+            pdfBtn.textContent = 'PDF';
+            pdfBtn.addEventListener('click', function () {
+                viewPDF(exam.id);
+            });
+            actions.appendChild(pdfBtn);
+        } else {
+            const pdfUnavailable = document.createElement('span');
+            pdfUnavailable.className = 'pdf-unavailable-state exam-item-pdf-unavailable';
+            pdfUnavailable.textContent = '此PDF不存在';
+            actions.appendChild(pdfUnavailable);
+        }
+
+        const isReading = exam && !isListeningExam && exam.hasHtml !== false;
         if (isReading && exam && exam.id) {
             const vocabBtn = document.createElement('button');
             vocabBtn.className = 'btn btn-outline exam-item-action-btn exam-item-vocab-btn';
@@ -4099,13 +4115,145 @@ function openExam(examId, options = {}) {
     return showMessage('统一练习入口未就绪：app.openExam 不可用，已阻止打开原始题源 HTML。', 'error');
 }
 
-async function viewPDF(examId) {
-    const list = await resolveActiveExamIndex();
-    const exam = list.find(e => e.id === examId);
-    if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
+async function viewPDF(examId, launchOptions = {}) {
+    const safeLaunchOptions = launchOptions && typeof launchOptions === 'object'
+        ? launchOptions
+        : {};
+    let reservedWindow = safeLaunchOptions.reservedWindow || null;
+    let ownsReservedWindow = Boolean(reservedWindow && safeLaunchOptions.ownsReservedWindow === true);
+    let reservationAttempted = safeLaunchOptions.reservationAttempted === true;
+    if (!reservedWindow && !reservationAttempted) {
+        reservationAttempted = true;
+        try {
+            reservedWindow = window.open(
+                'about:blank',
+                '_blank',
+                'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+            );
+            ownsReservedWindow = Boolean(reservedWindow);
+        } catch (_) { }
+    }
 
-    const fullPath = window.buildResourcePath(exam, 'pdf');
-    openPDFSafely(fullPath, exam.title);
+    const closeReservedWindow = () => {
+        if (!ownsReservedWindow || !reservedWindow || reservedWindow.closed
+            || typeof reservedWindow.close !== 'function') {
+            return;
+        }
+        try { reservedWindow.close(); } catch (_) { }
+    };
+
+    let list;
+    try {
+        list = await resolveActiveExamIndex();
+    } catch (error) {
+        closeReservedWindow();
+        throw error;
+    }
+    const exam = Array.isArray(list) ? list.find(e => e.id === examId) : null;
+    const resourceCore = getResourceCore();
+    const isListeningExam = Boolean(
+        resourceCore
+        && typeof resourceCore.isListeningExam === 'function'
+        && resourceCore.isListeningExam(exam)
+    );
+
+    if (isListeningExam) {
+        if (typeof exam.pdfFilename !== 'string' || !exam.pdfFilename.trim()) {
+            closeReservedWindow();
+            return showMessage('未找到PDF文件', 'error');
+        }
+        let listeningPdfPath = '';
+        try {
+            listeningPdfPath = window.buildResourcePath(exam, 'pdf');
+        } catch (error) {
+            closeReservedWindow();
+            console.warn('[PDF] 听力资源路径构建失败:', error);
+            return showMessage('未找到PDF文件', 'error');
+        }
+        let resourceResolution = null;
+        if (/^blob:/i.test(String(listeningPdfPath || '').trim())
+            && resourceCore
+            && typeof resourceCore.resolveResource === 'function') {
+            try {
+                resourceResolution = await resourceCore.resolveResource(exam, 'pdf');
+            } catch (error) {
+                console.warn('[PDF] 听力 Blob 资源解析失败:', error);
+            }
+        }
+        return openPDFSafely(listeningPdfPath, exam.title, {
+            reservationAttempted,
+            reservedWindow,
+            ownsReservedWindow,
+            preventCurrentWindowFallback: true,
+            resourceResolution
+        });
+    }
+
+    const isAvailable = Boolean(
+        exam
+        && resourceCore
+        && typeof resourceCore.isPdfAvailable === 'function'
+        && resourceCore.isPdfAvailable(exam)
+    );
+    if (!isAvailable) {
+        closeReservedWindow();
+        return showMessage('此PDF不存在', 'error');
+    }
+
+    const protocol = window.location && window.location.protocol
+        ? String(window.location.protocol).toLowerCase()
+        : '';
+    let fullPath = '';
+    let resourceResolution = null;
+
+    if (protocol === 'http:' || protocol === 'https:') {
+        if (typeof resourceCore.resolveResource !== 'function') {
+            closeReservedWindow();
+            return showMessage('此PDF不存在', 'error');
+        }
+        try {
+            resourceResolution = await resourceCore.resolveResource(exam, 'pdf');
+            fullPath = resourceResolution && typeof resourceResolution.url === 'string'
+                ? resourceResolution.url.trim()
+                : '';
+        } catch (error) {
+            console.warn('[PDF] 资源解析失败:', error);
+        }
+    } else if (typeof window.buildResourcePath === 'function') {
+        try {
+            fullPath = window.buildResourcePath(exam, 'pdf');
+        } catch (error) {
+            closeReservedWindow();
+            console.warn('[PDF] 资源路径构建失败:', error);
+            return showMessage('此PDF不存在', 'error');
+        }
+        if (/^blob:/i.test(String(fullPath || '').trim())
+            && resourceCore
+            && typeof resourceCore.resolveResource === 'function') {
+            try {
+                resourceResolution = await resourceCore.resolveResource(exam, 'pdf');
+                fullPath = resourceResolution && typeof resourceResolution.url === 'string'
+                    ? resourceResolution.url.trim()
+                    : '';
+            } catch (error) {
+                console.warn('[PDF] Blob 资源解析失败:', error);
+                fullPath = '';
+            }
+        }
+    }
+
+    if (!fullPath) {
+        closeReservedWindow();
+        return showMessage('此PDF不存在', 'error');
+    }
+
+    return openPDFSafely(fullPath, exam.title, {
+        reservationAttempted,
+        reservedWindow,
+        ownsReservedWindow,
+        preventCurrentWindowFallback: true,
+        resourceResolution
+    });
 }
 
 // Bridge for record details to existing enhancer/modal if present
@@ -4131,16 +4279,62 @@ function showRecordDetails(recordId) {
 }
 
 // Provide a local implementation to avoid dependency on legacy js/script.js
-function openPDFSafely(pdfPath, examTitle = 'PDF') {
-    try {
-        if (pdfHandler && typeof pdfHandler.openPDF === 'function') {
-            return pdfHandler.openPDF(pdfPath, examTitle, { width: 1000, height: 800 });
+function openPDFSafely(pdfPath, examTitle = 'PDF', options = {}) {
+    const reservedWindow = options && options.reservedWindow;
+    const ownsReservedWindow = Boolean(reservedWindow && options.ownsReservedWindow === true);
+    const reservationAttempted = options.reservationAttempted === true;
+    const closeReservedWindow = () => {
+        if (!ownsReservedWindow || !reservedWindow || reservedWindow.closed
+            || typeof reservedWindow.close !== 'function') {
+            return;
         }
-        let pdfWindow = null;
-        try {
-            pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
-        } catch (_) { }
+        try { reservedWindow.close(); } catch (_) { }
+    };
+    try {
+        if (/^blob:/i.test(String(pdfPath || '').trim())) {
+            const resourceCore = getResourceCore();
+            const approved = Boolean(
+                resourceCore
+                && typeof resourceCore.isApprovedPdfResolution === 'function'
+                && resourceCore.isApprovedPdfResolution(options.resourceResolution, pdfPath)
+            );
+            if (!approved) {
+                closeReservedWindow();
+                showMessage('打开PDF失败', 'error');
+                return null;
+            }
+        }
+        if (pdfHandler && typeof pdfHandler.openPDF === 'function') {
+            return pdfHandler.openPDF(pdfPath, examTitle, {
+                width: 1000,
+                height: 800,
+                reservationAttempted,
+                reservedWindow,
+                ownsReservedWindow,
+                preventCurrentWindowFallback: options.preventCurrentWindowFallback === true,
+                resourceResolution: options.resourceResolution || null
+            });
+        }
+        let pdfWindow = reservedWindow && !reservedWindow.closed ? reservedWindow : null;
+        if (pdfWindow) {
+            try {
+                pdfWindow.location.href = pdfPath;
+                if (typeof pdfWindow.focus === 'function') pdfWindow.focus();
+            } catch (_) {
+                pdfWindow = null;
+            }
+        }
+        if (!pdfWindow && !reservationAttempted && !options.preventCurrentWindowFallback) {
+            try {
+                pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+            } catch (_) { }
+        }
         if (!pdfWindow) {
+            if (reservationAttempted || options.preventCurrentWindowFallback) {
+                closeReservedWindow();
+                showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');
+                return null;
+            }
             try {
                 // 降级：当前窗口打开
                 window.location.href = pdfPath;
@@ -4153,6 +4347,7 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
         showMessage('正在打开PDF...', 'info');
         return pdfWindow;
     } catch (error) {
+        closeReservedWindow();
         console.error('[PDF] 打开失败:', error);
         showMessage('打开PDF失败', 'error');
         return null;
@@ -4184,7 +4379,22 @@ function updateSystemInfo(examIndex = []) {
     const lastUpdateEl = document.getElementById('last-update');
 
     if (htmlExamsEl) htmlExamsEl.textContent = readingExams.length + listeningExams.length; // Simplified
-    if (pdfExamsEl) pdfExamsEl.textContent = examIndexSnapshot.filter(e => e.pdfFilename).length;
+    if (pdfExamsEl) {
+        const resourceCore = getResourceCore();
+        pdfExamsEl.textContent = examIndexSnapshot.filter((exam) => {
+            const isListeningExam = Boolean(
+                resourceCore
+                && typeof resourceCore.isListeningExam === 'function'
+                && resourceCore.isListeningExam(exam)
+            );
+            if (isListeningExam) {
+                return Boolean(typeof exam.pdfFilename === 'string' && exam.pdfFilename.trim());
+            }
+            return Boolean(resourceCore
+                && typeof resourceCore.isPdfAvailable === 'function'
+                && resourceCore.isPdfAvailable(exam));
+        }).length;
+    }
     if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleString();
 }
 
@@ -5194,27 +5404,48 @@ function resolveLibraryConfigContainer(options) {
 }
 
 async function renderLibraryConfigList(options = {}) {
+    const isCurrent = typeof options.isCurrent === 'function' ? options.isCurrent : () => true;
+    const shouldRender = () => {
+        try {
+            return isCurrent() !== false;
+        } catch (_) {
+            return false;
+        }
+    };
+    if (!shouldRender()) {
+        return null;
+    }
     const container = resolveLibraryConfigContainer(options);
     if (!container) {
         return null;
     }
 
     let configs = Array.isArray(options.configs) ? options.configs : await resolveLibraryConfigurations();
+    if (!shouldRender()) {
+        return null;
+    }
     if (!configs.length) {
         if (options.silentEmpty) {
             const existingHost = container.querySelector('.library-config-list');
-            if (existingHost) {
+            if (existingHost && shouldRender()) {
                 existingHost.remove();
             }
-        } else if (typeof showMessage === 'function') {
+        } else if (shouldRender() && typeof showMessage === 'function') {
             showMessage('暂无题库配置记录', 'info');
         }
         return null;
     }
 
-    const activeKey = options.activeKey || await getActiveLibraryConfigurationKey();
+    const hasSuppliedActiveKey = Object.prototype.hasOwnProperty.call(options, 'activeKey');
+    const activeKey = hasSuppliedActiveKey ? options.activeKey : await getActiveLibraryConfigurationKey();
+    if (!shouldRender()) {
+        return null;
+    }
     const view = ensureLibraryConfigView();
     if (view) {
+        if (!shouldRender()) {
+            return null;
+        }
         return view.mount(container, configs, {
             activeKey,
             allowDelete: options.allowDelete !== false,
@@ -5226,6 +5457,9 @@ async function renderLibraryConfigList(options = {}) {
         });
     }
 
+    if (!shouldRender()) {
+        return null;
+    }
     return renderLibraryConfigFallback(container, configs, { activeKey, emptyMessage: options.emptyMessage });
 }
 
@@ -5240,25 +5474,10 @@ async function showLibraryConfigListV2(options) {
 // 切换题库配置
 async function switchLibraryConfig(configKey) {
     const key = typeof configKey === 'string' && configKey.trim() ? configKey.trim() : null;
-    try {
-        const activeKey = await getActiveLibraryConfigurationKey();
-        if (activeKey === key) {
-            showMessage('当前题库已激活', 'info');
-            return;
-        }
-    } catch (error) {
-        console.warn('[LibraryConfig] 无法读取当前题库配置', error);
+    if (window.LibraryManager && typeof window.LibraryManager.switchLibraryConfig === 'function') {
+        return window.LibraryManager.switchLibraryConfig(key);
     }
-    const dataset = await fetchLibraryDataset(key);
-    if (!Array.isArray(dataset) || dataset.length === 0) {
-        showMessage('目标题库没有题目，请先加载该题库数据', 'warning');
-        return;
-    }
-    showMessage('正在切换题库配置...', 'info');
-    const applied = await applyLibraryConfiguration(key, dataset, { skipConfigRefresh: false });
-    if (applied) {
-        showMessage('题库配置已切换', 'success');
-    }
+    return false;
 }
 
 // 删除题库配置
@@ -5368,12 +5587,49 @@ function startSuitePractice() {
 }
 
 // Phase 3: 打开题目 - 已迁移到 app-actions.js
-function openExamWithFallback(exam, delay = 600) {
-    if (window.AppActions && typeof window.AppActions.openExamWithFallback === 'function') {
-        return window.AppActions.openExamWithFallback(exam, delay);
+function closeOwnedReservedPdfWindow(options) {
+    if (!options || options.ownsReservedWindow !== true) return;
+    const reservedWindow = options.reservedWindow;
+    if (!reservedWindow || reservedWindow.closed || typeof reservedWindow.close !== 'function') return;
+    try { reservedWindow.close(); } catch (_) { }
+}
+
+function transferReservedWindowForHtml(options) {
+    const launchOptions = options && typeof options === 'object' ? options : {};
+    const reservedWindow = launchOptions.reservedWindow;
+    if (reservedWindow && !reservedWindow.closed) {
+        launchOptions.reuseWindow = reservedWindow;
     }
+    return launchOptions;
+}
+
+function reserveRandomPracticePdfWindow() {
+    const launchOptions = {
+        reservedWindow: null,
+        reservationAttempted: true,
+        ownsReservedWindow: false,
+        preventCurrentWindowFallback: true
+    };
+    if (typeof window.open !== 'function') return launchOptions;
+    try {
+        launchOptions.reservedWindow = window.open(
+            'about:blank',
+            '_blank',
+            'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+        );
+        launchOptions.ownsReservedWindow = Boolean(launchOptions.reservedWindow);
+    } catch (_) { }
+    return launchOptions;
+}
+
+function openExamWithFallback(exam, delay = 600, options = {}) {
+    if (window.AppActions && typeof window.AppActions.openExamWithFallback === 'function') {
+        return window.AppActions.openExamWithFallback(exam, delay, options);
+    }
+    const launchOptions = options && typeof options === 'object' ? options : {};
     // 降级：直接执行
     if (!exam) {
+        closeOwnedReservedPdfWindow(launchOptions);
         if (typeof showMessage === 'function') {
             showMessage('未找到可用题目', 'error');
         }
@@ -5382,11 +5638,12 @@ function openExamWithFallback(exam, delay = 600) {
     const launch = () => {
         try {
             if (exam.hasHtml) {
-                openExam(exam.id);
+                openExam(exam.id, transferReservedWindowForHtml(launchOptions));
             } else {
-                viewPDF(exam.id);
+                viewPDF(exam.id, launchOptions);
             }
         } catch (error) {
+            closeOwnedReservedPdfWindow(launchOptions);
             console.error('[main.js] 启动题目失败:', error);
             if (typeof showMessage === 'function') {
                 showMessage('无法打开题目，请检查题库路径', 'error');
@@ -5406,7 +5663,14 @@ async function startRandomPractice(category, type = 'reading', filterMode = null
         return window.AppActions.startRandomPractice(category, type, filterMode, path);
     }
     // 降级：直接执行
-    const list = await resolveActiveExamIndex();
+    const launchOptions = reserveRandomPracticePdfWindow();
+    let list;
+    try {
+        list = await resolveActiveExamIndex();
+    } catch (error) {
+        closeOwnedReservedPdfWindow(launchOptions);
+        throw error;
+    }
     const normalizedType = (!type || type === 'all') ? null : type;
     const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
 
@@ -5429,6 +5693,7 @@ async function startRandomPractice(category, type = 'reading', filterMode = null
         }
     }
     if (pool.length === 0) {
+        closeOwnedReservedPdfWindow(launchOptions);
         if (typeof showMessage === 'function') {
             const typeLabel = normalizedType === 'listening' ? '听力' : (normalizedType === 'reading' ? '阅读' : '题库');
             showMessage(`${category} ${typeLabel} 分类暂无可用题目`, 'error');
@@ -5439,7 +5704,7 @@ async function startRandomPractice(category, type = 'reading', filterMode = null
     if (typeof showMessage === 'function') {
         showMessage(`随机选择: ${randomExam.title}`, 'info');
     }
-    openExamWithFallback(randomExam);
+    openExamWithFallback(randomExam, 600, launchOptions);
 }
 
 // Phase 4: 清理重复事件绑定

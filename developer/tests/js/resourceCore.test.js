@@ -56,6 +56,7 @@ function createResourceCoreHarness() {
         JSON,
         Map,
         Set,
+        URL,
         Promise,
         encodeURIComponent,
         decodeURIComponent
@@ -188,6 +189,111 @@ function testExplicitEmptyRootDoesNotFallback(ResourceCore) {
     });
 }
 
+function testListeningClassifierRecognizesCompleteLegacySignals(ResourceCore) {
+    const listeningCases = [
+        { label: 'type signal', exam: { type: ' LISTENING ' } },
+        { label: 'id signal', exam: { id: 'Listening-Legacy-Set' } },
+        { label: 'ListeningPractice path signal', exam: { path: 'Archive\\ListeningPractice\\Set-1\\' } },
+        { label: 'P1 path signal', exam: { path: 'P1/legacy-set/' } },
+        { label: 'P2 path signal', exam: { path: 'p2/legacy-set/' } },
+        { label: 'P3 path signal', exam: { path: ' P3/legacy-set/ ' } },
+        { label: 'P4 path signal', exam: { path: 'P4\\legacy-set\\' } },
+        {
+            label: 'unknown type with legacy id signal',
+            exam: { type: 'legacy-import', id: 'listening-unknown-type' }
+        },
+        {
+            label: 'unknown type with legacy path signal',
+            exam: { type: 'external', path: 'P2/unknown-type/' }
+        }
+    ];
+    listeningCases.forEach(({ label, exam }) => {
+        assert.strictEqual(ResourceCore.isListeningExam(exam), true, `${label} should classify as listening`);
+    });
+
+    const nonListeningCases = [
+        { label: 'null exam', exam: null },
+        { label: 'empty exam', exam: {} },
+        { label: 'reading type', exam: { type: 'reading' } },
+        {
+            label: 'explicit reading type overrides every legacy listening heuristic',
+            exam: {
+                type: ' READING ',
+                id: 'listening-conflicting-record',
+                path: 'ListeningPractice/P1/conflicting-record/'
+            }
+        },
+        { label: 'non-prefixed id', exam: { id: 'legacy-listening-set' } },
+        { label: 'similar directory name', exam: { path: 'Listening-Practice/set-1/' } },
+        { label: 'P5 path', exam: { path: 'P5/legacy-set/' } },
+        { label: 'nested P1 segment', exam: { path: 'Archive/P1/legacy-set/' } }
+    ];
+    nonListeningCases.forEach(({ label, exam }) => {
+        assert.strictEqual(ResourceCore.isListeningExam(exam), false, `${label} should not classify as listening`);
+    });
+
+    recordResult('ResourceCore 完整识别听力题目标识', true, {
+        listeningCases: listeningCases.length,
+        nonListeningCases: nonListeningCases.length
+    });
+}
+
+function testPdfAvailabilityRequiresExplicitTrueFlagAndLocator(ResourceCore) {
+    const unavailableCases = [
+        { label: 'null exam', exam: null },
+        { label: 'empty exam', exam: {} },
+        { label: 'missing locator', exam: { hasPdf: true } },
+        { label: 'empty locator', exam: { hasPdf: true, pdfFilename: '' } },
+        { label: 'whitespace locator', exam: { hasPdf: true, pdfFilename: '   ' } },
+        {
+            label: 'explicitly unavailable legacy file-picker with retained locator',
+            exam: { sourceKind: 'file-picker', hasPdf: false, pdfFilename: 'expected.pdf' }
+        },
+        { label: 'truthy non-boolean availability', exam: { hasPdf: 'true', pdfFilename: 'file.pdf' } },
+        { label: 'numeric availability', exam: { hasPdf: 1, pdfFilename: 'file.pdf' } },
+        { label: 'filename-only entry without source kind', exam: { pdfFilename: 'file.pdf' } },
+        {
+            label: 'filename-only generated-reading entry',
+            exam: { sourceKind: 'generated-reading', pdfFilename: 'file.pdf' }
+        },
+        {
+            label: 'legacy file-picker locator without normalized availability flag',
+            exam: { sourceKind: 'file-picker', pdfFilename: 'Imported/PDF/legacy.pdf' }
+        },
+        {
+            label: 'legacy file-picker with blank locator',
+            exam: { sourceKind: 'file-picker', pdfFilename: '   ' }
+        }
+    ];
+
+    unavailableCases.forEach(({ label, exam }) => {
+        assert.strictEqual(
+            ResourceCore.isPdfAvailable(exam),
+            false,
+            `${label} must not expose a PDF`
+        );
+    });
+
+    assert.strictEqual(
+        ResourceCore.isPdfAvailable({ hasPdf: true, pdfFilename: 'file.pdf' }),
+        true,
+        'explicit availability with a filename should expose the PDF'
+    );
+    assert.strictEqual(
+        ResourceCore.isPdfAvailable({
+            hasHtml: false,
+            hasPdf: true,
+            pdfFilename: 'ReadingPractice/PDF/file.pdf'
+        }),
+        true,
+        'PDF-only entries should remain available when they have an explicit flag and locator'
+    );
+    recordResult('ResourceCore PDF 可用性要求显式真值与 locator', true, {
+        unavailableCases: unavailableCases.length,
+        availableCases: 2
+    });
+}
+
 function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
     ResourceCore.setBasePrefix('./');
     ResourceCore.setActivePathMap(ResourceCore.DEFAULT_PATH_MAP);
@@ -224,6 +330,75 @@ function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
     });
 }
 
+async function testBlobRuntimeResourceBypassesHttpProbe(context, ResourceCore) {
+    const runtimePdfUrl = 'blob:https://example.test/imported-reading-pdf';
+    const runtimeHtmlUrl = 'blob:https://example.test/imported-reading-html';
+    let fetchCalls = 0;
+    context.window.location.href = 'https://example.test/index.html';
+    context.window.location.protocol = 'https:';
+    context.fetch = async () => {
+        fetchCalls += 1;
+        throw new Error('blob URLs must not be network-probed');
+    };
+    context.window.LibraryDiscovery = {
+        resolveRuntimeResource(exam, kind) {
+            if (exam && exam.importKey === 'reading:imported/passage.pdf' && kind === 'pdf') {
+                return runtimePdfUrl;
+            }
+            if (exam && exam.importKey === 'reading:imported/passage.pdf' && kind === 'html') {
+                return runtimeHtmlUrl;
+            }
+            return '';
+        }
+    };
+
+    const exam = {
+        id: 'imported-reading-pdf',
+        importKey: 'reading:imported/passage.pdf',
+        type: 'reading',
+        hasHtml: false,
+        hasPdf: true,
+        pdfFilename: 'passage.pdf'
+    };
+    const resolved = await ResourceCore.resolveResource(exam, 'pdf');
+
+    assert.strictEqual(resolved.url, runtimePdfUrl, '托管页面应直接接受当前会话已注册的 Blob PDF URL');
+    assert.strictEqual(resolved.attempts[0]?.label, 'runtime', 'Blob PDF 应继续优先使用运行时资源');
+    assert.strictEqual(resolved.source, 'runtime', '资源解析结果应携带命中的来源');
+    assert.strictEqual(resolved.kind, 'pdf', '资源解析结果应携带规范化后的资源类型');
+    assert.strictEqual(fetchCalls, 0, 'Blob PDF 不应发起无效的 HTTP HEAD 探测');
+    assert.strictEqual(
+        ResourceCore.isApprovedPdfResolution(resolved, runtimePdfUrl),
+        true,
+        '由 PDF resolver 返回的同一 Blob URL 应获得启动批准'
+    );
+    assert.strictEqual(
+        ResourceCore.isApprovedPdfResolution(resolved, 'blob:https://example.test/different-pdf'),
+        false,
+        '批准不得转移给另一个 Blob URL'
+    );
+    assert.strictEqual(
+        ResourceCore.isApprovedPdfResolution({ ...resolved }, runtimePdfUrl),
+        false,
+        '复制或伪造的 resolver 结果不得获得批准'
+    );
+
+    const htmlResolution = await ResourceCore.resolveResource(exam, 'html');
+    assert.strictEqual(htmlResolution.url, runtimeHtmlUrl);
+    assert.strictEqual(htmlResolution.source, 'runtime');
+    assert.strictEqual(htmlResolution.kind, 'html');
+    assert.strictEqual(
+        ResourceCore.isApprovedPdfResolution(htmlResolution, runtimeHtmlUrl),
+        false,
+        'HTML resolver 结果不得作为 Blob PDF 启动凭据'
+    );
+
+    recordResult('ResourceCore 托管环境跳过 Blob URL 探测', true, {
+        url: resolved.url,
+        fetchCalls
+    });
+}
+
 async function testPathMapDerivedFromLibraryIndex(context, ResourceCore) {
     const index = [
         { id: 'custom-reading', type: 'reading', path: 'ReadingCustom/set-a/', filename: 'index.html' },
@@ -250,7 +425,10 @@ async function main() {
         testMappedRootStillPrependsRelativePaths(ResourceCore);
         testDefaultRootStillWorks(ResourceCore);
         testExplicitEmptyRootDoesNotFallback(ResourceCore);
+        testListeningClassifierRecognizesCompleteLegacySignals(ResourceCore);
+        testPdfAvailabilityRequiresExplicitTrueFlagAndLocator(ResourceCore);
         testRuntimeResourceTakesPrecedence(context, ResourceCore);
+        await testBlobRuntimeResourceBypassesHttpProbe(context, ResourceCore);
         await testPathMapDerivedFromLibraryIndex(context, ResourceCore);
 
         console.log(JSON.stringify({

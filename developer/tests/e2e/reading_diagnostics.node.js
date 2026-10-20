@@ -5,7 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
-import { runRejectedResubmission, runCommittedAcknowledgementLoss, runDelayedSuiteAcknowledgement } from './readingSubmissionReviewCases.js';
+import {
+    expireOrObservePendingSubmissionTimeout,
+    runRejectedResubmission,
+    runCommittedAcknowledgementLoss,
+    runDelayedSuiteAcknowledgement
+} from './readingSubmissionReviewCases.js';
 
 const root = path.resolve(process.env.DIAGNOSTIC_RUNTIME_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
 const reports = path.resolve(process.env.DIAGNOSTIC_REPORT_DIR || path.join(root, 'developer/tests/e2e/reports'));
@@ -55,6 +60,9 @@ async function openPractice(host, context, base, { examId = 'p1-high-01', suite 
         }, { examId, suite })]);
     await child.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState().sessionReadySent, null, { timeout: 20000 });
     await child.waitForFunction(() => AppDiagnostics.status().transport?.connection === 'connected');
+    assert.equal(await child.evaluate(() => (
+        __IELTS_UNIFIED_READING_PAGE_TEST__.setSubmissionAcknowledgementTimeoutMs(120000)
+    )), true, 'the E2E fixture must isolate explicit timeout tests from the production wall clock');
     if (suite) await child.waitForFunction(() => {
         const state = __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
         return state.suiteInline && !state.suiteActivating && state.suiteSequence.length === 3;
@@ -116,25 +124,58 @@ try {
                     } else if (scenario === 'lost-ack-retry') {
                         await host.evaluate(() => {
                             window.originalPost = window.app._postExamMessage;
+                            window.lostAckCompleted = 0;
+                            window.lostAckDroppedAcks = [];
+                            const complete = window.app.handlePracticeComplete;
+                            window.app.handlePracticeComplete = async function (...args) {
+                                try {
+                                    return await complete.apply(this, args);
+                                } finally {
+                                    window.lostAckCompleted++;
+                                }
+                            };
                             window.app._postExamMessage = function (examId, target, type, data) {
-                                if (type === 'PRACTICE_SUBMIT_ACK') return true; // Commit succeeds, receipt is lost.
-                                return originalPost.call(this, examId, target, type, data);
+                                if (type === 'PRACTICE_SUBMIT_ACK') {
+                                    window.lostAckDroppedAcks.push(structuredClone(data));
+                                    return true; // Commit and receipt succeed, but the child loses the ACK.
+                                }
+                                return window.originalPost.call(this, examId, target, type, data);
                             };
                         });
                         await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.handleSubmit());
-                        await host.waitForFunction(async () => (await AppData.practice.list()).length === 1);
-                        await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.expirePendingSubmission());
-                        await child.locator('.incident-dialog').waitFor();
-                        assert.match(await child.locator('.incident-dialog').innerText(), /尚未确认保存/);
-                        const before = await child.evaluate(() => ({ state: __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState(),
-                            event: AppDiagnostics.snapshot().events.find(event => event.code === 'PRACTICE_CHANNEL_TIMEOUT' && event.action === 'submit') }));
+                        await host.waitForFunction(() => window.lostAckCompleted >= 1);
+                        const committedFixture = await host.evaluate(async () => ({
+                            droppedAcks: window.lostAckDroppedAcks,
+                            records: await AppData.practice.list()
+                        }));
+                        const committedSubmissionId = await child.evaluate(
+                            () => __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionId
+                        );
+                        assert.equal(committedFixture.records.length, 1, 'the first write must commit before its ACK is expired');
+                        assert.equal(committedFixture.droppedAcks.length, 1, 'the fixture must drop exactly one successful ACK');
+                        assert.equal(committedFixture.droppedAcks[0].submissionId, committedSubmissionId);
+                        const timeoutIncident = await expireOrObservePendingSubmissionTimeout(
+                            child,
+                            'the lost-ACK fixture must expire or observe expiry of the pending submission it created'
+                        );
+                        assert.equal(timeoutIncident.submissionId, committedSubmissionId);
+                        const retryDialog = child.locator('.incident-dialog').filter({ hasText: timeoutIncident.eventId });
+                        await retryDialog.waitFor({ state: 'visible' });
+                        const before = await child.evaluate(eventId => ({ state: __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState(),
+                            event: AppDiagnostics.snapshot().events.find(event => event.eventId === eventId) }), timeoutIncident.eventId);
                         assert.equal(before.event.persistence.operation, 'unconfirmed'); assert.equal(before.event.retry.available, true);
                         await host.waitForFunction(id => !!AppDiagnostics.getIncident(id), before.event.eventId);
-                        await host.evaluate(() => { window.app._postExamMessage = originalPost; });
-                        await child.getByRole('button', { name: '安全重试原操作' }).click();
+                        await host.evaluate(() => { window.app._postExamMessage = window.originalPost; });
+                        await retryDialog.getByRole('button', { name: '安全重试原操作' }).click();
                         await child.waitForFunction(() => __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'submitted');
-                        await child.waitForFunction(() => document.querySelector('.incident-dialog')?.textContent.includes('已确认保存'));
-                        assert.equal(await host.evaluate(async () => (await AppData.practice.list()).length), 1);
+                        await host.waitForFunction(() => window.lostAckCompleted >= 2);
+                        await retryDialog.filter({ hasText: '已确认保存' }).waitFor({ state: 'visible' });
+                        const reconciledFixture = await host.evaluate(async () => ({
+                            droppedAcks: window.lostAckDroppedAcks,
+                            records: await AppData.practice.list()
+                        }));
+                        assert.equal(reconciledFixture.droppedAcks.length, 1, 'only the fixture ACK may be dropped');
+                        assert.equal(reconciledFixture.records.length, 1, 'receipt reconciliation must not duplicate the committed record');
                         assert.equal(await child.evaluate(() => __IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionId), before.state.submissionId);
                         const hostEvidence = await host.evaluate(() => {
                             const id = AppDiagnostics.report({ code: 'UNEXPECTED_RUNTIME_ERROR', module: 'practice', action: 'report' });
@@ -148,7 +189,7 @@ try {
                         assert.equal(exported.report.events.filter(event => event.eventId === before.event.eventId).length, 1);
                         assert.ok(!exported.json.includes(before.state.windowSessionToken));
                         await child.screenshot({ path: path.join(reports, `reading-diagnostics-${mode}-retry.png`) });
-                        await child.getByRole('button', { name: '关闭提示（不代表已保存）', exact: true }).click();
+                        await retryDialog.getByRole('button', { name: '关闭提示（不代表已保存）', exact: true }).click();
                         await child.setViewportSize({ width: 390, height: 844 });
                         assert.equal(await child.evaluate(() => {
                             const notice = document.querySelector('.incident-notifications').getBoundingClientRect();
@@ -203,7 +244,9 @@ try {
                 console.log(`PASS ${mode} ${scenario}`);
             } catch (error) {
                 console.error(String(error));
-                results.push({ mode, scenario, passed: false, error: String(error) });
+                // The qualification gate keeps only the allowlisted source line
+                // from this transient stack and discards the exception payload.
+                results.push({ mode, scenario, passed: false, error: error.stack || String(error) });
                 if (!child.isClosed()) {
                     await child.screenshot({ path: path.join(reports, `reading-diagnostics-${mode}-${scenario}-failure.png`) }).catch(() => {});
                     console.error(await child.evaluate(() => ({ state: window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState(),

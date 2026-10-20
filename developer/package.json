@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "playwright": "^1.56.1"
+    "playwright": "1.62.1"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 \"tests/js/**/*.test.js\"",

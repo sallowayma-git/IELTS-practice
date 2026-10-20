@@ -288,6 +288,43 @@
         return kind === 'pdf' ? value + '.pdf' : value + '.html';
     }
 
+    function isListeningExam(exam) {
+        if (!exam || typeof exam !== 'object') {
+            return false;
+        }
+
+        const examType = typeof exam.type === 'string'
+            ? exam.type.trim().toLowerCase()
+            : '';
+        const examId = typeof exam.id === 'string'
+            ? exam.id.trim().toLowerCase()
+            : '';
+        const examPath = typeof exam.path === 'string'
+            ? exam.path.trim().replace(/\\/g, '/').toLowerCase()
+            : '';
+
+        // An explicit canonical type is authoritative. Legacy identifiers and
+        // directory layouts are consulted only when the type is absent or is
+        // not one of the canonical reading/listening values.
+        if (examType === 'reading') {
+            return false;
+        }
+
+        return examType === 'listening'
+            || examId.startsWith('listening-')
+            || examPath.includes('listeningpractice/')
+            || /^p[1-4]\//.test(examPath);
+    }
+
+    function isPdfAvailable(exam) {
+        if (!exam || typeof exam !== 'object'
+            || typeof exam.pdfFilename !== 'string'
+            || !exam.pdfFilename.trim()) {
+            return false;
+        }
+        return exam.hasPdf === true;
+    }
+
     function stripQueryAndHash(url) {
         if (!url) {
             return '';
@@ -560,7 +597,7 @@
         try {
             const resolved = new URL(url, global.location && global.location.href ? global.location.href : undefined);
             const protocol = (resolved.protocol || '').toLowerCase();
-            if (protocol === 'file:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
+            if (protocol === 'file:' || protocol === 'blob:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
                 return true;
             }
             if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(url)) {
@@ -575,6 +612,7 @@
     }
 
     const resourceProbeCache = new Map();
+    const approvedRuntimePdfResolutions = new WeakSet();
 
     function probeResource(url) {
         if (!url) {
@@ -607,19 +645,42 @@
     }
 
     async function resolveResource(exam, kind = 'html') {
-        const attempts = getResourceAttempts(exam, kind);
+        const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const attempts = getResourceAttempts(exam, resourceKind);
         for (let i = 0; i < attempts.length; i += 1) {
             const entry = attempts[i];
             try {
                 const ok = await probeResource(entry.path);
                 if (ok) {
-                    return { url: entry.path, attempts };
+                    const resolution = Object.freeze({
+                        url: entry.path,
+                        attempts,
+                        source: entry.label,
+                        kind: resourceKind
+                    });
+                    if (resourceKind === 'pdf'
+                        && entry.label === 'runtime'
+                        && /^blob:/i.test(String(entry.path || '').trim())) {
+                        approvedRuntimePdfResolutions.add(resolution);
+                    }
+                    return resolution;
                 }
             } catch (error) {
                 console.warn('[ResourceCore] 资源探测失败:', entry, error);
             }
         }
-        return { url: '', attempts };
+        return Object.freeze({ url: '', attempts, source: '', kind: resourceKind });
+    }
+
+    function isApprovedPdfResolution(resolution, url) {
+        return Boolean(
+            resolution
+            && approvedRuntimePdfResolutions.has(resolution)
+            && resolution.kind === 'pdf'
+            && resolution.source === 'runtime'
+            && resolution.url === url
+            && /^blob:/i.test(String(url || '').trim())
+        );
     }
 
     global.ResourceCore = {
@@ -645,6 +706,9 @@
         buildResourcePath,
         getResourceAttempts,
         resolveResource,
+        isApprovedPdfResolution,
+        isListeningExam,
+        isPdfAvailable,
         sanitizeFilename,
         encodePathSegments,
         detectScriptBasePrefix,

@@ -3228,33 +3228,47 @@
 
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
+        var isListeningExam = !!(global.ResourceCore
+            && typeof global.ResourceCore.isListeningExam === 'function'
+            && global.ResourceCore.isListeningExam(exam));
+        var pdfAvailable = isListeningExam || !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
 
-        var startBtn = this._createElement('button', {
-            className: actionConfig.startClass,
-            dataset: { action: actionConfig.startAction, examId: exam.id },
-            type: 'button'
-        }, actionConfig.startLabel);
-        if (isSelecting) {
-            startBtn.disabled = true;
-            startBtn.setAttribute('aria-disabled', 'true');
+        if (exam.hasHtml !== false || pdfAvailable) {
+            var startBtn = this._createElement('button', {
+                className: actionConfig.startClass,
+                dataset: { action: actionConfig.startAction, examId: exam.id },
+                type: 'button'
+            }, actionConfig.startLabel);
+            if (isSelecting) {
+                startBtn.disabled = true;
+                startBtn.setAttribute('aria-disabled', 'true');
+            }
+            actions.appendChild(startBtn);
         }
-        actions.appendChild(startBtn);
 
         if (actionConfig.includePdfButton) {
-            var pdfBtn = this._createElement('button', {
-                className: 'btn btn-secondary exam-item-action-btn',
-                dataset: { action: 'pdf', examId: exam.id },
-                type: 'button',
-                title: '查看PDF版本'
-            }, '查看PDF');
-            if (isSelecting) {
-                pdfBtn.disabled = true;
-                pdfBtn.setAttribute('aria-disabled', 'true');
+            if (pdfAvailable) {
+                var pdfBtn = this._createElement('button', {
+                    className: 'btn btn-secondary exam-item-action-btn',
+                    dataset: { action: 'pdf', examId: exam.id },
+                    type: 'button',
+                    title: '查看PDF版本'
+                }, '查看PDF');
+                if (isSelecting) {
+                    pdfBtn.disabled = true;
+                    pdfBtn.setAttribute('aria-disabled', 'true');
+                }
+                actions.appendChild(pdfBtn);
+            } else {
+                actions.appendChild(this._createElement('span', {
+                    className: 'pdf-unavailable-state exam-item-pdf-unavailable'
+                }, '此PDF不存在'));
             }
-            actions.appendChild(pdfBtn);
         }
 
-        var isReadingExam = exam && (exam.type === 'reading' || !exam.type || String(exam.type).toLowerCase() !== 'listening') && exam.hasHtml !== false;
+        var isReadingExam = exam && !isListeningExam && exam.hasHtml !== false;
         if (isReadingExam && exam.id) {
             var vocabBtn = this._createElement('button', {
                 className: 'btn btn-outline exam-item-action-btn exam-item-vocab-btn',

@@ -1,6 +1,12 @@
 (function initBookshelfView(global) {
     'use strict';
 
+    function isPdfAvailable(exam) {
+        return !!(global.ResourceCore
+            && typeof global.ResourceCore.isPdfAvailable === 'function'
+            && global.ResourceCore.isPdfAvailable(exam));
+    }
+
     function needsPageReload(error) {
         return error && error.code === 'BACKEND_UNAVAILABLE';
     }
@@ -103,7 +109,21 @@
                     ? await library.listConfigurations() : [];
                 await Promise.all(snapshot.reading.sources.filter((row) => row.kind === 'imported').map(async (source) => {
                     const config = configurations.find((row) => String(row.id || row.key || row.configId) === source.libraryId);
-                    const index = typeof library.getIndex === 'function' ? await library.getIndex(source.libraryId) : null;
+                    const storedIndex = typeof library.getIndex === 'function'
+                        ? await library.getIndex(source.libraryId)
+                        : null;
+                    const libraryManager = global.LibraryManager
+                        && typeof global.LibraryManager.getInstance === 'function'
+                        ? global.LibraryManager.getInstance()
+                        : null;
+                    let index = storedIndex;
+                    if (Array.isArray(storedIndex) && libraryManager) {
+                        if (typeof libraryManager.normalizeIndexForCustomConfigReady === 'function') {
+                            index = await libraryManager.normalizeIndexForCustomConfigReady(storedIndex);
+                        } else if (typeof libraryManager.normalizeIndexForCustomConfig === 'function') {
+                            index = libraryManager.normalizeIndexForCustomConfig(storedIndex);
+                        }
+                    }
                     metadata.set(source.id, {
                         name: config && (config.name || config.title) || source.libraryId,
                         index: Array.isArray(index) ? index : null
@@ -176,7 +196,8 @@
                             : `导入题库 · ${config?.name && config.name !== row.source.id ? `${config.name} (${row.source.id})` : row.source.id}`,
                         sourceUnavailable: row.source.kind === 'imported' && Array.isArray(config?.index)
                             && !config.index.some(item => String(item.id || item.examId) === row.examId),
-                        hasPdf: Boolean(meta.pdfPath || meta.pdf),
+                        hasPdf: isPdfAvailable(meta),
+                        pdfFilename: meta.pdfFilename || '', pdfPath: meta.pdfPath || '', pdf: meta.pdf || '',
                         sampleWords: preview?.words || [], previewPage: preview?.page || 0,
                         previewLoaded: Boolean(preview), previewError: preview?.error || null };
                 }).sort((a, b) => b.lastActivityAt - a.lastActivityAt);
@@ -218,7 +239,8 @@
                     category: meta.category || meta.type || '雅思阅读',
                     wordCount: termIds.length, allWords: words.map((word) => word.word),
                     sampleWords: words.slice(0, 10).map((word) => word.word),
-                    lastActivityAt, hasPdf: Boolean(meta.pdfPath || meta.pdf)
+                    lastActivityAt, hasPdf: isPdfAvailable(meta),
+                    pdfFilename: meta.pdfFilename || '', pdfPath: meta.pdfPath || '', pdf: meta.pdf || ''
                 };
             }).sort((a, b) => b.lastActivityAt - a.lastActivityAt);
         },
@@ -543,6 +565,7 @@
         renderExamCard(exam) {
             const formattedTime = this.formatFriendlyDate(exam.lastActivityAt);
             const wordsList = exam.sampleWords || [];
+            const pdfAvailable = isPdfAvailable(exam);
 
             return `
                 <div class="bookshelf-card" data-exam-id="${this.escapeHtml(exam.examId)}" data-article-id="${this.escapeHtml(exam.articleId)}">
@@ -602,11 +625,11 @@
                         <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-action-btn" data-action="open-exam-practice" data-exam-id="${this.escapeHtml(exam.examId)}">
                             📝 做题
                         </button>
-                        ${exam.hasPdf ? `
+                        ${pdfAvailable ? `
                             <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-action-btn" data-action="open-exam-pdf" data-exam-id="${this.escapeHtml(exam.examId)}">
                                 📄 PDF
                             </button>
-                        ` : ''}
+                        ` : '<span class="pdf-unavailable-state bookshelf-pdf-unavailable">此PDF不存在</span>'}
                         <button type="button" class="btn btn-secondary shui-glass-btn bookshelf-action-btn" data-action="export-exam-txt" data-exam-id="${this.escapeHtml(exam.examId)}" data-exam-title="${this.escapeHtml(exam.title)}" ${exam.wordCount === 0 ? 'disabled' : ''} title="导出本篇生词 TXT">
                             📥 导出
                         </button>
@@ -799,9 +822,30 @@
                 const openPdfTrigger = e.target.closest('[data-action="open-exam-pdf"]');
                 if (openPdfTrigger) {
                     const examId = openPdfTrigger.dataset.examId;
-                    if (!await this.canOpenOriginalSource(article)) return;
+                    let reservedWindow = null;
+                    try {
+                        reservedWindow = global.open(
+                            'about:blank',
+                            '_blank',
+                            'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+                        );
+                    } catch (_) { }
+                    const closeReservation = () => {
+                        if (!reservedWindow || reservedWindow.closed || typeof reservedWindow.close !== 'function') return;
+                        try { reservedWindow.close(); } catch (_) { }
+                    };
+                    if (!await this.canOpenOriginalSource(article)) {
+                        closeReservation();
+                        return;
+                    }
                     if (typeof global.viewPDF === 'function') {
-                        global.viewPDF(examId);
+                        global.viewPDF(examId, {
+                            reservationAttempted: true,
+                            reservedWindow,
+                            ownsReservedWindow: Boolean(reservedWindow)
+                        });
+                    } else {
+                        closeReservation();
                     }
                     return;
                 }

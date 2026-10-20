@@ -298,6 +298,7 @@
             filename: htmlRecord ? getBaseName(htmlRecord.path) : undefined,
             pdfFilename: pdfRecord ? getBaseName(pdfRecord.path) : undefined,
             hasHtml: !!htmlRecord,
+            hasPdf: !!pdfRecord,
             sourcePath,
             importKey,
             sourceKind: 'file-picker',

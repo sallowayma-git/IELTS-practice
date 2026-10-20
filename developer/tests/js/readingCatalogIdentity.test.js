@@ -24,6 +24,20 @@ const duplicates = (entries, keyOf) => {
     return [...groups].filter(([, ids]) => ids.length > 1);
 };
 
+const ISSUE_249_MISSING_PDF_IDS = [
+    'p1-high-240',
+    'p2-high-235',
+    'p2-high-239',
+    'p2-low-240',
+    'p2-low-242',
+    'p2-medium-243',
+    'p3-high-229',
+    'p3-low-240',
+    'p3-low-999',
+    'p3-medium-241',
+    'p3-medium-244',
+].sort();
+
 test('each passage is listed under exactly one exam ID', () => {
     const entries = Object.values(catalog().__READING_EXAM_MANIFEST__);
     const title = (entry) => String(entry.title || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -56,5 +70,19 @@ test('listed passages point at existing data files', () => {
     }
     for (const entry of Object.values(window.__READING_EXPLANATION_MANIFEST__)) {
         assert.ok(window.__READING_EXAM_MANIFEST__[entry.examId], entry.examId);
+    }
+});
+
+test('issue #249 keeps the confirmed missing PDFs unavailable without disabling HTML practice', () => {
+    const manifest = catalog().__READING_EXAM_MANIFEST__;
+
+    for (const examId of ISSUE_249_MISSING_PDF_IDS) {
+        const entry = manifest[examId];
+        assert.ok(entry, `${examId} must remain in the manifest`);
+        assert.equal(entry.hasPdf, false, `${examId} must not expose a missing PDF`);
+        assert.equal(entry.hasHtml, true, `${examId} must keep its HTML exercise`);
+        assert.match(String(entry.pdfFilename || ''), /^ReadingPractice\/PDF\/.+\.pdf$/i, `${examId} must retain its expected PDF locator`);
+        assert.match(String(entry.script || ''), /^\.\/p.+\.js$/, `${examId} must retain its generated exercise script`);
+        assert.ok(exists(`assets/generated/reading-exams/${entry.script.slice(2)}`), `${examId} exercise script must exist`);
     }
 });

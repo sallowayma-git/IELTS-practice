@@ -317,11 +317,31 @@ def main() -> None:
             ) == 0
             show_history(page)
             empty_record_id = observe_timeout(page, READING_EXAM_ID)
-            # The draft-isolation assertion is complete. Stop the live child
-            # before comparing unrelated recovery fixtures: late SESSION_READY
-            # messages may otherwise legitimately recreate its active session.
+            # Observe the host's actual close cleanup, not a transient empty
+            # storage read after the synthetic timeout. A late SESSION_READY can
+            # recreate the checkpoint before the close monitor removes it.
+            page.evaluate(
+                """examId => {
+                    const app = window.app;
+                    const cleanup = app.cleanupExamSession;
+                    window.__interruptedHistoryCloseCleanup = false;
+                    app.cleanupExamSession = async function (closedExamId, ...args) {
+                        const result = await cleanup.call(this, closedExamId, ...args);
+                        if (closedExamId === examId && result === true) {
+                            window.__interruptedHistoryCloseCleanup = true;
+                            this.cleanupExamSession = cleanup;
+                        }
+                        return result;
+                    };
+                }""",
+                READING_EXAM_ID,
+            )
             if not popup.is_closed():
                 popup.close()
+            page.wait_for_function(
+                "() => window.__interruptedHistoryCloseCleanup === true", timeout=15_000
+            )
+            page.evaluate("async () => { await window.app._readingDraftStoreQueue; }")
             page.wait_for_function(
                 """async examId => !(await AppData.recovery.listActiveSessions()).some(row => row.examId === examId)""",
                 arg=READING_EXAM_ID,
@@ -336,7 +356,6 @@ def main() -> None:
             empty_details.locator("summary").click()
             expect(empty_details).to_contain_text("此记录没有保存的答案。阅读草稿单独保存")
             assert "draft-only-answer-143" not in empty_details.inner_text()
-            popup.close()
             assert canonical_snapshot(page) == baseline
 
             screenshot_dir = os.environ.get("INTERRUPTED_HISTORY_SCREENSHOT_DIR")
