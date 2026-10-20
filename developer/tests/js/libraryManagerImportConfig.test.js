@@ -2141,6 +2141,183 @@ async function testDeleteFirstQueuesLaterDefaultSelection() {
     });
 }
 
+async function createQueuedDeletionRace() {
+    const harness = createLatestIntentRaceHarness();
+    const examC = {
+        ...clone(harness.immediateB),
+        id: 'race-c',
+        examId: 'race-c',
+        path: 'Race/C/',
+        filename: 'c.html',
+        pdfFilename: 'c.pdf'
+    };
+    await harness.window.AppData.library.import({
+        id: 'race_c',
+        configuration: { name: 'Race C', examCount: 1 },
+        index: [examC]
+    });
+    await establishDeletionRaceBaseline(harness);
+
+    const removeStarted = createDeferred();
+    const removeRelease = createDeferred();
+    const commitsQueued = [createDeferred(), createDeferred()];
+    let queuedCount = 0;
+    const remove = harness.window.AppData.library.remove.bind(harness.window.AppData.library);
+    harness.window.AppData.library.remove = async function removeWithGate(id) {
+        if (id === 'race_b') {
+            removeStarted.resolve();
+            await removeRelease.promise;
+        }
+        return remove(id);
+    };
+    const runCommit = harness.manager.runLibraryCommitForIntent.bind(harness.manager);
+    harness.manager.runLibraryCommitForIntent = function runCommitObserved(generation, commit) {
+        const pending = runCommit(generation, commit);
+        commitsQueued[queuedCount++]?.resolve();
+        return pending;
+    };
+
+    return Object.assign(harness, { removeStarted, removeRelease, commitsQueued });
+}
+
+async function assertDeletedBAndSelectedTarget(harness, targetKey) {
+    assert.deepStrictEqual(await harness.window.AppData.library.getIndex('race_b'), []);
+    assert(!harness.getConfigurations().some((config) => config.id === 'race_b' || config.key === 'race_b'));
+    assert.strictEqual(harness.getActiveId(), targetKey, 'the accepted selection must remain durable');
+    const expectedId = targetKey === null ? 'race-a' : 'race-c';
+    assert.deepStrictEqual(harness.effects.publications, [
+        { key: 'race_a', ids: ['race-a'], provenance: ['race_a'] },
+        { key: targetKey, ids: [expectedId], provenance: [targetKey] }
+    ], 'only the accepted selection may replace the coherent A publication');
+    assert.deepStrictEqual(harness.effects.activations, ['race_a', targetKey]);
+    assert.deepStrictEqual(harness.effects.configRenders, ['race_a', targetKey]);
+    const expectedRoot = targetKey === null ? harness.manager.DEFAULT_PATH_MAP.reading.root : 'Race/C/';
+    assert.strictEqual(harness.window.ResourceCore.getPathMap().reading.root, expectedRoot);
+    assert.strictEqual(harness.window.__activeLibraryPathMap.reading.root, expectedRoot);
+    assert.strictEqual(harness.window.pathMap.reading.root, expectedRoot);
+}
+
+async function testDeletePreservesQueuedSelectionAfterRejectedSuccessor(targetKey, rejection) {
+    const harness = await createQueuedDeletionRace();
+    const deletion = harness.manager.deleteLibraryConfiguration('race_b');
+    let switching;
+    try {
+        await withTimeout(harness.removeStarted.promise, 'delete-B before accepted selection');
+        switching = harness.manager.switchLibraryConfig(targetKey);
+        await withTimeout(harness.commitsQueued[0].promise, 'accepted selection queued behind delete-B');
+
+        if (rejection === 'missing') {
+            assert.strictEqual(await withTimeout(
+                harness.manager.switchLibraryConfig('missing-config'),
+                'missing successor rejection'
+            ), false);
+        } else if (rejection === 'empty') {
+            assert.strictEqual(await withTimeout(
+                harness.manager.applyLibraryConfiguration('empty-config', []),
+                'empty successor rejection'
+            ), false);
+        } else {
+            const loadPathMap = harness.manager.loadPathMapForConfiguration.bind(harness.manager);
+            harness.manager.loadPathMapForConfiguration = async function loadPathMapWithFailure(key) {
+                if (key === 'failing-config') throw new Error('simulated queued successor preflight failure');
+                return loadPathMap(key);
+            };
+            await assert.rejects(withTimeout(
+                harness.manager.applyLibraryConfiguration('failing-config', [clone(harness.immediateB)]),
+                'failing successor preflight'
+            ), /simulated queued successor preflight failure/);
+        }
+
+        let switchSettled = false;
+        switching.then(
+            () => { switchSettled = true; },
+            () => { switchSettled = true; }
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert.strictEqual(switchSettled, false, 'the accepted selection must wait for destructive cleanup');
+        assert.strictEqual(harness.getActiveId(), 'race_a');
+        assert.deepStrictEqual(harness.effects.publications.map((entry) => entry.key), ['race_a']);
+        assert.strictEqual(harness.window.ResourceCore.getPathMap().reading.root, 'Race/A/');
+    } finally {
+        harness.removeRelease.resolve();
+    }
+
+    const [deletionResult, switchResult] = await withTimeout(
+        Promise.all([deletion, switching]),
+        'delete and accepted selection after rejected successor'
+    );
+    assert.strictEqual(deletionResult.deleted, true, 'a rejected successor must not interrupt deletion cleanup');
+    assert.strictEqual(switchResult, true, 'a rejected successor must not cancel the accepted queued selection');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await assertDeletedBAndSelectedTarget(harness, targetKey);
+    recordResult(`delete-B 后排队的 ${targetKey || 'default'} 不被 ${rejection} 请求取消`, { targetKey, rejection });
+}
+
+async function testNewerValidSelectionSupersedesDeleteQueuedSelection(firstKey, newerKey) {
+    const harness = await createQueuedDeletionRace();
+    const deletion = harness.manager.deleteLibraryConfiguration('race_b');
+    let firstSelection;
+    let newerSelection;
+    try {
+        await withTimeout(harness.removeStarted.promise, 'delete-B before competing valid selections');
+        firstSelection = harness.manager.switchLibraryConfig(firstKey);
+        await withTimeout(harness.commitsQueued[0].promise, 'first accepted selection queued');
+        newerSelection = harness.manager.switchLibraryConfig(newerKey);
+        await withTimeout(harness.commitsQueued[1].promise, 'newer accepted selection queued');
+        assert.strictEqual(await withTimeout(
+            harness.manager.switchLibraryConfig('missing-config'),
+            'rejected request after two accepted selections'
+        ), false);
+        assert.deepStrictEqual(harness.effects.publications.map((entry) => entry.key), ['race_a']);
+    } finally {
+        harness.removeRelease.resolve();
+    }
+
+    const [deletionResult, firstResult, newerResult] = await withTimeout(
+        Promise.all([deletion, firstSelection, newerSelection]),
+        'delete and competing valid selections completion'
+    );
+    assert.strictEqual(deletionResult.deleted, true);
+    assert.strictEqual(firstResult, false, 'a newer valid candidate must supersede the earlier reservation');
+    assert.strictEqual(newerResult, true, 'the latest accepted candidate must survive the rejected request');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await assertDeletedBAndSelectedTarget(harness, newerKey);
+    recordResult(`delete-B 后较新的 ${newerKey || 'default'} 覆盖 ${firstKey || 'default'} 预约`, { firstKey, newerKey });
+}
+
+async function testRejectedSuccessorDoesNotBypassDeletedTargetRevalidation() {
+    const harness = await createQueuedDeletionRace();
+    let revalidatedDeletedTarget = false;
+    const getIndex = harness.window.AppData.library.getIndex.bind(harness.window.AppData.library);
+    harness.window.AppData.library.getIndex = async function observeDeletedTargetRead(id) {
+        const index = await getIndex(id);
+        if (id === 'race_b' && index.length === 0) revalidatedDeletedTarget = true;
+        return index;
+    };
+    const deletion = harness.manager.deleteLibraryConfiguration('race_b');
+    let switching;
+    try {
+        await withTimeout(harness.removeStarted.promise, 'delete-B before same-target selection');
+        switching = harness.manager.switchLibraryConfig('race_b');
+        await withTimeout(harness.commitsQueued[0].promise, 'same-target selection queued');
+        assert.strictEqual(await withTimeout(
+            harness.manager.applyLibraryConfiguration('empty-config', []),
+            'empty request after accepted same-target selection'
+        ), false);
+    } finally {
+        harness.removeRelease.resolve();
+    }
+
+    const [deletionResult, switchResult] = await withTimeout(
+        Promise.all([deletion, switching]),
+        'deleted-target revalidation after rejected successor'
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.strictEqual(revalidatedDeletedTarget, true, 'the accepted reservation must reach stored-target revalidation');
+    await assertDeletionRaceWinner(harness, deletionResult, switchResult);
+    recordResult('拒绝后续请求仍不允许排队的已删除 B 复活', { switchResult });
+}
+
 async function testCapturedSwitchCannotCommitAfterDelete() {
     const harness = createLatestIntentRaceHarness();
     await establishDeletionRaceBaseline(harness);
@@ -2712,6 +2889,14 @@ async function main() {
         await testSupersededQueuedDefaultLoadReturnsEmptyArray();
         await testDeleteFirstExcludesSwitchDuringRemove();
         await testDeleteFirstQueuesLaterDefaultSelection();
+        for (const targetKey of [null, 'race_c']) {
+            for (const rejection of ['missing', 'empty', 'preflight']) {
+                await testDeletePreservesQueuedSelectionAfterRejectedSuccessor(targetKey, rejection);
+            }
+        }
+        await testNewerValidSelectionSupersedesDeleteQueuedSelection(null, 'race_c');
+        await testNewerValidSelectionSupersedesDeleteQueuedSelection('race_c', null);
+        await testRejectedSuccessorDoesNotBypassDeletedTargetRevalidation();
         await testCapturedSwitchCannotCommitAfterDelete();
         await testProductionUploadStopsAfterManagerRejection();
         await testSwitchConfigurationDoesNotTouchPracticeRecords();

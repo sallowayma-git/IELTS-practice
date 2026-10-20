@@ -95,6 +95,7 @@
             this.options = options || {};
             this._libraryIntentGeneration = 0;
             this._libraryCommitIntentGeneration = 0;
+            this._pendingLibraryCommitIntentGeneration = 0;
             this._libraryCommitTail = Promise.resolve();
             this._libraryCommitPendingCount = 0;
             this._activeLibraryPreparationCounts = new Map();
@@ -115,12 +116,17 @@
         }
 
         claimLibraryCommitIntent(generation) {
-            if (!this.canPrepareLibraryIntent(generation)) return false;
+            const hasAcceptedReservation = generation === this._pendingLibraryCommitIntentGeneration
+                && generation > this._libraryCommitIntentGeneration;
+            if (!hasAcceptedReservation && !this.canPrepareLibraryIntent(generation)) return false;
             if (
                 this._exclusiveLibraryMutationGeneration > 0
                 && this._exclusiveLibraryMutationGeneration !== generation
             ) return false;
             this._libraryCommitIntentGeneration = generation;
+            if (this._pendingLibraryCommitIntentGeneration <= generation) {
+                this._pendingLibraryCommitIntentGeneration = 0;
+            }
             return true;
         }
 
@@ -131,8 +137,10 @@
                 && this._exclusiveLibraryMutationGeneration !== generation
             ) {
                 // A destructive mutation already owns the serialized commit slot.
-                // Keep the newer intent eligible so it can queue behind that
-                // mutation, but do not supersede the active owner mid-cleanup.
+                // Record the latest accepted successor separately from that owner.
+                // Rejected requests must not cancel it before cleanup hands off
+                // the slot; only another commit-capable reservation can replace it.
+                this._pendingLibraryCommitIntentGeneration = generation;
                 return true;
             }
             return this.claimLibraryCommitIntent(generation);
