@@ -54,8 +54,8 @@ def assert_flat_surfaces(page, selector, name):
     Exam routes (.atlas-exam) stay flat: no shadow beyond the subtle tokens.
     Paper routes (.atlas-paper) may use only the approved light elevation:
     --anth-shadow-1/-2, the inset press shadow, the highlight and the focus
-    ring. Blur above 32px, radii above 8px on non-circular elements and any
-    gradient fail everywhere.
+    ring. Blur above 32px, radii above 8px on non-circular elements (dialogs
+    may use the --anth-radius-dialog token) and any gradient fail everywhere.
     """
     surfaces = page.evaluate(
         """selector => {
@@ -97,6 +97,8 @@ def assert_flat_surfaces(page, selector, name):
               approved,
               subtleShadows,
               radius: style.borderTopLeftRadius,
+              dialog: node.classList.contains('dialog'),
+              dialogRadius: parseFloat(style.getPropertyValue('--anth-radius-dialog')) || 0,
               circle: Math.abs(rect.width - rect.height) < 0.5,
               width: rect.width,
             };
@@ -121,8 +123,9 @@ def assert_flat_surfaces(page, selector, name):
         if not flat_ok:
             raise AssertionError(f"{name}: shadow outside the approved tokens: {surface}")
         radius = surface['radius']
-        if not surface['circle'] and not radius.endswith('%') and float(radius.rstrip('px') or 0) > 8 and not surface['exam']:
-            raise AssertionError(f"{name}: radius above 8px on a non-circular surface: {surface}")
+        radius_limit = max(8.0, surface.get('dialogRadius', 0.0)) if surface.get('dialog') else 8.0
+        if not surface['circle'] and not radius.endswith('%') and float(radius.rstrip('px') or 0) > radius_limit and not surface['exam']:
+            raise AssertionError(f"{name}: radius above {radius_limit:g}px on a non-circular surface: {surface}")
         if surface['width'] <= 0:
             raise AssertionError(f"{name}: surface collapsed: {surface}")
 

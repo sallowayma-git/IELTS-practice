@@ -70,7 +70,9 @@ def state(page):
             scoreLabel: document.querySelector('label[for="history-min-score"]')?.textContent.trim(),
             toolbarLinks: [...document.querySelectorAll('[data-history-toggle]')].map((node) => node.textContent.trim()),
             tabRects: [...document.querySelectorAll('[data-history-tab]')].map(rect),
-            summary: document.querySelector('[data-history-summary]')?.textContent.trim(),
+            summary: document.querySelector('[data-history-summary]')?.getAttribute('aria-label') || '',
+            summaryChips: [...document.querySelectorAll('[data-history-summary] [data-history-stat]')]
+              .map((node) => node.textContent.trim().replace(/\\s+/g, ' ')),
           };
         }
         """
@@ -144,6 +146,8 @@ def run_case(browser, name, width, height, report):
         raise AssertionError(f"{name}: toolbar links changed: {mixed['toolbarLinks']}")
     if mixed["summary"] != "全部记录：阅读 3 篇，平均正确率 73%；写作 2 篇，平均 Band 7.0。":
         raise AssertionError(f"{name}: summary sentence: {mixed['summary']}")
+    if mixed["summaryChips"] != ["共 5 条", "阅读 3 篇 · 平均正确率 73%", "写作 2 篇 · 平均 Band 7.0"]:
+        raise AssertionError(f"{name}: summary chips: {mixed['summaryChips']}")
     open_filters(page)
     mixed = state(page)
     if mixed["kinds"] or mixed["scoreDisabled"] is not True:
@@ -159,6 +163,8 @@ def run_case(browser, name, width, height, report):
         raise AssertionError(f"{name}: reading score filter contract: {reading}")
     if reading["summary"] != "全部记录：阅读 3 篇，平均正确率 73%。":
         raise AssertionError(f"{name}: a single-activity tab shows only its own clause: {reading['summary']}")
+    if reading["summaryChips"] != ["共 3 条", "阅读 3 篇 · 平均正确率 73%"]:
+        raise AssertionError(f"{name}: reading summary chips: {reading['summaryChips']}")
     select_rows(page)
     if page.locator("[data-history-clear-all]").inner_text().strip() != "清空阅读全部记录":
         raise AssertionError(f"{name}: clear action is not scoped to the tab")

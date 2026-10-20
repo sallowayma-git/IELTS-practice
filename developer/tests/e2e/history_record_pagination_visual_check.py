@@ -92,9 +92,12 @@ def read_geometry(page):
           const rect = (node) => node ? node.getBoundingClientRect() : null;
           const style = (node) => node ? getComputedStyle(node) : null;
           const item = document.querySelector('.history-page .history-row');
-          const main = item?.querySelector('.history-row__main');
+          const main = item?.querySelector('.history-card__body');
           const title = item?.querySelector('.history-row__title');
           const score = item?.querySelector('.history-row__score');
+          const contentInsetRight = main
+            ? (parseFloat(style(item)?.borderRightWidth || 0) + parseFloat(style(main)?.paddingRight || 0))
+            : 0;
           const pagination = document.querySelector('.history-page .history-pagination');
           const pageInfo = pagination?.querySelector('.history-pagination__info');
           const pageButtons = [...(pagination?.querySelectorAll('button') || [])];
@@ -110,9 +113,11 @@ def read_geometry(page):
             titleScrollWidth: title?.scrollWidth || 0,
             titleOverflowWrap: style(title)?.overflowWrap || '',
             scoreRect: rect(score),
+            contentInsetRight,
             scoreAlign: style(score)?.justifySelf || '',
             scoreNumerals: style(score?.querySelector('.t-num'))?.fontVariantNumeric || '',
             rowButtons: item ? item.querySelectorAll('button').length : -1,
+            rowOpenButtons: item ? item.querySelectorAll('.history-card__open').length : -1,
             dayHeads: [...document.querySelectorAll('.list-group-title')].map((node) => node.textContent.trim()),
             badgeKinds: kinds.map((node) => ({
               className: node.className,
@@ -120,7 +125,7 @@ def read_geometry(page):
               background: getComputedStyle(node).backgroundColor,
             })),
             paginationRect: rect(pagination),
-            paginationText: pagination?.textContent.replace(/\s+/g, ' ').trim() || '',
+            paginationText: pagination?.textContent.replace(/\\s+/g, ' ').trim() || '',
             pageInfoText: pageInfo?.textContent.trim() || '',
             pageButtons: pageButtons.map((node) => ({ text: node.textContent.trim(), rect: rect(node) }))
           };
@@ -141,13 +146,15 @@ def assert_geometry(name, data):
         raise AssertionError(f"{name}: long record title is silently clipped: {json.dumps(data, ensure_ascii=False)}")
     if data["itemRect"]["height"] < 44:
         raise AssertionError(f"{name}: the record row is not a 44px target")
-    if data["rowButtons"] != 0:
-        raise AssertionError(f"{name}: rows carry no per-row buttons outside selection mode")
+    # The card owns one explicit detail link; mutations stay in the toolbar.
+    if data["rowButtons"] != 1 or data["rowOpenButtons"] != 1:
+        raise AssertionError(f"{name}: rows must carry only their 查看详情 opener outside selection mode")
     if not data["dayHeads"]:
         raise AssertionError(f"{name}: records are not grouped by day")
     score = data["scoreRect"]
-    # List-row padding is 16px on the right (design-system spec 2.6, list.css).
-    if not score or score["right"] > data["itemRect"]["right"] + 1 or score["right"] < data["itemRect"]["right"] - 16:
+    # The score sits flush with the card body's content box: border + padding.
+    expected_score_right = data["itemRect"]["right"] - data["contentInsetRight"]
+    if not score or abs(score["right"] - expected_score_right) > 1:
         raise AssertionError(f"{name}: score is not right-aligned in the row: {score} / {data['itemRect']}")
     if data["scoreAlign"] != "end" or "tabular-nums" not in data["scoreNumerals"]:
         raise AssertionError(f"{name}: score needs right alignment and tabular numerals: {data['scoreAlign']} {data['scoreNumerals']}")

@@ -47,10 +47,25 @@ for index, item in enumerate(READING):
     item["submittedAt"] = f"2026-07-{index + 1:02d}T09:30:00.000Z"
 
 MODES = {
-    "mixed": {"url": "/#/history", "items": WRITING + READING, "series": ["reading", "writing"]},
-    "writing": {"url": "/#/history?activity=writing", "items": WRITING + READING, "series": ["writing"]},
-    "reading": {"url": "/#/history?activity=reading", "items": WRITING + READING, "series": ["reading"]},
-    "single": {"url": "/#/history", "items": [WRITING[0]], "series": []},
+    "mixed": {
+        "url": "/#/history",
+        "items": WRITING + READING,
+        "count": len(WRITING) + len(READING),
+        "series": ["reading", "writing"],
+    },
+    "writing": {
+        "url": "/#/history?activity=writing",
+        "items": WRITING + READING,
+        "count": len(WRITING),
+        "series": ["writing"],
+    },
+    "reading": {
+        "url": "/#/history?activity=reading",
+        "items": WRITING + READING,
+        "count": len(READING),
+        "series": ["reading"],
+    },
+    "single": {"url": "/#/history", "items": [WRITING[0]], "count": 1, "series": []},
 }
 
 
@@ -76,6 +91,7 @@ def read_geometry(page):
           }));
           const table = document.querySelector('[data-history-criteria] table');
           const toolbar = document.querySelector('.history-toolbar');
+          const summaryGroup = document.querySelector('[data-history-summary]');
           return {
             viewport: [innerWidth, innerHeight],
             documentWidth: document.documentElement.scrollWidth,
@@ -92,7 +108,10 @@ def read_geometry(page):
               rows: [...table.querySelectorAll('tbody tr')].map((row) => [...row.children].map((cell) => cell.textContent.trim())),
               scoped: table.querySelector('thead th')?.getAttribute('scope') || ''
             } : null,
-            summary: document.querySelector('[data-history-summary]')?.textContent.trim() || '',
+            summary: summaryGroup?.getAttribute('aria-label') || '',
+            summaryChips: summaryGroup
+              ? [...summaryGroup.querySelectorAll('[data-history-stat]')].map((node) => node.textContent.trim().replace(/\\s+/g, ' '))
+              : [],
             tabs: [...document.querySelectorAll('[data-history-tab]')].map((node) => node.textContent.trim()),
             rows: document.querySelectorAll('.history-row').length
           };
@@ -188,10 +207,14 @@ def run_mode(browser, name, width, height, mode, report):
     geometry = read_geometry(page)
     assert_page_shape(name, mode, geometry)
     assert_trends(name, mode, geometry)
+    if not geometry["summary"].startswith("全部记录："):
+        raise AssertionError(f"{name}/{mode}: summary sentence is missing: {geometry['summary']}")
+    # The chip group counts the activity scope, not the mock's full record set.
+    expected_total = f"共 {MODES[mode]['count']} 条"
+    if not geometry["summaryChips"] or geometry["summaryChips"][0] != expected_total:
+        raise AssertionError(f"{name}/{mode}: summary chips are missing: {geometry['summaryChips']}")
     if mode != "single":
         assert_scope_from_all_records(page, f"{name}/{mode}")
-        if not geometry["summary"].startswith("全部记录："):
-            raise AssertionError(f"{name}/{mode}: summary sentence is missing: {geometry['summary']}")
     page.screenshot(path=str(REPORT_DIR / f"history-filter-analytics-{mode}-{name}-current.png"), full_page=True)
 
     if mode == "mixed":

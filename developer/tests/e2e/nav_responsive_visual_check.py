@@ -17,7 +17,7 @@ CASES = (
     ("narrow", 320, 844),
 )
 ROUTES = (
-    ("reading", "/?view=browse", "阅读"),
+    ("reading", "/?view=browse", "题库"),
     ("notebook", "/notebook", "札记"),
     ("history", "/history", "历史"),
     ("settings", "/settings", "设置"),
@@ -28,12 +28,22 @@ ROUTE_VIEWS = {
     'history': '.history-page',
     'settings': '.settings-page',
 }
-# 阅读 · 写作 · 札记 · 历史 · 设置 — the agent workbench is a developer route.
-NAV_LABELS = ["阅读", "写作", "札记", "历史", "设置"]
+# 总览 · 题库 · 写作 · 札记 · 历史 · 更多 · 设置 — the agent workbench is a
+# developer route. 题库 owns the 阅读 / 写作 secondary row.
+NAV_LABELS = ["总览", "题库", "写作", "札记", "历史", "更多", "设置"]
+SUB_LABELS = {"reading": ["阅读", "写作"]}
 
 
 def expected_href_for(label):
-    return {"札记": "#/notebook", "历史": "#/history", "设置": "#/settings"}.get(label, "#/")
+    return {
+        "总览": "#/",
+        "题库": "#/?view=browse",
+        "写作": "#/writing",
+        "札记": "#/notebook",
+        "历史": "#/history",
+        "更多": "#/?view=more",
+        "设置": "#/settings",
+    }[label]
 
 
 def install_tauri_mock(page):
@@ -111,6 +121,12 @@ def read_geometry(page):
             columns,
             visibleRows,
             itemGeometry,
+            subLabel: document.querySelector('.nav-sub')?.getAttribute('aria-label') || '',
+            subItems: [...document.querySelectorAll('.nav-sub-item')].map((item) => ({
+              label: item.textContent.trim(),
+              href: item.getAttribute('href'),
+              ariaCurrent: item.getAttribute('aria-current')
+            })),
             linksBounds: linksRect ? {
               left: linksRect.left,
               right: linksRect.right,
@@ -140,6 +156,15 @@ def assert_geometry(case_name, route_name, expected_active, geometry):
     current = [item for item in geometry["itemGeometry"] if item["ariaCurrent"] == "page"]
     if len(current) != 1 or current[0]["href"] != expected_href:
         raise AssertionError(f"{case_name}/{route_name}: incorrect aria-current state {current}")
+    expected_sub = SUB_LABELS.get(route_name, [])
+    if [item["label"] for item in geometry["subItems"]] != expected_sub:
+        raise AssertionError(f"{case_name}/{route_name}: secondary entries changed: {geometry['subItems']}")
+    if expected_sub:
+        if geometry["subLabel"] != "题库分类":
+            raise AssertionError(f"{case_name}/{route_name}: secondary row lost its landmark: {geometry['subLabel']!r}")
+        current_sub = [item for item in geometry["subItems"] if item["ariaCurrent"] == "page"]
+        if len(current_sub) != 1 or current_sub[0]["href"] != expected_href:
+            raise AssertionError(f"{case_name}/{route_name}: incorrect secondary aria-current state {current_sub}")
     bounds = geometry["linksBounds"]
     for item in geometry["itemGeometry"]:
         if item["left"] < bounds["left"] - 1 or item["right"] > bounds["right"] + 1:
@@ -162,9 +187,8 @@ def assert_geometry(case_name, route_name, expected_active, geometry):
 
 
 def assert_focus_visible(page, case_name, route_name):
-    settings = page.locator(".nav-item").filter(has_text="设置")
     # Exercise keyboard modality and navigation, including a genuinely visible ring.
-    page.locator('.nav-item').filter(has_text='历史').focus()
+    page.locator('.nav-item').filter(has_text='更多').focus()
     page.keyboard.press('Tab')
     focus = page.evaluate(
         """

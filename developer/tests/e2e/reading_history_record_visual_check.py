@@ -48,11 +48,11 @@ def geometry(page):
             tabs: [...document.querySelectorAll('[data-history-tab]')].map((node) => node.dataset.historyTab),
             rowRect: rect(first),
             titleRect: rect(first.querySelector('.history-row__title')),
-            scoreRect: rect(first.querySelector('.history-row__score .tag')),
-            scoreText: first.querySelector('.history-row__score .tag')?.textContent.trim(),
+            scoreRect: rect(first.querySelector('.history-row__score .history-row__score-value')),
+            scoreText: first.querySelector('.history-row__score .history-row__score-value')?.textContent.trim(),
             scoreLabel: first.querySelector('.history-row__label')?.textContent.trim(),
-            meta: first.querySelector('.list-row-meta')?.textContent.trim(),
-            summary: document.querySelector('[data-history-summary]')?.textContent.trim(),
+            meta: first.querySelector('.history-row__meta')?.textContent.trim(),
+            summary: document.querySelector('[data-history-summary]')?.getAttribute('aria-label') || '',
             badge: first.querySelector('.history-row__kind')?.textContent.trim(),
           };
         }

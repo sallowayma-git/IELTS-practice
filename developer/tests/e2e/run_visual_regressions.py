@@ -20,6 +20,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 DIST = ROOT / "dist/writing"
 REPORTS = ROOT / "developer/tests/e2e/reports"
+
+# Windows consoles default to a legacy code page (cp1252/cp936); the matrix
+# prints Chinese verdicts and script output. Keep the bytes UTF-8 end to end
+# instead of letting one unencodable character abort the whole run.
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 REPORT = REPORTS / "visual-regression-report.json"
 EVIDENCE = REPORTS / "visual-ci-evidence"
 FAILED_LOG_TAIL_LINES = 600
@@ -206,6 +215,7 @@ def main() -> int:
             wait_for_server(process, base_url)
             environment = os.environ.copy()
             environment["PYTHONUTF8"] = "1"
+            environment["PYTHONIOENCODING"] = "utf-8"
             for name in BASE_URL_ENV_NAMES:
                 environment[name] = base_url
             for group, scripts in SCRIPT_GROUPS:

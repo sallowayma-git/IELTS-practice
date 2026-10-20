@@ -397,6 +397,16 @@ WEEKLY_EXPECTED = {
 WEEKLY_CASES = (("live_final", 1440), ("live_final", 360), ("final_no_ai", 390), ("narrative_failed", 768), ("empty", 1440))
 W41_PLAN = ["判断题对比练习易混题约15分钟", "段落大意配对换一篇新文章练同类题约15分钟",
             "写作·连贯与衔接改写一段作文约15分钟"]
+# v3 hides the per-block example/source lists; the links that remain are the
+# narrative's practice target (a reading skill -> a library card tag), the
+# no-AI state line and the plan's three entries. Every one must resolve to a
+# real route, and the set differs by state.
+W41_PLAN_LINKS = ["#/", "#/", "#/writing"]
+W41_LINKS = {
+    "final": ["#/?view=browse&kind=judgement"] + W41_PLAN_LINKS,
+    "final_no_ai": ["#/settings"] + W41_PLAN_LINKS,
+    "narrative_failed": W41_PLAN_LINKS,
+}
 
 
 def read_weeks(page):
@@ -546,8 +556,8 @@ def check_week_entry(name, scenario, week):
         return
     if len(week["charts"]) != 5:
         raise AssertionError(f"{where}: expected 5 charts (volume, accuracy, types, redo, bands), got {len(week['charts'])}")
-    if "#/reading/p2-mid-07/review/attempt-41-2" not in week["links"] or "#/result/writing-41-2" not in week["links"]:
-        raise AssertionError(f"{where}: example links lost their routes: {week['links']}")
+    if week["links"] != W41_LINKS[state]:
+        raise AssertionError(f"{where}: remaining links lost their routes: {week['links']}")
     if week["plan"] != W41_PLAN:
         raise AssertionError(f"{where}: plan list {week['plan']}")
     if state == "final":
