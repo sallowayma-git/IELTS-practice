@@ -157,6 +157,12 @@ fn valid_target(target: &Value) -> Option<NarrativeTarget> {
     {
         return None;
     }
+    // The page routes a writing target only for task1/task2
+    // (`weeklyTarget` in apps/writing-vue/src/modules/notebook/weekly.js).
+    // `kind` and `asset` stay open: the frontend accepts any well-formed key.
+    if kind == "writing" && !matches!(key, "task1" | "task2") {
+        return None;
+    }
     Some(NarrativeTarget { kind: kind.to_owned(), key: key.to_owned() })
 }
 
@@ -215,6 +221,11 @@ fn violation(text: &str, facts: &Value, counts_allowed: bool) -> Option<&'static
     if contains_security_marker(text) || contains_forbidden_inference_domain(text) {
         return Some("unsafe_text");
     }
+    // The model can echo internal record ids from pack facts/lines; they are
+    // storage keys, never prose the page may show.
+    if contains_id_token(text) {
+        return Some("internal_id");
+    }
     let references = Regex::new(r"\{\{([fq]):([^{}]+)\}\}").unwrap();
     for captures in references.captures_iter(text) {
         let fact = &facts[&captures[2]];
@@ -256,6 +267,28 @@ fn violation(text: &str, facts: &Value, counts_allowed: bool) -> Option<&'static
         return Some("literal_chinese_count");
     }
     None
+}
+
+/// Internal id prefixes that must never reach the page as prose.
+const ID_PREFIXES: [&str; 4] = ["obs-", "mem-", "drmrun-", "att-"];
+
+fn contains_id_token(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    ID_PREFIXES.iter().any(|prefix| lower.contains(prefix)) || contains_uuid(text)
+}
+
+/// Whether any run of ASCII alphanumerics and hyphens holds a hyphenated UUID.
+fn contains_uuid(text: &str) -> bool {
+    text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '-'))
+        .filter(|run| run.len() >= 36)
+        .any(|run| (0..=run.len() - 36).any(|start| is_uuid(&run[start..start + 36])))
+}
+
+fn is_uuid(candidate: &str) -> bool {
+    candidate.char_indices().all(|(index, ch)| match index {
+        8 | 13 | 18 | 23 => ch == '-',
+        _ => ch.is_ascii_hexdigit(),
+    })
 }
 
 /// Whether a digest has a body after filtering. The preflight path uses this to
@@ -411,6 +444,57 @@ mod tests {
             "strengths": [{"text": "回看错题。", "target": {"type": "kind", "key": "reading.tfng"}}],
         }));
         assert_eq!(outcome.narrative.strengths[0].target.as_ref().unwrap().kind, "kind");
+    }
+
+    #[test]
+    fn writing_targets_route_only_task1_and_task2() {
+        for (key, admitted) in [
+            ("task1", true),
+            ("task2", true),
+            ("writing", false),
+            ("task3", false),
+            ("task2x", false),
+        ] {
+            let outcome = validate(json!({
+                "body": ["读了 {{f:volume.reading}} 篇。"],
+                "changes": [{"text": "重做错题。", "target": {"type": "writing", "key": key}}],
+            }));
+            assert_eq!(outcome.narrative.changes.len(), 1, "{key}");
+            assert_eq!(outcome.narrative.changes[0].target.is_some(), admitted, "{key}");
+        }
+        // `kind` and `asset` stay open: the frontend accepts any well-formed key.
+        let outcome = validate(json!({
+            "body": ["读了 {{f:volume.reading}} 篇。"],
+            "changes": [
+                {"text": "重做错题。", "target": {"type": "kind", "key": "reading.tfng"}},
+                {"text": "回看原文。", "target": {"type": "asset", "key": "passage-1"}},
+            ],
+        }));
+        assert!(outcome.narrative.changes.iter().all(|item| item.target.is_some()));
+    }
+
+    #[test]
+    fn fact_citing_sentences_with_internal_record_ids_are_dropped() {
+        for token in [
+            "obs-abc",
+            "mem-xyz",
+            "att-abc",
+            "drmrun-week",
+            "3f2b8c1e-9a4d-4e2f-8b1a-0c9d7e6f5a4b",
+        ] {
+            let sentence = format!("这周读了 {{{{f:volume.reading}}}} 篇，参考 {token}。");
+            let outcome = validate(json!({"body": [sentence]}));
+            assert!(!outcome.usable, "{token}");
+            let codes: Vec<&str> = outcome
+                .narrative
+                .validation
+                .final_report
+                .violations
+                .iter()
+                .map(|violation| violation.code.as_str())
+                .collect();
+            assert_eq!(codes, ["internal_id"], "{token}");
+        }
     }
 
     #[test]
