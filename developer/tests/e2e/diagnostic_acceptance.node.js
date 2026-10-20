@@ -33,6 +33,30 @@ try {
             await context.route(/^https?:/, route => new URL(route.request().url()).hostname === '127.0.0.1'
                 ? route.continue() : route.abort());
             await context.addInitScript(() => { window.acceptanceClock = Date.now(); Date.now = () => acceptanceClock; });
+            if (scenario === 'passive-fallback') {
+                await context.addInitScript(() => {
+                    // AppData.ready excludes idle recovery maintenance. Observe
+                    // its real completion before attributing global API calls
+                    // to the exporter; do not disable or skip the maintenance.
+                    const requestIdle = window.requestIdleCallback.bind(window);
+                    const pending = new Set();
+                    window.requestIdleCallback = (callback, options) => {
+                        let finish;
+                        pending.add(new Promise(resolve => { finish = resolve; }));
+                        return requestIdle(deadline => {
+                            try { Promise.resolve(callback(deadline)).finally(finish); }
+                            catch (error) { finish(); throw error; }
+                        }, options);
+                    };
+                    window.waitForAcceptanceIdleWork = async () => {
+                        while (pending.size) {
+                            const batch = [...pending];
+                            await Promise.all(batch);
+                            for (const task of batch) pending.delete(task);
+                        }
+                    };
+                });
+            }
             const page = await context.newPage();
             let restore;
             try {
@@ -199,6 +223,7 @@ try {
                     assert.ok(!survivor.databases.includes('IELTSAtlasDiagnosticsV1'));
                 } else if (scenario === 'passive-fallback') {
                     const fallback = await page.evaluate(async () => {
+                        await window.waitForAcceptanceIdleWork();
                         AppDiagnostics.report({ code: 'DATA_EXPORT_FAILED', error: Error('PRIVATE_ANSWER') });
                         await AppDiagnostics.flush();
                         window.acceptanceEffects = [];
@@ -215,7 +240,12 @@ try {
                         };
                         Storage.prototype.setItem = forbidden('storage-write');
                         for (const name of ['put', 'add', 'delete', 'clear']) IDBObjectStore.prototype[name] = forbidden(name);
-                        window.AppDiagnosticStore = { snapshot: async () => { throw Error('PRIVATE_STORAGE'); } };
+                        window.AppDiagnosticStore = { snapshot: async () => {
+                            // Yield to real browser tasks so unrelated startup
+                            // work cannot accidentally pass an immediate mock.
+                            await new Promise(resolve => setTimeout(resolve, 25));
+                            throw Error('PRIVATE_STORAGE');
+                        } };
                         Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw Error('PRIVATE_CLIPBOARD'); } } });
                         window.Blob = class { constructor() { throw Error('PRIVATE_FILE'); } };
                         const copy = await AppDiagnosticExport.copySummary();
@@ -236,7 +266,8 @@ try {
                 results.push({ mode, scenario, passed: true, buildId: manifest.buildId });
                 console.log(`PASS ${mode}/${scenario}`);
             } catch (error) {
-                results.push({ mode, scenario, passed: false, buildId: manifest.buildId });
+                // The release gate retains only the allowlisted source line.
+                results.push({ mode, scenario, passed: false, buildId: manifest.buildId, error: error.stack || String(error) });
                 throw error;
             } finally { restore?.(); await context.close(); }
         }
