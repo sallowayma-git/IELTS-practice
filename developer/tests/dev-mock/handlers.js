@@ -627,9 +627,10 @@ export function createHandlers(state, host) {
       dedupeKey: `daily_journal:local:${day}`, lastError: null, createdAt: `${day}T00:00:00Z`, updatedAt: `${day}T00:00:00Z`,
     })),
     weekly_report_current: () => clone(reports.current),
-    weekly_report_list: () => clone(reports.list),
-    weekly_history_list: () => notebook.weeks.map((digest, index) => ({ runId: `legacy-${index}`, window: digest.window,
-      start: `${digest.windowStart}T00:00:00Z`, end: `${digest.windowEnd}T23:59:59Z`, digest: clone(digest) })),
+    weekly_report_list: ({ limit = 8, offset = 0 } = {}) => clone(reports.list.slice(offset, offset + Math.max(1, Math.min(limit, 52)))),
+    weekly_history_list: ({ limit = 52, offset = 0 } = {}) => notebook.weeks.map((digest, index) => ({ runId: `legacy-${index}`, window: digest.window,
+      start: `${digest.windowStart}T00:00:00Z`, end: `${digest.windowEnd}T23:59:59Z`, digest: clone(digest) }))
+      .slice(offset, offset + Math.max(1, Math.min(limit, 52))),
     consolidation_archive_stale: () => ({ archived: 0 }),
     learner_model_get_state: () => ({ states: clone(notebook.states) }),
     learner_model_get_review_needs: () => ({ needs: clone(notebook.needs) }),

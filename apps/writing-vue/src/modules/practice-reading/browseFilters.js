@@ -61,11 +61,13 @@ export function filterReadingAssets(readingAssets, options = {}) {
     keyword = '',
     selectedType = 'all',
     selectedCategory = 'all',
+    questionKind = '',
     frequencyFilter = 'all',
     sortMode = 'default'
   } = options
   const query = String(keyword || '').trim().toLowerCase()
   const filtered = (Array.isArray(readingAssets) ? readingAssets : []).filter((asset) => {
+    if (questionKind && !(asset?.questionKinds || []).includes(questionKind)) return false
     if (selectedType !== 'all' && asset?.activity !== selectedType) return false
     if (selectedCategory !== 'all' && normalizeCategory(asset?.category) !== selectedCategory) return false
     if (frequencyFilter !== 'all' && normalizeFrequency(asset) !== frequencyFilter) return false

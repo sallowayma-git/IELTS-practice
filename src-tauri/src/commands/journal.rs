@@ -198,16 +198,25 @@ fn default_local_user() -> String {
 /// (a completed run's report wins over a failed run's). Nothing here can mutate
 /// memory.
 #[tauri::command]
-pub fn weekly_history_list(db: State<'_, AppDb>, limit: Option<u32>) -> CommandResponse<Vec<ielts_db::LegacyWeeklyDigest>> {
-    respond_weekly(db.with_conn(|conn| ielts_db::list_legacy_weekly_digests(conn, "local", limit.unwrap_or(52))))
+pub fn weekly_history_list(
+    db: State<'_, AppDb>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> CommandResponse<Vec<ielts_db::LegacyWeeklyDigest>> {
+    respond_weekly(db.with_conn(|conn| {
+        ielts_db::list_legacy_weekly_digests_page(conn, "local", limit.unwrap_or(52), offset.unwrap_or(0))
+    }))
 }
 
 #[tauri::command]
 pub fn weekly_report_list(
     db: State<'_, AppDb>,
     limit: Option<u32>,
+    offset: Option<u32>,
 ) -> CommandResponse<Vec<ielts_domain::WeeklyReport>> {
-    respond_weekly(db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", limit.unwrap_or(8))))
+    respond_weekly(db.with_conn(|conn| {
+        ielts_db::list_weekly_reports_page(conn, "local", limit.unwrap_or(8), offset.unwrap_or(0))
+    }))
 }
 
 /// Read-only: the live report of the week so far (since the last finished

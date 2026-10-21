@@ -262,7 +262,9 @@ fn violation(text: &str, facts: &Value, counts_allowed: bool) -> Option<&'static
         return Some("literal_number");
     }
     if !counts_allowed
-        && Regex::new(r"[一二两三四五六七八九十几]+(?:多|余)?[次套篇道题分]").unwrap().is_match(&plain)
+        && Regex::new(r"[零〇一二两三四五六七八九十百千万亿几]+(?:多|余)?\s*(?:小时|分钟|秒钟|[次套篇道题分天个周项处组遍回种月年秒日倍成])")
+            .unwrap()
+            .is_match(&plain)
     {
         return Some("literal_chinese_count");
     }
@@ -272,7 +274,7 @@ fn violation(text: &str, facts: &Value, counts_allowed: bool) -> Option<&'static
 /// Internal id prefixes that must never reach the page as prose.
 const ID_PREFIXES: [&str; 4] = ["obs-", "mem-", "drmrun-", "att-"];
 
-fn contains_id_token(text: &str) -> bool {
+pub(crate) fn contains_id_token(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     ID_PREFIXES.iter().any(|prefix| lower.contains(prefix)) || contains_uuid(text)
 }
@@ -387,6 +389,74 @@ mod tests {
     }
 
     #[test]
+    fn chinese_counts_require_facts_everywhere_except_next_steps() {
+        for (count, unit) in [
+            ("三", "天"),
+            ("两", "小时"),
+            ("两", "组判断题"),
+            ("一百", "题"),
+            ("零", "次"),
+            ("〇", "次"),
+            ("百", "题"),
+            ("一千", "道题"),
+            ("一万", "次"),
+            ("一亿", "次"),
+            ("三", "个错题"),
+            ("两", "周"),
+            ("两", "项练习"),
+            ("三", "处错误"),
+            ("十多", "分钟"),
+            ("二十余", "秒钟"),
+            ("三 ", "天"),
+            ("三", "遍"),
+            ("两", "回"),
+            ("四", "种题型"),
+            ("两", "月"),
+            ("一", "年"),
+            ("十", "秒"),
+            ("三", "日"),
+            ("两", "倍"),
+            ("七", "成"),
+        ] {
+            let sentence = format!("练习了{count}{unit}。");
+            let outcome = validate(json!({
+                "title": sentence,
+                "body": [sentence],
+                "changes": [sentence],
+                "strengths": [sentence],
+                "weaknesses": [sentence],
+                "nextSteps": [sentence],
+            }));
+            assert!(!outcome.usable, "{sentence}");
+            assert!(outcome.narrative.title.is_empty(), "{sentence}");
+            assert!(outcome.narrative.changes.is_empty(), "{sentence}");
+            assert!(outcome.narrative.strengths.is_empty(), "{sentence}");
+            assert!(outcome.narrative.weaknesses.is_empty(), "{sentence}");
+            assert_eq!(outcome.narrative.next_steps[0].text, sentence);
+            let report = outcome.narrative.validation.final_report;
+            assert_eq!(report.dropped_sentences, 4, "{sentence}");
+            assert!(report.violations.iter().all(|v| v.code == "literal_chinese_count"), "{sentence}");
+            assert!(!has_usable_body(&json!({"body": [sentence]}), &facts()), "{sentence}");
+
+            let cited = format!("练习了{{{{f:volume.reading}}}}{unit}。");
+            let outcome = validate(json!({
+                "body": [cited],
+                "changes": [cited],
+                "strengths": [cited],
+                "weaknesses": [cited],
+                "nextSteps": [cited],
+            }));
+            assert_eq!(outcome.narrative.body, [cited.clone()]);
+            assert_eq!(outcome.narrative.changes[0].text, cited);
+            assert_eq!(outcome.narrative.strengths[0].text, cited);
+            assert_eq!(outcome.narrative.weaknesses[0].text, cited);
+            assert_eq!(outcome.narrative.next_steps[0].text, cited);
+            assert!(outcome.narrative.validation.final_report.violations.is_empty(), "{cited}");
+            assert!(has_usable_body(&json!({"body": [cited]}), &facts()), "{cited}");
+        }
+    }
+
+    #[test]
     fn identifiers_are_not_numbers() {
         let outcome = validate(json!({
             "body": ["Task 2 的 Q14-16 和第3题都练了。"],
@@ -419,8 +489,8 @@ mod tests {
 
     #[test]
     fn short_quotes_are_unwrapped_before_validation() {
-        let outcome = validate(json!({"body": ["答案写的是「Bees」，这一处记下来了。"]}));
-        assert_eq!(outcome.narrative.body, vec!["答案写的是Bees，这一处记下来了。"]);
+        let outcome = validate(json!({"body": ["答案写的是「Bees」，这里记下来了。"]}));
+        assert_eq!(outcome.narrative.body, vec!["答案写的是Bees，这里记下来了。"]);
     }
 
     #[test]

@@ -51,6 +51,13 @@
       </div>
     </div>
 
+    <div v-if="questionKindLabel" class="browse-question-kind" data-reading-question-kind>
+      <span>题型：{{ questionKindLabel }}</span>
+      <button class="btn btn-ghost btn-sm" type="button" @click="$emit('clear-question-kind')">
+        清除题型筛选
+      </button>
+    </div>
+
     <div class="search-box">
       <div class="search-row">
         <div class="search-input-wrap">
@@ -276,6 +283,7 @@ defineProps({
   browseTitle: { type: String, required: true },
   typeFilters: { type: Array, required: true },
   selectedType: { type: String, required: true },
+  questionKindLabel: { type: String, default: '' },
   keyword: { type: String, default: '' },
   frequencyFilters: { type: Array, required: true },
   frequencyFilter: { type: String, required: true },
@@ -314,6 +322,7 @@ const emit = defineEmits([
   'toggle-browse-preference',
   'persist-browse-preference',
   'filter-by-type',
+  'clear-question-kind',
   'clear-search',
   'toggle-frequency-filter',
   'retry-load',
@@ -330,6 +339,14 @@ function handleBrowseRememberPositionChange(event) {
 </script>
 
 <style scoped>
+.browse-question-kind {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--anth-space-2);
+  color: var(--anth-ink-muted);
+}
+
 /* Browse cards mirror the writing topic cards (TopicManagePage .topic-card). */
 .reading-card-grid {
   display: grid;

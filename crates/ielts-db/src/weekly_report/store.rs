@@ -20,7 +20,7 @@ use crate::dream::normalize_user_id;
 use crate::sqlite::{DbError, DbResult};
 use crate::weekly_report::project_weekly_facts;
 
-const MAX_REPORTS: u32 = 52;
+const MAX_PAGE_SIZE: u32 = 52;
 
 /// Original prose retained for read-only history. New runs never write it.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -34,6 +34,17 @@ pub struct LegacyWeeklyDigest {
 }
 
 pub fn list_legacy_weekly_digests(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<LegacyWeeklyDigest>> {
+    list_legacy_weekly_digests_page(conn, user_id, limit, 0)
+}
+
+/// A page of readable legacy digests. The offset counts legacy rows only;
+/// modern reports sharing the table must not consume the page's positions.
+pub fn list_legacy_weekly_digests_page(
+    conn: &Connection,
+    user_id: &str,
+    limit: u32,
+    offset: u32,
+) -> DbResult<Vec<LegacyWeeklyDigest>> {
     let mut statement = conn.prepare(
         "SELECT r.id, r.input_hash, d.digest_json FROM dream_runs r
            JOIN weekly_digests d ON d.run_id = r.id
@@ -45,6 +56,7 @@ pub fn list_legacy_weekly_digests(conn: &Connection, user_id: &str, limit: u32) 
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
     let mut out = Vec::new();
+    let mut skipped = 0;
     for row in rows {
         let (run_id, marker, raw) = row?;
         let digest: serde_json::Value = serde_json::from_str(&raw).map_err(|error| DbError::Validation(error.to_string()))?;
@@ -52,11 +64,15 @@ pub fn list_legacy_weekly_digests(conn: &Connection, user_id: &str, limit: u32) 
             || digest.get("observations").is_some_and(|v| v.is_array());
         if !prose || digest.get("blocks").is_some() { continue; }
         let Some(window) = crate::dream::window_of_marker(&marker) else { continue };
+        if skipped < offset {
+            skipped += 1;
+            continue;
+        }
         out.push(LegacyWeeklyDigest {
             run_id, window: window.key, start: window.start.to_rfc3339(),
             end: window.end.to_rfc3339(), digest,
         });
-        if out.len() >= limit.clamp(1, MAX_REPORTS) as usize { break; }
+        if out.len() >= limit.clamp(1, MAX_PAGE_SIZE) as usize { break; }
     }
     Ok(out)
 }
@@ -248,6 +264,17 @@ fn window_order(report: &WeeklyReport) -> (Option<DateTime<Utc>>, String) {
 /// Rows that are not v2 reports, reports without blocks, and failed reports
 /// that end at or before the latest completed report are skipped.
 pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<WeeklyReport>> {
+    list_weekly_reports_page(conn, user_id, limit, 0)
+}
+
+/// Page the final visible history, after retries have been deduplicated and
+/// superseded failures removed. The page-size cap never limits the archive.
+pub fn list_weekly_reports_page(
+    conn: &Connection,
+    user_id: &str,
+    limit: u32,
+    offset: u32,
+) -> DbResult<Vec<WeeklyReport>> {
     let user_id = normalize_user_id(user_id);
     let mut best: BTreeMap<String, Candidate> = BTreeMap::new();
     for candidate in candidates(conn, &user_id)? {
@@ -266,6 +293,5 @@ pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbRe
     let mut reports: Vec<WeeklyReport> =
         best.into_values().filter(|candidate| !superseded(candidate)).map(|candidate| candidate.report).collect();
     reports.sort_by_key(|report| Reverse(window_order(report)));
-    reports.truncate(limit.clamp(1, MAX_REPORTS) as usize);
-    Ok(reports)
+    Ok(reports.into_iter().skip(offset as usize).take(limit.clamp(1, MAX_PAGE_SIZE) as usize).collect())
 }

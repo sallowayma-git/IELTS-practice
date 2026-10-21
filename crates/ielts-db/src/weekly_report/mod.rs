@@ -23,7 +23,7 @@ use rusqlite::Connection;
 pub use facts::{criterion_label, question_type_label, week_facts, WeekFacts};
 pub use narrative::{has_usable_body, validate_narrative, NarrativeOutcome};
 pub use project::project_weekly_facts;
-pub use store::{list_legacy_weekly_digests, list_weekly_reports, previous_weekly_digest, put_weekly_report, LegacyWeeklyDigest, weekly_memory_changes, weekly_mutation_request_id};
+pub use store::{list_legacy_weekly_digests, list_legacy_weekly_digests_page, list_weekly_reports, list_weekly_reports_page, previous_weekly_digest, put_weekly_report, LegacyWeeklyDigest, weekly_memory_changes, weekly_mutation_request_id};
 
 use crate::dream::WeeklyWindow;
 use crate::sqlite::DbResult;

@@ -374,6 +374,54 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         self.assertEqual(len(bridge.preflights()), 2)
         self.assertEqual(bridge.submitted()["digest"]["body"], second["body"])
 
+    def test_an_unusable_body_gets_one_repair_without_sentence_violations(self) -> None:
+        missing_body = _digest()
+        del missing_body["body"]
+        report = {"usable": False, "needsRepair": False, "droppedSentences": 0, "violations": []}
+        for digest in (_digest(body=[]), missing_body, _digest(body=[" ", "\n\t"])):
+            with self.subTest(digest=digest):
+                bridge = FakeHostBridge(
+                    contents=[_answer(digest=digest), _answer()],
+                    validate_reports=[report, dict(_CLEAN_PREFLIGHT)],
+                )
+                sleeps: list[float] = []
+                self.assertIsNone(_run(bridge, sleep=sleeps.append).fallback_reason)
+                self.assertEqual(bridge.model_calls(), 2)
+                self.assertEqual(len(bridge.preflights()), 2)
+                self.assertEqual(sleeps, [], "repair must not incur retry backoff")
+                repair_message = bridge.calls[3][1]["request"]["messages"][-1]["content"]
+                repair_payload = json.loads(repair_message[repair_message.index("{"):])
+                self.assertEqual(repair_payload["validation"], report)
+                self.assertEqual(repair_payload["previousDigest"]["body"], [])
+                self.assertEqual(bridge.submitted()["digest"], _digest())
+
+    def test_an_unusable_repaired_digest_is_submitted_without_another_repair(self) -> None:
+        report = {"usable": False, "needsRepair": False, "droppedSentences": 0, "violations": []}
+        bridge = FakeHostBridge(
+            content=_answer(digest=_digest(body=[])),
+            validate_reports=[report, report],
+        )
+        self.assertIsNone(_run(bridge).fallback_reason)
+        self.assertEqual(bridge.model_calls(), 2, "unusable output still gets only one repair")
+        self.assertEqual(len(bridge.preflights()), 2)
+        self.assertEqual(bridge.submitted()["digest"]["body"], [])
+
+    def test_an_unusable_digest_cannot_repair_after_the_model_budget_is_spent(self) -> None:
+        bridge = ScriptedModelBridge([
+            _transient(), "invalid JSON", _answer(digest=_digest(body=[])), _answer(),
+        ])
+        bridge.set_validate_reports([
+            {"usable": False, "needsRepair": False, "droppedSentences": 0, "violations": []},
+        ])
+        sleeps: list[float] = []
+        self.assertIsNone(_run(bridge, sleep=sleeps.append).fallback_reason)
+        self.assertEqual(bridge.model_calls(), MODEL_MAX_ATTEMPTS)
+        self.assertEqual(sleeps, [2.0, 5.0])
+        self.assertEqual(len(bridge.preflights()), 1)
+        self.assertEqual(bridge.submitted()["digest"]["body"], [])
+        self.assertEqual(len([params for method, params in bridge.calls
+                              if method == CAPABILITY_DREAM_RUN_WEEKLY and not params.get("validateOnly")]), 1)
+
     def test_total_model_calls_never_exceed_three(self) -> None:
         # A retryable provider failure, then a digest the host sends back once,
         # then its repair: three calls is the whole budget.

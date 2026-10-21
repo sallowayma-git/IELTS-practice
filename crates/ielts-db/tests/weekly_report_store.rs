@@ -63,7 +63,7 @@ fn report_with(
     )];
     let narrative = (state == WeeklyReportState::Final).then(|| WeeklyNarrative {
         title: title.to_owned(),
-        body: vec!["这周把阅读错题重做了一遍。".to_owned()],
+        body: vec!["这周重做了阅读错题。".to_owned()],
         ..WeeklyNarrative::default()
     });
     let as_of = chrono::NaiveDate::parse_from_str(&end[..10], "%Y-%m-%d").unwrap();
@@ -234,6 +234,47 @@ fn reports_are_newest_window_first_and_limited() {
     // A limit of 0 still returns one; another user sees none.
     assert_eq!(titles(&list_weekly_reports(&conn, "local", 0).unwrap()), vec!["2026-W42"]);
     assert!(list_weekly_reports(&conn, "someone-else", 8).unwrap().is_empty());
+}
+
+#[test]
+fn report_and_legacy_pages_reach_history_beyond_fifty_two_weeks() {
+    let (_dir, conn) = open_db();
+    let journal = journal_for(&conn, "2026-01-11");
+    let first = chrono::NaiveDate::from_ymd_opt(2026, 1, 11).unwrap();
+    let mut reports = Vec::new();
+    let mut legacy = Vec::new();
+    // Interleave both schemas in the shared table: page offsets count visible
+    // rows of the requested schema, not all weekly_digests rows.
+    for index in 0..120 {
+        let day = first + chrono::Duration::weeks(index);
+        let key = day.format("%G-W%V").to_string();
+        let end = format!("{day}T09:30:00Z");
+        let run = complete_run(&conn, &journal, &key, &end, &end);
+        if index % 2 == 0 {
+            put_weekly_report(&conn, "local", &run, &report(&key, &end, WeeklyReportState::Final, &key), UTC, &end).unwrap();
+            reports.push(key);
+        } else {
+            conn.execute(
+                "INSERT INTO weekly_digests (run_id, digest_json, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![run, json!({ "title": key, "body": ["旧周记。"] }).to_string(), end],
+            ).unwrap();
+            legacy.push(key);
+        }
+    }
+    reports.reverse();
+    legacy.reverse();
+    let first_page = ielts_db::list_weekly_reports_page(&conn, "local", 52, 0).unwrap();
+    let second_page = ielts_db::list_weekly_reports_page(&conn, "local", 52, 52).unwrap();
+    assert_eq!(first_page.len(), 52);
+    assert_eq!(second_page.len(), 8);
+    assert_eq!(first_page.into_iter().chain(second_page).map(|entry| entry.window).collect::<Vec<_>>(), reports);
+    assert!(ielts_db::list_weekly_reports_page(&conn, "local", 52, 60).unwrap().is_empty());
+    let first_page = ielts_db::list_legacy_weekly_digests_page(&conn, "local", 52, 0).unwrap();
+    let second_page = ielts_db::list_legacy_weekly_digests_page(&conn, "local", 52, 52).unwrap();
+    assert_eq!(first_page.len(), 52);
+    assert_eq!(second_page.len(), 8);
+    assert_eq!(first_page.into_iter().chain(second_page).map(|entry| entry.window).collect::<Vec<_>>(), legacy);
+    assert!(ielts_db::list_legacy_weekly_digests_page(&conn, "local", 52, 60).unwrap().is_empty());
 }
 
 /// Review on #243: W41 kept failing, then the W42 run folded W41's span in and

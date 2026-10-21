@@ -69,6 +69,7 @@ pub use vocab::*;
 pub use weekly_pack::*;
 pub use weekly_report::{
     build_blocks, build_weekly_report, has_usable_body, list_legacy_weekly_digests, list_weekly_reports,
+    list_legacy_weekly_digests_page, list_weekly_reports_page,
     previous_weekly_digest, project_weekly_facts, put_weekly_report, validate_narrative, LegacyWeeklyDigest,
     NarrativeOutcome, SkillContext, WeekFacts, week_facts, weekly_memory_changes, weekly_mutation_request_id,
 };

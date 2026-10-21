@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { readFileSync } from 'node:fs'
+import { legacyWeeklyEntry } from '../../../apps/writing-vue/src/modules/notebook/legacy.js'
 import {
   BLOCK_HEADINGS,
   STATE_LINES,
@@ -517,4 +519,92 @@ test('weeklyMonthSlots lists every Thursday of the month, with empty slots betwe
   assert.deepEqual(weeklyMonthSlots(weeks, '2026-13'), [])
   assert.deepEqual(weeklyMonthSlots(weeks, '2026-9'), [])
   assert.deepEqual(weeklyMonthSlots(weeks, ''), [])
+})
+
+// Execute the real repository pagination and NotebookPage loader against the
+// command boundary, then display its month slots. This catches a
+// correct formatter fed only the first eight (or first 52) stored weeks.
+function weeklyRepository(persisted, legacy = []) {
+  const source = readFileSync(new URL('../../../apps/writing-vue/src/api/memory-repository.js', import.meta.url), 'utf8')
+    .replace(/^import .*$/m, '')
+    .replace(/^export default .*$/m, '')
+    .replace(/^export (async function|function|const) /gm, '$1 ')
+  const calls = []
+  const invoke = async (command, { limit, offset }) => {
+    calls.push({ command, limit, offset })
+    const rows = command === 'weekly_report_list' ? persisted : legacy
+    return { ok: true, data: rows.slice(offset, offset + Math.max(1, Math.min(limit, 52))) }
+  }
+  const repository = new Function('invokeCommand', 'unwrapCommandResponse',
+    `${source}\nreturn { getAllWeeklyReports, getAllWeeklyHistory }`)(invoke, (response) => response.data)
+  return { ...repository, calls }
+}
+
+function loadNotebookWeeks(repository) {
+  const source = readFileSync(new URL('../../../apps/writing-vue/src/views/NotebookPage.vue', import.meta.url), 'utf8')
+  const loader = source.match(/async function readWeeks\(\) \{[\s\S]*?\r?\n\}/)?.[0]
+  assert.ok(loader, 'NotebookPage weekly loading function is present')
+  const bindings = {
+    ...repository,
+    getCurrentWeeklyReport: async () => null,
+    settledValue: (result) => result.status === 'fulfilled' ? result.value : null,
+    listRows: (value) => Array.isArray(value) ? value : [],
+    legacyWeeklyEntry,
+    weeklyEntries,
+    weeklySequence
+  }
+  return new Function(...Object.keys(bindings), `${loader}\nreturn readWeeks()`)(...Object.values(bindings))
+}
+
+function archiveReports(size) {
+  return Array.from({ length: size }, (_, index) => {
+    const monday = new Date(Date.UTC(2025, 0, 6 + index * 7))
+    const thursday = new Date(monday.getTime() + 3 * 86400000)
+    const year = thursday.getUTCFullYear()
+    const week = Math.ceil(((thursday - new Date(Date.UTC(year, 0, 1))) / 86400000 + 1) / 7)
+    return report({
+      window: `${year}-W${String(week).padStart(2, '0')}`,
+      windowStart: new Date(monday.getTime() - 8 * 3600000 - 1000).toISOString(),
+      windowEnd: new Date(monday.getTime() + 6 * 86400000 + 15 * 3600000).toISOString()
+    })
+  }).reverse()
+}
+
+for (const size of [9, 60]) {
+  test(`the notebook retrieves all ${size} weeks, opens the oldest month and keeps its numbering after a new week`, async () => {
+    const stored = archiveReports(size)
+    const repository = weeklyRepository(stored)
+    const weeks = await loadNotebookWeeks(repository)
+    assert.equal(weeks.length, size)
+    assert.deepEqual(weeks.map((week) => week.sequence), Array.from({ length: size }, (_, index) => size - index))
+    const oldest = weeks.at(-1)
+    const oldMonth = weeklyMonth(oldest)
+    const slot = weeklyMonthSlots(weeks, oldMonth).find((entry) => entry.week?.window === oldest.window)
+    assert.equal(slot?.week.sequence, 1, 'a generated old week must never become an empty placeholder')
+    assert.deepEqual(repository.calls.filter((call) => call.command === 'weekly_report_list').map((call) => call.offset), size > 52 ? [0, 52] : [0])
+
+    stored.splice(0, stored.length, ...archiveReports(size + 1))
+    const next = await loadNotebookWeeks(repository)
+    const sequences = new Map(next.map((week) => [week.window, week.sequence]))
+    for (const week of weeks) assert.equal(sequences.get(week.window), week.sequence)
+    assert.equal(next[0].sequence, size + 1)
+    assert.equal(weeklyMonthSlots(next, oldMonth).find((entry) => entry.week?.window === oldest.window)?.week.sequence, 1)
+  })
+}
+
+test('legacy pagination crosses 52 rows and shares one complete sequence with modern reports', async () => {
+  const stored = archiveReports(61)
+  const legacy = stored.slice(1).map((entry, index) => ({
+    runId: `legacy-${index}`, window: entry.window, start: entry.windowStart, end: entry.windowEnd,
+    digest: { title: '历史周记', body: ['这周做过阅读练习。'] }
+  }))
+  const repository = weeklyRepository(stored.slice(0, 1), legacy)
+  const weeks = await loadNotebookWeeks(repository)
+  assert.equal(weeks.length, 61)
+  assert.equal(weeks[0].schemaVersion, 3)
+  assert.equal(weeks[0].sequence, 61)
+  assert.equal(weeks.at(-1).sequence, 1)
+  assert.deepEqual(repository.calls.filter((call) => call.command === 'weekly_history_list').map((call) => call.offset), [0, 52])
+  const oldest = weeks.at(-1)
+  assert.ok(weeklyMonthSlots(weeks, weeklyMonth(oldest)).some((slot) => slot.week === oldest))
 })

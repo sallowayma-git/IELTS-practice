@@ -247,9 +247,9 @@ class WeeklyDreamOrchestrator:
     ) -> _ModelOutput:
         """Call ``model.invoke`` at most ``MODEL_MAX_ATTEMPTS`` times in total.
 
-        The first call, at most one repair carrying the host's violation list,
-        and at most one retry with backoff after a retryable failure. A second
-        preflight that still reports violations is submitted as-is, never looped.
+        The first call, at most one repair for an unusable digest or host
+        violations, and at most one retry with backoff after a retryable failure.
+        A second bad preflight is submitted as-is, never looped.
         """
         failure: _Retryable | None = None
         repair: dict[str, Any] | None = None
@@ -262,7 +262,8 @@ class WeeklyDreamOrchestrator:
                 # The call succeeded: backoff belongs only to a failed call.
                 failure = None
                 report = self._preflight(run_input, output, started=started)
-                if report.get("needsRepair") and not repaired and attempt + 1 < MODEL_MAX_ATTEMPTS:
+                needs_repair = report.get("needsRepair") or report.get("usable") is False
+                if needs_repair and not repaired and attempt + 1 < MODEL_MAX_ATTEMPTS:
                     repair = {"previousDigest": output.digest.to_wire(), "validation": report}
                     repaired = True
                     continue

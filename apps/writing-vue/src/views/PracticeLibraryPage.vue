@@ -73,6 +73,7 @@
       :browse-title="browseTitle"
       :type-filters="typeFilters"
       :selected-type="selectedType"
+      :question-kind-label="questionKindLabel"
       v-model:keyword="keyword"
       :frequency-filters="frequencyFilters"
       :frequency-filter="frequencyFilter"
@@ -91,6 +92,7 @@
       @toggle-browse-preference="toggleBrowsePreference"
       @persist-browse-preference="persistBrowsePreference"
       @filter-by-type="filterByType"
+      @clear-question-kind="clearQuestionKind"
       @clear-search="clearSearch"
       @toggle-frequency-filter="toggleFrequencyFilter"
       @retry-load="loadAssets"
@@ -173,6 +175,7 @@ import {
   normalizeFrequency
 } from '@/modules/practice-reading/browseFilters'
 import { hasReadingPracticePayload } from '@/modules/practice-reading/readingAssetCore'
+import { QUESTION_KIND_LABELS } from '@/modules/practice-reading/readingTags.js'
 import { LIBRARY_LOAD_FAILURE, libraryFailureMessage } from '@/modules/practice-reading/libraryFailure'
 import { useReadingLibrary } from '@/modules/practice-reading/useReadingLibrary'
 import { useReadingSuite } from '@/modules/practice-reading/useReadingSuite'
@@ -263,6 +266,7 @@ const localMessage = ref('')
 const pdfViewer = ref({ open: false, title: '', dataUrl: '' })
 const latestAssetReadAt = ref(null)
 let pendingBrowsePositionRestore = false
+let browsePositionRestored = false
 
 const readingCategoryEntries = computed(() => ['P1', 'P2', 'P3'].map((category) => ({
   category,
@@ -274,10 +278,12 @@ const browseTitle = computed(() => {
   return buildBrowseTitle(selectedCategory.value, selectedType.value)
 })
 
+const questionKind = computed(() => typeof route.query.kind === 'string' ? route.query.kind : '')
+const questionKindLabel = computed(() => QUESTION_KIND_LABELS[questionKind.value] || questionKind.value)
+
 const filteredReadingAssets = computed(() => {
-  const kind = typeof route.query.kind === 'string' ? route.query.kind : ''
-  const assets = kind ? readingAssets.value.filter((asset) => (asset.questionKinds || []).includes(kind)) : readingAssets.value
-  return filterReadingAssets(assets, {
+  return filterReadingAssets(readingAssets.value, {
+    questionKind: questionKind.value,
     keyword: keyword.value,
     selectedType: selectedType.value,
     selectedCategory: selectedCategory.value,
@@ -324,6 +330,7 @@ watch(() => route.query.view, () => {
 })
 
 watch(activeView, (value) => {
+  if (value === 'browse') browsePositionRestored = false
   updateRouteView(value)
   nextTick(() => {
     updateSegmentedIndicators()
@@ -335,12 +342,6 @@ watch(activeView, (value) => {
 
 watch(selectedType, () => {
   nextTick(updateSegmentedIndicators)
-})
-
-watch(filteredReadingAssets, () => {
-  if (activeView.value === 'browse') {
-    scheduleBrowsePositionRestore()
-  }
 })
 
 async function loadAssets() {
@@ -448,7 +449,14 @@ function filterByType(type) {
   selectedType.value = type === 'reading' ? 'reading' : 'all'
   if (selectedType.value === 'all') {
     selectedCategory.value = 'all'
+    return clearQuestionKind()
   }
+}
+
+function clearQuestionKind() {
+  if (!questionKind.value) return
+  const { kind, ...query } = route.query
+  return router.replace({ query }).catch(() => {})
 }
 
 function browseCategory(category, type = 'reading') {
@@ -481,12 +489,13 @@ function saveBrowsePosition(asset) {
 }
 
 function restoreBrowsePosition() {
-  if (!browseRememberPosition.value || activeView.value !== 'browse') return false
+  if (browsePositionRestored || !browseRememberPosition.value || activeView.value !== 'browse') return false
   const prefs = readBrowsePreferences()
   const assetId = String(prefs.lastAssetId || '').trim()
   if (!assetId) return false
   const targetAsset = readingAssets.value.find((asset) => String(asset?.id || '').trim() === assetId)
   if (!targetAsset) return false
+  browsePositionRestored = true
 
   const normalizedType = prefs.lastType === 'reading' ? 'reading' : 'all'
   const normalizedCategory = String(prefs.lastCategory || '').trim()

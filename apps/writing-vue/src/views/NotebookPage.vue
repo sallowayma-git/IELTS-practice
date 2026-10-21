@@ -228,8 +228,8 @@ import {
   getCurrentWeeklyReport,
   getDailyJournal,
   getMemoryCatalog,
-  getWeeklyHistory,
-  getWeeklyReports,
+  getAllWeeklyHistory,
+  getAllWeeklyReports,
   recordMemoryFeedback,
   triggerDailyDream
 } from '@/api/memory-repository.js'
@@ -341,11 +341,13 @@ async function readEntries(memoriesById, plan) {
 // simply shows the daily pages. The live week, the finished v3 weeks and the
 // read-only legacy digests are read apart, so one failing does not hide the
 // others; a legacy week only fills a window no v3 report already covers.
+// Finish every archive page before numbering: the month shelf and its global
+// sequence both need the oldest generated week, not a recent-page cutoff.
 async function readWeeks() {
   const [current, persisted, legacy] = await Promise.allSettled([
     getCurrentWeeklyReport(),
-    getWeeklyReports(),
-    getWeeklyHistory()
+    getAllWeeklyReports(),
+    getAllWeeklyHistory()
   ])
   const older = listRows(settledValue(legacy)).map(legacyWeeklyEntry).filter(Boolean)
   return weeklySequence(weeklyEntries(settledValue(current), settledValue(persisted), older))

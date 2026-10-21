@@ -207,6 +207,10 @@ def main() -> int:
             ["node", "developer/tests/js/practiceReadingCore10.test.js"],
         ),
         run_command(
+            "Reading browse question-kind filter",
+            ["node", "developer/tests/js/readingBrowseFilter.test.mjs"],
+        ),
+        run_command(
             "Reading asset list boundary",
             ["node", "developer/tests/js/readingAssetList.test.mjs"],
         ),
