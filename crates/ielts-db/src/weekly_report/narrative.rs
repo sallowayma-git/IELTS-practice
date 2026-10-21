@@ -264,11 +264,34 @@ fn violation(text: &str, facts: &Value, counts_allowed: bool) -> Option<&'static
     if !counts_allowed
         && Regex::new(r"[零〇一二两三四五六七八九十百千万亿几]+(?:多|余)?\s*(?:小时|分钟|秒钟|[次套篇道题分天个周项处组遍回种月年秒日倍成])")
             .unwrap()
-            .is_match(&plain)
+            .find_iter(&plain)
+            .any(|count| !is_relative_week(&plain, count))
     {
         return Some("literal_chinese_count");
     }
     None
+}
+
+fn is_relative_week(text: &str, count: regex::Match<'_>) -> bool {
+    // In 这一周 / 上一周, 一周 names a calendar period rather than a duration.
+    // Only exempt this match: a later quantity in the sentence still needs a fact.
+    if count.as_str() != "一周" || text[count.end()..].starts_with('半') {
+        return false;
+    }
+    let prefix = &text[..count.start()];
+    if prefix.ends_with(['这', '那']) {
+        return true;
+    }
+    let Some(context) = prefix.strip_suffix(['上', '下']) else {
+        return false;
+    };
+    // 上/下 can also finish a verb (加上、花上、剩下). Require a period
+    // boundary or an explicit calendar/comparison context instead of guessing.
+    context.is_empty()
+        || context.ends_with(|c: char| c.is_whitespace() || "，。；！？、：,.;!?:（(“「".contains(c))
+        || context.ends_with(['在', '比', '较', '与', '和', '从', '到', '至', '于'])
+        || context.ends_with("回顾")
+        || context.ends_with("经过")
 }
 
 /// Internal id prefixes that must never reach the page as prose.
@@ -453,6 +476,88 @@ mod tests {
             assert_eq!(outcome.narrative.next_steps[0].text, cited);
             assert!(outcome.narrative.validation.final_report.violations.is_empty(), "{cited}");
             assert!(has_usable_body(&json!({"body": [cited]}), &facts()), "{cited}");
+        }
+    }
+
+    #[test]
+    fn relative_week_labels_preserve_fact_backed_prose() {
+        for period in [
+            "这一周", "上一周", "下一周", "那一周", "回顾上一周", "相比上一周", "而在下一周",
+            "从上一周到下一周", "回看记录，上一周",
+        ] {
+            let title = format!("{period}的练习回顾");
+            let sentence = format!("{period}读了 {{{{f:volume.reading}}}} 篇。");
+            let raw = json!({
+                "title": title,
+                "body": [sentence],
+                "changes": [sentence],
+                "strengths": [sentence],
+                "weaknesses": [sentence],
+            });
+            let outcome = validate(raw.clone());
+            assert!(outcome.usable, "{period}");
+            assert!(has_usable_body(&raw, &facts()), "{period}");
+            assert_eq!(outcome.narrative.title, title);
+            assert_eq!(outcome.narrative.body, [sentence.clone()]);
+            assert_eq!(outcome.narrative.changes[0].text, sentence);
+            assert_eq!(outcome.narrative.strengths[0].text, sentence);
+            assert_eq!(outcome.narrative.weaknesses[0].text, sentence);
+            let report = outcome.narrative.validation.final_report;
+            assert!(report.violations.is_empty(), "{period}");
+            assert_eq!(report.dropped_sentences, 0, "{period}");
+            assert!(!report.needs_repair, "{period}");
+        }
+    }
+
+    #[test]
+    fn relative_week_labels_do_not_hide_unsupported_counts() {
+        for sentence in [
+            "练习了一周。",
+            "练习了两周。",
+            "这两周练习很规律。",
+            "这一周练习了两周。",
+            "这一周读了三篇。",
+            "这一周读了 {{f:volume.reading}} 篇，还练习了两周。",
+            "练习了两周，上一周读了 {{f:volume.reading}} 篇。",
+            "这一周半练习很规律。",
+            "练习时间再加上一周。",
+            "距离考试只剩下一周。",
+            "这项练习需要花上一周。",
+            "这项练习安排上一周。",
+        ] {
+            let raw = json!({"body": [sentence]});
+            let outcome = validate(raw.clone());
+            assert!(!outcome.usable, "{sentence}");
+            assert!(!has_usable_body(&raw, &facts()), "{sentence}");
+            assert!(outcome.narrative.validation.final_report.violations.iter()
+                .any(|violation| violation.code == "literal_chinese_count"), "{sentence}");
+        }
+    }
+
+    #[test]
+    fn packaged_provider_weekly_wording_survives_without_repair() {
+        // The title and both first-paragraph variants from packaged_tauri_flow.py.
+        for (first, second, test_facts) in [
+            ("这一周读了 {{f:volume.reading}} 篇。",
+             "阅读正确率是 {{f:accuracy.rate}}。同类题的错误值得回看原文依据。", facts()),
+            ("这一周保持练习，记录已经整理好了。",
+             "同类题的错误值得回看原文依据。", BTreeMap::new()),
+        ] {
+            let raw = json!({
+                "title": "这一周的练习回顾",
+                "body": [first, second],
+                "nextSteps": ["下一周再做两组同类题。"],
+            });
+            let outcome = validate_narrative(&raw, &test_facts, &profile(), NaiveDate::from_ymd_opt(2026, 10, 11).unwrap());
+            assert!(outcome.usable, "{first}");
+            assert!(has_usable_body(&raw, &test_facts), "{first}");
+            assert_eq!(outcome.narrative.title, "这一周的练习回顾");
+            assert_eq!(outcome.narrative.body, [first, second]);
+            assert_eq!(outcome.narrative.next_steps[0].text, "下一周再做两组同类题。");
+            let report = outcome.narrative.validation.final_report;
+            assert!(report.violations.is_empty(), "{first}");
+            assert_eq!(report.dropped_sentences, 0, "{first}");
+            assert!(!report.needs_repair, "{first}");
         }
     }
 
