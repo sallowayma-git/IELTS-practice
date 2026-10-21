@@ -285,6 +285,12 @@ fn is_relative_week(text: &str, count: regex::Match<'_>) -> bool {
     let Some(context) = prefix.strip_suffix(['上', '下']) else {
         return false;
     };
+    // Advice, feedback and records belong to a calendar week regardless of the
+    // leading verb (延续上一周的建议, 回看上一周的记录). A bare 的 is not
+    // sufficient: 花上一周的时间 and 安排上一周的练习 still express durations.
+    if ["的建议", "的反馈", "的记录"].iter().any(|noun| text[count.end()..].starts_with(noun)) {
+        return true;
+    }
     // 上/下 can also finish a verb (加上、花上、剩下). Require a period
     // boundary or an explicit calendar/comparison context instead of guessing.
     context.is_empty()
@@ -510,6 +516,30 @@ mod tests {
     }
 
     #[test]
+    fn previous_advice_response_survives_as_the_second_paragraph() {
+        let first = "这一周读了 {{f:volume.reading}} 篇。";
+        for advice in [
+            "延续上一周的建议",
+            "回应上一周的建议",
+            "遵循上一周的建议",
+            "参考上一周的反馈",
+            "结合上一周的记录",
+            "回看上一周的记录",
+        ] {
+            let second = format!("{advice}，这一周读了 {{{{f:volume.reading}}}} 篇。");
+            let raw = json!({"body": [first, second]});
+            let outcome = validate(raw.clone());
+            assert!(outcome.usable, "{advice}");
+            assert!(has_usable_body(&raw, &facts()), "{advice}");
+            assert_eq!(outcome.narrative.body, [first.to_owned(), second]);
+            let report = outcome.narrative.validation.final_report;
+            assert!(report.violations.is_empty(), "{advice}");
+            assert_eq!(report.dropped_sentences, 0, "{advice}");
+            assert!(!report.needs_repair, "{advice}");
+        }
+    }
+
+    #[test]
     fn relative_week_labels_do_not_hide_unsupported_counts() {
         for sentence in [
             "练习了一周。",
@@ -524,6 +554,12 @@ mod tests {
             "距离考试只剩下一周。",
             "这项练习需要花上一周。",
             "这项练习安排上一周。",
+            "这项练习需要花上一周的时间。",
+            "这项练习安排上一周的练习。",
+            "距离考试只剩下一周的时间。",
+            "练习时间再加上一周的时间。",
+            "延续上一周的建议，这一周练习了两周。",
+            "练习了两周，回看上一周的记录。",
         ] {
             let raw = json!({"body": [sentence]});
             let outcome = validate(raw.clone());
