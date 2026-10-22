@@ -41,7 +41,7 @@
   margin: 0;
   padding: 0 14px;
   border: 1px solid var(--btn-border);
-  border-radius: var(--anth-radius-md);
+  border-radius: var(--anth-radius-control);
   background: var(--btn-bg);
   color: var(--btn-fg);
   box-shadow: var(--btn-shadow);
@@ -59,6 +59,11 @@
     color var(--anth-duration-fast) var(--anth-ease),
     box-shadow var(--anth-duration-fast) var(--anth-ease),
     transform var(--anth-duration-fast) var(--anth-ease);
+}
+
+/* Primary glow on hover. */
+.atlas-paper .btn-primary:hover:not(:disabled, [aria-disabled="true"]) {
+  box-shadow: var(--anth-glow-primary);
 }
 
 /* Hover and press. Disabled buttons never react. */
@@ -169,9 +174,9 @@
 
 /* ── Variants: assign --btn-* only ───────────────────────────────────── */
 .atlas-paper .btn-primary {
-  --btn-bg: var(--anth-accent);
-  --btn-fg: var(--anth-ink-inverse);
-  --btn-border: var(--anth-accent);
+  --btn-bg: var(--anth-accent-fill);
+  --btn-fg: var(--anth-accent-contrast);
+  --btn-border: var(--anth-accent-fill);
   --btn-shadow: var(--anth-highlight), var(--anth-shadow-1);
   --btn-bg-hover: var(--anth-accent-hover);
   --btn-fg-hover: var(--anth-ink-inverse);

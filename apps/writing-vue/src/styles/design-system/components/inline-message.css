@@ -13,8 +13,9 @@
   padding: 10px 12px;
   border: 1px solid var(--msg-border);
   border-left: 3px solid var(--msg-fg);
-  border-radius: var(--anth-radius-sm);
+  border-radius: var(--anth-radius-alert);
   background: var(--msg-soft);
+  box-shadow: var(--anth-alert-shadow);
   color: var(--anth-ink-soft);
   font-size: var(--anth-text-small-size);
   line-height: var(--anth-text-small-line);
@@ -42,6 +43,14 @@
   --msg-fg: var(--anth-danger);
   --msg-soft: var(--anth-danger-soft);
   --msg-border: var(--anth-danger-border);
+}
+
+/* Optional leading icon; sits in the message's own line box. */
+.atlas-paper .inline-message__icon {
+  display: inline-flex;
+  margin-right: var(--anth-space-2);
+  vertical-align: -3px;
+  color: var(--msg-fg);
 }
 
 .atlas-paper .inline-message:is(.inline-message-info, .inline-message-success, .inline-message-warning, .inline-message-error) {

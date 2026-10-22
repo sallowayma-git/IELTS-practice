@@ -42,7 +42,7 @@ pub struct CompletionRequest {
 }
 
 /// Per-call-site output ceilings (tokens). The Coach (2000) and the sidecar
-/// jobs (memory candidates 2000, weekly dream 1500) keep their own constants
+/// jobs (memory candidates 2000, weekly dream 2500) keep their own constants
 /// next to the code that builds the prompt.
 pub const WRITING_EVALUATION_MAX_TOKENS: u32 = 6_144;
 pub const AGENT_ROUND_MAX_TOKENS: u32 = 1_500;

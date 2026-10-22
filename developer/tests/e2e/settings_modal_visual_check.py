@@ -77,13 +77,14 @@ def read_detail_surface_geometry(page):
         () => {
           const panel = document.querySelector('.settings-detail-panel');
           const sections = [...document.querySelectorAll('.settings-detail-panel > .settings-panel')];
-          const nested = [...document.querySelectorAll('.settings-detail-panel > .settings-panel :is(.settings-list__row, .mode-card, .custom-temperature-panel, .about-info, .about-features)')];
+          const nested = [...document.querySelectorAll('.settings-detail-panel > .settings-panel :is(.settings-list__row, .mode-card, .custom-temperature-panel)')];
           return {
             panelOutline: panel ? parseFloat(getComputedStyle(panel).borderTopWidth) : 0,
             sectionCount: sections.length,
             sectionShadows: sections.map((section) => getComputedStyle(section).boxShadow),
             nestedShadows: nested.map((section) => getComputedStyle(section).boxShadow),
             detailOverflow: panel ? getComputedStyle(panel).overflowY : '',
+            tabs: [...document.querySelectorAll('.settings-detail-panel .settings-tabs .settings-tab')].map(node => node.textContent.trim()),
             modes: [...document.querySelectorAll('.settings-detail-panel .mode-card')].map(node => ({
               active: node.classList.contains('active'),
               background: getComputedStyle(node).backgroundColor,
@@ -92,6 +93,39 @@ def read_detail_surface_geometry(page):
         }
         """
     )
+
+
+def read_about_geometry(page):
+    return page.evaluate(
+        """
+        () => {
+          const about = document.querySelector('#settings-info');
+          const modal = document.querySelector('.settings-detail-modal');
+          return {
+            present: Boolean(about && about.offsetParent !== null),
+            infoRows: about ? about.querySelectorAll('.about-info .info-row').length : 0,
+            featureRows: about ? about.querySelectorAll('.about-features li').length : 0,
+            productName: about?.querySelector('.about-identity__name')?.textContent.trim() || '',
+            version: about?.querySelector('.version')?.textContent.trim() || '',
+            insideModal: Boolean(about && modal && modal.contains(about)),
+            aboutTrigger: document.querySelectorAll('[data-settings-open="about"]').length,
+          };
+        }
+        """
+    )
+
+
+def assert_about_inline(name, geometry):
+    if not geometry['present']:
+        raise AssertionError(f'{name}: about section is not rendered on the page')
+    if geometry['insideModal']:
+        raise AssertionError(f'{name}: about content still lives inside the settings dialog')
+    if geometry['aboutTrigger']:
+        raise AssertionError(f'{name}: about still exposes a dialog trigger')
+    if geometry['infoRows'] < 5 or geometry['featureRows'] < 4:
+        raise AssertionError(f'{name}: inline about lost its facts or capabilities: {geometry}')
+    if geometry['productName'] != 'IELTS Atlas' or not geometry['version']:
+        raise AssertionError(f'{name}: inline about lost its identity block: {geometry}')
 
 
 def assert_detail_surfaces(name, geometry):
@@ -134,6 +168,8 @@ def main():
                 install_tauri_mock(page)
                 page.goto(f"{BASE_URL}/#/settings", wait_until="networkidle")
                 page.wait_for_selector(".settings-page #show-onboarding-btn")
+                about = read_about_geometry(page)
+                assert_about_inline(name, about)
 
                 page.locator("#show-onboarding-btn").click()
                 page.wait_for_selector(".settings-page > .dialog-overlay")
@@ -149,31 +185,44 @@ def main():
                 assert_geometry(f"{name}: update", update)
                 page.locator(".settings-page > .dialog-overlay .btn-warm-sand").click()
 
-                page.get_by_role("button", name="历史保留上限").click()
+                page.locator('[data-settings-open="api"]').click()
                 page.wait_for_selector(".settings-detail-modal")
                 detail_surfaces = {}
-                for tab_name in ("模型参数", "数据管理", "关于", "提示词", "API 配置"):
-                    page.locator(".settings-tabs .settings-tab").filter(has_text=tab_name).click()
+                for tab_name in ("模型参数", "提示词管理", "API 配置"):
+                    page.locator(".settings-detail-modal .settings-tab").filter(has_text=tab_name).click()
                     page.wait_for_timeout(30)
                     if tab_name == '模型参数':
-                        page.locator('.mode-card').filter(has_text='自定义模式').click()
+                        page.locator('.settings-detail-modal .mode-card').filter(has_text='自定义模式').click()
                         page.wait_for_selector('.custom-temperature-panel')
-                    if tab_name in ('提示词', 'API 配置'):
+                    if tab_name in ('提示词管理', 'API 配置'):
                         page.wait_for_selector('.settings-detail-panel .settings-list__row')
                     detail_surfaces[tab_name] = read_detail_surface_geometry(page)
                     assert_detail_surfaces(f"{name}: {tab_name}", detail_surfaces[tab_name])
+                    expected_tabs = ["API 配置", "提示词管理", "模型参数"]
+                    if detail_surfaces[tab_name]['tabs'] != expected_tabs:
+                        raise AssertionError(f"{name}: settings dialog tabs changed: {detail_surfaces[tab_name]['tabs']}")
                     assert_flat_surfaces(
-                        page, '.settings-detail-panel > .settings-panel, .settings-detail-panel :is(.settings-list__row, .mode-card, .custom-temperature-panel, .about-info, .about-features)',
+                        page, '.settings-detail-panel > .settings-panel, .settings-detail-panel :is(.settings-list__row, .mode-card, .custom-temperature-panel)',
                         f'{name}: {tab_name}',
                     )
 
-                page.locator(".settings-tabs .settings-tab").filter(has_text="数据管理").click()
-                page.locator(".danger-zone .btn-danger").click()
+                page.get_by_role("button", name="关闭写作设置").click()
+                page.wait_for_selector(".settings-detail-modal", state="detached")
+                page.get_by_role("button", name="调整", exact=True).click()
+                page.wait_for_selector(".data-dialog")
+                data_surfaces = read_detail_surface_geometry(page)
+                assert_detail_surfaces(f"{name}: data", data_surfaces)
+                assert_flat_surfaces(
+                    page, '.data-dialog > .settings-panel, .data-dialog :is(.settings-list__row, .mode-card, .custom-temperature-panel)',
+                    f'{name}: data',
+                )
+
+                page.locator(".data-dialog .danger-zone .btn-danger").first.click()
                 page.wait_for_selector(".settings-page > .dialog-overlay")
                 confirm = read_geometry(page)
                 assert_geometry(f"{name}: confirmation", confirm)
                 page.screenshot(path=str(REPORT_DIR / f"settings-{name}-current.png"), full_page=True)
-                report.append({"name": name, "onboarding": onboarding, "update": update, "detailSurfaces": detail_surfaces, "confirmation": confirm})
+                report.append({"name": name, "about": about, "onboarding": onboarding, "update": update, "detailSurfaces": detail_surfaces, "dataSurfaces": data_surfaces, "confirmation": confirm})
                 page.close()
         finally:
             browser.close()

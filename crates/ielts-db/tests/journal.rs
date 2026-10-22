@@ -628,12 +628,17 @@ fn memory_event_evidence_is_linked_day_user_scoped_and_round_trips() {
     let (_dir, conn) = open_db();
     seed_dream_memory(&conn, "mem-reading", "local");
     seed_dream_memory(&conn, "mem-other", "other");
+    // An imported timestamp outside this LOCAL day, also on DST machines.
+    // The old 00:30+01:00 fixture was inside the day in summer London.
+    let start = ielts_db::local_day::day_bounds(DAY).unwrap().0;
+    let outside = chrono::DateTime::parse_from_rfc3339(&start).unwrap() - chrono::Duration::minutes(30);
+    let outside = outside.with_timezone(&chrono::FixedOffset::east_opt(3600).unwrap()).to_rfc3339();
     for (id, user, at) in [
         ("obs-related", "local", "2026-08-16T09:00:00Z"),
         ("obs-writing", "local", "2026-08-16T15:00:00Z"),
         ("obs-old", "local", "2026-08-15T09:00:00Z"),
         ("obs-other", "other", "2026-08-16T09:00:00Z"),
-        ("obs-offset", "local", "2026-08-16T00:30:00+01:00"),
+        ("obs-offset", "local", outside.as_str()),
     ] {
         seed_dream_observation(&conn, id, user, at);
     }

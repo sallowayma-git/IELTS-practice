@@ -48,8 +48,19 @@ READING_P95_BUDGET_MS = 3000
 FAKE_NOW_ENV = "IELTS_ATLAS_FAKE_NOW"
 WEEKLY_MIN_OBSERVATIONS = 8  # ielts_db::WEEKLY_MIN_OBSERVATIONS
 WEEKLY_TITLE = "这一周的练习回顾"
-# Number-free on purpose: a weekly sentence may only cite numbers in its block's data.
-WEEKLY_SENTENCE = "这一块的数据值得留意。"
+# A non-empty wrong answer is a real negative skill signal; a blank is not.
+PACKAGED_WRONG_ANSWER = "__packaged_wrong__"
+# Deterministic preference among question kinds present in two or more assets.
+WEEKLY_KIND_PRIORITY = ("true_false_not_given", "matching_headings", "summary_completion")
+# Mirrors crates/ielts-db/src/reading/assets.rs::matching_subtype, in order.
+MATCHING_SUBTYPE_RULES = (
+    (("list of headings", "correct heading"), "matching_headings"),
+    (("paragraph contains", "section contains"), "matching_information"),
+    (("correct ending", "sentence ending"), "matching_sentence_endings"),
+    (("complete the summary",), "summary_completion"),
+    (("classify the following",), "classification"),
+    (("match each",), "matching_features"),
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -329,9 +340,11 @@ def start_tauri_driver(driver: "Driver", tauri: str, native: str, ports: tuple[i
 
 
 def is_weekly_request(body: dict) -> bool:
-    messages = body.get("messages") or []
-    return any(message.get("role") == "system"
-               and "weekly reviewer" in str(message.get("content", "")).lower()
+    messages = body.get("messages") if isinstance(body, dict) else None
+    if not isinstance(messages, list):
+        return False
+    return any(isinstance(message, dict) and message.get("role") == "system"
+               and "weekly journal" in str(message.get("content", "")).lower()
                for message in messages)
 
 
@@ -348,23 +361,185 @@ def _first_json_object(text: str):
             return None
 
 
-def weekly_block_ids(body: dict) -> list[str]:
-    """Block ids of the weekly pack (`pack.blocks[].id`) in the request's user message."""
-    for message in body.get("messages") or []:
-        if message.get("role") != "user" or not isinstance(message.get("content"), str):
+def weekly_pack(body: dict) -> dict | None:
+    """The weekly pack (`pack`, else the bare object) from the first user JSON."""
+    messages = body.get("messages") if isinstance(body, dict) else None
+    for message in messages if isinstance(messages, list) else []:
+        if not isinstance(message, dict) or message.get("role") != "user":
             continue
-        value = _first_json_object(message["content"])
-        pack = value.get("pack", value) if isinstance(value, dict) else None
-        blocks = pack.get("blocks") if isinstance(pack, dict) else None
-        if isinstance(blocks, list):
-            ids = [block.get("id") for block in blocks if isinstance(block, dict)]
-            return list(dict.fromkeys(item for item in ids if isinstance(item, str) and item))
-    return []
+        content = message.get("content")
+        if not isinstance(content, str):
+            continue
+        value = _first_json_object(content)
+        if not isinstance(value, dict):
+            continue
+        pack = value.get("pack", value)
+        if isinstance(pack, dict):
+            return pack
+    return None
+
+
+def weekly_facts(body: dict) -> dict:
+    """The `pack.facts` map of a weekly request, or an empty map."""
+    pack = weekly_pack(body)
+    facts = pack.get("facts") if isinstance(pack, dict) else None
+    return facts if isinstance(facts, dict) else {}
+
+
+def weekly_evidence_fact(body: dict) -> str | None:
+    """The first fact id (key order) whose provenance covers two or more assets."""
+    facts = weekly_facts(body)
+    for fact_id in sorted(facts):
+        fact = facts.get(fact_id)
+        provenance = fact.get("provenance") if isinstance(fact, dict) else None
+        asset_ids = provenance.get("assetIds") if isinstance(provenance, dict) else None
+        if not isinstance(asset_ids, list):
+            continue
+        assets = {asset for asset in asset_ids if isinstance(asset, str) and asset}
+        if len(assets) >= 2:
+            return fact_id
+    return None
+
+
+def instruction_text(html: str) -> str:
+    """Lower-cased text of an HTML fragment with tags removed and spaces collapsed."""
+    text: list[str] = []
+    in_tag = False
+    for char in html:
+        if char == "<":
+            in_tag = True
+        elif char == ">" and in_tag:
+            in_tag = False
+            text.append(" ")
+        elif not in_tag:
+            text.append(char)
+    return " ".join("".join(text).replace("&nbsp;", " ").split()).lower()
+
+
+def matching_subtype(text: str) -> str:
+    """The specific matching task an instruction text names, else `matching`."""
+    for needles, kind in MATCHING_SUBTYPE_RULES:
+        if any(needle in text for needle in needles):
+            return kind
+    return "matching"
+
+
+def question_kind(group: dict) -> str:
+    """The scored kind of a question group, resolving generic `matching`."""
+    if not isinstance(group, dict):
+        return "unknown"
+    kind = group.get("kind")
+    if not isinstance(kind, str) or not kind:
+        return "unknown"
+    if kind != "matching":
+        return kind
+    html = group.get("bodyHtml")
+    return matching_subtype(instruction_text(html if isinstance(html, str) else ""))
+
+
+def question_kinds(payload: dict) -> dict[str, set[str]]:
+    """Question ids of a reading payload keyed by their scored kind."""
+    kinds: dict[str, set[str]] = {}
+    groups = payload.get("questionGroups") if isinstance(payload, dict) else None
+    for group in groups if isinstance(groups, list) else []:
+        kind = question_kind(group)
+        question_ids = group.get("questionIds") if isinstance(group, dict) else None
+        ids = ({question_id for question_id in question_ids if isinstance(question_id, str) and question_id}
+               if isinstance(question_ids, list) else set())
+        if kind == "unknown" or not ids:
+            continue
+        kinds.setdefault(kind, set()).update(ids)
+    return kinds
+
+
+def choose_shared_kind(kinds_by_asset: dict[str, set[str]]) -> str | None:
+    """A kind present in two or more assets, with a stable preference order."""
+    counts: dict[str, int] = {}
+    for kinds in kinds_by_asset.values():
+        for kind in set(kinds):
+            if isinstance(kind, str) and kind and kind != "unknown":
+                counts[kind] = counts.get(kind, 0) + 1
+    eligible = [kind for kind, count in counts.items() if count >= 2]
+    if not eligible:
+        return None
+
+    def order(kind: str) -> tuple[int, int, str]:
+        if kind in WEEKLY_KIND_PRIORITY:
+            return (0, WEEKLY_KIND_PRIORITY.index(kind), kind)
+        if kind == "matching":
+            return (2, 0, kind)
+        return (1, 0, kind)
+
+    return min(eligible, key=order)
+
+
+def weekly_wrong_question_ids(payload: dict, kind: str) -> set[str]:
+    """Answer-key question ids of one kind in a reading payload."""
+    return set(question_kinds(payload).get(kind, set()))
+
+
+def weekly_attempt_answers(payload: dict, kind: str) -> dict:
+    """Answer key with only the chosen kind's questions answered wrong."""
+    answers = payload.get("answerKey") if isinstance(payload, dict) else None
+    if not isinstance(answers, dict):
+        return {}
+    wrong = weekly_wrong_question_ids(payload, kind)
+    return {question_id: PACKAGED_WRONG_ANSWER if question_id in wrong else answer
+            for question_id, answer in answers.items()}
+
+
+def _number_text(value) -> str:
+    """A JSON number as the page's `String(number)` writes it."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def fact_display(fact: dict) -> str:
+    """One weekly fact as apps/writing-vue/src/modules/notebook/weekly.js renders it."""
+    value = fact.get("value") if isinstance(fact, dict) else None
+    fmt = str(fact.get("format") or "").lower() if isinstance(fact, dict) else ""
+    if fmt == "percent":
+        return f"{math.floor(float(value) * 100 + 0.5)}%"
+    if fmt == "minutes":
+        return f"{_number_text(value)} 分钟"
+    return _number_text(value)
 
 
 def weekly_answer(body: dict) -> str:
-    sentences = {block_id: WEEKLY_SENTENCE for block_id in weekly_block_ids(body)}
-    return json.dumps({"title": WEEKLY_TITLE, "sentences": sentences, "mutations": []}, ensure_ascii=False)
+    """The packaged fake's v3 answer: validator-clean prose plus a Soul edit."""
+    facts = weekly_facts(body)
+    first = ("这一周读了 {{f:volume.reading}} 篇。" if "volume.reading" in facts
+             else "这一周保持练习，记录已经整理好了。")
+    observation = "同类题的错误值得回看原文依据。"
+    second = ("阅读正确率是 {{f:accuracy.rate}}。" + observation
+              if "accuracy.rate" in facts else observation)
+    evidence = weekly_evidence_fact(body)
+    profile_edits = []
+    if evidence:
+        profile_edits = [{
+            "key": "soul.companionNotes",
+            "value": "先看错题，再开始新的练习。",
+            "evidenceIds": [evidence],
+            "reason": "同类题在两篇文章里都有错题。",
+        }]
+    return json.dumps({
+        "digest": {
+            "title": WEEKLY_TITLE,
+            "body": [first, second],
+            "changes": [],
+            "nextSteps": [{
+                "text": "下一周再做两组同类题。",
+                "target": {"type": "kind", "key": "reading.tfng"},
+            }],
+            "strengths": ["练习记录完整，阅读和写作都有覆盖。"],
+            "weaknesses": ["同类题在不同文章里出错。"],
+        },
+        "profileEdits": profile_edits,
+        "mutations": [],
+    }, ensure_ascii=False)
 
 
 def send_weekly_completion(handler: http.server.BaseHTTPRequestHandler, body: dict, model: str) -> None:
@@ -851,34 +1026,104 @@ def wait_daily_receipts(app_data: Path, day: str, today: str, timeout_seconds: i
     raise RuntimeError(f"automatic Daily incomplete after {timeout_seconds}s: {json.dumps(diagnostic, ensure_ascii=False)}")
 
 
-SCORED_READING_ANSWERS = (
-    "SELECT COUNT(*) FROM attempt_answers a JOIN attempts t ON t.id = a.attempt_id "
-    "WHERE t.activity = 'reading' AND t.status = 'completed' AND a.is_correct IS NOT NULL")
+SCORED_READING_OBSERVATIONS = (
+    "SELECT COUNT(*) FROM learner_observations WHERE user_id='local' "
+    "AND projector_key='learning_observation_v1' AND projector_version=2 "
+    "AND observation_type='reading.question.outcome' AND polarity IS NOT NULL "
+    "AND julianday(observed_at)>julianday(?) AND julianday(observed_at)<=julianday(?)")
 
 
-def ensure_weekly_evidence(driver: Driver, app_data: Path, asset_ids: list[str]) -> int:
-    """Reuse the flow's reading submissions; submit more (blank answers still
-    score as wrong) until the weekly window holds enough scored outcomes."""
-    for index, asset_id in enumerate(asset_ids):
+def ensure_weekly_evidence(driver: Driver, app_data: Path, asset_ids: list[str], weekly_now: str) -> int:
+    """Seed actual answers, then assert the weekly projector's scored evidence.
+
+    The week must hold a question type missed in two different assets: that is
+    the cross-asset evidence a Soul edit can cite. The chosen kind is answered
+    wrong in both selected assets (a non-empty answer is a real negative skill
+    signal), while every other question is answered correctly. Extra assets are
+    answered correctly only when the window still holds too few scored
+    outcomes. Blank answers count as exam mistakes but carry no skill signal.
+    This isolated database has no prior weekly run, so its window looks back 28
+    days.
+    """
+    end = datetime.fromisoformat(weekly_now)
+    bounds = ((end - timedelta(days=28)).isoformat(), end.isoformat())
+
+    def count() -> int:
+        invoke_data(driver, "weekly_report_current", {})  # refresh the observation projection
         with closing(database_connection(app_data)) as conn:
-            if conn.execute(SCORED_READING_ANSWERS).fetchone()[0] >= WEEKLY_MIN_OBSERVATIONS:
-                break
+            return conn.execute(SCORED_READING_OBSERVATIONS, bounds).fetchone()[0]
+
+    payloads: list[tuple[str, dict]] = []
+    kinds_by_asset: dict[str, set[str]] = {}
+    for asset_id in dict.fromkeys(asset_ids):
+        canonical = invoke_data(driver, "reading_get_asset_payload", {"assetId": asset_id})
+        payload = canonical.get("payload") if isinstance(canonical, dict) else None
+        require(isinstance(payload, dict), f"weekly evidence asset payload is invalid: {asset_id}")
+        answers = payload.get("answerKey")
+        require(isinstance(answers, dict) and bool(answers), f"weekly evidence asset has no answer key: {asset_id}")
+        kinds = question_kinds(payload)
+        require(bool(kinds), f"weekly evidence asset has no question kinds: {asset_id}")
+        payloads.append((asset_id, payload))
+        kinds_by_asset[asset_id] = set(kinds)
+
+    kind = choose_shared_kind(kinds_by_asset)
+    require(kind is not None, "weekly evidence assets share no question kind in two assets")
+    selected = [(asset_id, payload) for asset_id, payload in payloads
+                if kind in kinds_by_asset[asset_id]][:2]
+    require(len(selected) == 2, f"weekly evidence kind {kind!r} is present in fewer than two assets")
+
+    def submit(index: int, asset_id: str, answers: dict) -> None:
         invoke_data(driver, "reading_submit_attempt", {"cmd": {
-            "attemptId": f"packaged-weekly-attempt-{index}", "assetId": asset_id, "answers": {},
+            "attemptId": f"packaged-weekly-attempt-{index}", "assetId": asset_id, "answers": answers,
             "markedQuestions": [], "questionTimeline": [], "idempotencyKey": f"packaged-weekly-submit-{index}"}})
-    with closing(database_connection(app_data)) as conn:
-        scored = conn.execute(SCORED_READING_ANSWERS).fetchone()[0]
+
+    submitted = 0
+    for asset_id, payload in selected:
+        answers = weekly_attempt_answers(payload, kind)
+        wrong = weekly_wrong_question_ids(payload, kind)
+        require(bool(wrong) and any(question_id in answers for question_id in wrong),
+                f"weekly evidence asset has no answer-key question of kind {kind!r}: {asset_id}")
+        submit(submitted, asset_id, answers)
+        submitted += 1
+
+    scored = count()
+    if scored < WEEKLY_MIN_OBSERVATIONS:
+        attempted = {asset_id for asset_id, _ in selected}
+        for asset_id, payload in payloads:
+            if asset_id in attempted:
+                continue
+            submit(submitted, asset_id, payload["answerKey"])
+            submitted += 1
+            scored = count()
+            if scored >= WEEKLY_MIN_OBSERVATIONS:
+                break
+    scored = count()
     require(scored >= WEEKLY_MIN_OBSERVATIONS, f"weekly window holds only {scored} scored outcomes")
     return scored
 
 
 def final_weekly_run(rows: list[dict]) -> dict | None:
+    """The first completed v3 final report with a narrative body."""
     for row in rows:
-        if row["status"] != "completed" or not row["digest_json"]:
+        if row.get("status") != "completed" or not row.get("digest_json"):
             continue
-        digest = json.loads(row["digest_json"])
-        if digest.get("schemaVersion") == 2 and digest.get("state") == "final":
-            return {"runId": row["id"], "inputHash": row["input_hash"]}
+        try:
+            digest = json.loads(row["digest_json"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        narrative = digest.get("narrative") if isinstance(digest, dict) else None
+        body = narrative.get("body") if isinstance(narrative, dict) else None
+        if (digest.get("schemaVersion") != 3 or digest.get("state") != "final"
+                or not isinstance(narrative, dict)
+                or not isinstance(body, list)
+                or not any(isinstance(paragraph, str) and paragraph.strip() for paragraph in body)):
+            continue
+        facts = digest.get("facts")
+        display_title = digest.get("displayTitle")
+        if not isinstance(facts, dict) or not isinstance(display_title, str) or not display_title.strip():
+            continue
+        return {"runId": row["id"], "inputHash": row["input_hash"],
+                "displayTitle": display_title, "facts": facts, "narrativeBody": body}
     return None
 
 
@@ -898,17 +1143,92 @@ def wait_weekly_run(app_data: Path, timeout_seconds: int = 180) -> dict:
     raise RuntimeError(f"weekly run incomplete after {timeout_seconds}s: {json.dumps(rows, ensure_ascii=False)[:2000]}")
 
 
-def check_notebook_week(driver: Driver) -> dict:
+def check_notebook_week(driver: Driver, weekly_run: dict) -> dict:
+    """Open the v3 final week, verify its prose/data/citation, then undo the Soul edit."""
+    title = weekly_run["displayTitle"]
     driver.script("location.hash = '#/'; return true")
     wait_for_value(driver, "return location.hash === '#/' && !document.querySelector('[data-notebook]')")
     driver.script("location.hash = '#/notebook'; return true")
-    return wait_for_value(driver, f"""
-        const week = Array.from(document.querySelectorAll('[data-notebook-week]')).find((entry) =>
-          entry.textContent.includes({json.dumps(WEEKLY_TITLE)})
-          && entry.textContent.includes({json.dumps(WEEKLY_SENTENCE)}));
-        return week ? {{window: week.getAttribute('data-notebook-week'),
-                        textLength: week.textContent.trim().length}} : null;
-    """, 30, label="weekly report on the notebook page")
+    window = wait_for_value(driver, f"""
+        const card = Array.from(document.querySelectorAll('[data-notebook-week]')).find((entry) =>
+          entry.textContent.includes({json.dumps(title)}));
+        if (!card) return null;
+        card.click();
+        return card.getAttribute('data-notebook-week');
+    """, 30, label="weekly report card")
+    wait_for_value(driver, """
+        const sheet = document.querySelector('[data-notebook-sheet]');
+        return Boolean(sheet && sheet.querySelector('[data-weekly-detail][data-week-state="final"]'));
+    """, 30, label="final weekly report sheet")
+
+    facts = weekly_run["facts"]
+    require(isinstance(facts, dict) and "volume.reading" in facts,
+            "final weekly run has no volume.reading fact")
+    rendered_volume = fact_display(facts["volume.reading"])
+    observed = wait_for_value(driver, """
+        const sheet = document.querySelector('[data-notebook-sheet]');
+        const detail = sheet && sheet.querySelector('[data-weekly-detail][data-week-state="final"]');
+        if (!detail) return null;
+        const data = detail.querySelector('[data-weekly-data]');
+        return {
+          text: sheet.textContent || '',
+          paragraphs: detail.querySelectorAll('.weekly-paragraph').length,
+          blocks: data ? data.querySelectorAll('[data-week-block]').length : 0,
+          charts: data ? data.querySelectorAll('svg[role="img"]').length : 0,
+        };
+    """, 30, label="weekly report content")
+    require(observed["paragraphs"] >= 1, f"final weekly report has no prose: {observed}")
+    require(rendered_volume in observed["text"],
+            f"volume.reading rendered as {rendered_volume!r} is absent from the weekly sheet")
+    require("{{f:" not in observed["text"] and "}}" not in observed["text"],
+            f"weekly sheet leaked a fact placeholder: {observed['text'][:400]}")
+    require(observed["blocks"] >= 2, f"weekly data appendix has only {observed['blocks']} blocks")
+    require(observed["charts"] >= 1, "weekly data appendix has no chart")
+
+    wait_for_value(driver, """
+        const citation = document.querySelector('[data-notebook-sheet] .weekly-citation');
+        if (!citation) return false;
+        citation.click();
+        return true;
+    """, 30, label="weekly citation")
+    citation = wait_for_value(driver, """
+        const source = document.querySelector('[data-notebook-sheet] .weekly-source');
+        return source ? source.textContent.trim() : null;
+    """, 15, label="weekly citation source")
+    require("依据" in citation, f"weekly citation source is not labelled: {citation}")
+    driver.script("""
+        const close = document.querySelector('[data-notebook-sheet] .notebook-sheet__close');
+        if (close) close.click();
+        return true;
+    """)
+    wait_for_value(driver, "return !document.querySelector('[data-notebook-sheet]')", 15,
+                   label="weekly sheet close")
+
+    driver.script("location.hash = '#/settings'; return true")
+    notes = wait_for_value(driver, """
+        const notes = document.querySelector('[data-soul-settings] [data-soul-companion-notes]');
+        return notes ? notes.textContent.trim() : null;
+    """, 30, label="Soul companion notes")
+    require("先看错题，再开始新的练习。" in notes, f"Soul companion note is missing: {notes}")
+    wait_for_value(driver, f"""
+        const button = Array.from(document.querySelectorAll('[data-soul-settings] button')).find((entry) =>
+          entry.textContent.trim() === {json.dumps("撤销这次修改")});
+        if (!button) return false;
+        button.click();
+        return true;
+    """, 30, label="Soul undo button")
+    notice = wait_for_value(driver, """
+        const notice = document.querySelector('[data-soul-settings] [data-soul-notice]');
+        return notice ? notice.textContent.trim() : null;
+    """, 30, label="Soul undo notice")
+    require("已撤销这次修改。" in notice, f"Soul undo was not confirmed: {notice}")
+    wait_for_value(driver,
+                   "return !document.querySelector('[data-soul-settings] [data-soul-companion-notes]')",
+                   30, label="Soul companion notes removed")
+
+    return {"window": window, "displayTitle": title, "paragraphs": observed["paragraphs"],
+            "blocks": observed["blocks"], "charts": observed["charts"], "citation": citation,
+            "factValue": rendered_volume, "soulNotes": notes, "soulUndo": notice}
 
 
 def stage_test_runtime(app: Path) -> tuple[tempfile.TemporaryDirectory[str], Path, dict]:
@@ -1536,7 +1856,7 @@ def main() -> int:
         listed_ids = (item.get("id") or item.get("assetId") or item.get("asset_id") for item in assets)
         asset_ids = list(dict.fromkeys([str(asset_id), *(str(item) for item in listed_ids if item)]))
         app_data = Path(isolated_app_data.name)
-        scored = ensure_weekly_evidence(driver, app_data, asset_ids)
+        scored = ensure_weekly_evidence(driver, app_data, asset_ids, weekly_now)
         # Relaunch on the first Sunday 10:00 after this practice: the only way to
         # vary the app's env is a new tauri-driver.
         close_native_app(driver, runtime_app)
@@ -1548,7 +1868,7 @@ def main() -> int:
         driver.create(str(runtime_app))
         wait_for_vue(driver)
         weekly_run = wait_weekly_run(app_data)
-        week = check_notebook_week(driver)
+        week = check_notebook_week(driver, weekly_run)
         driver.screenshot(NOTEBOOK_WEEKLY_SCREENSHOT)
         weekly_requests = sum(is_weekly_request(body) for provider in (fake_agent_provider, fake_coach_provider)
                               for body in provider.requests)

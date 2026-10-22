@@ -173,6 +173,11 @@ export function recordMemoryFeedback(memoryId: string, feedbackKind: MemoryFeedb
 export function triggerDailyDream(query: DailyDreamQuery): Promise<unknown>
 export function getDailyJournal(query: DailyJournalQuery): Promise<unknown>
 export function getBackgroundJobStatus(): Promise<unknown[]>
+export function getWeeklyHistory(limit?: number, offset?: number): Promise<Array<{runId: string; window: string; start: string; end: string; digest: Record<string, unknown>}>>
+export function getWeeklyReports(limit?: number, offset?: number): Promise<Record<string, unknown>[]>
+export function getAllWeeklyHistory(): ReturnType<typeof getWeeklyHistory>
+export function getAllWeeklyReports(): ReturnType<typeof getWeeklyReports>
+export function getCurrentWeeklyReport(): Promise<Record<string, unknown> | null>
 export function archiveStaleMemories(): Promise<unknown>
 
 export const memoryRepository: {
@@ -190,6 +195,11 @@ export const memoryRepository: {
   triggerDailyDream: typeof triggerDailyDream
   getDailyJournal: typeof getDailyJournal
   getBackgroundJobStatus: typeof getBackgroundJobStatus
+  getWeeklyHistory: typeof getWeeklyHistory
+  getWeeklyReports: typeof getWeeklyReports
+  getAllWeeklyHistory: typeof getAllWeeklyHistory
+  getAllWeeklyReports: typeof getAllWeeklyReports
+  getCurrentWeeklyReport: typeof getCurrentWeeklyReport
   archiveStaleMemories: typeof archiveStaleMemories
 }
 

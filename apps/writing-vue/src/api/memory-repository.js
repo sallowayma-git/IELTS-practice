@@ -169,9 +169,34 @@ export async function getBackgroundJobStatus() {
 }
 
 /** Finished weekly reports (read-only), newest first. */
-export async function getWeeklyReports(limit = 8) {
-  const response = await invokeCommand('weekly_report_list', { limit })
+export async function getWeeklyHistory(limit = 52, offset = 0) {
+  const response = await invokeCommand('weekly_history_list', { limit, offset })
+  return unwrapCommandResponse(response, 'weekly_history_list')
+}
+
+export async function getWeeklyReports(limit = 8, offset = 0) {
+  const response = await invokeCommand('weekly_report_list', { limit, offset })
   return unwrapCommandResponse(response, 'weekly_report_list')
+}
+
+// The host caps a page at 52 rows. Read the archive to its end before numbering
+// the notebook, so older months remain reachable and new weeks keep old numbers.
+async function readWeeklyArchive(readPage) {
+  const limit = 52
+  const rows = []
+  while (true) {
+    const page = await readPage(limit, rows.length)
+    rows.push(...page)
+    if (page.length < limit) return rows
+  }
+}
+
+export async function getAllWeeklyHistory() {
+  return readWeeklyArchive(getWeeklyHistory)
+}
+
+export async function getAllWeeklyReports() {
+  return readWeeklyArchive(getWeeklyReports)
 }
 
 /** This week's report so far (state "live"), or null when nothing was practised since the last finished week. */
@@ -203,6 +228,9 @@ export const memoryRepository = {
   getDailyJournal,
   getBackgroundJobStatus,
   getWeeklyReports,
+  getWeeklyHistory,
+  getAllWeeklyReports,
+  getAllWeeklyHistory,
   getCurrentWeeklyReport,
   archiveStaleMemories
 }

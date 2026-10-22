@@ -217,6 +217,7 @@ pub fn run() {
             commands::journal::background_job_status,
             #[cfg(feature = "daily-dream-v1")]
             commands::journal::weekly_report_list,
+            commands::journal::weekly_history_list,
             #[cfg(feature = "daily-dream-v1")]
             commands::journal::weekly_report_current,
             // Round-3 audit (A3): `dream_run_weekly` is deliberately NOT
@@ -228,6 +229,11 @@ pub fn run() {
             commands::journal::memory_record_feedback,
             #[cfg(feature = "daily-dream-v1")]
             commands::journal::consolidation_archive_stale,
+            // Soul preferences: reads and audited writes only, all through
+            // `ielts_db::soul`; availability does not depend on the dream features.
+            commands::soul::soul_get,
+            commands::soul::soul_update,
+            commands::soul::soul_undo,
             commands::settings::list_settings,
             commands::settings::upsert_setting,
             commands::settings::set_secret,

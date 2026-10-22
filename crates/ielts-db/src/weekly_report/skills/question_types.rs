@@ -16,6 +16,8 @@ struct TypeRow {
     answered: u32,
     rate: f64,
     passages: u32,
+    /// The distinct passages the misses came from, for fact provenance.
+    asset_ids: Vec<String>,
 }
 
 fn round2(value: f64) -> f64 {
@@ -45,14 +47,21 @@ fn type_rows(facts: &WeekFacts) -> Vec<TypeRow> {
     let mut rows: Vec<TypeRow> = totals
         .into_iter()
         .filter_map(|(qtype, (correct, wrong))| {
-            let (miss_count, passages) = missed.get(qtype.as_str()).map_or((0, 0), |(n, set)| (*n, set.len() as u32));
+            let (miss_count, assets) = missed.get(qtype.as_str()).cloned().unwrap_or((0, BTreeSet::new()));
             let wrong = wrong.max(miss_count);
             if wrong == 0 {
                 return None;
             }
             let answered = correct + wrong;
             let rate = round2(f64::from(correct) / f64::from(answered));
-            Some(TypeRow { qtype, wrong, answered, rate, passages })
+            Some(TypeRow {
+                qtype,
+                wrong,
+                answered,
+                rate,
+                passages: assets.len() as u32,
+                asset_ids: assets.into_iter().map(str::to_owned).collect(),
+            })
         })
         .collect();
     rows.sort_by(|left, right| {
@@ -69,6 +78,7 @@ fn row_json(row: &TypeRow) -> Value {
         "answered": row.answered,
         "rate": row.rate,
         "passages": row.passages,
+        "assetIds": row.asset_ids,
     })
 }
 
@@ -175,10 +185,10 @@ mod tests {
         assert_eq!(
             block.data,
             json!({"types": [
-                {"qtype": "summary_completion", "label": "摘要填空", "wrong": 2, "answered": 3, "rate": 0.33, "passages": 2},
-                {"qtype": "tfng", "label": "判断题", "wrong": 2, "answered": 3, "rate": 0.33, "passages": 2},
-                {"qtype": "matching_headings", "label": "段落大意配对", "wrong": 2, "answered": 8, "rate": 0.75, "passages": 1},
-                {"qtype": "short_answer", "label": "简答题", "wrong": 1, "answered": 5, "rate": 0.8, "passages": 1},
+                {"qtype": "summary_completion", "label": "摘要填空", "wrong": 2, "answered": 3, "rate": 0.33, "passages": 2, "assetIds": ["p2", "p3"]},
+                {"qtype": "tfng", "label": "判断题", "wrong": 2, "answered": 3, "rate": 0.33, "passages": 2, "assetIds": ["p1", "p2"]},
+                {"qtype": "matching_headings", "label": "段落大意配对", "wrong": 2, "answered": 8, "rate": 0.75, "passages": 1, "assetIds": ["p1"]},
+                {"qtype": "short_answer", "label": "简答题", "wrong": 1, "answered": 5, "rate": 0.8, "passages": 1, "assetIds": ["p3"]},
             ]})
         );
     }
@@ -225,7 +235,7 @@ mod tests {
         let block = run(&facts, &[]).unwrap();
         assert_eq!(
             block.data["types"][0],
-            json!({"qtype": "unknown", "label": "其他题型", "wrong": 1, "answered": 1, "rate": 0.0, "passages": 1})
+            json!({"qtype": "unknown", "label": "其他题型", "wrong": 1, "answered": 1, "rate": 0.0, "passages": 1, "assetIds": ["p1"]})
         );
     }
 }

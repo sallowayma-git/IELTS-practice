@@ -34,7 +34,7 @@ use crate::learner::canonical_reading_skill_key;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
 
-pub const WEEKLY_PACK_SCHEMA_VERSION: u32 = 2;
+pub const WEEKLY_PACK_SCHEMA_VERSION: u32 = 3;
 /// Upper bound of the whole serialized pack, in `estimate_tokens` units.
 pub const WEEKLY_PACK_TOKEN_CAP: u32 = 6_000;
 /// The most the carried-along preferences and memories may spend of the cap:

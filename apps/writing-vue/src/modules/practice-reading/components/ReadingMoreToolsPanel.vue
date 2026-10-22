@@ -5,13 +5,6 @@
     </div>
     <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
     <div class="more-tools-grid">
-      <button class="card is-interactive tool-card tool-card--featured" type="button" id="writing-entry-btn" @click="$emit('open-writing-entry', $event)">
-        <div class="list-row-main tool-card-content">
-          <h3>写作评分</h3>
-          <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
-        </div>
-        <span class="list-row-trail tool-card-arrow" aria-hidden="true">进入 →</span>
-      </button>
       <button class="card is-interactive tool-card" type="button" data-action="open-clock" @click="$emit('open-clock-tool', $event)">
         <div class="list-row-main tool-card-content">
           <h3>全屏时钟</h3>
@@ -37,7 +30,6 @@ defineProps({
 })
 
 defineEmits([
-  'open-writing-entry',
   'open-clock-tool',
   'open-reading-memorize'
 ])

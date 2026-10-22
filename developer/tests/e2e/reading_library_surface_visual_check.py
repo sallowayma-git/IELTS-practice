@@ -106,7 +106,7 @@ def read_overview(page):
           meta: ['P1', 'P2', 'P3'].map((category) => (
             document.querySelector(`[data-reading-category-card="${category}"] .category-meta`)?.textContent.trim() || ''
           )),
-          error: document.querySelector('#overview-view [data-reading-library-error]')?.textContent.trim() || '',
+          error: document.querySelector('#overview-view [data-reading-library-error] h3')?.textContent.trim() || '',
         })
         """
     )
@@ -168,22 +168,27 @@ def read_geometry(page):
             activeShadow: style(activeView)?.boxShadow || '',
             activeRect: rect(activeView),
             toolCards: [...document.querySelectorAll('#more-view .tool-card')].map((node) => ({
+              action: node.dataset.action || '',
               shadow: style(node)?.boxShadow || '',
               background: style(node)?.backgroundColor + style(node)?.backgroundImage,
               rect: rect(node),
             })),
-            settingPanels: [...document.querySelectorAll('#reading-preferences-view .hero-settings-group > .hero-panel')].map((node) => ({
-              shadow: style(node)?.boxShadow || '',
-              rect: rect(node),
-            })),
-            config: (() => {
-              const node = document.querySelector('[data-reading-library-config-list]');
-              const card = node?.querySelector('.backup-list-card');
-              return node ? {
-                visible: style(node)?.display !== 'none',
-                cardShadow: style(card)?.boxShadow || '',
-                cardRect: rect(card),
-              } : null;
+            settings: (() => {
+              const page = document.querySelector('.settings-page');
+              const row = document.querySelector('#settings-reading');
+              const dialog = document.querySelector('.data-dialog');
+              return {
+                pageVisible: Boolean(page),
+                rowRect: rect(row),
+                dialogVisible: Boolean(dialog),
+                dialogRect: rect(dialog),
+                dialogPanels: dialog ? dialog.querySelectorAll('.settings-panel').length : 0,
+                tabs: [...(dialog?.querySelectorAll('.settings-tab') || [])].map((node) => node.textContent.trim()),
+                activeTab: dialog?.querySelector('.settings-tab.active')?.textContent.trim() || '',
+                reload: Boolean(dialog?.querySelector("[data-action='reload-reading-library']")),
+                exportAction: Boolean(dialog?.querySelector("[data-action='export-reading-archive']")),
+                importAction: Boolean(dialog?.querySelector("[data-action='import-reading-archive']")),
+              };
             })(),
             clock: (() => {
               const node = document.querySelector('#fullscreen-clock-overlay:not(.is-hidden)');
@@ -225,15 +230,34 @@ def assert_page_geometry(name, geometry):
 def assert_tool_surface(name, geometry):
     assert_page_geometry(name, geometry)
     cards = geometry["toolCards"]
-    if len(cards) != 3:
-        raise AssertionError(f"{name}: expected three More Tools cards")
+    if [card["action"] for card in cards] != ["open-clock", "open-reading-memorize"]:
+        raise AssertionError(f"{name}: More Tools entries changed: {cards}")
 
 
-def assert_settings_surface(name, geometry):
-    assert_page_geometry(name, geometry)
-    panels = geometry["settingPanels"]
-    if len(panels) != 4:
-        raise AssertionError(f"{name}: expected four Reading Settings panels")
+def assert_settings_surface(name, geometry, width):
+    settings = geometry["settings"]
+    if not settings["pageVisible"]:
+        raise AssertionError(f"{name}: reading settings did not redirect to Settings")
+    row = settings["rowRect"]
+    if not row or row["left"] < -1 or row["right"] > width + 1:
+        raise AssertionError(f"{name}: reading data row escapes the viewport: {row}")
+    if settings["dialogVisible"]:
+        raise AssertionError(f"{name}: reading data dialog is open before the row is used")
+
+
+def assert_data_dialog(name, geometry, width):
+    settings = geometry["settings"]
+    dialog = settings["dialogRect"]
+    if not dialog or dialog["left"] < -1 or dialog["right"] > width + 1:
+        raise AssertionError(f"{name}: reading data dialog escapes the viewport: {dialog}")
+    if settings["tabs"] != ["全部数据", "阅读", "写作"]:
+        raise AssertionError(f"{name}: data dialog tabs changed: {settings['tabs']}")
+    if settings["activeTab"] != "阅读":
+        raise AssertionError(f"{name}: reading data dialog did not open on its own tab: {settings['activeTab']}")
+    if settings["dialogPanels"] != 3:
+        raise AssertionError(f"{name}: expected three reading data panels: {settings['dialogPanels']}")
+    if not (settings["reload"] and settings["exportAction"] and settings["importAction"]):
+        raise AssertionError(f"{name}: reading data actions are missing: {settings}")
 
 
 def assert_overlay(name, geometry, key):
@@ -274,22 +298,20 @@ def main():
                 page.locator("#fullscreen-clock-overlay .clock-close-btn").click()
                 page.wait_for_function("() => document.querySelector('#fullscreen-clock-overlay')?.classList.contains('is-hidden')")
 
-                open_route(page, "/?view=settings")
+                page.goto(f"{BASE_URL}/#/?view=settings", wait_until="networkidle")
+                page.wait_for_selector(".settings-page")
+                page.wait_for_selector("#settings-reading")
                 settings_geometry = read_geometry(page)
-                assert_settings_surface(f"{name}: settings", settings_geometry)
-                assert_flat_surfaces(page, '.hero-settings-group > .hero-panel', f'{name}: settings')
+                assert_settings_surface(f"{name}: settings", settings_geometry, width)
                 capture_state(page, f'reading-settings-{name}')
-                page.locator("#library-config-btn").click()
-                page.wait_for_selector("[data-reading-library-config-list]")
-                config_geometry = read_geometry(page)
-                assert_settings_surface(f"{name}: config", config_geometry)
-                config = config_geometry["config"]
-                if not config:
-                    raise AssertionError(f"{name}: library config is missing")
-                assert_flat_surfaces(page, '[data-reading-library-config-list] > .backup-list-card', f'{name}: config')
-                capture_state(page, f'reading-config-{name}')
-                page.locator(".reading-library-config-list .backup-list-dismiss").click()
-                page.wait_for_selector("[data-reading-library-config-list]", state="detached")
+                page.locator("#settings-reading button").first.click()
+                page.wait_for_selector(".data-dialog")
+                dialog_geometry = read_geometry(page)
+                assert_data_dialog(f"{name}: data dialog", dialog_geometry, width)
+                assert_flat_surfaces(page, ".data-dialog", f'{name}: data dialog')
+                capture_state(page, f'reading-data-dialog-{name}')
+                page.locator(".data-dialog .settings-detail-close").click()
+                page.wait_for_selector(".data-dialog", state="detached")
 
                 open_route(page, "/?view=browse")
                 page.wait_for_selector("[data-reading-asset-id='pdf-visual-1']")
@@ -302,7 +324,7 @@ def main():
                 page.wait_for_selector(".pdf-viewer-overlay", state="detached")
 
                 page.screenshot(path=str(REPORT_DIR / f"reading-library-surfaces-{name}-current.png"))
-                report.append({"name": name, "more": more_geometry, "settings": settings_geometry, "config": config_geometry, "clock": clock_geometry, "pdf": pdf_geometry})
+                report.append({"name": name, "more": more_geometry, "settings": settings_geometry, "dataDialog": dialog_geometry, "clock": clock_geometry, "pdf": pdf_geometry})
                 page.close()
         finally:
             browser.close()

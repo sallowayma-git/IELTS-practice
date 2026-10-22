@@ -1,9 +1,9 @@
 <template>
   <div id="settings-view" class="settings-page view active" data-writing-settings>
     <header class="page-header has-rule">
-      <p class="page-header-kicker">写作 · 偏好与数据</p>
+      <p class="page-header-kicker">偏好与数据</p>
       <h1>设置</h1>
-      <p class="page-header-desc">配置评测通道与提示词，管理本机备份、历史保留与应用信息。</p>
+      <p class="page-header-desc">配置评测、管理本机数据与应用信息。</p>
     </header>
 
     <div v-if="globalMessage.message" :class="['inline-message', `inline-message-${globalMessage.type}`]">
@@ -12,13 +12,15 @@
 
     <div class="settings-layout">
       <nav class="tabs is-vertical settings-rail" aria-label="设置分区">
+        <p class="settings-rail__title">目录</p>
         <button class="tab" type="button" @click="jumpToSection('settings-ai')">AI 与评测</button>
-        <button class="tab" type="button" @click="jumpToSection('settings-backup')">本机数据备份</button>
-        <button class="tab" type="button" @click="jumpToSection('settings-system')">系统与外观</button>
-        <button class="tab" type="button" @click="jumpToSection('settings-info')">系统信息</button>
+        <button class="tab" type="button" @click="jumpToSection('settings-data')">数据</button>
+        <button class="tab" type="button" @click="jumpToSection('settings-general')">通用</button>
+        <button class="tab" type="button" @click="jumpToSection('settings-info')">关于</button>
       </nav>
 
       <div class="settings-sections">
+        <SoulSettings />
         <section id="settings-ai" class="card settings-card ai-settings-panel" aria-labelledby="settings-ai-title">
           <div class="panel-header">
             <div class="settings-card__head">
@@ -53,15 +55,6 @@
               <button class="btn btn-secondary" type="button" data-settings-open="model" @click="openSettingsDetail('model')">模型参数</button>
             </div>
           </div>
-          <div class="setting-row">
-            <div class="setting-row__copy">
-              <strong>版本与运行环境</strong>
-              <span>应用版本、宿主与数据路径</span>
-            </div>
-            <div class="setting-row__control">
-              <button class="btn btn-secondary" type="button" data-settings-open="about" @click="openSettingsDetail('about')">关于</button>
-            </div>
-          </div>
           <div class="settings-stats">
             <div class="stat">
               <span class="stat-label">已启用配置</span>
@@ -78,73 +71,60 @@
           </div>
         </section>
 
-        <section id="settings-backup" class="card settings-card data-management-panel" aria-labelledby="settings-backup-title">
+        <section id="settings-data" class="card settings-card data-management-panel" aria-labelledby="settings-data-title">
           <div class="panel-header">
             <div class="settings-card__head">
-              <h2 id="settings-backup-title">本机数据备份</h2>
-              <p class="field-help">完整备份由 Rust 写入应用 backups 目录，包含练习记录与设置元数据；不含明文 API Key。</p>
+              <h2 id="settings-data-title">数据</h2>
+              <p class="field-help">完整备份、阅读题库、写作数据与历史保留的摘要；具体操作在「管理」中完成。</p>
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-row__copy">
-              <strong>备份全部数据</strong>
-              <span>生成一份可恢复的完整快照</span>
+              <strong>完整备份</strong>
+              <span>包含阅读、写作与设置的全部本机数据，不含明文 API Key</span>
+              <span class="field-help">{{ backupSummary }}</span>
             </div>
             <div class="setting-row__control">
               <button class="btn btn-secondary data-mgmt-btn" id="create-backup-btn" type="button" :disabled="backupBusy" @click="createFullAppBackup">
-                {{ backupBusy ? '处理中…' : '备份全部数据' }}
+                {{ backupBusy ? '处理中…' : '立即备份' }}
               </button>
+              <button class="btn btn-secondary" type="button" @click="showNativeBackupList">管理</button>
+            </div>
+          </div>
+          <div id="settings-reading" class="setting-row" data-reading-settings>
+            <div class="setting-row__copy">
+              <strong>阅读数据</strong>
+              <span>{{ readingData.summary.value }}</span>
+            </div>
+            <div class="setting-row__control">
+              <button class="btn btn-secondary" type="button" @click="openDataDialog('reading')">管理</button>
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-row__copy">
-              <strong>从备份恢复</strong>
-              <span>替换当前全部数据，恢复前会先保存快照</span>
+              <strong>写作数据</strong>
+              <span>{{ writingDataSummary }}</span>
             </div>
             <div class="setting-row__control">
-              <button class="btn btn-secondary data-mgmt-btn" id="restore-backup-btn" type="button" :disabled="backupBusy" @click="restoreFullAppBackup">
-                从备份恢复…
-              </button>
+              <button class="btn btn-secondary" type="button" @click="openDataDialog('writing')">管理</button>
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-row__copy">
-              <strong>备份文件</strong>
-              <span>查看 backups 目录中的完整备份</span>
+              <strong>历史保留</strong>
+              <span>{{ historyRetentionSummary }}</span>
             </div>
             <div class="setting-row__control">
-              <button class="btn btn-secondary data-mgmt-btn" id="backup-list-btn" type="button" :disabled="backupBusy" @click="showNativeBackupList">
-                备份列表
-              </button>
+              <button class="btn btn-secondary" type="button" @click="openDataDialog('all')">调整</button>
             </div>
-          </div>
-          <div v-if="lastBackupPath" class="inline-message inline-message-success" role="status">
-            <div>最近完整备份已写入</div>
-            <code class="settings-path" :title="lastBackupPath">{{ lastBackupPath }}</code>
-          </div>
-          <div v-if="backupsPath" class="setting-row">
-            <div class="setting-row__copy">
-              <strong>备份目录</strong>
-              <span>应用 backups 目录</span>
-            </div>
-            <code class="settings-path" :title="backupsPath">{{ backupsPath }}</code>
           </div>
         </section>
 
-        <section id="settings-system" class="card settings-card system-management-panel" aria-labelledby="settings-system-title">
+        <section id="settings-general" class="card settings-card system-management-panel" aria-labelledby="settings-general-title">
           <div class="panel-header">
             <div class="settings-card__head">
-              <h2 id="settings-system-title">系统与外观</h2>
-              <p class="field-help">写作题库入口、新手引导与原生更新工具。</p>
-            </div>
-          </div>
-          <div class="setting-row">
-            <div class="setting-row__copy">
-              <strong>写作题库</strong>
-              <span>浏览题库并开始练习</span>
-            </div>
-            <div class="setting-row__control">
-              <button class="btn btn-secondary" id="load-library-btn" type="button" @click="openWritingTopicLibrary">打开写作题库</button>
+              <h2 id="settings-general-title">通用</h2>
+              <p class="field-help">新手引导与应用更新。</p>
             </div>
           </div>
           <div class="setting-row">
@@ -158,15 +138,6 @@
           </div>
           <div class="setting-row">
             <div class="setting-row__copy">
-              <strong>提示词设置</strong>
-              <span>题库页使用的提示词与生成参数</span>
-            </div>
-            <div class="setting-row__control">
-              <button class="btn btn-secondary" id="library-config-btn" type="button" data-action="library-config" @click="openWritingLibraryConfig">提示词设置</button>
-            </div>
-          </div>
-          <div class="setting-row">
-            <div class="setting-row__copy">
               <strong>应用更新</strong>
               <span>检查原生更新通道</span>
             </div>
@@ -174,48 +145,38 @@
               <button class="btn btn-secondary" id="check-updates-btn" type="button" data-update-action="open-modal" @click="openUpdateManager">检查更新</button>
             </div>
           </div>
-          <div class="setting-row">
-            <div class="setting-row__copy">
-              <strong>历史保留上限</strong>
-              <span>自动保留最近终态记录的数量</span>
-            </div>
-            <div class="setting-row__control">
-              <button class="btn btn-secondary" type="button" @click="openSettingsDetail('data')">历史保留上限</button>
-            </div>
-          </div>
         </section>
 
         <section id="settings-info" class="card settings-card system-info-panel" aria-labelledby="settings-info-title">
           <div class="panel-header">
             <div class="settings-card__head">
-              <h2 id="settings-info-title">系统信息</h2>
-              <p class="field-help system-info-status">{{ topicLibraryStatus }}</p>
+              <h2 id="settings-info-title">关于</h2>
+              <p class="field-help">应用版本、运行环境与反馈入口。</p>
             </div>
           </div>
-          <div class="settings-stats">
-            <div class="stat">
-              <span class="stat-label">题目总数</span>
-              <span id="total-exams" class="stat-value">{{ topicLibraryStats.total }}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">Task 1</span>
-              <span id="html-exams" class="stat-value">{{ topicLibraryStats.task1 }}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">Task 2</span>
-              <span id="pdf-exams" class="stat-value">{{ topicLibraryStats.task2 }}</span>
-            </div>
+          <div class="about-identity">
+            <p class="about-identity__name">IELTS Atlas</p>
+            <p class="version">版本 {{ appVersion }}</p>
           </div>
-          <p class="field-help">最近更新：<span id="last-update">{{ topicLibraryStats.lastUpdate }}</span></p>
-          <details class="settings-technical-details">
-            <summary>技术详情</summary>
-            <dl class="settings-info-list">
-              <div class="info-row"><dt class="label">桌面宿主</dt><dd class="value">{{ hostName }}</dd></div>
-              <div class="info-row"><dt class="label">Tauri 版本</dt><dd class="value">{{ tauriVersion }}</dd></div>
-              <div class="info-row"><dt class="label">数据目录</dt><dd class="value settings-path" :title="userDataPath || pathsLoadingLabel">{{ userDataPath || pathsLoadingLabel }}</dd></div>
-              <div class="info-row"><dt class="label">备份目录</dt><dd class="value settings-path" :title="backupsPath || ''">{{ backupsPath || (pathsResolved ? '未获取' : '加载中...') }}</dd></div>
-            </dl>
-          </details>
+          <dl class="about-info">
+            <div class="info-row"><dt class="label">应用形态</dt><dd class="value">Tauri 2 原生桌面客户端</dd></div>
+            <div class="info-row"><dt class="label">业务与数据内核</dt><dd class="value">Rust + SQLite</dd></div>
+            <div class="info-row"><dt class="label">桌面宿主</dt><dd class="value">{{ hostName }}</dd></div>
+            <div class="info-row"><dt class="label">Tauri 版本</dt><dd class="value">{{ tauriVersion }}</dd></div>
+            <div class="info-row"><dt class="label">数据目录</dt><dd class="value settings-path" :title="userDataPath || pathsLoadingLabel">{{ userDataPath || pathsLoadingLabel }}</dd></div>
+            <div v-if="backupsPath || pathsResolved" class="info-row"><dt class="label">备份目录</dt><dd class="value settings-path" :title="backupsPath || ''">{{ backupsPath || '未获取' }}</dd></div>
+          </dl>
+          <div class="about-features">
+            <h3>产品能力</h3>
+            <ul>
+              <li><span>写作</span>题库与自由写作、草稿恢复、AI 评测</li>
+              <li><span>阅读</span>套题、无尽模式、作答与复盘</li>
+              <li><span>数据</span>Rust/SQLite 统一保存练习、设置与历史</li>
+              <li><span>安全</span>API Key 存于系统密钥环，不进入普通备份</li>
+              <li><span>备份</span>原生完整备份、校验和文件恢复</li>
+              <li><span>更新</span>发布配置可启用 Tauri 原生更新检查</li>
+            </ul>
+          </div>
           <div class="settings-credit">
             <a href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT" target="_blank" rel="noopener noreferrer" class="btn btn-link btn-sm inline-hover-link">问题反馈</a>
             <a href="https://github.com/sallowayma-git" target="_blank" rel="noopener noreferrer" class="btn btn-link btn-sm">Salloway呈现</a>
@@ -501,143 +462,300 @@
             </button>
           </div>
         </section>
+      </section>
+    </div>
 
-        <!-- 数据管理 -->
-        <section v-if="activeTab === 'data'" class="settings-panel">
-          <div class="panel-header settings-panel__head">
-            <div>
-              <h3>历史记录</h3>
-              <p>由本机 SQLite 在写入终态练习时执行的历史保留策略；草稿、进行中和评测中的记录不会被清理。</p>
+    <div
+      v-if="dataDialogOpen"
+      class="settings-detail-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="数据管理"
+      @click.self="hideDataDialog"
+    >
+      <section class="dialog dialog-lg settings-detail-panel data-dialog">
+        <div class="settings-detail-chrome">
+          <header class="settings-detail-head">
+            <div class="settings-detail-head__copy">
+              <h3>数据管理</h3>
+              <p class="field-help">备份、题库与历史记录的操作都在这里完成；清空操作不可恢复。</p>
             </div>
-            <span class="tag tag-neutral">{{ historyRetentionLabel }}</span>
-          </div>
-          <div v-if="sectionMessages.data.message" :class="['inline-message', `inline-message-${sectionMessages.data.type}`]">
-            {{ sectionMessages.data.message }}
-          </div>
+            <button class="btn btn-icon settings-detail-close" type="button" aria-label="关闭数据管理" @click="hideDataDialog">×</button>
+          </header>
 
-          <div class="setting-row">
-            <div class="setting-row__copy">
-              <strong>自动保留最近记录数量</strong>
-              <span>仅终态记录（完成、取消、失败或中断）会按完成时间裁剪；不限时不自动清理。</span>
-            </div>
-            <div class="setting-row__control">
-              <label class="check-label">
-                <input v-model="dataSettings.unlimited" type="checkbox" />
-                <span>不限</span>
-              </label>
-              <label v-if="!dataSettings.unlimited" class="check-label">
-                <input
-                  class="input settings-number"
-                  type="number"
-                  v-model.number="dataSettings.max_terminal_attempts"
-                  min="50"
-                  max="500"
-                  step="50"
-                />
-                <span>条</span>
-              </label>
-            </div>
-          </div>
-          <div class="settings-savebar">
-            <span>{{ dataSettings.unlimited ? '不限：不自动清理历史。' : '允许范围 50-500，按 50 递增。' }}</span>
-            <button class="btn btn-primary" type="button" @click="saveDataSettings" :disabled="dataSaving">
-              {{ dataSaving ? '保存中...' : '保存' }}
+          <nav class="tabs settings-tabs" aria-label="数据管理分类">
+            <button
+              v-for="tab in dataTabs"
+              :key="tab.key"
+              type="button"
+              :class="['tab settings-tab', { active: dataDialogTab === tab.key }]"
+              @click="selectDataTab(tab.key)"
+            >
+              {{ tab.label }}
             </button>
-          </div>
-        </section>
+          </nav>
+        </div>
 
-        <section v-if="activeTab === 'data' && settingsBackupListOpen" class="settings-panel" data-writing-settings-backup-list>
-          <div class="panel-header settings-panel__head">
-            <div>
-              <h3>应用备份文件</h3>
-              <p>来自 backups 目录的完整备份。恢复会替换当前全部数据，不是合并写入；恢复前会先保存当前数据的快照。密钥引用仅为元数据，不含明文 API Key。</p>
-            </div>
-            <span class="tag tag-neutral">{{ nativeBackups.length }} 个文件</span>
-          </div>
-          <div v-if="!nativeBackups.length" class="settings-empty">暂无完整备份文件。可先点「备份全部数据」。</div>
-          <div v-else class="list settings-list">
-            <div v-for="backup in nativeBackups" :key="backup.grantId" class="list-row settings-list__row">
-              <div class="list-row-main">
-                <div class="settings-list__title">
-                  <strong>{{ backup.name }}</strong>
-                  <span class="tag tag-neutral">{{ formatNativeBackupDate(backup) }}</span>
-                </div>
-                <div class="list-row-meta">
-                  <span>{{ formatBytes(backup.sizeBytes || backup.size_bytes || 0) }}</span>
-                  <span class="settings-path" :title="backup.displayPath">{{ backup.displayPath }}</span>
-                </div>
-              </div>
-              <div class="list-row-trail">
-                <button class="btn btn-ghost btn-sm" type="button" :disabled="backupBusy" @click="restoreNativeBackupFile(backup)">恢复</button>
+        <div v-if="globalMessage.message" :class="['inline-message', `inline-message-${globalMessage.type}`]">
+          {{ globalMessage.message }}
+        </div>
+        <div v-if="sectionMessages.data.message" :class="['inline-message', `inline-message-${sectionMessages.data.type}`]">
+          {{ sectionMessages.data.message }}
+        </div>
+
+        <!-- 全部数据 -->
+        <template v-if="dataDialogTab === 'all'">
+          <section class="settings-panel">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>完整备份</h3>
+                <p>包含阅读、写作与设置的全部本机数据，不含明文 API Key。恢复会替换当前全部数据而不是合并写入，恢复前会先保存快照。</p>
               </div>
             </div>
-          </div>
-        </section>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>备份全部数据</strong>
+                <span>生成一份可恢复的完整快照</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-secondary data-mgmt-btn" type="button" :disabled="backupBusy" @click="createFullAppBackup">
+                  {{ backupBusy ? '处理中…' : '备份全部数据' }}
+                </button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>从备份恢复</strong>
+                <span>替换当前全部数据，恢复前会先保存快照</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-secondary data-mgmt-btn" id="restore-backup-btn" type="button" :disabled="backupBusy" @click="restoreFullAppBackup">
+                  从备份恢复…
+                </button>
+              </div>
+            </div>
+            <div v-if="lastBackupPath" class="inline-message inline-message-success" role="status">
+              <div>最近完整备份已写入</div>
+              <code class="settings-path" :title="lastBackupPath">{{ lastBackupPath }}</code>
+            </div>
+            <div v-if="backupsPath" class="setting-row">
+              <div class="setting-row__copy">
+                <strong>备份目录</strong>
+                <span>应用 backups 目录</span>
+              </div>
+              <code class="settings-path" :title="backupsPath">{{ backupsPath }}</code>
+            </div>
+          </section>
 
-        <section v-if="activeTab === 'data'" class="settings-panel danger-zone">
-          <div class="panel-header settings-panel__head">
-            <div>
-              <h3>危险操作</h3>
-              <p>这些操作会影响本地历史数据。</p>
+          <section class="settings-panel" data-writing-settings-backup-list>
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>应用备份文件</h3>
+                <p>来自 backups 目录的完整备份。密钥引用仅为元数据，不含明文 API Key。</p>
+              </div>
+              <span class="tag tag-neutral">{{ nativeBackups.length }} 个文件</span>
             </div>
-          </div>
-          <div class="setting-row">
-            <div class="setting-row__copy">
-              <strong>清空所有历史记录</strong>
-              <span>此操作将删除所有评分历史，且不可恢复</span>
+            <div v-if="!nativeBackups.length" class="settings-empty">暂无完整备份文件。可先点「备份全部数据」。</div>
+            <div v-else class="list settings-list">
+              <div v-for="backup in nativeBackups" :key="backup.grantId" class="list-row settings-list__row">
+                <div class="list-row-main">
+                  <div class="settings-list__title">
+                    <strong>{{ backup.name }}</strong>
+                    <span class="tag tag-neutral">{{ formatNativeBackupDate(backup) }}</span>
+                  </div>
+                  <div class="list-row-meta">
+                    <span>{{ formatBytes(backup.sizeBytes || backup.size_bytes || 0) }}</span>
+                    <span class="settings-path" :title="backup.displayPath">{{ backup.displayPath }}</span>
+                  </div>
+                </div>
+                <div class="list-row-trail">
+                  <button class="btn btn-ghost btn-sm" type="button" :disabled="backupBusy" @click="restoreNativeBackupFile(backup)">恢复</button>
+                </div>
+              </div>
             </div>
-            <div class="setting-row__control">
-              <button class="btn btn-danger" type="button" @click="confirmClearHistory">清空历史</button>
-            </div>
-          </div>
-        </section>
+          </section>
 
-        <!-- 关于 -->
-        <section v-if="activeTab === 'about'" class="settings-panel about-section">
-          <div class="about-identity">
-            <h2 class="heading-serif">IELTS Atlas</h2>
-            <p class="version">版本 {{ appVersion }}</p>
-          </div>
+          <section class="settings-panel">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>历史记录</h3>
+                <p>由本机 SQLite 在写入终态练习时执行的历史保留策略；草稿、进行中和评测中的记录不会被清理。</p>
+              </div>
+              <span class="tag tag-neutral">{{ historyRetentionLabel }}</span>
+            </div>
 
-          <div class="about-info">
-            <div class="info-row">
-              <span class="label">应用形态</span>
-              <span class="value">Tauri 2 原生桌面客户端</span>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>自动保留最近记录数量</strong>
+                <span>仅终态记录（完成、取消、失败或中断）会按完成时间裁剪；不限时不自动清理。</span>
+              </div>
+              <div class="setting-row__control">
+                <label class="check-label">
+                  <input v-model="dataSettings.unlimited" type="checkbox" />
+                  <span>不限</span>
+                </label>
+                <label v-if="!dataSettings.unlimited" class="check-label">
+                  <input
+                    class="input settings-number"
+                    type="number"
+                    v-model.number="dataSettings.max_terminal_attempts"
+                    min="50"
+                    max="500"
+                    step="50"
+                  />
+                  <span>条</span>
+                </label>
+              </div>
             </div>
-            <div class="info-row">
-              <span class="label">业务与数据内核</span>
-              <span class="value">Rust + SQLite</span>
+            <div class="settings-savebar">
+              <span>{{ dataSettings.unlimited ? '不限：不自动清理历史。' : '允许范围 50-500，按 50 递增。' }}</span>
+              <button class="btn btn-primary" type="button" @click="saveDataSettings" :disabled="dataSaving">
+                {{ dataSaving ? '保存中...' : '保存' }}
+              </button>
             </div>
-            <div class="info-row">
-              <span class="label">桌面宿主</span>
-              <span class="value">{{ hostName }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">Tauri版本</span>
-              <span class="value">{{ tauriVersion }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">数据目录</span>
-              <span class="value settings-path" :title="userDataPath || pathsLoadingLabel">{{ userDataPath || pathsLoadingLabel }}</span>
-            </div>
-            <div v-if="backupsPath || pathsResolved" class="info-row">
-              <span class="label">备份目录</span>
-              <span class="value settings-path" :title="backupsPath || ''">{{ backupsPath || '未获取' }}</span>
-            </div>
-          </div>
+          </section>
 
-          <div class="about-features">
-            <h3>产品能力</h3>
-            <ul>
-              <li><span>写作</span>题库与自由写作、草稿恢复、AI 评测</li>
-              <li><span>阅读</span>套题、无尽模式、作答与复盘</li>
-              <li><span>数据</span>Rust/SQLite 统一保存练习、设置与历史</li>
-              <li><span>安全</span>API Key 存于系统密钥环，不进入普通备份</li>
-              <li><span>备份</span>原生完整备份、校验和文件恢复</li>
-              <li><span>更新</span>发布配置可启用 Tauri 原生更新检查</li>
-            </ul>
-          </div>
-        </section>
+          <section class="settings-panel danger-zone">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>危险操作</h3>
+                <p>这些操作会影响本地历史数据。</p>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>清空全部历史记录</strong>
+                <span>删除阅读与写作的全部终态历史，不可恢复</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-danger" type="button" @click="confirmClearHistory('all')">清空全部历史</button>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <!-- 阅读 -->
+        <template v-else-if="dataDialogTab === 'reading'">
+          <section class="settings-panel">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>本机题库</h3>
+                <p>题库由桌面应用的 Rust/SQLite 本地索引提供；重新读取只会读取本机索引。</p>
+              </div>
+            </div>
+            <div v-if="readingData.message.value.text" :class="['inline-message', `inline-message-${readingData.message.value.type}`]" role="status">
+              {{ readingData.message.value.text }}
+            </div>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>题库状态</strong>
+                <span>{{ readingData.summary.value }}</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-secondary" type="button" data-action="reload-reading-library" :disabled="readingData.loading.value" @click="readingData.reloadWithNotice">重新读取</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-panel">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>阅读记录归档</h3>
+                <p>导出完整归档；导入会先完整校验，失败时不会写入任何记录。</p>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>导出与导入</strong>
+                <span>归档为 JSON 文件，保存在你选择的位置</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-secondary" type="button" data-action="export-reading-archive" :disabled="readingData.busy.value" @click="readingData.exportArchive">导出归档</button>
+                <button class="btn btn-secondary" type="button" data-action="import-reading-archive" :disabled="readingData.busy.value" @click="readingArchiveInput?.click()">导入归档</button>
+                <input
+                  ref="readingArchiveInput"
+                  hidden
+                  data-reading-archive-import-input
+                  type="file"
+                  accept="application/json,.json"
+                  @change="readingData.importArchiveFromInput"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-panel danger-zone">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>危险操作</h3>
+                <p>这些操作会影响本地历史数据。</p>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>清空阅读历史记录</strong>
+                <span>删除阅读的全部终态历史，不可恢复</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-danger" type="button" @click="confirmClearHistory('reading')">清空阅读历史</button>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <!-- 写作 -->
+        <template v-else>
+          <section class="settings-panel">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>写作题库</h3>
+                <p>{{ topicLibraryStatus }}。</p>
+              </div>
+            </div>
+            <div class="settings-stats">
+              <div class="stat">
+                <span class="stat-label">题目总数</span>
+                <span id="total-exams" class="stat-value">{{ topicLibraryStats.total }}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-label">Task 1</span>
+                <span id="html-exams" class="stat-value">{{ topicLibraryStats.task1 }}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-label">Task 2</span>
+                <span id="pdf-exams" class="stat-value">{{ topicLibraryStats.task2 }}</span>
+              </div>
+            </div>
+            <p class="field-help">最近更新：<span id="last-update">{{ topicLibraryStats.lastUpdate }}</span></p>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>打开写作题库</strong>
+                <span>浏览题库并开始练习</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-secondary" id="load-library-btn" type="button" @click="openWritingTopicLibrary">打开写作题库</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-panel danger-zone">
+            <div class="panel-header settings-panel__head">
+              <div>
+                <h3>危险操作</h3>
+                <p>这些操作会影响本地历史数据。</p>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row__copy">
+                <strong>清空写作历史记录</strong>
+                <span>删除写作的全部终态历史，不可恢复</span>
+              </div>
+              <div class="setting-row__control">
+                <button class="btn btn-danger" type="button" @click="confirmClearHistory('writing')">清空写作历史</button>
+              </div>
+            </div>
+          </section>
+        </template>
       </section>
     </div>
 
@@ -731,8 +849,9 @@
 </template>
 
 <script setup>
+import SoulSettings from '@/modules/notebook/components/SoulSettings.vue'
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Channel } from '@tauri-apps/api/core'
 import { settings, essays, configs, prompts, topics } from '@/api/client.js'
 import {
@@ -744,6 +863,7 @@ import {
   importBackupPath
 } from '@/api/settings-repository.js'
 import { invokeCommand } from '@/api/tauri-bridge.js'
+import { useReadingDataTools } from '@/modules/practice-reading/useReadingDataTools.js'
 import { createRequestGate } from '@/utils/request-gate.js'
 import {
   isProviderDefaultUrl,
@@ -756,8 +876,6 @@ const icons = {
   api: `<svg ${iconAttrs}><circle cx="7" cy="12" r="2.4"></circle><circle cx="17" cy="7" r="2.4"></circle><circle cx="17" cy="17" r="2.4"></circle><path d="M9.2 10.9 14.8 8"></path><path d="M9.2 13.1 14.8 16"></path></svg>`,
   prompts: `<svg ${iconAttrs}><path d="M7 5h10v14H7z"></path><path d="M10 9h4"></path><path d="M10 13h3"></path></svg>`,
   model: `<svg ${iconAttrs}><path d="M5 7h14"></path><path d="M5 12h14"></path><path d="M5 17h14"></path><circle cx="9" cy="7" r="1.8"></circle><circle cx="15" cy="12" r="1.8"></circle><circle cx="11" cy="17" r="1.8"></circle></svg>`,
-  data: `<svg ${iconAttrs}><path d="M7 7h10v12H7z"></path><path d="M9 7V5h6v2"></path><path d="M10 12h4"></path></svg>`,
-  about: `<svg ${iconAttrs}><circle cx="12" cy="12" r="8"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>`,
   precise: `<svg ${iconAttrs}><circle cx="12" cy="12" r="7"></circle><path d="M12 8v8"></path><path d="M8 12h8"></path></svg>`,
   balanced: `<svg ${iconAttrs}><path d="M5 8h14"></path><path d="M5 16h14"></path><circle cx="10" cy="8" r="2"></circle><circle cx="14" cy="16" r="2"></circle></svg>`,
   creative: `<svg ${iconAttrs}><path d="M12 4l1.5 4.5L18 10l-4.5 1.5L12 16l-1.5-4.5L6 10l4.5-1.5z"></path><path d="M18 15l.7 2.3L21 18l-2.3.7L18 21l-.7-2.3L15 18l2.3-.7z"></path></svg>`,
@@ -765,6 +883,7 @@ const icons = {
   trash: `<svg ${iconAttrs}><path d="M6 7h12"></path><path d="M10 7V5h4v2"></path><path d="M8 10v8"></path><path d="M16 10v8"></path><path d="M9 19h6"></path></svg>`
 }
 
+// AI 设置弹窗的分类（数据管理另有独立弹窗）
 const tabs = [
   {
     key: 'api',
@@ -792,35 +911,34 @@ const tabs = [
     title: '模型参数',
     description: '选择适合评测场景的温度策略，保存后作用于后续评分。',
     icon: icons.model
-  },
-  {
-    key: 'data',
-    label: '数据管理',
-    summary: '历史上限与原生备份',
-    kicker: 'Storage',
-    title: '数据管理',
-    description: '控制历史记录保留策略，并通过 Rust 管理完整应用备份。',
-    icon: icons.data
-  },
-  {
-    key: 'about',
-    label: '关于',
-    summary: '版本、运行环境、能力',
-    kicker: '关于',
-    title: '关于产品',
-    description: '查看 Tauri 桌面客户端、Rust 数据内核和本机数据路径。',
-    icon: icons.about
   }
 ]
 
+const dataTabs = [
+  { key: 'all', label: '全部数据' },
+  { key: 'reading', label: '阅读' },
+  { key: 'writing', label: '写作' }
+]
+
+// Scope of 清空历史: activity null clears both products.
+const CLEAR_SCOPES = {
+  all: { label: '全部', activity: null, message: '此操作将删除阅读与写作的全部终态历史记录，且不可恢复。' },
+  reading: { label: '阅读', activity: 'reading', message: '此操作将删除阅读的全部终态历史记录，且不可恢复。' },
+  writing: { label: '写作', activity: 'writing', message: '此操作将删除写作的全部终态历史记录，且不可恢复。' }
+}
+
 const router = useRouter()
+const route = useRoute()
+const readingData = useReadingDataTools()
+const readingArchiveInput = ref(null)
 const activeTab = ref('model')
 const settingsDetailOpen = ref(false)
+const dataDialogOpen = ref(false)
+const dataDialogTab = ref('all')
 const modelSaving = ref(false)
 const dataSaving = ref(false)
 const apiLoading = ref(false)
 const promptLoading = ref(false)
-const settingsBackupListOpen = ref(false)
 const onboardingOpen = ref(false)
 const onboardingStep = ref(0)
 const updateDialogOpen = ref(false)
@@ -1092,6 +1210,26 @@ const historyRetentionLabel = computed(() => {
   return policy.maxTerminalAttempts == null
     ? '不限'
     : `${policy.maxTerminalAttempts} 条`
+})
+
+const historyRetentionSummary = computed(() => {
+  const policy = persistedHistoryRetention.value
+  if (!policy) return '未读取'
+  return policy.maxTerminalAttempts == null
+    ? '不限，不自动清理'
+    : `保留最近 ${policy.maxTerminalAttempts} 条终态记录`
+})
+
+const writingDataSummary = computed(() => {
+  const { total, task1, task2 } = topicLibraryStats.value
+  if (typeof total !== 'number') return topicLibraryStatus.value
+  return `题库 ${total} 题 · Task 1 ${task1} · Task 2 ${task2}`
+})
+
+const backupSummary = computed(() => {
+  const latest = nativeBackups.value[0]
+  if (!latest) return '尚未生成完整备份'
+  return `最近备份 ${formatNativeBackupDate(latest)} · 共 ${nativeBackups.value.length} 个文件`
 })
 
 const activeTabMeta = computed(() => (
@@ -1534,15 +1672,16 @@ watch(() => apiForm.value.base_url, (nextBaseUrl) => {
 })
 
 // 清空历史记录
-function confirmClearHistory() {
+function confirmClearHistory(scope = 'all') {
+  const { label, activity, message } = CLEAR_SCOPES[scope] || CLEAR_SCOPES.all
   openConfirmDialog({
     kind: 'clear-history',
     section: 'data',
-    title: '清空所有历史记录',
-    message: '此操作将删除所有历史记录，且不可恢复。',
+    title: `清空${label}历史记录`,
+    message,
     keyword: '确认删除',
-    confirmLabel: '确认清空',
-    payload: null
+    confirmLabel: `确认清空${label}`,
+    payload: { activity, label }
   })
 }
 
@@ -1560,8 +1699,8 @@ async function executeConfirmAction() {
       await loadPromptList()
       setSectionMessage('prompts', 'success', '提示词版本已删除')
     } else if (kind === 'clear-history') {
-      await essays.deleteAll()
-      setSectionMessage('data', 'success', '已清空所有历史记录')
+      await essays.deleteAll(payload?.activity ?? null)
+      setSectionMessage('data', 'success', `已清空${payload?.label || '全部'}历史记录`)
     } else if (kind === 'restore-full-backup') {
       const grantId = String(payload?.grantId || '').trim()
       if (!grantId) throw new Error('缺少备份文件授权')
@@ -1588,7 +1727,9 @@ function setGlobalMessage(type, message) {
 }
 
 function handleSettingsKeydown(event) {
-  if (event?.key === 'Escape' && settingsDetailOpen.value) hideSettingsDetail()
+  if (event?.key !== 'Escape') return
+  if (dataDialogOpen.value) hideDataDialog()
+  else if (settingsDetailOpen.value) hideSettingsDetail()
 }
 
 async function startOnboardingTour(event) {
@@ -1662,6 +1803,7 @@ async function restartAfterUpdate() {
 }
 
 function openWritingTopicLibrary() {
+  hideDataDialog()
   router.push({ name: 'TopicManage' })
 }
 
@@ -1676,9 +1818,25 @@ function hideSettingsDetail() {
   settingsDetailOpen.value = false
 }
 
-function openWritingLibraryConfig() {
-  openSettingsDetail('prompts')
-  setGlobalMessage('success', '已切换到写作提示词与题库相关配置。')
+function openDataDialog(tabKey = 'all') {
+  dataDialogOpen.value = true
+  selectDataTab(tabKey)
+}
+
+function hideDataDialog() {
+  dataDialogOpen.value = false
+}
+
+// Each tab reloads its own source when shown, so the dialog never shows stale state.
+function selectDataTab(tabKey) {
+  dataDialogTab.value = tabKey
+  // Messages belong to the tab that raised them; 全部数据 re-reads its own state.
+  clearSectionMessage('data')
+  if (tabKey === 'all') {
+    refreshNativeBackupList()
+    loadHistoryRetentionPolicy()
+  }
+  if (tabKey === 'writing') loadTopicLibraryStats()
 }
 
 async function createFullAppBackup() {
@@ -1717,10 +1875,8 @@ async function refreshNativeBackupList() {
   }
 }
 
-async function showNativeBackupList() {
-  await refreshNativeBackupList()
-  settingsBackupListOpen.value = true
-  openSettingsDetail('data')
+function showNativeBackupList() {
+  openDataDialog('all')
 }
 
 async function restoreFullAppBackup() {
@@ -1834,9 +1990,13 @@ onMounted(async () => {
   loadSettings()
   getUserDataPath()
   loadTopicLibraryStats()
+  refreshNativeBackupList()
   loadApiConfigs()
   loadPromptList()
+  readingData.reload()
   document.addEventListener('keydown', handleSettingsKeydown)
+  // Deep links such as the library's 管理 button land on their section.
+  if (route.hash) jumpToSection(route.hash.slice(1))
 })
 
 onBeforeUnmount(() => {
@@ -1865,11 +2025,43 @@ function jumpToSection(id) {
   min-width: 0;
 }
 
-.settings-page .settings-rail.tabs.is-vertical { position: sticky; top: var(--anth-space-6); }
+/* The rail is a floating table of contents: it stays below the site nav while
+ * the sections scroll, instead of sliding out under it. */
+.settings-page .settings-rail.tabs.is-vertical {
+  position: sticky;
+  top: calc(var(--anth-nav-height) + var(--anth-space-4));
+  z-index: var(--anth-z-sticky);
+  align-self: start;
+  max-height: calc(100vh - var(--anth-nav-height) - var(--anth-space-6));
+  overflow-y: auto;
+  padding: var(--anth-space-3);
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
+}
+
+.settings-rail__title {
+  margin: 0 0 var(--anth-space-1);
+  padding: 0 12px;
+  color: var(--anth-ink-muted);
+  font-family: var(--anth-font-sans);
+  font-size: var(--anth-text-caption-size);
+  font-weight: var(--anth-weight-semibold);
+  letter-spacing: var(--anth-tracking-caption);
+  text-transform: uppercase;
+}
 
 .settings-sections { display: grid; gap: var(--anth-space-5); min-width: 0; }
+/* Rail jumps and #section deep links stop below the sticky top nav. */
+.settings-sections > .settings-card,
+#settings-reading { scroll-margin-top: calc(var(--anth-nav-height) + var(--anth-space-4)); }
 .settings-card__head { display: grid; gap: var(--anth-space-1); min-width: 0; }
 .settings-card__head h2 { margin: 0; }
+
+/* Sub-groups inside one card: quiet sub-heading, hairline between groups. */
+.settings-group + .settings-group { margin-top: var(--anth-space-4); padding-top: var(--anth-space-4); border-top: 1px solid var(--anth-rule); }
+.settings-subhead { margin: 0 0 var(--anth-space-1); color: var(--anth-ink-muted); font-size: var(--anth-text-xs); font-weight: var(--anth-weight-medium); letter-spacing: 0.06em; }
 
 /* One setting per row: copy left, control right, hairline between rows. */
 .setting-row {
@@ -1919,8 +2111,7 @@ function jumpToSection(id) {
 }
 
 .settings-badges { display: flex; flex-wrap: wrap; gap: var(--anth-space-2); }
-.settings-credit { display: flex; flex-wrap: wrap; gap: var(--anth-space-3); margin-top: var(--anth-space-2); }
-.settings-technical-details summary { color: var(--anth-ink-soft); font-size: var(--anth-text-small-size); cursor: pointer; }
+.settings-credit { display: flex; flex-wrap: wrap; gap: var(--anth-space-3); margin-top: var(--anth-space-3); }
 
 .info-row {
   display: grid;
@@ -2026,8 +2217,6 @@ function jumpToSection(id) {
  * The selected mode card keeps the canonical .is-selected wash from list.css. */
 .settings-page .settings-list__row,
 .settings-page .custom-temperature-panel,
-.settings-page .about-info,
-.settings-page .about-features,
 .settings-page .mode-card:not(.is-selected) {
   background: var(--anth-surface-raised);
 }
@@ -2065,10 +2254,12 @@ function jumpToSection(id) {
 
 .settings-page .danger-zone h3 { color: var(--anth-danger); }
 
-/* About */
-.about-identity h2 { margin: 0; }
-.version { margin: 2px 0 0; color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); font-variant-numeric: tabular-nums; }
-.about-info { display: grid; border-top: 1.5px solid var(--anth-rule-heavy); border-bottom: 1.5px solid var(--anth-rule-heavy); }
+/* About, inline on the page: identity, ruled facts, capabilities, credits. */
+.about-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--anth-space-1) var(--anth-space-3); }
+.about-identity__name { margin: 0; color: var(--anth-ink-strong); font-family: var(--anth-font-serif); font-size: var(--anth-text-lg); }
+.version { margin: 0; color: var(--anth-ink-muted); font-size: var(--anth-text-small-size); font-variant-numeric: tabular-nums; }
+.about-info { display: grid; margin: var(--anth-space-4) 0 0; border-top: 1px solid var(--anth-rule); border-bottom: 1px solid var(--anth-rule); }
+.about-features { margin-top: var(--anth-space-4); }
 .about-features h3 { margin: 0 0 var(--anth-space-2); }
 
 .about-features ul {
@@ -2096,9 +2287,15 @@ function jumpToSection(id) {
     position: static;
     flex-direction: row;
     overflow-x: auto;
-    border-right: 0;
+    padding: 0;
+    border: 0;
     border-bottom: 1px solid var(--anth-rule);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
+
+  .settings-rail__title { display: none; }
 }
 
 @media (max-width: 640px) {

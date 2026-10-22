@@ -207,6 +207,10 @@ def main() -> int:
             ["node", "developer/tests/js/practiceReadingCore10.test.js"],
         ),
         run_command(
+            "Reading browse question-kind filter",
+            ["node", "developer/tests/js/readingBrowseFilter.test.mjs"],
+        ),
+        run_command(
             "Reading asset list boundary",
             ["node", "developer/tests/js/readingAssetList.test.mjs"],
         ),
@@ -231,6 +235,7 @@ def main() -> int:
         run_command("Notebook prose composition", ["node", "developer/tests/js/notebookCompose.test.mjs"]),
         run_command("Notebook phrasing bank", ["node", "developer/tests/js/notebookPhrasing.test.mjs"]),
         run_command("Notebook weekly report", ["node", "developer/tests/js/notebookWeekly.test.mjs"]),
+        run_command("Integrated UI and mock contracts", ["node", "--test", "developer/tests/js/integrationContracts.test.mjs", "developer/tests/js/dashboardCore.test.js", "developer/tests/js/readingTags.test.js", "developer/tests/js/moodFor.test.js"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
@@ -331,7 +336,7 @@ def main() -> int:
         ),
         run_command(
             "Rust weekly dream receipts, weekly report blocks and input pack",
-            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--test", "weekly_pack", "--test", "weekly_report_store", "--test", "weekly_report_facts", "--locked", "--offline"],
+            ["cargo", "test", "-p", "ielts-db", "--test", "weekly_digest", "--test", "weekly_pack", "--test", "weekly_report_store", "--test", "weekly_report_facts", "--test", "weekly_soul_v3", "--locked", "--offline"],
         ),
         run_command(
             "Rust weekly report block skills and narrative whitelist",

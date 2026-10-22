@@ -5,6 +5,7 @@ pub mod archive;
 pub mod assets;
 pub mod attempt;
 mod legacy_archive;
+pub mod question_kinds;
 pub mod scoring;
 
 pub use analysis::*;

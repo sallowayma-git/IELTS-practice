@@ -16,6 +16,7 @@ env:
   TAURI_CLI_VERSION: 2.11.4
   TAURI_DRIVER_VERSION: 2.0.6
   PY_PLAYWRIGHT_VERSION: 1.61.0
+  PYTHONIOENCODING: utf-8
   PYTHONUTF8: '1'
   PYTHONDONTWRITEBYTECODE: '1'
   # build.rs refuses a missing, mismatched or placeholder sidecar.

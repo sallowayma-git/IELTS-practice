@@ -1,26 +1,29 @@
-//! Weekly report v2: the week as typed blocks, each built by one deterministic
-//! skill from [`WeekFacts`].
+//! Weekly report v3: the week as typed blocks, each built by one deterministic
+//! skill from [`WeekFacts`], plus the fact map the narrative layer writes
+//! against.
 //!
 //! The skills are plain functions chosen by the shape of the data (a skill
 //! that has nothing to show returns `None`), never by the model. The report is
 //! computed live midweek and persisted when the weekend run finishes, together
-//! with the model's whitelisted narrative (see `narrative`).
+//! with the model's validated narrative and Soul edits (see `narrative`).
 
 pub mod facts;
 pub mod narrative;
+pub mod project;
 pub mod store;
 mod skills;
 
 use chrono::{DateTime, FixedOffset, SecondsFormat, Utc};
 use ielts_domain::{
-    BlockKind, ReportBlock, SkillReviewNeed, SkillReviewNeedsQuery, WeeklyReport, WeeklyReportState,
-    WEEKLY_REPORT_SCHEMA_VERSION,
+    display_title, BlockKind, ReportBlock, SkillReviewNeed, SkillReviewNeedsQuery, WeeklyReport,
+    WeeklyReportState, WEEKLY_REPORT_SCHEMA_VERSION,
 };
 use rusqlite::Connection;
 
 pub use facts::{criterion_label, question_type_label, week_facts, WeekFacts};
-pub use narrative::apply_narrative;
-pub use store::{list_weekly_reports, put_weekly_report, weekly_memory_changes, weekly_mutation_request_id};
+pub use narrative::{has_usable_body, validate_narrative, NarrativeOutcome};
+pub use project::project_weekly_facts;
+pub use store::{list_legacy_weekly_digests, list_legacy_weekly_digests_page, list_weekly_reports, list_weekly_reports_page, previous_weekly_digest, put_weekly_report, LegacyWeeklyDigest, weekly_memory_changes, weekly_mutation_request_id};
 
 use crate::dream::WeeklyWindow;
 use crate::sqlite::DbResult;
@@ -68,16 +71,8 @@ pub fn build_blocks(context: &SkillContext<'_>) -> Vec<ReportBlock> {
         .collect()
 }
 
-/// The title a report carries before (or without) the model's: what the week
-/// was, in counts the blocks show.
-pub fn default_title(facts: &WeekFacts) -> String {
-    match (facts.reading.len(), facts.writing.len()) {
-        (0, 0) => "这一周还没有练习".to_owned(),
-        (reading, 0) => format!("这一周读了 {reading} 篇"),
-        (0, writing) => format!("这一周写了 {writing} 篇"),
-        (reading, writing) => format!("这一周读了 {reading} 篇，写了 {writing} 篇"),
-    }
-}
+/// The title a report carries before (or without) the model's is
+/// [`ielts_domain::derive_title`]; there is no second derivation here.
 
 fn review_needs(conn: &Connection, as_of: DateTime<Utc>) -> Vec<SkillReviewNeed> {
     let query = SkillReviewNeedsQuery { limit: 8, ..SkillReviewNeedsQuery::default() };
@@ -103,6 +98,9 @@ pub fn build_weekly_report(
     let needs = review_needs(conn, window.end);
     let memories = crate::weekly_pack::active_memories(conn, user_id)?;
     let context = SkillContext { current: &current, previous: &previous, review_needs: &needs, memories: &memories };
+    let blocks = build_blocks(&context);
+    let exam_date = crate::soul::soul_exam_date(conn, user_id)?;
+    let facts = project_weekly_facts(&blocks, exam_date, now.with_timezone(&offset).date_naive());
     Ok(WeeklyReport {
         schema_version: WEEKLY_REPORT_SCHEMA_VERSION,
         window: window.key.clone(),
@@ -110,8 +108,11 @@ pub fn build_weekly_report(
         window_end: rfc3339(window.end),
         state,
         generated_at: rfc3339(now),
-        title: default_title(&current),
-        blocks: build_blocks(&context),
+        display_title: display_title(None, &blocks),
+        blocks,
+        facts,
+        narrative: None,
+        profile_edits: Vec::new(),
         memory_changes: Vec::new(),
     })
 }

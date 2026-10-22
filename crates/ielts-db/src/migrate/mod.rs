@@ -4,6 +4,8 @@ use rusqlite::Connection;
 
 use crate::sqlite::{DbError, DbResult};
 
+mod snapshot;
+
 #[derive(Debug, Clone)]
 pub struct Migration {
     pub version: i64,
@@ -220,6 +222,18 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0033_drop_dead_evolution_tables.sql"),
                 rebuilds: None,
             },
+            Migration {
+                version: 34,
+                name: "snapshot_compatibility",
+                sql: include_str!("../../migrations/0034_snapshot_compatibility.sql"),
+                rebuilds: None,
+            },
+            Migration {
+                version: 35,
+                name: "soul",
+                sql: include_str!("../../migrations/0035_soul.sql"),
+                rebuilds: None,
+            },
         ]
     })
 }
@@ -249,12 +263,14 @@ pub fn latest_version() -> i64 {
 /// database is not "pending": there is nothing in it to protect.
 pub fn has_pending_migrations(conn: &Connection) -> DbResult<bool> {
     let version = current_version(conn)?;
+    snapshot::validate_history(conn)?;
     Ok(version > 0 && version < latest_version())
 }
 
 /// Apply all pending migrations inside individual transactions.
 pub fn migrate(conn: &mut Connection) -> DbResult<Vec<i64>> {
-    let mut applied = Vec::new();
+    current_version(conn)?;
+    let mut applied = snapshot::reconcile(conn)?;
     let mut version = current_version(conn)?;
     for migration in migrations() {
         if migration.version <= version {
@@ -290,6 +306,9 @@ pub fn migrate(conn: &mut Connection) -> DbResult<Vec<i64>> {
     // question.
     if version >= 30 {
         crate::safety::close_delete_gate(conn)?;
+    }
+    if version >= 34 {
+        crate::reading::backfill_question_kinds(conn)?;
     }
     Ok(applied)
 }
@@ -337,6 +356,9 @@ fn apply(conn: &mut Connection, migration: &Migration) -> DbResult<()> {
 
 fn run_in_transaction(conn: &mut Connection, migration: &Migration) -> DbResult<()> {
     let tx = conn.transaction()?;
+    if migration.version == 34 {
+        snapshot::add_question_kinds(&tx)?;
+    }
     tx.execute_batch(migration.sql)?;
     record(&tx, migration)?;
     tx.commit()?;
@@ -435,6 +457,83 @@ pub fn open_and_migrate(path: impl AsRef<std::path::Path>) -> DbResult<Connectio
 mod tests {
     use super::*;
 
+    fn history_at(version: i64) -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        current_version(&conn).unwrap();
+        for migration in migrations().iter().filter(|m| m.version <= version) {
+            apply(&mut conn, migration).unwrap();
+        }
+        conn
+    }
+
+    fn local_history(version: i64) -> Connection {
+        let mut conn = history_at(30);
+        let local = [
+            (31, "practice_assets_question_kinds", include_str!("../../../../developer/tests/fixtures/weekly-snapshot/0031_practice_assets_question_kinds.sql")),
+            (32, "reading_matching_subtypes", include_str!("../../../../developer/tests/fixtures/weekly-snapshot/0032_reading_matching_subtypes.sql")),
+            (33, "soul", include_str!("../../../../developer/tests/fixtures/weekly-snapshot/0033_soul.sql")),
+        ];
+        for (number, name, sql) in local.into_iter().filter(|(number, _, _)| *number <= version) {
+            apply(&mut conn, &Migration {version: number, name, sql, rebuilds: None}).unwrap();
+        }
+        conn
+    }
+
+    #[test]
+    fn both_published_histories_and_common_base_upgrade_without_losing_snapshot_audit() {
+        let mut databases = vec![history_at(0), history_at(30), history_at(33)];
+        databases.extend((31..=33).map(local_history));
+        for mut conn in databases {
+            let had_soul = current_version(&conn).unwrap() == 33
+                && conn.query_row("SELECT name FROM schema_migrations WHERE version=33", [], |r|r.get::<_, String>(0)).unwrap() == "soul";
+            if had_soul {
+                conn.execute_batch("INSERT INTO soul_revisions VALUES ('audit', 'local', 'soul.tone', 'null', '\"warm\"', 'user', '[]', 'keep', NULL, NULL, 'now')").unwrap();
+            }
+            migrate(&mut conn).unwrap();
+            assert_eq!(current_version(&conn).unwrap(), latest_version());
+            conn.prepare("SELECT learner_profile_json FROM coach_threads").unwrap();
+            conn.prepare("SELECT question_kinds_json FROM practice_assets").unwrap();
+            assert_eq!(conn.query_row("SELECT COUNT(*) FROM skill_catalog WHERE skill_key IN ('reading.matching', 'reading.matching_sentence_endings')", [], |r|r.get::<_,i64>(0)).unwrap(), 2);
+            assert_eq!(conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE name='prompt_skill_releases'", [], |r|r.get::<_,i64>(0)).unwrap(), 0);
+            assert_eq!(conn.query_row("SELECT COUNT(*) FROM soul_revisions", [], |r|r.get::<_,i64>(0)).unwrap(), i64::from(had_soul));
+            verify_idempotent(&mut conn).unwrap();
+        }
+    }
+
+    #[test]
+    fn snapshot_upgrade_takes_a_snapshot_and_rejects_unknown_or_mixed_history() {
+        let mut conn = local_history(33);
+        let directory = tempfile::tempdir().unwrap();
+        assert!(has_pending_migrations(&conn).unwrap());
+        migrate_with_snapshot(&mut conn, directory.path()).unwrap();
+        let path = std::fs::read_dir(directory.path()).unwrap().next().unwrap().unwrap().path();
+        let before = Connection::open(path).unwrap();
+        assert_eq!(current_version(&before).unwrap(), 33);
+        assert_eq!(before.query_row("SELECT name FROM schema_migrations WHERE version=33", [], |r|r.get::<_,String>(0)).unwrap(), "soul");
+        before.prepare("SELECT * FROM prompt_skill_releases").unwrap();
+        let original: String = conn.query_row("SELECT value FROM migration_meta WHERE key='weekly_snapshot.original_migrations'", [], |r|r.get(0)).unwrap();
+        assert!(original.contains("practice_assets_question_kinds"));
+        for name in ["unknown", "reading_matching_skills"] {
+            let mut invalid = local_history(33);
+            invalid.execute("UPDATE schema_migrations SET name=?1 WHERE version=32", [name]).unwrap();
+            assert!(migrate(&mut invalid).is_err());
+            assert_eq!(current_version(&invalid).unwrap(), 33);
+            assert_eq!(invalid.query_row("SELECT name FROM schema_migrations WHERE version=31", [], |r|r.get::<_,String>(0)).unwrap(), "practice_assets_question_kinds");
+        }
+    }
+
+    #[test]
+    fn a_failed_bridge_rolls_back_structure_history_and_audit_marker() {
+        let mut conn = local_history(33);
+        // Force the last cleanup statement to fail after profile/skills changed.
+        conn.execute_batch("DROP TABLE dream_candidates; CREATE VIEW dream_candidates AS SELECT 1;").unwrap();
+        assert!(migrate(&mut conn).is_err());
+        assert_eq!(conn.query_row("SELECT name FROM schema_migrations WHERE version=31", [], |r|r.get::<_,String>(0)).unwrap(), "practice_assets_question_kinds");
+        assert!(conn.prepare("SELECT learner_profile_json FROM coach_threads").is_err());
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM migration_meta WHERE key='weekly_snapshot.original_migrations'", [], |r|r.get::<_,i64>(0)).unwrap(), 0);
+    }
+
     #[test]
     fn migration_33_drops_a_prompt_release_chain_with_foreign_keys_on() {
         let mut conn = Connection::open_in_memory().unwrap();
@@ -453,7 +552,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(left, 0);
-        assert_eq!(current_version(&conn).unwrap(), 33);
+        assert_eq!(current_version(&conn).unwrap(), latest_version());
     }
 
     /// Only the self-reference matters here, so the chain is written with

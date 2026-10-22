@@ -1,7 +1,7 @@
 /*
  * Tabs — spec section 2.4.
  *
- * Text tabs on a bottom rule. The active tab is ink with a 2px clay underline
+ * Text tabs on a bottom rule. The active tab is ink with a 2px accent underline
  * drawn as an inset shadow, so selecting a tab never shifts layout.
  * `.tabs.is-vertical` is the rail variant used by Settings.
  */

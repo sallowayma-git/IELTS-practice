@@ -51,6 +51,13 @@
       </div>
     </div>
 
+    <div v-if="questionKindLabel" class="browse-question-kind" data-reading-question-kind>
+      <span>题型：{{ questionKindLabel }}</span>
+      <button class="btn btn-ghost btn-sm" type="button" @click="$emit('clear-question-kind')">
+        清除题型筛选
+      </button>
+    </div>
+
     <div class="search-box">
       <div class="search-row">
         <div class="search-input-wrap">
@@ -130,67 +137,92 @@
     </div>
 
     <div class="browse-body">
-    <div v-if="error" class="inline-message inline-message-error">
-      <span>{{ error }}</span>
-      <button class="btn btn-ghost btn-sm btn-text" type="button" @click="$emit('retry-load', $event)">重试</button>
-    </div>
+    <MascotState v-if="error" kind="error" :title="error">
+      <div class="empty-state-action">
+        <button class="btn btn-secondary btn-sm" type="button" @click="$emit('retry-load', $event)">重试</button>
+      </div>
+    </MascotState>
     <div v-if="suiteError" class="inline-message inline-message-error" data-reading-suite-error>{{ suiteError }}</div>
     <div id="exam-list-container" class="scroll-region">
       <div v-if="loading" class="loading">
         <div class="spinner"></div>
         <p>正在加载题目列表...</p>
       </div>
-      <div v-else-if="filteredReadingAssets.length === 0" class="empty-state exam-list-empty" role="status">
-        <div class="empty-state-glyph exam-list-empty-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="7"></circle>
-            <path d="m20 20-4-4M8.5 11h5"></path>
-          </svg>
-        </div>
-        <h3 class="exam-list-empty-text">未找到匹配的题目</h3>
-        <p class="empty-state-desc exam-list-empty-hint">请调整筛选条件或搜索词后再试</p>
+      <MascotState
+        v-else-if="filteredReadingAssets.length === 0"
+        :kind="keyword ? 'no-results' : 'empty'"
+        class="exam-list-empty"
+        title="未找到匹配的题目"
+        desc="请调整筛选条件或搜索词后再试"
+      >
         <div v-if="keyword" class="empty-state-action exam-list-empty-actions">
           <button class="btn btn-secondary exam-list-empty-action" type="button" @click="$emit('clear-search', $event)">清除搜索</button>
         </div>
-      </div>
-      <div v-else class="list exam-list">
-        <div
+      </MascotState>
+      <div v-else class="exam-list reading-card-grid">
+        <article
           v-for="asset in filteredReadingAssets"
           :key="asset.id"
-          class="list-row exam-item"
+          class="reading-card exam-item"
           :data-exam-id="asset.id"
           :data-reading-asset-id="asset.id"
         >
-          <div class="list-row-main exam-info">
-            <div>
-              <h4>{{ asset.title }}</h4>
-              <div class="exam-meta">{{ formatExamMetaText(asset) }}</div>
+          <div class="reading-card__body">
+            <div class="reading-card__tags">
+              <span class="tag tag-neutral">{{ categoryOf(asset) }}</span>
+              <span
+                v-if="frequencyTagOf(asset)"
+                class="tag"
+                :class="frequencyTagOf(asset).cls"
+              >{{ frequencyTagOf(asset).label }}</span>
+              <span v-if="asset.pdfOnly" class="tag tag-info">PDF</span>
+            </div>
+            <h4 class="reading-card__title">{{ asset.title }}</h4>
+            <div v-if="questionKindTags(asset).length" class="reading-card__kinds">
+              <span
+                v-for="kind in questionKindTags(asset)"
+                :key="kind.key"
+                class="reading-card__kind"
+              >{{ kind.label }}</span>
             </div>
           </div>
-          <div class="list-row-trail exam-actions">
+          <footer class="reading-card__footer">
             <button
-              class="btn btn-secondary btn-sm exam-item-action-btn"
-              type="button"
-              data-action="start"
-              :data-exam-id="asset.id"
-              :aria-label="`开始练习 ${asset.title}`"
-              @click="$emit('browse-primary-action', asset)"
-            >
-              {{ customSuiteDraft ? '选择此题' : '开始练习' }}
-            </button>
-            <button
-              v-if="asset.pdfOnly"
-              class="btn btn-ghost btn-sm exam-item-action-btn"
+              v-if="asset.pdfOnly && !customSuiteDraft"
+              class="btn btn-primary btn-sm"
               type="button"
               data-action="pdf"
               :data-exam-id="asset.id"
               :aria-label="`查看PDF ${asset.title}`"
               @click="$emit('view-pdf', asset)"
             >
-              PDF
+              查看 PDF
             </button>
-          </div>
-        </div>
+            <template v-else>
+              <button
+                v-if="asset.pdfOnly"
+                class="btn btn-ghost btn-sm"
+                type="button"
+                data-action="pdf"
+                :data-exam-id="asset.id"
+                :aria-label="`查看PDF ${asset.title}`"
+                @click="$emit('view-pdf', asset)"
+              >
+                PDF
+              </button>
+              <button
+                class="btn btn-primary btn-sm"
+                type="button"
+                data-action="start"
+                :data-exam-id="asset.id"
+                :aria-label="`${customSuiteDraft ? '选择' : '开始练习'} ${asset.title}`"
+                @click="$emit('browse-primary-action', asset)"
+              >
+                {{ customSuiteDraft ? '选择此题' : '开始练习' }}
+              </button>
+            </template>
+          </footer>
+        </article>
       </div>
       <div
         v-if="customSuiteDraft"
@@ -240,6 +272,10 @@
 </template>
 
 <script setup>
+import MascotState from '@/components/mascot/MascotState.vue'
+import { normalizeCategory, normalizeFrequency } from '../browseFilters.js'
+import { questionKindTags } from '../readingTags.js'
+
 defineProps({
   activeView: { type: String, required: true },
   browsePreferencePanelOpen: { type: Boolean, default: false },
@@ -247,6 +283,7 @@ defineProps({
   browseTitle: { type: String, required: true },
   typeFilters: { type: Array, required: true },
   selectedType: { type: String, required: true },
+  questionKindLabel: { type: String, default: '' },
   keyword: { type: String, default: '' },
   frequencyFilters: { type: Array, required: true },
   frequencyFilter: { type: String, required: true },
@@ -261,9 +298,22 @@ defineProps({
   customSuitePickedByCategory: { type: Object, required: true },
   customSuiteReady: { type: Boolean, default: false },
   creatingSuite: { type: Boolean, default: false },
-  icons: { type: Object, required: true },
-  formatExamMetaText: { type: Function, required: true }
+  icons: { type: Object, required: true }
 })
+
+const FREQUENCY_TAGS = {
+  high: { label: '高频', cls: 'tag-accent' },
+  medium: { label: '次高频', cls: 'tag-neutral' },
+  low: { label: '低频', cls: 'tag-neutral' }
+}
+
+function categoryOf(asset) {
+  return normalizeCategory(asset?.category)
+}
+
+function frequencyTagOf(asset) {
+  return FREQUENCY_TAGS[normalizeFrequency(asset)] || null
+}
 
 const emit = defineEmits([
   'update:browseRememberPosition',
@@ -272,6 +322,7 @@ const emit = defineEmits([
   'toggle-browse-preference',
   'persist-browse-preference',
   'filter-by-type',
+  'clear-question-kind',
   'clear-search',
   'toggle-frequency-filter',
   'retry-load',
@@ -286,3 +337,91 @@ function handleBrowseRememberPositionChange(event) {
   emit('persist-browse-preference', event)
 }
 </script>
+
+<style scoped>
+.browse-question-kind {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--anth-space-2);
+  color: var(--anth-ink-muted);
+}
+
+/* Browse cards mirror the writing topic cards (TopicManagePage .topic-card). */
+.reading-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: var(--anth-space-4);
+}
+
+.reading-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-card);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
+  transition: transform var(--anth-duration-fast) var(--anth-ease), box-shadow var(--anth-duration-fast) var(--anth-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .reading-card:hover { transform: translateY(-2px); box-shadow: var(--anth-shadow-2); }
+}
+
+.reading-card__body {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: var(--anth-space-3);
+  min-width: 0;
+  padding: var(--anth-space-4) var(--anth-space-4) var(--anth-space-3);
+}
+
+.reading-card__tags { display: flex; flex-wrap: wrap; gap: var(--anth-space-1); min-width: 0; }
+
+/* Serif prose, two lines at most; the title is the only thing that grows. */
+.reading-card__title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--anth-ink);
+  font-family: var(--anth-font-serif);
+  font-size: var(--anth-text-body-lg-size);
+  font-weight: var(--anth-weight-medium);
+  line-height: var(--anth-text-body-lg-line);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.reading-card__kinds { display: flex; flex-wrap: wrap; gap: var(--anth-space-1); min-width: 0; }
+
+.reading-card__kind {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--anth-space-2);
+  border: 1px solid var(--anth-rule-strong);
+  border-radius: var(--anth-radius-xs);
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-tag-size);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.reading-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--anth-space-2) var(--anth-space-3);
+  margin-top: auto;
+  padding: var(--anth-space-3) var(--anth-space-4);
+  border-top: 1px solid var(--anth-rule);
+}
+
+/* PDF stays a quiet secondary action next to the primary select/start button. */
+.reading-card__footer .btn-ghost { color: var(--anth-ink-muted); }
+</style>

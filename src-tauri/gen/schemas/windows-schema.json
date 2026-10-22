@@ -1065,6 +1065,24 @@
           "markdownDescription": "Enables the set_secret command without any pre-configured scope."
         },
         {
+          "description": "Enables the soul_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-soul-get",
+          "markdownDescription": "Enables the soul_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the soul_undo command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-soul-undo",
+          "markdownDescription": "Enables the soul_undo command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the soul_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-soul-update",
+          "markdownDescription": "Enables the soul_update command without any pre-configured scope."
+        },
+        {
           "description": "Enables the study_plan_create command without any pre-configured scope.",
           "type": "string",
           "const": "allow-study-plan-create",
@@ -1165,6 +1183,12 @@
           "type": "string",
           "const": "allow-vocab-upsert",
           "markdownDescription": "Enables the vocab_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the weekly_history_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-weekly-history-list",
+          "markdownDescription": "Enables the weekly_history_list command without any pre-configured scope."
         },
         {
           "description": "Enables the weekly_report_current command without any pre-configured scope.",
@@ -1977,6 +2001,24 @@
           "markdownDescription": "Denies the set_secret command without any pre-configured scope."
         },
         {
+          "description": "Denies the soul_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-soul-get",
+          "markdownDescription": "Denies the soul_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the soul_undo command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-soul-undo",
+          "markdownDescription": "Denies the soul_undo command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the soul_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-soul-update",
+          "markdownDescription": "Denies the soul_update command without any pre-configured scope."
+        },
+        {
           "description": "Denies the study_plan_create command without any pre-configured scope.",
           "type": "string",
           "const": "deny-study-plan-create",
@@ -2077,6 +2119,12 @@
           "type": "string",
           "const": "deny-vocab-upsert",
           "markdownDescription": "Denies the vocab_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the weekly_history_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-weekly-history-list",
+          "markdownDescription": "Denies the weekly_history_list command without any pre-configured scope."
         },
         {
           "description": "Denies the weekly_report_current command without any pre-configured scope.",

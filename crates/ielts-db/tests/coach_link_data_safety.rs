@@ -193,6 +193,36 @@ fn snapshot_ref(conn: &Connection, table: &str, id: &str) -> Option<String> {
     .unwrap()
 }
 
+/// Keep the manifest's table and row counts in step with a fabricated payload.
+fn recount(package: &mut ielts_domain::dto::BackupPackage) {
+    package.manifest.table_count = package.database.len() as u32;
+    package.manifest.row_count = package
+        .database
+        .iter()
+        .map(|table| table.rows.len() as u64)
+        .sum::<u64>()
+        + package.secret_refs.len() as u64;
+}
+
+fn rechecksum(package: &mut ielts_domain::dto::BackupPackage) {
+    recount(package);
+    package.manifest.checksum_sha256.clear();
+    package.manifest.checksum_sha256 = {
+        use sha2::{Digest, Sha256};
+        hex::encode(Sha256::digest(serde_json::to_vec(package).unwrap()))
+    };
+}
+
+/// A current snapshot minus every table a genuine format-18 package cannot
+/// carry: context snapshots arrived in format 19, soul_revisions in format 21.
+fn as_format_18(package: &mut ielts_domain::dto::BackupPackage) {
+    package.database.retain(|table| {
+        !table.name.starts_with("agent_context_") && table.name != "soul_revisions"
+    });
+    package.manifest.schema_version = 18;
+    rechecksum(package);
+}
+
 #[test]
 fn backup_with_context_snapshot_references_restores_on_a_fresh_device() {
     let dir = tempdir().unwrap();
@@ -238,22 +268,10 @@ fn older_backup_without_context_snapshots_still_restores() {
     insert_coach_assignment(&source, "asg-1", &message, Some("ctx-1"));
 
     let mut package = ielts_db::create_backup_package(&source, "test").unwrap();
-    package
-        .database
-        .retain(|table| !table.name.starts_with("agent_context_"));
-    package.manifest.schema_version = 18;
-    package.manifest.table_count = package.database.len() as u32;
-    package.manifest.row_count = package
-        .database
-        .iter()
-        .map(|table| table.rows.len() as u64)
-        .sum::<u64>()
-        + package.secret_refs.len() as u64;
-    package.manifest.checksum_sha256.clear();
-    package.manifest.checksum_sha256 = {
-        use sha2::{Digest, Sha256};
-        hex::encode(Sha256::digest(serde_json::to_vec(&package).unwrap()))
-    };
+    // Fabricate a genuine format-18 payload: context snapshots (format 19) and
+    // soul_revisions (format 21) did not exist yet, so the package cannot carry
+    // them. Keeping either is an unsupported table and must stay rejected.
+    as_format_18(&mut package);
 
     // A non-empty target: its own later snapshots must not survive a restore
     // that replaces the user's data.
@@ -269,4 +287,39 @@ fn older_backup_without_context_snapshots_still_restores() {
         snapshot_ref(&target, "coach_strategy_assignments_v0", "asg-1"),
         None
     );
+}
+
+#[test]
+fn format_18_packages_with_tables_from_a_newer_format_are_still_rejected() {
+    let dir = tempdir().unwrap();
+    let source = open(&dir.path().join("source.db"));
+    let package = ielts_db::create_backup_package(&source, "test").unwrap();
+    let target = open(&dir.path().join("target.db"));
+
+    // `soul_revisions` is canonical in the current format but not in format 18;
+    // `future_only` is unknown to every format. The unsupported-table gate must
+    // reject both rather than silently dropping rows it cannot restore.
+    for table in ["soul_revisions", "future_only"] {
+        let mut package = package.clone();
+        as_format_18(&mut package);
+        package.database.push(ielts_domain::dto::BackupTable {
+            name: table.to_owned(),
+            columns: vec!["id".to_owned()],
+            rows: vec![vec![ielts_domain::dto::BackupSqlValue::Text("row".to_owned())]],
+        });
+        rechecksum(&mut package);
+
+        let error = ielts_db::validate_backup(&package).unwrap_err();
+        assert!(
+            error.to_string().contains(&format!("unsupported table: {table}")),
+            "{table}: {error}"
+        );
+        let report = ielts_db::import_backup(&target, &package, false).unwrap();
+        assert!(!report.ok, "{table} must not import");
+        assert!(
+            report.errors.iter().any(|error| error.contains(&format!("unsupported table: {table}"))),
+            "{table}: {:?}",
+            report.errors
+        );
+    }
 }

@@ -1,31 +1,32 @@
 /*
- * IELTS Atlas — design tokens, v2 "Paper".
+ * IELTS Atlas — design tokens, "Warm Paper" (design system v3).
  *
  * Full spec: developer/docs/design-system.md (section 1 = tokens).
  *
  * Two layers, one namespace (--anth-*):
  *
- *   1. `.atlas-paper` — the v2 system. Every non-exam route sits in this
+ *   1. `.atlas-paper` — the design system. Every non-exam route sits in this
  *      shell (App.vue), so this block is the source of truth for the app.
- *      It also rebinds every legacy name (--anth-border, --anth-space-5,
- *      --anth-text-md, ...) to its v2 value, so components that still use
- *      the old names pick up the new scale without a template change.
+ *      It also rebinds the legacy names (--anth-border, --anth-space-5,
+ *      --anth-text-md, ...) so components that still use them pick up the
+ *      current scale without a template change.
  *
  *   2. `:root, .atlas-source-ui` — the legacy baseline. It is kept
  *      value-for-value because the frozen reading exam (`.atlas-exam`,
  *      exam-frozen.css) reads it. Do not change these values to restyle
- *      the app: put new values in the `.atlas-paper` block.
+ *      the app: change the `.atlas-paper` block instead.
  *
  * Fonts are bundled (main.js imports @fontsource packages). The family
  * names below must match what those packages register.
  *
- * Rules every paper surface follows:
+ * Rules every surface follows:
  *   - Type first, surfaces second, colour last. Serif for headings and
  *     prose, sans for controls, tables and metadata.
- *   - Ink is warm near-black. Clay (--anth-accent) is rare: links, the focus
- *     ring, one primary action per view.
- *   - Radius never exceeds 8px. No pills, no gradients, no glass.
- *   - Elevation is a faint 1px/3px ink shadow.
+ *   - Ink is warm near-black. Orange (--anth-accent) marks focus, links and
+ *     the one primary action per view; --anth-accent-fill is the button fill.
+ *   - Controls and cards use the rounded radius tokens (10-14px); chips are
+ *     fully round. No gradients, no glass.
+ *   - Elevation is two soft ink layers; primary hover adds a warm glow.
  *   - Components consume tokens only; no literal colours or shadows.
  */
 
@@ -84,7 +85,7 @@
   --anth-reading-nav-height: 52px;
   --anth-reading-divider-width: 1px;
 
-  --anth-font-serif: Charter, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, "Source Han Serif SC", "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --anth-font-serif: Charter, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, "Source Han Serif SC", "Atlas Noto Serif SC", "Songti SC", "SimSun", serif;
   --anth-font-sans: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --anth-font-mono: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
 
@@ -164,10 +165,10 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════
- * Paper v2. Sits on the same element as the legacy block above.
+ * Design system block. Sits on the same element as the legacy block above.
  * ════════════════════════════════════════════════════════════════════ */
 .atlas-paper {
-  /* 1.1 Typography: families. Names match fonts.css (CJK serif is renamed there). */
+  /* 1.1 Typography: families. Names match the @fontsource packages. */
   --anth-font-serif: "Source Serif 4 Variable", "Atlas Noto Serif SC", "Songti SC", Georgia, serif;
   --anth-font-sans: "Inter Variable", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
   --anth-font-mono: "JetBrains Mono", Consolas, ui-monospace, monospace;
@@ -201,7 +202,7 @@
   --anth-leading-relaxed: 1.7;
   --anth-measure: 66ch;
 
-  /* Legacy size names, rebound to the v2 scale by role. */
+  /* Legacy size names, rebound to the scale by role. */
   --anth-text-xs: var(--anth-text-small-size);
   --anth-text-sm: var(--anth-text-body-size);
   --anth-text-base: var(--anth-text-body-size);
@@ -230,7 +231,7 @@
   --anth-surface-hover: var(--anth-surface-raised);
   --anth-surface-inset: var(--anth-surface-sunken);
 
-  /* Rules. */
+  /* Rules, card and field edges. */
   --anth-rule: rgba(31, 29, 26, 0.12);
   --anth-rule-strong: rgba(31, 29, 26, 0.22);
   --anth-rule-ink: #1F1D1A;
@@ -240,26 +241,32 @@
   --anth-border-subtle: rgba(31, 29, 26, 0.08);
   --anth-divider: var(--anth-rule);
   --anth-scrim: rgba(31, 29, 26, 0.32);
+  --anth-card-border: rgba(31, 29, 26, 0.06);
+  --anth-field-bg: #FFFFFF;
+  --anth-field-border: rgba(31, 29, 26, 0.12);
 
-  /* Accent: clay, single brand hue. */
-  --anth-accent: #B4552F;
-  --anth-accent-hover: #9C4626;
-  --anth-accent-press: #843A1F;
-  --anth-accent-soft: #F2E1D6;
-  --anth-accent-subtle: #F8EEE7;
-  --anth-accent-ink: #8A3B1E;
+  /* Accent: orange, single brand hue. The decorative accent (#DF5830, 3.77:1)
+   * is not text-safe; fills and text accents below pass WCAG AA. */
+  --anth-accent: #DF5830;            /* decorative: underline, strip, checkbox */
+  --anth-accent-fill: #CE4B26;       /* primary button fill, 4.51:1 with white */
+  --anth-accent-hover: #C2481F;
+  --anth-accent-press: #B8431F;
+  --anth-accent-soft: #FBE4DA;       /* chip / tag fill */
+  --anth-accent-subtle: #FDF3EE;     /* selected wash */
+  --anth-accent-ink: #B9421E;        /* accent text: 4.99:1 on surface */
   --anth-accent-strong: var(--anth-accent-hover);
   --anth-accent-softer: var(--anth-accent-subtle);
-  --anth-accent-ring: rgba(180, 85, 47, 0.45);
-  --anth-accent-contrast: var(--anth-ink-inverse);
+  --anth-accent-ring: rgba(223, 88, 48, 0.45);
+  --anth-accent-contrast: #FFFFFF;   /* text on accent-fill */
+  --anth-chip-outline-border: rgba(31, 29, 26, 0.16);
 
   /* Semantic: fg / soft / border. */
   --anth-success: #2F6B4A;
   --anth-success-soft: #E3EEE6;
   --anth-success-border: #B9D3C2;
-  --anth-warning: #8A6420;
-  --anth-warning-soft: #F4EAD3;
-  --anth-warning-border: #E0CB9C;
+  --anth-warning: #A4421C;
+  --anth-warning-soft: #FCE9DD;
+  --anth-warning-border: #F0C3AA;
   --anth-danger: #A23A2E;
   --anth-danger-soft: #F6E1DD;
   --anth-danger-border: #E2B3AB;
@@ -272,8 +279,9 @@
   --anth-rule-hover: rgba(31, 29, 26, 0.30);        /* button hover border */
   --anth-rule-hover-strong: rgba(31, 29, 26, 0.35); /* input hover border */
   --anth-danger-hover: #95352A;                     /* filled danger, 8% darker */
-  --anth-halo-accent: 0 0 0 3px var(--anth-accent-soft);
+  --anth-halo-accent: 0 0 0 3px rgba(223, 88, 48, 0.20), 0 6px 16px rgba(223, 88, 48, 0.25);
   --anth-halo-danger: 0 0 0 3px var(--anth-danger-soft);
+  --anth-glow-primary: 0 0 0 3px rgba(223, 88, 48, 0.20), 0 6px 16px rgba(223, 88, 48, 0.25);
   --anth-scrollbar-thumb: rgba(31, 29, 26, 0.18);
   --anth-scrollbar-thumb-hover: rgba(31, 29, 26, 0.30);
   --anth-text-tag-size: 12px;
@@ -297,21 +305,31 @@
   --anth-space-9: 48px;
   --anth-space-10: 64px;
 
-  /* 1.4 Radius: never above 8px. */
+  /* 1.4 Radius: plain steps, then one token per component role. */
   --anth-radius-xs: 2px;
   --anth-radius-sm: 4px;
   --anth-radius-md: 6px;
   --anth-radius-lg: 8px;
   --anth-radius-xl: 8px;
   --anth-radius-pill: 6px;
+  --anth-radius-control: 10px;       /* buttons, inputs, selects */
+  --anth-radius-card: 12px;          /* cards, panels, lists */
+  --anth-radius-dialog: 14px;
+  --anth-radius-alert: 10px;
+  --anth-radius-segment: 10px;       /* segmented outer */
+  --anth-radius-segment-item: 8px;   /* segmented inner */
+  --anth-radius-chip: 999px;         /* tags and chips */
 
   /* 1.5 Elevation and focus. */
   --anth-shadow-none: none;
-  --anth-shadow-1: 0 1px 0 rgba(31, 29, 26, 0.04), 0 1px 3px rgba(31, 29, 26, 0.07);
-  --anth-shadow-2: 0 2px 6px rgba(31, 29, 26, 0.07), 0 12px 28px rgba(31, 29, 26, 0.10);
+  --anth-shadow-1: 0 1px 2px rgba(31, 29, 26, 0.06), 0 4px 12px rgba(31, 29, 26, 0.06);
+  --anth-shadow-2: 0 2px 4px rgba(31, 29, 26, 0.06), 0 10px 24px rgba(31, 29, 26, 0.10);
+  --anth-shadow-lift: var(--anth-shadow-2);
+  --anth-field-shadow: var(--anth-shadow-1);
+  --anth-alert-shadow: var(--anth-shadow-1);
   --anth-shadow-inset: inset 0 1px 2px rgba(31, 29, 26, 0.14);
   --anth-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  --anth-focus-ring: 0 0 0 2px var(--anth-canvas), 0 0 0 4px var(--anth-accent);
+  --anth-focus-ring: 0 0 0 3px rgba(223, 88, 48, 0.22), 0 6px 16px rgba(223, 88, 48, 0.25);
   --anth-shadow-xs: var(--anth-shadow-1);
   --anth-shadow-sm: var(--anth-shadow-1);
   --anth-shadow-md: var(--anth-shadow-2);
@@ -330,7 +348,7 @@
   /* 1.7 Layout. */
   --anth-nav-height: 56px;
   --anth-touch-target: 44px; /* touch contexts: coarse pointer or phone width */
-  --anth-shell-max: 1200px;
+  --anth-shell-max: 1600px;
   --anth-shell-max-width: var(--anth-shell-max);
   --anth-prose-max: 720px;
   --anth-content-max-width: var(--anth-prose-max);

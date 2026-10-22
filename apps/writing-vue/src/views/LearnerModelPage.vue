@@ -175,7 +175,6 @@ onMounted(loadLearnerModel)
 /* Learner model (flag-gated): skill queues as list rows, one card level at most. */
 .learner-model-page {
   min-width: 0;
-  max-width: 960px;
 }
 
 .learner-model-page__body {

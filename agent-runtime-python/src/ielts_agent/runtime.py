@@ -146,13 +146,15 @@ class RuntimeServer:
         return self.metadata.as_dict()
 
     def _run_weekly_dream(self, request: RequestEnvelope) -> dict[str, Any]:
-        """Weekly consolidation: one model call over the host-built pack.
+        """Weekly consolidation: one v3 narrative over the host-built pack.
 
-        Rust stays the authority: the pack of the learner's practice records
-        comes from ``learning.weekly_pack`` and the weekly narrative and memory mutations
-        are submitted via ``dream.run_weekly`` for validation by the host. Host
-        failures stay inside the orchestrator's fail-closed fallback result; an
-        empty result is a success.
+        Rust stays the authority: the pack of the learner's practice records,
+        facts, blocks and Soul comes from ``learning.weekly_pack``; the digest is
+        preflighted (``validateOnly``, write-free) and the narrative, Soul edits
+        and memory mutations are then submitted via ``dream.run_weekly``. One
+        attempt makes at most three model calls: the first, at most one repair
+        and at most one retry. Host failures stay inside the orchestrator's
+        fail-closed fallback result; a model-free result is a success.
         """
         if self.host_bridge is None:
             raise ProtocolError("host_bridge_unavailable", "trusted Rust host bridge is unavailable")

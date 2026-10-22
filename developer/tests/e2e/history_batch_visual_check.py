@@ -31,8 +31,9 @@ def read_geometry(page):
             barRect: rect(bar),
             barDisplay: style(bar)?.display || '',
             barWrap: style(bar)?.flexWrap || '',
-            // The bar lives inside the sticky toolbar block, which owns the sticky position.
-            barPosition: style(bar?.closest('.is-sticky'))?.position || '',
+            // The bar lives inside the floating sticky toolbar block, which
+            // owns the sticky position (HistoryPage `.history-toolbar-bar`).
+            barPosition: style(bar?.closest('.history-toolbar-bar, .is-sticky'))?.position || '',
             countText: count?.textContent.trim() || '',
             checked: [...document.querySelectorAll('.history-row[aria-checked="true"]')].length,
             countRect: rect(count),

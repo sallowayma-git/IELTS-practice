@@ -31,6 +31,10 @@ pub struct AssetIndexEntry {
     /// Always present so list filters (`activity === 'reading'`) work.
     pub activity: String,
     pub pdf_only: bool,
+    /// Stable tag keys (single_choice, multi_choice, judgement, completion,
+    /// heading_match, paragraph_match, matching), canonically ordered and
+    /// deduplicated. Empty for a pdf-only or not-yet-classified asset.
+    pub question_kinds: Vec<String>,
 }
 
 const MAX_PDF_BYTES: usize = 20 * 1024 * 1024;
@@ -144,6 +148,11 @@ pub fn seed_builtin_reading_pack(
             metadata: Some(json!({ "resourcePack": &manifest.pack_id, "sha256": &entry.sha256 })),
         };
         upsert_practice_asset(&tx, &asset)?;
+        set_question_kinds(
+            &tx,
+            &asset.id,
+            &crate::reading::question_kinds::classify_question_kinds(&payload),
+        )?;
     }
     tx.commit()?;
 
@@ -202,7 +211,7 @@ pub fn list_assets(
     activity: Option<Activity>,
 ) -> DbResult<Vec<AssetIndexEntry>> {
     let mut sql = String::from(
-        "SELECT id, title, category, difficulty, frequency, fingerprint, schema_version, content_ref, pdf_only
+        "SELECT id, title, category, difficulty, frequency, fingerprint, schema_version, content_ref, pdf_only, question_kinds_json
          FROM practice_assets",
     );
     if activity.is_some() {
@@ -212,6 +221,7 @@ pub fn list_assets(
     let mut stmt = conn.prepare(&sql)?;
     let map_row = |row: &rusqlite::Row<'_>| {
         let content_ref: Option<String> = row.get(7)?;
+        let question_kinds_json: Option<String> = row.get(9)?;
         Ok(AssetIndexEntry {
             id: row.get(0)?,
             title: row.get(1)?,
@@ -224,6 +234,7 @@ pub fn list_assets(
             payload_ref: content_ref,
             activity: "reading".into(),
             pdf_only: row.get::<_, i64>(8)? != 0,
+            question_kinds: parse_question_kinds(question_kinds_json.as_deref()),
         })
     };
     let rows = if let Some(act) = activity {
@@ -537,7 +548,73 @@ pub fn import_asset_payload(
         metadata: Some(json_meta(payload)),
     };
     upsert_practice_asset(conn, &asset)?;
+    set_question_kinds(
+        conn,
+        &asset.id,
+        &crate::reading::question_kinds::classify_question_kinds(payload),
+    )?;
     Ok(asset)
+}
+
+/// Store the classified tag keys for one asset. Called right after every
+/// insert/update of `practice_assets` so the column never drifts from the
+/// payload it was computed from.
+fn set_question_kinds(conn: &Connection, asset_id: &str, kinds: &[String]) -> DbResult<()> {
+    let encoded = serde_json::to_string(kinds).unwrap_or_else(|_| "[]".to_string());
+    conn.execute(
+        "UPDATE practice_assets SET question_kinds_json = ?1 WHERE id = ?2",
+        params![encoded, asset_id],
+    )?;
+    Ok(())
+}
+
+fn parse_question_kinds(raw: Option<&str>) -> Vec<String> {
+    raw.and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
+        .unwrap_or_default()
+}
+
+/// Classify and store `question_kinds_json` for every reading asset migrated
+/// in from before this column existed. Payloads are re-read from disk (the
+/// SQL migration itself cannot do this); a missing or unparsable payload
+/// (e.g. a pdf-only asset) is left as `[]` rather than failing the migration.
+/// Idempotent and cheap once applied: a single COUNT when there is nothing
+/// left to backfill.
+pub fn backfill_question_kinds(conn: &mut Connection) -> DbResult<()> {
+    let tx = conn.transaction()?;
+    backfill_question_kinds_in_transaction(&tx)?;
+    tx.commit()?;
+    Ok(())
+}
+
+pub(crate) fn backfill_question_kinds_in_transaction(conn: &Connection) -> DbResult<()> {
+    let pending: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM practice_assets WHERE activity = 'reading' AND question_kinds_json IS NULL",
+        [],
+        |row| row.get(0),
+    )?;
+    if pending == 0 {
+        return Ok(());
+    }
+    let mut rows: Vec<(String, Option<String>)> = Vec::new();
+    {
+        let mut stmt = conn.prepare(
+            "SELECT id, content_ref FROM practice_assets WHERE activity = 'reading' AND question_kinds_json IS NULL",
+        )?;
+        let mapped = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        for r in mapped {
+            rows.push(r?);
+        }
+    }
+    for (id, content_ref) in rows {
+        let kinds = content_ref
+            .as_deref()
+            .and_then(|path| fs::read_to_string(path).ok())
+            .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+            .map(|payload| crate::reading::question_kinds::classify_question_kinds(&payload))
+            .unwrap_or_default();
+        set_question_kinds(conn, &id, &kinds)?;
+    }
+    Ok(())
 }
 
 fn json_meta(payload: &Value) -> Value {
@@ -697,7 +774,7 @@ pub fn load_kinds(payload: &Value) -> serde_json::Map<String, Value> {
 /// matching task as the generic `matching`; its instructions say which one it
 /// is, so the sub-type is resolved here, once, where questions are indexed.
 /// A matching group whose instructions are not recognised stays `matching`.
-fn group_kind(group: &Value) -> String {
+pub(super) fn group_kind(group: &Value) -> String {
     let kind = group
         .get("kind")
         .and_then(|v| v.as_str())

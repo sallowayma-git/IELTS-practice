@@ -1,19 +1,81 @@
-//! Persistence of finished weekly reports (`weekly_digests.digest_json`, v2).
+//! Persistence of finished weekly reports (`weekly_digests.digest_json`).
 //!
 //! Reports reuse the table of the v1 prose digests: one row per weekly run.
-//! Old prose rows stay where they are and are simply not reports.
+//! Old prose rows stay where they are and are simply not reports. A v3 report is
+//! written by exactly one path, which first re-projects the fact map from the
+//! blocks and the Soul profile and refuses a report whose facts (or title) are
+//! not that exact projection.
 
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
-use ielts_domain::{WeeklyMemoryChange, WeeklyReport, WEEKLY_REPORT_SCHEMA_VERSION};
+use chrono::{DateTime, FixedOffset, Utc};
+use ielts_domain::{
+    display_title, WeeklyMemoryChange, WeeklyReport, LEGACY_WEEKLY_REPORT_SCHEMA_VERSION,
+    WEEKLY_REPORT_SCHEMA_VERSION,
+};
 use rusqlite::{params, Connection};
 
 use crate::dream::normalize_user_id;
 use crate::sqlite::{DbError, DbResult};
+use crate::weekly_report::project_weekly_facts;
 
-const MAX_REPORTS: u32 = 52;
+const MAX_PAGE_SIZE: u32 = 52;
+
+/// Original prose retained for read-only history. New runs never write it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyWeeklyDigest {
+    pub run_id: String,
+    pub window: String,
+    pub start: String,
+    pub end: String,
+    pub digest: serde_json::Value,
+}
+
+pub fn list_legacy_weekly_digests(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<LegacyWeeklyDigest>> {
+    list_legacy_weekly_digests_page(conn, user_id, limit, 0)
+}
+
+/// A page of readable legacy digests. The offset counts legacy rows only;
+/// modern reports sharing the table must not consume the page's positions.
+pub fn list_legacy_weekly_digests_page(
+    conn: &Connection,
+    user_id: &str,
+    limit: u32,
+    offset: u32,
+) -> DbResult<Vec<LegacyWeeklyDigest>> {
+    let mut statement = conn.prepare(
+        "SELECT r.id, r.input_hash, d.digest_json FROM dream_runs r
+           JOIN weekly_digests d ON d.run_id = r.id
+          WHERE r.user_id = ?1 AND r.status IN ('completed', 'failed')
+            AND r.input_hash LIKE 'weekly:%'
+          ORDER BY d.updated_at DESC, r.id DESC",
+    )?;
+    let rows = statement.query_map(params![normalize_user_id(user_id)], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+    })?;
+    let mut out = Vec::new();
+    let mut skipped = 0;
+    for row in rows {
+        let (run_id, marker, raw) = row?;
+        let digest: serde_json::Value = serde_json::from_str(&raw).map_err(|error| DbError::Validation(error.to_string()))?;
+        let prose = digest.get("body").is_some_and(|v| v.is_array())
+            || digest.get("observations").is_some_and(|v| v.is_array());
+        if !prose || digest.get("blocks").is_some() { continue; }
+        let Some(window) = crate::dream::window_of_marker(&marker) else { continue };
+        if skipped < offset {
+            skipped += 1;
+            continue;
+        }
+        out.push(LegacyWeeklyDigest {
+            run_id, window: window.key, start: window.start.to_rfc3339(),
+            end: window.end.to_rfc3339(), digest,
+        });
+        if out.len() >= limit.clamp(1, MAX_PAGE_SIZE) as usize { break; }
+    }
+    Ok(out)
+}
 
 const MUTATION_BATCH_PREFIX: &str = "weekly-mutations-";
 
@@ -50,7 +112,19 @@ pub fn weekly_memory_changes(conn: &Connection, user_id: &str) -> DbResult<Vec<W
 }
 
 /// Store the report of a weekly run. Idempotent per run.
-pub fn put_weekly_report(conn: &Connection, run_id: &str, report: &WeeklyReport, now: &str) -> DbResult<()> {
+///
+/// `offset` is the local UTC offset of the run, used to turn `generatedAt` into
+/// the local day the exam countdown was computed from. The facts in the report
+/// must equal a fresh projection of its own blocks and the active Soul profile:
+/// one writer, one projection, no hand-written facts.
+pub fn put_weekly_report(
+    conn: &Connection,
+    user_id: &str,
+    run_id: &str,
+    report: &WeeklyReport,
+    offset: FixedOffset,
+    now: &str,
+) -> DbResult<()> {
     if run_id.trim().is_empty() {
         return Err(DbError::Validation("runId is required".into()));
     }
@@ -60,6 +134,34 @@ pub fn put_weekly_report(conn: &Connection, run_id: &str, report: &WeeklyReport,
             report.schema_version
         )));
     }
+    match (report.state, report.narrative.as_ref()) {
+        (ielts_domain::WeeklyReportState::Final, Some(narrative)) if !narrative.body.is_empty() => {}
+        (ielts_domain::WeeklyReportState::Final, _) => {
+            return Err(DbError::Validation("a final weekly report needs a narrative body".into()))
+        }
+        (_, None) => {}
+        (state, Some(_)) => {
+            return Err(DbError::Validation(format!(
+                "weekly report in state {state:?} must not carry a narrative"
+            )))
+        }
+    }
+    if report.display_title != display_title(report.narrative.as_ref(), &report.blocks) {
+        return Err(DbError::Validation(
+            "weekly report displayTitle is not the one derived title".into(),
+        ));
+    }
+    let as_of = DateTime::parse_from_rfc3339(&report.generated_at)
+        .map_err(|error| DbError::Validation(format!("invalid generatedAt: {error}")))?
+        .with_timezone(&offset)
+        .date_naive();
+    let exam_date = crate::soul::soul_exam_date(conn, user_id)?;
+    let projected = project_weekly_facts(&report.blocks, exam_date, as_of);
+    if report.facts != projected {
+        return Err(DbError::Validation(
+            "weekly report facts do not match project(blocks, soul)".into(),
+        ));
+    }
     let value = serde_json::to_string(report).map_err(|error| DbError::Message(error.to_string()))?;
     conn.execute(
         "INSERT INTO weekly_digests (run_id, digest_json, updated_at) VALUES (?1, ?2, ?3)
@@ -67,6 +169,46 @@ pub fn put_weekly_report(conn: &Connection, run_id: &str, report: &WeeklyReport,
         params![run_id, value, now],
     )?;
     Ok(())
+}
+
+/// The narrative of the last completed report before `window_start`, with its
+/// fact placeholders resolved: prompt context, never a citation source.
+pub fn previous_weekly_digest(
+    conn: &Connection,
+    user_id: &str,
+    window_start: DateTime<Utc>,
+) -> DbResult<Option<serde_json::Value>> {
+    let user_id = normalize_user_id(user_id);
+    let previous = candidates(conn, &user_id)?
+        .into_iter()
+        .filter(|candidate| candidate.rank.0)
+        .filter_map(|candidate| {
+            let end = end_of(&candidate.report)?;
+            (end <= window_start).then_some((end, candidate.report))
+        })
+        .max_by_key(|(end, _)| *end);
+    let Some((_, report)) = previous else { return Ok(None) };
+    let Some(narrative) = report.narrative.as_ref() else { return Ok(None) };
+    let mut summary = serde_json::json!({
+        "title": narrative.title,
+        "body": narrative.body,
+        "nextSteps": narrative.next_steps,
+    });
+    resolve_references(&mut summary, &report.facts);
+    Ok(Some(summary))
+}
+
+fn resolve_references(value: &mut serde_json::Value, facts: &BTreeMap<String, ielts_domain::WeeklyFact>) {
+    match value {
+        serde_json::Value::String(text) => {
+            for (id, fact) in facts {
+                *text = text.replace(&format!("{{{{f:{id}}}}}"), &fact.value.to_string());
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(|item| resolve_references(item, facts)),
+        serde_json::Value::Object(map) => map.values_mut().for_each(|item| resolve_references(item, facts)),
+        _ => {}
+    }
 }
 
 /// A stored report ranked for "which report of this window wins": a completed
@@ -78,8 +220,12 @@ struct Candidate {
 
 fn parse_report(raw: &str) -> Option<WeeklyReport> {
     // v1 prose rows do not parse as a report; they are skipped, not errors.
+    // v2 rows are historical display only: they parse and never get rewritten.
     let report: WeeklyReport = serde_json::from_str(raw).ok()?;
-    let usable = report.schema_version == WEEKLY_REPORT_SCHEMA_VERSION && !report.is_empty();
+    let usable = matches!(
+        report.schema_version,
+        WEEKLY_REPORT_SCHEMA_VERSION | LEGACY_WEEKLY_REPORT_SCHEMA_VERSION
+    ) && !report.is_empty();
     usable.then_some(report)
 }
 
@@ -118,6 +264,17 @@ fn window_order(report: &WeeklyReport) -> (Option<DateTime<Utc>>, String) {
 /// Rows that are not v2 reports, reports without blocks, and failed reports
 /// that end at or before the latest completed report are skipped.
 pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbResult<Vec<WeeklyReport>> {
+    list_weekly_reports_page(conn, user_id, limit, 0)
+}
+
+/// Page the final visible history, after retries have been deduplicated and
+/// superseded failures removed. The page-size cap never limits the archive.
+pub fn list_weekly_reports_page(
+    conn: &Connection,
+    user_id: &str,
+    limit: u32,
+    offset: u32,
+) -> DbResult<Vec<WeeklyReport>> {
     let user_id = normalize_user_id(user_id);
     let mut best: BTreeMap<String, Candidate> = BTreeMap::new();
     for candidate in candidates(conn, &user_id)? {
@@ -136,6 +293,5 @@ pub fn list_weekly_reports(conn: &Connection, user_id: &str, limit: u32) -> DbRe
     let mut reports: Vec<WeeklyReport> =
         best.into_values().filter(|candidate| !superseded(candidate)).map(|candidate| candidate.report).collect();
     reports.sort_by_key(|report| Reverse(window_order(report)));
-    reports.truncate(limit.clamp(1, MAX_REPORTS) as usize);
-    Ok(reports)
+    Ok(reports.into_iter().skip(offset as usize).take(limit.clamp(1, MAX_PAGE_SIZE) as usize).collect())
 }

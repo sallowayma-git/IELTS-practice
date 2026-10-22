@@ -166,6 +166,26 @@ pub(crate) fn local_day_start_utc<Tz: chrono::TimeZone>(now: &chrono::DateTime<T
         .map_or_else(|| now.with_timezone(&Utc) - Duration::hours(24), |start| start.with_timezone(&Utc))
 }
 
+/// The report of one host-owned window, built exactly as the weekly write path
+/// builds it. Read-only: both the pack and the validate-only preflight must see
+/// the same blocks and facts the submission will be validated against, so the
+/// construction lives here once.
+#[cfg(feature = "daily-dream-v1")]
+fn weekly_window_report(
+    conn: &rusqlite::Connection,
+    window: &ielts_db::WeeklyWindow,
+) -> Result<ielts_domain::WeeklyReport, ielts_db::DbError> {
+    let now = crate::app::clock::now();
+    ielts_db::build_weekly_report(
+        conn,
+        "local",
+        window,
+        *now.offset(),
+        ielts_domain::WeeklyReportState::Live,
+        now.with_timezone(&chrono::Utc),
+    )
+}
+
 /// The weekly pack of one window, as the sidecar receives it: the learner's real
 /// practice records, bounded (see `ielts_db::weekly_pack`).
 #[cfg(feature = "daily-dream-v1")]
@@ -173,28 +193,55 @@ pub(crate) fn weekly_pack_value(
     db: &AppDb,
     window: &ielts_db::WeeklyWindow,
 ) -> Result<Value, RuntimeHostError> {
-    let offset = *crate::app::clock::now().offset();
     db.with_conn(|conn| {
         let mut pack = ielts_db::weekly_pack(conn, "local", window.start, window.end)?.to_value();
-        // The blocks the model writes its sentences for: data only, the page
-        // renders the rest.
-        let report = ielts_db::build_weekly_report(
-            conn,
-            "local",
-            window,
-            offset,
-            ielts_domain::WeeklyReportState::Live,
-            chrono::Utc::now(),
-        )?;
+        // The report built for the same window is the single source of every
+        // number the model may cite: blocks for layout, facts for prose.
+        let report = weekly_window_report(conn, window)?;
         let blocks: Vec<Value> = report
             .blocks
             .iter()
             .map(|block| json!({"id": block.id, "kind": block.kind, "data": block.data}))
             .collect();
         pack["blocks"] = Value::Array(blocks);
+        pack["facts"] = serde_json::to_value(&report.facts)
+            .map_err(|error| ielts_db::DbError::Message(error.to_string()))?;
+        pack["soul"] = Value::Object(ielts_db::soul::soul_profile(conn, "local")?);
+        pack["persona"] = json!(ielts_db::soul::SOUL_PERSONA);
+        pack["previousDigest"] =
+            ielts_db::previous_weekly_digest(conn, "local", window.start)?.unwrap_or(Value::Null);
         Ok(pack)
     })
     .map_err(|error: ielts_db::DbError| RuntimeHostError::InvalidResponse(error.to_string()))
+}
+
+/// The sidecar's write-free preflight: validate a submitted digest against the
+/// same facts and Soul profile the real `dream.run_weekly` write would use.
+///
+/// This is read-only by construction — it opens no journal, creates no run and
+/// persists no report — and it never returns prose, only the validator's
+/// metrics so the sidecar can repair once before submitting.
+#[cfg(feature = "daily-dream-v1")]
+fn weekly_validate_only(
+    db: &AppDb,
+    window: &ielts_db::WeeklyWindow,
+    params: &serde_json::Map<String, Value>,
+) -> Result<Value, String> {
+    let digest = params.get("digest").cloned().unwrap_or(Value::Null);
+    let today = crate::app::clock::now().date_naive();
+    db.with_conn(|conn| {
+        let report = weekly_window_report(conn, window)?;
+        let profile = ielts_db::soul::soul_profile(conn, "local")?;
+        let outcome = ielts_db::validate_narrative(&digest, &report.facts, &profile, today);
+        let report = outcome.narrative.validation.final_report;
+        Ok(json!({
+            "usable": outcome.usable,
+            "needsRepair": report.needs_repair,
+            "droppedSentences": report.dropped_sentences,
+            "violations": report.violations,
+        }))
+    })
+    .map_err(|error: ielts_db::DbError| error.to_string())
 }
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -1431,7 +1478,7 @@ impl RuntimeManager {
         match value.get("method").and_then(Value::as_str) {
             Some("tool.invoke") => self.invoke_candidate_input_tool(app, trace_id, params, &active).await,
             Some("model.invoke") => {
-                self.invoke_model(app, params, request_budget, active.kind.model_transport_retries()).await
+                self.invoke_model(app, params, request_budget, active.kind).await
             }
             #[cfg(feature = "context-compiler-v1")]
             Some(method @ ("learning.learner_skill_state"
@@ -1539,9 +1586,9 @@ impl RuntimeManager {
     /// applied without any delete. The daily journal is deterministic and has no
     /// sidecar involvement.
     #[cfg(feature = "daily-dream-v1")]
-    async fn invoke_journal_dream(
+    async fn invoke_journal_dream<R: tauri::Runtime>(
         &self,
-        app: &AppHandle,
+        app: &tauri::AppHandle<R>,
         method: &str,
         params: &serde_json::Map<String, Value>,
         active: &ActiveRun,
@@ -1563,6 +1610,13 @@ impl RuntimeManager {
             .and_then(ielts_db::WeeklyWindow::parse)
             .ok_or_else(|| RuntimeHostError::InvalidResponse("weekly run has no valid host-owned window".into()))?;
         let result: Result<Value, String> = match method {
+            // The preflight validates the digest against the facts of the
+            // host-owned window without creating anything: no journal, no run,
+            // no report. It must be answered before the write path touches the
+            // database, so the sidecar's one repair pass cannot cause a run.
+            "dream.run_weekly" if params.get("validateOnly").and_then(Value::as_bool) == Some(true) => {
+                weekly_validate_only(db.inner(), &window, params)
+            }
             "dream.run_weekly" => {
                 // The run row is FK-anchored on the journal of the window's end
                 // day, resolved the same way the daily worker does.
@@ -1740,18 +1794,18 @@ impl RuntimeManager {
         app: &AppHandle,
         params: &serde_json::Map<String, Value>,
         timeout: Duration,
-        transport_retries: u32,
+        kind: RunKind,
     ) -> Result<Value, RuntimeHostError> {
         let request = params
             .get("request")
             .cloned()
             .ok_or_else(|| RuntimeHostError::InvalidResponse("model request is missing".into()))?;
-        let request = parse_model_request(request)?;
+        let request = parse_model_request(request, kind)?;
         let db = app.state::<AppDb>();
         let vault = app.state::<AppVault>();
         let runtime = load_runtime(&db, &vault)
             .map_err(|error| RuntimeHostError::Process(error.to_string()))?
-            .with_transport_retries(transport_retries);
+            .with_transport_retries(kind.model_transport_retries());
         // The gateway already returns final content only (no reasoning), so the
         // sidecar can never receive chain-of-thought.
         let response = tokio::time::timeout(timeout, runtime.complete(request))
@@ -1876,14 +1930,14 @@ pub(crate) fn is_host_only_method(method: &str) -> bool {
 
 /// A sidecar completion must declare `maxTokens` (serde rejects a missing
 /// field), and the declared ceiling must pass `validate_model_request`.
-fn parse_model_request(request: Value) -> Result<CompletionRequest, RuntimeHostError> {
+fn parse_model_request(request: Value, kind: RunKind) -> Result<CompletionRequest, RuntimeHostError> {
     let request: CompletionRequest = serde_json::from_value(request)
         .map_err(|error| RuntimeHostError::InvalidResponse(format!("invalid model request: {error}")))?;
-    validate_model_request(&request)?;
+    validate_model_request(&request, kind)?;
     Ok(request)
 }
 
-fn validate_model_request(request: &CompletionRequest) -> Result<(), RuntimeHostError> {
+fn validate_model_request(request: &CompletionRequest, kind: RunKind) -> Result<(), RuntimeHostError> {
     if request.messages.is_empty() || request.messages.len() > 4 {
         return Err(RuntimeHostError::InvalidResponse(
             "model request requires one to four messages".into(),
@@ -1903,6 +1957,21 @@ fn validate_model_request(request: &CompletionRequest) -> Result<(), RuntimeHost
     if bytes > MAX_FRAME_BYTES {
         return Err(RuntimeHostError::FrameTooLarge(bytes));
     }
+    // The weekly narrative samples at the snapshot's 0.6; every other sidecar
+    // call (memory candidates) stays deterministic at zero.
+    #[cfg(feature = "daily-dream-v1")]
+    if matches!(kind, RunKind::WeeklyDream) {
+        if !(0.0..=1.0).contains(&request.temperature) {
+            return Err(RuntimeHostError::InvalidResponse(
+                "weekly model temperature must be between zero and one".into(),
+            ));
+        }
+    } else if request.temperature != 0.0 {
+        return Err(RuntimeHostError::InvalidResponse(
+            "memory model temperature must be zero".into(),
+        ));
+    }
+    #[cfg(not(feature = "daily-dream-v1"))]
     if request.temperature != 0.0 {
         return Err(RuntimeHostError::InvalidResponse(
             "memory model temperature must be zero".into(),
@@ -2201,6 +2270,131 @@ mod tests {
         }
     }
 
+    /// Drive the `dream.run_weekly` reverse-RPC exactly as the sidecar does.
+    #[cfg(feature = "daily-dream-v1")]
+    async fn weekly_preflight<R: tauri::Runtime>(
+        app: &tauri::AppHandle<R>,
+        window: &ielts_db::WeeklyWindow,
+        digest: Value,
+    ) -> Value {
+        let params = json!({
+            "userId": "local",
+            "window": window.token(),
+            "digest": digest,
+            "validateOnly": true,
+        });
+        let active = ActiveRun::new(
+            "dream.weekly",
+            "trusted-run",
+            json!({"window": window.token()}),
+            7,
+        )
+        .unwrap();
+        RuntimeManager::default()
+            .invoke_journal_dream(app, "dream.run_weekly", params.as_object().unwrap(), &active)
+            .await
+            .unwrap()
+    }
+
+    /// The validate-only preflight answers with the validator's metrics against
+    /// the same facts the real write builds, and writes nothing: no journal, no
+    /// dream run, no report. It runs before `ensure_journal`, so the sidecar's
+    /// repair pass can never be the attempt that creates a run.
+    #[cfg(feature = "daily-dream-v1")]
+    #[tokio::test]
+    async fn weekly_validate_only_returns_metrics_and_writes_nothing() {
+        let directory = tempfile::tempdir().unwrap();
+        let app = tauri::test::mock_builder()
+            .manage(crate::app::state::test_support::test_db(directory.path()))
+            .build(tauri::generate_context!())
+            .expect("mock app owns the migrated database");
+        let window = ielts_db::WeeklyWindow::new(
+            "2026-W40",
+            utc("2026-09-26T00:00:00Z"),
+            utc("2026-10-03T00:00:00Z"),
+        );
+
+        // A literal Chinese count in the body is exactly what the validator
+        // refuses: one dropped sentence, and the first body sentence is lost.
+        let rejected = weekly_preflight(
+            app.handle(),
+            &window,
+            json!({
+                "title": "本周回顾",
+                "body": ["这周做了三次练习。"],
+                "changes": [],
+                "nextSteps": [],
+                "strengths": [],
+                "weaknesses": [],
+            }),
+        )
+        .await;
+        assert_eq!(rejected["usable"], false);
+        assert_eq!(rejected["needsRepair"], true);
+        assert_eq!(rejected["droppedSentences"], 1);
+        assert_eq!(rejected["violations"][0]["path"], "body/0");
+        assert_eq!(rejected["violations"][0]["sentence"], 0);
+        assert_eq!(rejected["violations"][0]["code"], "literal_chinese_count");
+
+        // Numbers pass only as facts the write path projected: a placeholder
+        // the window's facts do not contain is refused, not resolved.
+        let unknown = weekly_preflight(
+            app.handle(),
+            &window,
+            json!({
+                "title": "本周回顾",
+                "body": ["这周共读了 {{f:volume.reading}} 篇。"],
+                "changes": [],
+                "nextSteps": [],
+                "strengths": [],
+                "weaknesses": [],
+            }),
+        )
+        .await;
+        assert_eq!(unknown["usable"], false);
+        assert_eq!(unknown["needsRepair"], true);
+        assert_eq!(unknown["violations"][0]["path"], "body/0");
+        assert_eq!(unknown["violations"][0]["code"], "unknown_reference");
+
+        // A Chinese count is allowed in nextSteps with no fact behind it.
+        let accepted = weekly_preflight(
+            app.handle(),
+            &window,
+            json!({
+                "title": "本周回顾",
+                "body": ["这周练习还算顺利。"],
+                "changes": [],
+                "nextSteps": [{"text": "再做两套题。"}],
+                "strengths": [],
+                "weaknesses": [],
+            }),
+        )
+        .await;
+        assert_eq!(accepted["usable"], true);
+        assert_eq!(accepted["needsRepair"], false);
+        assert_eq!(accepted["droppedSentences"], 0);
+        assert_eq!(accepted["violations"], json!([]));
+        // Metrics only: the preflight never returns a narrative.
+        let mut keys: Vec<&str> = accepted
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["droppedSentences", "needsRepair", "usable", "violations"]);
+
+        let db = app.state::<AppDb>();
+        for table in ["daily_journals", "dream_runs", "weekly_digests"] {
+            let count: i64 = db
+                .with_conn(|conn| {
+                    Ok(conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))?)
+                })
+                .unwrap();
+            assert_eq!(count, 0, "{table} was written by the validate-only preflight");
+        }
+    }
+
     /// The model gateway's transport retries and the weekly sidecar's own retry
     /// loop must never multiply, and the weekly budget must fit its three calls.
     #[cfg(feature = "daily-dream-v1")]
@@ -2494,14 +2688,14 @@ mod tests {
             max_tokens,
             cache_key: None,
         };
-        assert!(validate_model_request(&request(1)).is_ok());
-        assert!(validate_model_request(&request(SIDECAR_MAX_OUTPUT_TOKENS)).is_ok());
+        assert!(validate_model_request(&request(1), RunKind::MemoryCandidate).is_ok());
+        assert!(validate_model_request(&request(SIDECAR_MAX_OUTPUT_TOKENS), RunKind::MemoryCandidate).is_ok());
         assert!(
-            validate_model_request(&request(0)).is_err(),
+            validate_model_request(&request(0), RunKind::MemoryCandidate).is_err(),
             "a zero ceiling would make every completion return empty"
         );
         assert!(
-            validate_model_request(&request(SIDECAR_MAX_OUTPUT_TOKENS + 1)).is_err(),
+            validate_model_request(&request(SIDECAR_MAX_OUTPUT_TOKENS + 1), RunKind::MemoryCandidate).is_err(),
             "the sidecar must not request an unbounded completion"
         );
         let wire = |extra: Value| {
@@ -2509,9 +2703,29 @@ mod tests {
             body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
             body
         };
-        assert!(parse_model_request(wire(json!({"maxTokens": 1500}))).is_ok());
-        let missing = parse_model_request(wire(json!({}))).unwrap_err().to_string();
+        assert!(parse_model_request(wire(json!({"maxTokens": 1500})), RunKind::MemoryCandidate).is_ok());
+        let missing = parse_model_request(wire(json!({})), RunKind::MemoryCandidate).unwrap_err().to_string();
         assert!(missing.contains("maxTokens"), "{missing}");
+    }
+
+    #[test]
+    fn the_weekly_narrative_samples_but_memory_candidates_stay_deterministic() {
+        let message = ChatMessage::new("user", "hello");
+        let at = |temperature| CompletionRequest {
+            messages: vec![message.clone()],
+            temperature,
+            max_tokens: 2_500,
+            cache_key: None,
+        };
+        #[cfg(feature = "daily-dream-v1")]
+        {
+            assert!(validate_model_request(&at(0.6), RunKind::WeeklyDream).is_ok());
+            assert!(validate_model_request(&at(1.0), RunKind::WeeklyDream).is_ok());
+            let too_hot = validate_model_request(&at(1.5), RunKind::WeeklyDream).unwrap_err().to_string();
+            assert!(too_hot.contains("temperature"), "{too_hot}");
+        }
+        let sampled = validate_model_request(&at(0.6), RunKind::MemoryCandidate).unwrap_err().to_string();
+        assert!(sampled.contains("temperature must be zero"), "{sampled}");
     }
 
     fn handshake() -> RuntimeHandshake {

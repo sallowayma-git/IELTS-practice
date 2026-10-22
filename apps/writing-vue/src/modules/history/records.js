@@ -247,25 +247,14 @@ export function recordDetail(record) {
   return record.subtitle.slice(label.length).replace(/^\s*·\s*/, '')
 }
 
-/** "09:30 · 用时 12m 0s · Task 2" — empty parts are dropped. */
-export function recordMetaLine(record) {
+/** "09:30 · 用时 12m 0s" — empty parts are dropped. */
+export function recordTimeLine(record) {
   const duration = record.durationSec > 0 ? `用时 ${formatDuration(record.durationSec)}` : ''
-  return [formatClock(record.occurredAt), duration, recordDetail(record)].filter(Boolean).join(' · ')
+  return [formatClock(record.occurredAt), duration].filter(Boolean).join(' · ')
 }
 
-function summaryClause(activity, entry) {
-  const { unit, metric, format } = ACTIVITIES[activity].summary
-  const count = `${activityLabel(activity)} ${entry.count} ${unit}`
-  if (!metric || entry.scored === 0) return count
-  return `${count}，${metric} ${format(entry.sum / entry.scored)}`
-}
-
-/**
- * One deterministic sentence about a set of records, e.g.
- * "全部记录：阅读 12 篇，平均正确率 76%；写作 3 篇，平均 Band 6.5。"
- * Clause wording comes from each activity's `summary`; '' when nothing counts.
- */
-export function summarizeRecords(records, scopeLabel = '全部记录') {
+/** Per activity: how many records, and the sum/count of their numeric scores. */
+function totalsByActivity(records) {
   const totals = {}
   for (const record of records) {
     if (!ACTIVITIES[record.activity]?.summary) continue
@@ -276,10 +265,54 @@ export function summarizeRecords(records, scopeLabel = '全部记录') {
     entry.sum += Number(value)
     entry.scored += 1
   }
-  const clauses = Object.keys(ACTIVITIES)
+  return totals
+}
+
+/**
+ * Per-activity summary parts, in ACTIVITIES order: `label` ("阅读 12 篇") and
+ * `detail` ("平均正确率 76%", '' when nothing is scored).
+ */
+export function summaryStats(records) {
+  const totals = totalsByActivity(records)
+  return Object.keys(ACTIVITIES)
     .filter((activity) => totals[activity])
-    .map((activity) => summaryClause(activity, totals[activity]))
+    .map((activity) => {
+      const { unit, metric, format } = ACTIVITIES[activity].summary
+      const entry = totals[activity]
+      const average = metric && entry.scored > 0 ? format(entry.sum / entry.scored) : ''
+      return {
+        activity,
+        label: `${activityLabel(activity)} ${entry.count} ${unit}`,
+        detail: average ? `${metric} ${average}` : ''
+      }
+    })
+}
+
+/**
+ * One deterministic sentence about a set of records, e.g.
+ * "全部记录：阅读 12 篇，平均正确率 76%；写作 3 篇，平均 Band 6.5。"
+ * Clause wording comes from each activity's `summary`; '' when nothing counts.
+ */
+export function summarizeRecords(records, scopeLabel = '全部记录') {
+  const clauses = summaryStats(records).map((stat) => (stat.detail ? `${stat.label}，${stat.detail}` : stat.label))
   return clauses.length > 0 ? `${scopeLabel}：${clauses.join('；')}。` : ''
+}
+
+// Score tone floors: a score at or above `success` is good, at or above `warning` is fair.
+const TONE_FLOORS = {
+  reading: { success: 0.75, warning: 0.5 }, // ratio, 0–1
+  writing: { success: 6.5, warning: 5.5 } // Band
+}
+
+/** 'success' | 'warning' | 'danger' for a scored record, '' when unscored. */
+export function scoreTone(record) {
+  const raw = record.score.value
+  if (raw === null || raw === undefined || raw === '') return ''
+  const value = Number(raw)
+  const floor = TONE_FLOORS[record.activity]
+  if (!Number.isFinite(value) || !floor) return ''
+  if (value >= floor.success) return 'success'
+  return value >= floor.warning ? 'warning' : 'danger'
 }
 
 /**

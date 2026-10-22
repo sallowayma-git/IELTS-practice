@@ -121,7 +121,7 @@ hr {
   box-shadow: var(--anth-shadow-1);
 }
 
-/* ── Paper v2 typography (.atlas-paper only) ──────────────────────────
+/* ── Typography (.atlas-paper only) ──────────────────────────
  * The global rules above are inherited by the frozen exam and stay as
  * they are. Everything below is scoped to the paper shell. */
 .atlas-paper {

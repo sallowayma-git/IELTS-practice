@@ -169,8 +169,9 @@ pub(crate) fn record_weekly_failure(
         }
     })?;
     // The blocks are final either way; only the narrative is owed a retry.
-    let report = weekly_report_without_narrative(db, window, WeeklyReportState::NarrativeFailed)?;
-    db.with_conn(|conn| ielts_db::put_weekly_report(conn, &run_id, &report, &now))
+    let local = crate::app::clock::now();
+    let report = weekly_report_without_narrative(db, window, WeeklyReportState::NarrativeFailed, local)?;
+    db.with_conn(|conn| ielts_db::put_weekly_report(conn, "local", &run_id, &report, *local.offset(), &now))
 }
 
 /// Close a due window without a model (none configured): its blocks become the
@@ -180,11 +181,12 @@ pub(crate) fn record_weekly_failure(
 pub(crate) fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbResult<()> {
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
-    let report = weekly_report_without_narrative(db, window, WeeklyReportState::FinalNoAi)?;
+    let local = crate::app::clock::now();
+    let report = weekly_report_without_narrative(db, window, WeeklyReportState::FinalNoAi, local)?;
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         let run = ielts_db::record_completed_weekly_run(&tx, "local", &journal_id, window, &now)?;
-        ielts_db::put_weekly_report(&tx, &run.id, &report, &now)?;
+        ielts_db::put_weekly_report(&tx, "local", &run.id, &report, *local.offset(), &now)?;
         tx.commit()?;
         Ok(())
     })
@@ -194,8 +196,9 @@ fn weekly_report_without_narrative(
     db: &AppDb,
     window: &WeeklyWindow,
     state: WeeklyReportState,
+    now: DateTime<chrono::FixedOffset>,
 ) -> DbResult<ielts_domain::WeeklyReport> {
-    crate::commands::journal::finished_report(db, window, state, None)
+    crate::commands::journal::finished_report(db, window, state, now)
         .map_err(|error| DbError::Validation(error.to_string()))
 }
 
@@ -251,12 +254,9 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
         }
         Err(error) => Err(error),
     };
-    let result = outcome.map_err(|error| error.to_string()).and_then(|payload| {
-        payload.get("result").cloned().ok_or_else(|| "weekly result is missing".to_string())
-    });
+    let result = outcome.map_err(|error| error.to_string()).and_then(|payload| weekly_run_result(&payload));
     let failure = match &result {
-        Ok(value) if value["fallbackReason"].is_null() => None,
-        Ok(value) => Some(("journal.weekly_fallback", value["fallbackReason"].to_string())),
+        Ok(_) => None,
         Err(error) => Some(("journal.weekly_failed", error.clone())),
     };
     match failure {
@@ -269,6 +269,17 @@ pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> D
         }
     }
     Ok(true)
+}
+
+/// The sidecar's `dream.weekly` result, or why the attempt failed. A fallback
+/// means it never reached the authoritative write: no report exists, so the
+/// attempt is recorded as failed and a later day retries it.
+fn weekly_run_result(payload: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let result = payload.get("result").cloned().ok_or_else(|| "weekly result is missing".to_string())?;
+    match result.get("fallbackReason").and_then(serde_json::Value::as_str) {
+        Some(reason) if !reason.is_empty() => Err(format!("weekly fallback: {reason}")),
+        _ => Ok(result),
+    }
 }
 
 fn execute(app: &tauri::AppHandle, job: &BackgroundJob, worker: &str) -> DbResult<()> {
@@ -662,6 +673,21 @@ mod tests {
             assert!(!weekly_attempt_due(false, true, 1, weekend), "once per local day");
             assert!(!weekly_attempt_due(true, false, 0, weekend), "completed");
         }
+    }
+
+    #[test]
+    fn a_sidecar_fallback_is_a_failed_attempt_not_a_quiet_success() {
+        let success = serde_json::json!({"result": {
+            "runId": "drmrun-1", "validated": 2, "rejected": 0, "accepted": 1, "fallbackReason": null
+        }});
+        assert!(weekly_run_result(&success).is_ok());
+        let fallback = serde_json::json!({"result": {
+            "runId": "", "validated": 0, "rejected": 0, "accepted": 0,
+            "fallbackReason": "model_invoke_failed:ProtocolError"
+        }});
+        let error = weekly_run_result(&fallback).unwrap_err();
+        assert!(error.contains("model_invoke_failed"), "{error}");
+        assert!(weekly_run_result(&serde_json::json!({})).is_err());
     }
 
     fn seed_scored_outcome(db: &AppDb, index: usize) {

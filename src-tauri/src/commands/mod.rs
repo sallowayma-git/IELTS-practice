@@ -18,4 +18,5 @@ pub mod modes;
 pub mod paths;
 pub mod reading;
 pub mod settings;
+pub mod soul;
 pub mod writing;

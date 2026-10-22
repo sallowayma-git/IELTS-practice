@@ -3,9 +3,10 @@
 Pure pydantic data contracts. No canonical DB access, no provider secrets, no
 host bridge. The daily journal is a deterministic summary built by the Rust
 host: there is no daily dream and no daily proposal. The weekly orchestrator
-reads the host-built weekly pack (the learner's practice records of the window)
-and submits one narrative (title + a sentence per report block) plus memory mutations via ``dream.run_weekly`` — Rust is
-the authority.
+reads the host-built weekly pack (the learner's practice records of the window,
+plus the report's facts, blocks, Soul and persona) and submits one v3 narrative
+(title, body, changes, nextSteps, strengths, weaknesses) plus Soul profile edits
+and memory mutations via ``dream.run_weekly`` — Rust is the authority.
 
 Conventions:
 
@@ -56,8 +57,9 @@ REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES: dict[str, str] = {
     CAPABILITY_LEARNING_WEEKLY_PACK: CAPABILITY_VERSION_LEARNING_WEEKLY_PACK,
 }
 
-# M8 weekly-dream schema version. Bumped only on wire-breaking change.
-WEEKLY_DREAM_SCHEMA_VERSION = 2
+# M8 weekly-dream schema version (pack v3 + the v3 digest: one narrative, no
+# per-block sentences). Bumped only on wire-breaking change.
+WEEKLY_DREAM_SCHEMA_VERSION = 3
 
 
 class _StrictModel(BaseModel):
@@ -239,41 +241,73 @@ MEMORY_NAMESPACES: frozenset[str] = frozenset(
 MEMORY_ACTIVITIES: frozenset[str] = frozenset({"reading", "writing"})
 
 
-# Bounds the host re-validates on a weekly narrative.
-WEEKLY_TITLE_MAX_CHARS = 40
-WEEKLY_SENTENCE_MAX_CHARS = 120
+# Bounds the host re-validates on the v3 weekly narrative (digest v3).
+WEEKLY_TITLE_MAX_CHARS = 16
+WEEKLY_BODY_MAX_PARAGRAPHS = 3
+WEEKLY_GROUP_MAX_ITEMS = 4
+WEEKLY_PROFILE_EDIT_MAX = 2
+NARRATIVE_TARGET_KINDS: frozenset[str] = frozenset({"kind", "asset", "writing"})
+
+
+class NarrativeTarget(_StrictModel):
+    """A route an actionable narrative line proposes, in the host's wire shape."""
+
+    type: Literal["kind", "asset", "writing"]
+    key: str = Field(min_length=1, max_length=160)
+
+    @field_validator("key")
+    @classmethod
+    def _plain_key(cls, value: str) -> str:
+        return value.strip()
+
+
+class NarrativeItem(_StrictModel):
+    """One actionable line: the words plus an optional route the page can open."""
+
+    text: str = Field(min_length=1)
+    target: NarrativeTarget | None = None
+
+    def to_wire(self) -> dict[str, Any]:
+        wire: dict[str, Any] = {"text": self.text}
+        if self.target is not None:
+            wire["target"] = {"type": self.target.type, "key": self.target.key}
+        return wire
 
 
 class WeeklyNarrative(_StrictModel):
-    """The model's words on one weekly report: a title and one sentence per block.
+    """The v3 weekly narrative (the digest the host validates).
 
-    ``title`` names the week's main point; ``sentences`` maps a report block id
-    (volume, accuracy, ...) to one plain Chinese sentence interpreting that
-    block. Every number on the page lives in the host-computed block data; the
-    host refuses a sentence citing any number not in its block, and bounds and
-    filters everything again.
+    Exactly six fields: ``title``, ``body`` (at most three paragraphs),
+    ``changes``, ``nextSteps``, ``strengths`` and ``weaknesses`` (at most four
+    items each). Rust owns the final validation, the numeric check against the
+    fact map, ``askUser`` and the display title; this model only carries the
+    model's prose in the shape the host accepts.
     """
 
     title: str = Field(default="", max_length=WEEKLY_TITLE_MAX_CHARS)
-    sentences: dict[str, str] = Field(default_factory=dict)
+    body: list[str] = Field(default_factory=list, max_length=WEEKLY_BODY_MAX_PARAGRAPHS)
+    changes: list[NarrativeItem] = Field(default_factory=list, max_length=WEEKLY_GROUP_MAX_ITEMS)
+    next_steps: list[NarrativeItem] = Field(
+        default_factory=list, alias="nextSteps", max_length=WEEKLY_GROUP_MAX_ITEMS
+    )
+    strengths: list[NarrativeItem] = Field(default_factory=list, max_length=WEEKLY_GROUP_MAX_ITEMS)
+    weaknesses: list[NarrativeItem] = Field(default_factory=list, max_length=WEEKLY_GROUP_MAX_ITEMS)
 
-    @field_validator("title")
+    @field_validator("title", mode="before")
     @classmethod
-    def _plain_title(cls, value: str) -> str:
-        return value.strip()
-
-    @field_validator("sentences")
-    @classmethod
-    def _plain_sentences(cls, value: dict[str, str]) -> dict[str, str]:
-        for block_id, sentence in value.items():
-            if not block_id or not sentence.strip() or len(sentence) > WEEKLY_SENTENCE_MAX_CHARS:
-                raise ValueError(
-                    f"sentences must be non-empty strings of at most {WEEKLY_SENTENCE_MAX_CHARS} characters"
-                )
-        return {block_id: value[block_id].strip() for block_id in sorted(value)}
+    def _plain_title(cls, value: Any) -> Any:
+        """The title is one plain line: surrounding whitespace never reaches the host."""
+        return value.strip() if isinstance(value, str) else value
 
     def to_wire(self) -> dict[str, Any]:
-        return {"title": self.title, "sentences": dict(self.sentences)}
+        return {
+            "title": self.title,
+            "body": list(self.body),
+            "changes": [item.to_wire() for item in self.changes],
+            "nextSteps": [item.to_wire() for item in self.next_steps],
+            "strengths": [item.to_wire() for item in self.strengths],
+            "weaknesses": [item.to_wire() for item in self.weaknesses],
+        }
 
 
 class WeeklyDreamResult(_StrictModel):
@@ -331,16 +365,21 @@ __all__ = [
     "JOURNAL_FACTS_SCHEMA_VERSION",
     "MEMORY_ACTIVITIES",
     "MEMORY_NAMESPACES",
+    "NARRATIVE_TARGET_KINDS",
     "REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES",
+    "WEEKLY_BODY_MAX_PARAGRAPHS",
     "WEEKLY_DREAM_SCHEMA_VERSION",
+    "WEEKLY_GROUP_MAX_ITEMS",
     "WEEKLY_MUTATION_ACTIONS",
     "WEEKLY_MUTATION_FIELDS",
-    "WEEKLY_SENTENCE_MAX_CHARS",
+    "WEEKLY_PROFILE_EDIT_MAX",
     "WEEKLY_TITLE_MAX_CHARS",
     "JournalEnrichment",
     "JournalFacts",
     "JournalMemoryEvent",
     "MemoryChangeSummary",
+    "NarrativeItem",
+    "NarrativeTarget",
     "SkillDelta",
     "WeeklyNarrative",
     "WeeklyDreamResult",

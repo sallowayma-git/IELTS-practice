@@ -14,7 +14,7 @@ use ielts_application::{
 };
 use ielts_db::background_jobs::{self, BackgroundJob};
 use ielts_db::WeeklyWindow;
-use ielts_domain::{WeeklyReport, WeeklyReportState};
+use ielts_domain::{AppliedProfileEdit, WeeklyReport, WeeklyReportState};
 use ielts_domain::{
     CommandResponse, DailyDreamQuery, DailyJournal, DailyJournalQuery, ErrorEnvelope,
     MemoryFeedbackKind, MemoryMutationProposalBatch, MemorySourceClass, WeeklyDreamQuery,
@@ -198,11 +198,25 @@ fn default_local_user() -> String {
 /// (a completed run's report wins over a failed run's). Nothing here can mutate
 /// memory.
 #[tauri::command]
+pub fn weekly_history_list(
+    db: State<'_, AppDb>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> CommandResponse<Vec<ielts_db::LegacyWeeklyDigest>> {
+    respond_weekly(db.with_conn(|conn| {
+        ielts_db::list_legacy_weekly_digests_page(conn, "local", limit.unwrap_or(52), offset.unwrap_or(0))
+    }))
+}
+
+#[tauri::command]
 pub fn weekly_report_list(
     db: State<'_, AppDb>,
     limit: Option<u32>,
+    offset: Option<u32>,
 ) -> CommandResponse<Vec<ielts_domain::WeeklyReport>> {
-    respond_weekly(db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", limit.unwrap_or(8))))
+    respond_weekly(db.with_conn(|conn| {
+        ielts_db::list_weekly_reports_page(conn, "local", limit.unwrap_or(8), offset.unwrap_or(0))
+    }))
 }
 
 /// Read-only: the live report of the week so far (since the last finished
@@ -310,35 +324,43 @@ fn now_iso() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-/// What the sidecar's one model call produced, after the host parsed it: the
-/// narrative (a title and one sentence per block), and the memory mutations in
-/// the same wire shape every cognitive proposal uses. Mutations that do not even
-/// parse, and those the sidecar already refused, are counted, never dropped
-/// silently.
+/// What the sidecar's model produced, after the host parsed it: the raw v3
+/// digest (title, body, groups, askUser), the Soul edits it proposes, and the
+/// memory mutations in the same wire shape every cognitive proposal uses.
+/// Mutations that do not even parse, and those the sidecar already refused, are
+/// counted, never dropped silently.
 #[derive(Debug)]
 pub(crate) struct WeeklySubmission {
-    pub narrative: ielts_domain::WeeklyNarrative,
+    pub digest: serde_json::Value,
     pub model_available: bool,
+    pub profile_edits: serde_json::Value,
     pub mutations: Vec<ielts_domain::MemoryMutationProposal>,
     pub unparsed: usize,
 }
 
 impl Default for WeeklySubmission {
     fn default() -> Self {
-        Self { narrative: Default::default(), model_available: true, mutations: Vec::new(), unparsed: 0 }
+        Self {
+            digest: serde_json::Value::Null,
+            model_available: true,
+            profile_edits: serde_json::json!([]),
+            mutations: Vec::new(),
+            unparsed: 0,
+        }
     }
 }
 
 impl WeeklySubmission {
     pub(crate) fn from_params(params: &serde_json::Map<String, serde_json::Value>) -> Self {
-        let narrative = params
-            .get("narrative")
-            .cloned()
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_default();
+        let digest = params.get("digest").cloned().unwrap_or(serde_json::Value::Null);
         let model_available = params.get("modelAvailable").and_then(serde_json::Value::as_bool).unwrap_or(true);
+        let profile_edits = params
+            .get("profileEdits")
+            .cloned()
+            .filter(serde_json::Value::is_array)
+            .unwrap_or_else(|| serde_json::json!([]));
         let dropped = params.get("droppedMutations").and_then(serde_json::Value::as_u64).unwrap_or(0) as usize;
-        let mut submission = Self { narrative, model_available, unparsed: dropped, ..Self::default() };
+        let mut submission = Self { digest, model_available, profile_edits, unparsed: dropped, ..Self::default() };
         for item in params.get("mutations").and_then(serde_json::Value::as_array).into_iter().flatten() {
             match serde_json::from_value(item.clone()) {
                 Ok(mutation) => submission.mutations.push(mutation),
@@ -380,7 +402,8 @@ pub(crate) fn run_weekly_consolidation(
 ) -> Result<WeeklyOutcome, ApplicationError> {
     let store = ApplicationStore::new(db);
     let dream_service = DreamService::new(&store);
-    let now = now_iso();
+    let now = crate::app::clock::now();
+    let now_iso = now_iso();
 
     // Claim the run row first. `dream_runs.journal_id` is NOT NULL with an FK
     // to `daily_journals(id)` under `PRAGMA foreign_keys = ON`, so a
@@ -395,11 +418,11 @@ pub(crate) fn run_weekly_consolidation(
     // idempotency key) and the window it covered, so no schema change is needed.
     let marker = window.marker();
     let run = dream_service.insert_dream_run(&dream_query, Some(&marker))?;
-    dream_service.start_dream_run(&run.id, &now)?;
+    dream_service.start_dream_run(&run.id, &now_iso)?;
 
-    let outcome = apply_weekly_submission(db, &store, query, submission, window, &run.id, &now);
+    let outcome = apply_weekly_submission(db, &store, query, submission, window, &run.id, now, &now_iso);
     if let Err(error) = &outcome {
-        let _ = dream_service.fail_run(&run.id, &serde_json::json!({ "error": error.to_string() }), &now);
+        let _ = dream_service.fail_run(&run.id, &serde_json::json!({ "error": error.to_string() }), &now_iso);
     }
     outcome
 }
@@ -411,20 +434,43 @@ fn apply_weekly_submission(
     submission: WeeklySubmission,
     window: &WeeklyWindow,
     run_id: &str,
-    now: &str,
+    now: chrono::DateTime<chrono::FixedOffset>,
+    now_iso: &str,
 ) -> Result<WeeklyOutcome, ApplicationError> {
+    let WeeklySubmission { digest, model_available, profile_edits, mutations, unparsed } = submission;
     let pack = db
         .with_conn(|conn| ielts_db::weekly_pack(conn, &query.user_id, window.start, window.end))
         .map_err(|error| ApplicationError::new("weekly.pack_failed", error.to_string(), true))?;
     let evidence = WeeklyEvidence { observation_ids: pack.evidence_ids(), memory_ids: pack.memory_ids() };
 
     // Build the report before any memory changes: if the blocks or the narrative
-    // cannot be built, the run fails with memory untouched.
-    let state = if submission.model_available { WeeklyReportState::Final } else { WeeklyReportState::FinalNoAi };
-    let mut report = finished_report(db, window, state, Some(submission.narrative))?;
+    // cannot be built, the run fails with memory untouched. A model that
+    // answered with nothing usable makes the narrative owed a retry; the host
+    // never writes a body of its own.
+    let state = if model_available { WeeklyReportState::Final } else { WeeklyReportState::FinalNoAi };
+    let mut report = finished_report(db, window, state, now)?;
+    if model_available {
+        let profile = db
+            .with_conn(|conn| ielts_db::soul::soul_profile(conn, &query.user_id))
+            .map_err(|error| ApplicationError::new("weekly.profile_failed", error.to_string(), true))?;
+        let outcome = ielts_db::validate_narrative(&digest, &report.facts, &profile, now.date_naive());
+        if !outcome.usable {
+            let final_report = &outcome.narrative.validation.final_report;
+            return Err(ApplicationError::new(
+                "weekly.narrative_empty",
+                format!(
+                    "weekly narrative has no usable body after validation ({} sentences dropped, needsRepair: {})",
+                    final_report.dropped_sentences, final_report.needs_repair
+                ),
+                true,
+            ));
+        }
+        report.narrative = Some(outcome.narrative);
+        report.display_title = ielts_domain::display_title(report.narrative.as_ref(), &report.blocks);
+    }
 
-    let (admitted, refused) = evidence.admitted(submission.mutations);
-    let mut rejected = refused + submission.unparsed;
+    let (admitted, refused) = evidence.admitted(mutations);
+    let mut rejected = refused + unparsed;
     let mut outcome = ielts_application::AppliedMutations::default();
     if !admitted.is_empty() {
         outcome = MemoryService::new(store).apply_cognitive_mutations(
@@ -442,17 +488,26 @@ fn apply_weekly_submission(
         )?;
     }
     rejected += outcome.rejected;
-    // The report (with what memory changed) and the run's completion commit
-    // together. Should that fail after memory changed, a retry's validator
-    // refuses to apply the changes twice (an ADD is a duplicate key, a
-    // SUPERSEDE or ARCHIVE target is no longer active, a REINFORCE has no newer
-    // evidence), and the report lists every change made since the last
-    // completed run, read from the promotion records, so it still carries them.
+    let profile_edits = if model_available { profile_edits } else { serde_json::json!([]) };
+    let facts = serde_json::to_value(&report.facts)
+        .map_err(|error| ApplicationError::new("weekly.report_failed", error.to_string(), true))?;
+    // The report (with what memory changed), the Soul revisions it applied, and
+    // the run's completion commit together. Should that fail after memory
+    // changed, a retry's validator refuses to apply the changes twice (an ADD is
+    // a duplicate key, a SUPERSEDE or ARCHIVE target is no longer active, a
+    // REINFORCE has no newer evidence), and the report lists every change made
+    // since the last completed run, read from the promotion records, so it still
+    // carries them.
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         report.memory_changes = ielts_db::weekly_memory_changes(&tx, &query.user_id)?;
-        ielts_db::put_weekly_report(&tx, run_id, &report, now)?;
-        ielts_db::finish_dream_run(&tx, run_id, &weekly_output_hash(&report), now)?;
+        let applied = ielts_db::soul::soul_apply_edits_in_transaction(&tx, &query.user_id, run_id, &profile_edits, &facts)?;
+        report.profile_edits = applied
+            .into_iter()
+            .map(|edit| serde_json::from_value::<AppliedProfileEdit>(edit).map_err(|error| ielts_db::DbError::Validation(error.to_string())))
+            .collect::<Result<Vec<_>, _>>()?;
+        ielts_db::put_weekly_report(&tx, &query.user_id, run_id, &report, *now.offset(), now_iso)?;
+        ielts_db::finish_dream_run(&tx, run_id, &weekly_output_hash(&report), now_iso)?;
         tx.commit()?;
         Ok(())
     })
@@ -473,25 +528,24 @@ fn apply_weekly_submission(
 }
 
 /// The report a weekly run leaves behind: the window's blocks as they stand
-/// now, the narrative that passed the number whitelist, and what weekly runs
-/// changed in memory since the last completed one. A failed or no-model report
-/// carries those changes too: a failed attempt may already have made them.
+/// now, and what weekly runs changed in memory since the last completed one. A
+/// failed or no-model report carries those changes too: a failed attempt may
+/// already have made them. Only a final report has a narrative.
 pub(crate) fn finished_report(
     db: &AppDb,
     window: &WeeklyWindow,
     state: WeeklyReportState,
-    narrative: Option<ielts_domain::WeeklyNarrative>,
+    now: chrono::DateTime<chrono::FixedOffset>,
 ) -> Result<WeeklyReport, ApplicationError> {
-    let now = crate::app::clock::now();
     db.with_conn(|conn| {
-        let mut report =
-            ielts_db::build_weekly_report(conn, "local", window, *now.offset(), state, chrono::Utc::now())?;
-        if let Some(narrative) = narrative {
-            let refused = ielts_db::apply_narrative(&mut report, narrative);
-            if refused > 0 {
-                tracing::info!(refused, "weekly narrative items refused by the number whitelist");
-            }
-        }
+        let mut report = ielts_db::build_weekly_report(
+            conn,
+            "local",
+            window,
+            *now.offset(),
+            state,
+            now.with_timezone(&chrono::Utc),
+        )?;
         report.memory_changes = ielts_db::weekly_memory_changes(conn, "local")?;
         Ok(report)
     })
@@ -503,7 +557,10 @@ fn weekly_output_hash(report: &WeeklyReport) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(serde_json::to_string(&report.blocks).unwrap_or_default().as_bytes());
-    hasher.update(report.title.as_bytes());
+    hasher.update(report.display_title.as_bytes());
+    if let Some(narrative) = &report.narrative {
+        hasher.update(serde_json::to_string(narrative).unwrap_or_default().as_bytes());
+    }
     for change in &report.memory_changes {
         hasher.update(b"|");
         hasher.update(change.memory_id.as_bytes());
@@ -634,9 +691,27 @@ mod tests {
 
     fn narrative_json() -> serde_json::Value {
         serde_json::json!({
-            "title": "判断题在两篇文章里都出了错",
-            "sentences": {"question_types": "判断题是这周最需要回头看的题型。", "volume": "这周练了 99 篇。"}
+            "title": "判断题先找原文依据",
+            "body": ["判断题是这周最需要回头看的题型。", "这周练了 99 篇。"]
         })
+    }
+
+    /// A digest-only submission from a model that answered.
+    fn model_submission(extra: serde_json::Value) -> WeeklySubmission {
+        let mut value = serde_json::json!({"digest": narrative_json()});
+        if let (Some(target), Some(source)) = (value.as_object_mut(), extra.as_object()) {
+            target.extend(source.clone());
+        }
+        params(value)
+    }
+
+    /// A submission without a model: blocks-only, no narrative owed.
+    fn no_model_submission(mut extra: serde_json::Value) -> WeeklySubmission {
+        let mut value = serde_json::json!({"modelAvailable": false});
+        if let (Some(target), Some(source)) = (value.as_object_mut(), extra.as_object_mut()) {
+            target.extend(std::mem::take(source));
+        }
+        params(value)
     }
 
     /// Round-3 audit (A3): the weekly path minted a synthetic `weekly-<uuid>`
@@ -648,9 +723,10 @@ mod tests {
         let journal_id = seed_journal(&db, "local");
         let query = WeeklyDreamQuery { user_id: "local".into(), journal_id };
 
-        // An empty submission is a legitimate success, and still must be
-        // recorded: the run happened, it just produced nothing.
-        let result = run_weekly_consolidation(&db, &query, WeeklySubmission::default(), &saturday()).unwrap();
+        // A no-model submission is a legitimate success, and still must be
+        // recorded: the run happened, it just produced no narrative.
+        let result = run_weekly_consolidation(&db, &query, no_model_submission(serde_json::json!({})), &saturday())
+            .unwrap();
 
         assert!(
             !result.run_id.starts_with("weekly-"),
@@ -667,8 +743,7 @@ mod tests {
     fn weekly_consolidation_rejects_an_unknown_journal_id() {
         let (_dir, db) = temp_db();
         let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: "journal-does-not-exist".into() };
-        let submission = params(serde_json::json!({
-            "narrative": narrative_json(),
+        let submission = model_submission(serde_json::json!({
             "mutations": [add_json("strategy.reading.never", &["obs-x"])],
         }));
 
@@ -690,7 +765,7 @@ mod tests {
         let due = |key: &str| db.with_conn(|conn| ielts_db::weekly_run_completed(conn, "local", key)).unwrap();
         assert!(!due("2026-W41"));
         let window = saturday();
-        run_weekly_consolidation(&db, &query, WeeklySubmission::default(), &window).unwrap();
+        run_weekly_consolidation(&db, &query, no_model_submission(serde_json::json!({})), &window).unwrap();
         assert!(due("2026-W41") && !due("2026-W42"));
         assert_eq!(db.with_conn(|conn| ielts_db::last_weekly_window_end(conn, "local")).unwrap(), Some(window.end));
         let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
@@ -760,8 +835,7 @@ mod tests {
         let pack = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
         let miss = pack.lines.iter().find(|line| line.kind == "miss").unwrap().ids[0].clone();
         let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
-        let submission = || params(serde_json::json!({
-            "narrative": narrative_json(),
+        let submission = || model_submission(serde_json::json!({
             "mutations": [add_json("strategy.reading.tfng_boundary", &[&miss])],
         }));
 
@@ -806,8 +880,7 @@ mod tests {
             "CREATE TEMP TRIGGER fail_report BEFORE INSERT ON weekly_digests
              BEGIN SELECT RAISE(ABORT, 'injected report write failure'); END;",
         )?)).unwrap();
-        let submission = params(serde_json::json!({
-            "narrative": narrative_json(),
+        let submission = model_submission(serde_json::json!({
             "mutations": [add_json("strategy.reading.tfng_boundary", &[&miss])],
         }));
         run_weekly_consolidation(db, &query, submission, &window).unwrap_err();
@@ -832,7 +905,7 @@ mod tests {
 
         let w42 = window("2026-W42", "2026-10-03T04:00:00Z", "2026-10-17T09:30:00Z");
         let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
-        let folded = run_weekly_consolidation(&db, &query, params(serde_json::json!({"narrative": narrative_json()})), &w42)
+        let folded = run_weekly_consolidation(&db, &query, model_submission(serde_json::json!({})), &w42)
             .unwrap();
         assert_eq!(folded.accepted, 0);
         let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
@@ -879,8 +952,7 @@ mod tests {
         // (writing scope cannot rest on reading evidence), and one malformed.
         let mut wrong_scope = add_json("strategy.writing.x", &[&first_miss]);
         wrong_scope["scope"] = serde_json::json!({"type": "activity", "key": "writing"});
-        let first = run_weekly_consolidation(&db, &query, params(serde_json::json!({
-            "narrative": narrative_json(),
+        let first = run_weekly_consolidation(&db, &query, model_submission(serde_json::json!({
             "mutations": [
                 add_json("strategy.reading.tfng_boundary", &[&first_miss]),
                 add_json("strategy.reading.invented", &["obs-forged"]),
@@ -901,7 +973,7 @@ mod tests {
         // Run 2: the memory is now in the pack, so newer evidence can reinforce it.
         let again = db.with_conn(|conn| ielts_db::weekly_pack(conn, "local", window.start, window.end)).unwrap();
         assert!(again.memory_ids().contains(&memory));
-        let second = run_weekly_consolidation(&db, &query, params(serde_json::json!({"mutations": [
+        let second = run_weekly_consolidation(&db, &query, model_submission(serde_json::json!({"mutations": [
             {"action": "REINFORCE", "targetMemoryId": memory, "evidenceObservationIds": [later_miss]},
         ]})), &rerun_of(&window, "2026-W42")).unwrap();
         assert_eq!((second.validated, second.accepted, second.rejected), (1, 1, 0));
@@ -912,7 +984,7 @@ mod tests {
             "canonicalKey": "strategy.reading.tfng_not_given", "scope": {"type": "activity", "key": "reading"},
             "proposedStatement": "判断题先找反面证据，没有再选 Not Given。", "evidenceObservationIds": [later_miss],
         });
-        let third = run_weekly_consolidation(&db, &query, params(serde_json::json!({"mutations": [sharper]})),
+        let third = run_weekly_consolidation(&db, &query, model_submission(serde_json::json!({"mutations": [sharper]})),
             &rerun_of(&window, "2026-W43")).unwrap();
         assert_eq!(third.accepted, 1);
         let rows = memories(&db);
@@ -922,14 +994,13 @@ mod tests {
         assert_eq!(rows.iter().filter(|(_, status, _)| status == "active").count(), 1);
 
         // The notebook reads one report per week; the first run's narrative
-        // passed the whitelist except the sentence with a number nobody computed.
+        // passed the whitelist except the paragraph with a number nobody computed.
         let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
         let first_report = reports.iter().find(|report| report.window == "2026-W41").unwrap();
         assert_eq!(first_report.state, WeeklyReportState::Final);
-        assert_eq!(first_report.title, "判断题在两篇文章里都出了错");
-        let narrative = |id: &str| first_report.blocks.iter().find(|block| block.id == id).and_then(|block| block.narrative.clone());
-        assert_eq!(narrative("question_types").as_deref(), Some("判断题是这周最需要回头看的题型。"));
-        assert_eq!(narrative("volume"), None, "99 is not in the volume block");
+        assert_eq!(first_report.display_title, "判断题先找原文依据");
+        let narrative = first_report.narrative.as_ref().expect("a final report carries its narrative");
+        assert_eq!(narrative.body, vec!["判断题是这周最需要回头看的题型。"]);
         assert_eq!(first_report.memory_changes.len(), 1);
         assert_eq!(first_report.memory_changes[0].memory_id, memory);
     }
