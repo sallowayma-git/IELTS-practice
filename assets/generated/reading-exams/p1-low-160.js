@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/7. P1 - Chili peppers 辣椒的历史/7. P1 - Chili peppers 辣椒的历史.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/7. P1 - Chili peppers 辣椒的历史/7. P1 - Chili peppers 辣椒的历史.pdf",
+    "pdf": "ReadingPractice/PDF/7. P1 - Chili peppers 辣椒的历史.pdf",
     "ieltsHtml": null
   },
   "audit": {

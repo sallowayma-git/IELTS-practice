@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/127. P3 - Science and Filmmaking 电影科学(CGI)【高】/127. P3 - Science and Filmmaking 电影科学(CGI)【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/127. P3 - Science and Filmmaking 电影科学(CGI)【高】/127. P3 - Science and Filmmaking 电影科学(CGI)【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/127. P3 - Science and Filmmaking 电影科学(CGI)【高】/127. P3 - Science and Filmmaking 电影科学(CGI)【高】.pdf",
     "ieltsHtml": "IELTS/P3/Science and Filmmaking.html"
   },
   "audit": {

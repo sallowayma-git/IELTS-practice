@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/39. P2 - How are deserts formed 沙漠成因【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/39. P2 - How are deserts formed 沙漠成因【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/39. P2 - How are deserts formed 沙漠成因【次】.pdf",
     "ieltsHtml": "IELTS/P2/How are deserts formed.html"
   },
   "audit": {

@@ -87,7 +87,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.pdf",
     "ieltsHtml": null
   },
   "audit": {

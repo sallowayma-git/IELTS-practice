@@ -9,11 +9,12 @@
   "meta": {
     "title": "Yawning 打呵欠",
     "category": "P3",
-    "frequency": "high",
+    "frequency": "low",
     "pdfFilename": "101. P3 - Yawning 打呵欠【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/",
     "legacyFilename": "101. P3 - Yawning 打呵欠【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -80,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/101. P3 - Yawning 打呵欠【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/101. P3 - Yawning 打呵欠【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/101. P3 - Yawning 打呵欠【高】.pdf",
     "ieltsHtml": "IELTS/P3/Yawning.html"
   },
   "audit": {

@@ -9,7 +9,8 @@
   "meta": {
     "title": "Decision Fatigue 决策疲劳",
     "category": "P2",
-    "frequency": "medium"
+    "frequency": "medium",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

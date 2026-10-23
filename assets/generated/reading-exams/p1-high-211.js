@@ -9,7 +9,8 @@
   "meta": {
     "title": "Ahead of its time 新西兰头骨",
     "category": "P1",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

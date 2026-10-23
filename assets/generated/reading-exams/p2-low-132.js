@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/44. P2 - Orientation of Birds 鸟类的定位能力/44. P2 - Orientation of Birds 鸟类的定位能力.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/44. P2 - Orientation of Birds 鸟类的定位能力/44. P2 - Orientation of Birds 鸟类的定位能力.pdf",
+    "pdf": "ReadingPractice/PDF/44. P2 - Orientation of Birds 鸟类的定位能力.pdf",
     "ieltsHtml": null
   },
   "audit": {

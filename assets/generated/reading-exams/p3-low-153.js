@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/63. P3 - Crossing the Threshold 奥克兰美术馆/63. P3 - Crossing the Threshold 奥克兰美术馆.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/63. P3 - Crossing the Threshold 奥克兰美术馆/63. P3 - Crossing the Threshold 奥克兰美术馆.pdf",
+    "pdf": "ReadingPractice/PDF/63. P3 - Crossing the Threshold 奥克兰美术馆.pdf",
     "ieltsHtml": null
   },
   "audit": {

@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf",
+    "pdf": "ReadingPractice/PDF/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf",
     "ieltsHtml": null
   },
   "audit": {

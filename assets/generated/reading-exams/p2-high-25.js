@@ -13,7 +13,8 @@
     "pdfFilename": "120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/",
     "legacyFilename": "120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -79,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.pdf",
     "ieltsHtml": "IELTS/P2/Will Eating Less Make You Live Longer.html"
   },
   "audit": {

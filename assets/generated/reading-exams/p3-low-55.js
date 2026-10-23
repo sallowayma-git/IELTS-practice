@@ -9,11 +9,12 @@
   "meta": {
     "title": "Improving Patient Safety 药品包装设计",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "148. P3 - Improving Patient Safety 药品包装设计.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/",
     "legacyFilename": "148. P3 - Improving Patient Safety 药品包装设计.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -82,7 +83,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/148. P3 - Improving Patient Safety 药品包装设计.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/148. P3 - Improving Patient Safety 药品包装设计.pdf",
+    "pdf": "ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf",
     "ieltsHtml": "IELTS/P3/Improving Patient Safety.html"
   },
   "audit": {

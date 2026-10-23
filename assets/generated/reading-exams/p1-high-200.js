@@ -9,7 +9,8 @@
   "meta": {
     "title": "Australia’s Airborne Dentists 澳洲飞行牙医",
     "category": "P1",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

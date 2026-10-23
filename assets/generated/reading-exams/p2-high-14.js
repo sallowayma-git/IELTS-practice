@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.pdf",
     "ieltsHtml": "IELTS/P2/Should space be explored by robots or by humans.html"
   },
   "audit": {

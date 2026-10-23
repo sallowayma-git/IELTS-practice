@@ -9,11 +9,12 @@
   "meta": {
     "title": "Star Performers 明星员工",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "104. P3 - Star Performers 明星员工.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/104. P3 - Star Performers 明星员工/",
     "legacyFilename": "104. P3 - Star Performers 明星员工.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -80,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/104. P3 - Star Performers 明星员工/104. P3 - Star Performers 明星员工.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/104. P3 - Star Performers 明星员工/104. P3 - Star Performers 明星员工.pdf",
+    "pdf": "ReadingPractice/PDF/104. P3 - Star Performers 明星员工.pdf",
     "ieltsHtml": "IELTS/P3/Star Performers.html"
   },
   "audit": {

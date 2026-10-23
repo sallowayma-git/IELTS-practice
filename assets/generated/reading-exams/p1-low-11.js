@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/108. P1 - Bovids 牛科动物/108. P1 - Bovids 牛科动物.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/108. P1 - Bovids 牛科动物/108. P1 - Bovids 牛科动物.pdf",
+    "pdf": "ReadingPractice/PDF/108. P1 - Bovids 牛科动物.pdf",
     "ieltsHtml": null
   },
   "audit": {

@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Significant Role of Mother Tongue in Education 母语教育",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】/",
     "legacyFilename": "95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -80,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.pdf",
     "ieltsHtml": "IELTS/P3/The Significant Role of Mother Tongue in Education.html"
   },
   "audit": {

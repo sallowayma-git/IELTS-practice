@@ -11,7 +11,8 @@
     "category": "P3",
     "frequency": "high",
     "sourceDoc": "P3 - The Causes of Linguistic Change(1).docx",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -78,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": null,
+    "pdf": null,
     "ieltsHtml": null
   },
   "audit": {

@@ -9,11 +9,12 @@
   "meta": {
     "title": "Pacific Navigation and Voyaging 太平洋航海",
     "category": "P3",
-    "frequency": "high",
+    "frequency": "low",
     "pdfFilename": "79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/",
     "legacyFilename": "79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -80,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.pdf",
     "ieltsHtml": null
   },
   "audit": {

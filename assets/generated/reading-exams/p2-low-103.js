@@ -72,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/191. P2 - The economic effect of climate 气候对经济的影响/191. P2 - The economic effect of climate 气候对经济的影响.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/191. P2 - The economic effect of climate 气候对经济的影响/191. P2 - The economic effect of climate 气候对经济的影响.pdf",
+    "pdf": "ReadingPractice/PDF/191. P2 - The economic effect of climate 气候对经济的影响.pdf",
     "ieltsHtml": "IELTS/P2/The economic effect of climate.html"
   },
   "audit": {

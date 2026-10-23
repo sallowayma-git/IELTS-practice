@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/11. P1 - Report on a university drama project 大学戏剧项目报告/11. P1 - Report on a university drama project 大学戏剧项目报告.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/11. P1 - Report on a university drama project 大学戏剧项目报告/11. P1 - Report on a university drama project 大学戏剧项目报告.pdf",
+    "pdf": "ReadingPractice/PDF/11. P1 - Report on a university drama project 大学戏剧项目报告.pdf",
     "ieltsHtml": "IELTS/P1/Report on a university drama project.html"
   },
   "audit": {

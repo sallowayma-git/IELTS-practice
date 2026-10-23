@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Costs of Brand Loyalty 品牌忠诚的代价",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/",
     "legacyFilename": "169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html",
-    "questionIntroHtml": ""
+    "questionIntroHtml": "",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -79,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
+    "pdf": "ReadingPractice/PDF/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf",
     "ieltsHtml": "IELTS/P3/The Costs of Brand Loyalty.html"
   },
   "audit": {

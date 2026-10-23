@@ -9,11 +9,12 @@
   "meta": {
     "title": "Dust and the American West 美国西部尘埃",
     "category": "P1",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "181. P1 - Dust and the American West 美国西部尘埃.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/181. P1 - Dust and the American West 美国西部尘埃【高】/",
     "legacyFilename": "181. P1 - Dust and the American West 美国西部尘埃.html",
-    "questionIntroHtml": "<h3>Questions 1–7</h3>"
+    "questionIntroHtml": "<h3>Questions 1–7</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -71,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/181. P1 - Dust and the American West 美国西部尘埃【高】/181. P1 - Dust and the American West 美国西部尘埃.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/181. P1 - Dust and the American West 美国西部尘埃【高】/181. P1 - Dust and the American West 美国西部尘埃.pdf",
+    "pdf": "ReadingPractice/PDF/181. P1 - Dust and the American West 美国西部尘埃.pdf",
     "ieltsHtml": "IELTS/P1/Dust and the American West.html"
   },
   "audit": {

@@ -25,7 +25,7 @@
     },
     {
       "label": "第三段",
-      "text": "1903年，她和两个姐姐一起搬到伦敦，就读于女王学院。曼斯菲尔德重新开始拉大提琴，这是她在女王学院期间相信自己会专业从事的职业。她也开始为学院报纸撰稿，并对此投入了极大的热情，最终成为了报纸的编辑。她对这个时期的法国作家和19世纪英国作家奥斯卡·王尔德的作品特别感兴趣，并且因其活泼、有魅力的人生态度和工作方式而受到女王学院同学们的赞赏。她在学院结识了来自南非的作家艾达·贝克，两人成为了一生的朋友。曼斯菲尔德并未积极支持英国的妇女参政运动。新西兰的妇女在1893年就获得了投票权。"
+      "text": "1903年，她和两个姐姐一起搬到伦敦，就读于女王学院。曼斯菲尔德重新开始拉大提琴，这是她在女王学院期间相信自己会专业从事的职业。她也开始为学院报纸撰稿，并对此投入了极大的热情，最终成为了报纸的编辑。她对这个时期的法国作家和19世纪英国作家奥斯卡·王尔德的作品特别感兴趣，并且因其活泼、有魅力的人生态度和工作方式而受到女王学院同学们的赞赏。她在学院结识了来自南非的作家艾达·贝克，两人成为了一生的朋友。曼斯菲尔德在伦敦生活时并没有参与太多政治活动。例如，当时伦敦有许多女性为女性投票权示威，但曼斯菲尔德并未积极支持英国的妇女参政运动。新西兰的妇女在1893年就获得了投票权。"
     },
     {
       "label": "第四段",
@@ -84,7 +84,7 @@
         },
         {
           "questionNumber": 6,
-          "text": "(6) 题目 6：In London, Mansfield showed little interest in politics. （在伦敦，曼斯菲尔德对政治表现出很少的兴趣。）\n答案：NOT GIVEN\n解析：第三段只提到她没有积极支持妇女参政运动，但这不足以推断她对所有政治都“兴趣不大”。",
+          "text": "(6) 题目 6：In London, Mansfield showed little interest in politics. （在伦敦，曼斯菲尔德对政治表现出很少的兴趣。）\n答案：TRUE\n解析：第三段明确提到“Mansfield did not become involved in much political activity when she lived in London”，即她在伦敦生活时没有参与太多政治活动，与题目意思一致。",
           "questionId": "q6"
         }
       ],
@@ -92,7 +92,7 @@
         "start": 1,
         "end": 6
       },
-      "text": "答案：FALSE\n解析：第一段明确指出“Katherine Mansfield”是她的笔名（pen name），而她的原名是“Katherine Mansfield Beauchamp Murry”，两者并不完全相同。\n答案：NOT GIVEN\n解析：第二段只提到她的故事“appeared in”（发表在）该杂志上，并未提及是否获奖。\n答案：TRUE\n解析：第二段提到毛利人“were often portrayed in a sympathetic light in her later stories”，即以同情的眼光描绘，这与“favourable way”（有利的方式）意思相符。\n答案：FALSE\n解析：第三段说她在女王学院时，相信自己会专业从事大提琴演奏（take up professionally）；而第四段指出，她是在回到新西兰后才下定决心成为职业作家的。\n答案：FALSE\n解析：第三段说她因其“lively and charismatic approach”而受到同学们的“appreciated”（欣赏），与“unpopular”（不受欢迎）相反。\n答案：NOT GIVEN\n解析：第三段只提到她没有积极支持妇女参政运动，但这不足以推断她对所有政治都“兴趣不大”。"
+      "text": "答案：FALSE\n解析：第一段明确指出“Katherine Mansfield”是她的笔名（pen name），而她的原名是“Katherine Mansfield Beauchamp Murry”，两者并不完全相同。\n答案：NOT GIVEN\n解析：第二段只提到她的故事“appeared in”（发表在）该杂志上，并未提及是否获奖。\n答案：TRUE\n解析：第二段提到毛利人“were often portrayed in a sympathetic light in her later stories”，即以同情的眼光描绘，这与“favourable way”（有利的方式）意思相符。\n答案：FALSE\n解析：第三段说她在女王学院时，相信自己会专业从事大提琴演奏（take up professionally）；而第四段指出，她是在回到新西兰后才下定决心成为职业作家的。\n答案：FALSE\n解析：第三段说她因其“lively and charismatic approach”而受到同学们的“appreciated”（欣赏），与“unpopular”（不受欢迎）相反。\n答案：TRUE\n解析：第三段明确提到“Mansfield did not become involved in much political activity when she lived in London”，即她在伦敦生活时没有参与太多政治活动，与题目意思一致。"
     },
     {
       "sectionTitle": "2. 笔记填空（Questions 7–13）",
@@ -105,7 +105,7 @@
         },
         {
           "questionNumber": 8,
-          "text": "(2) 题目 8：first paid writing work was in a publication based in \\___\\___ （第一次有报酬的写作工作是在一份总部位于_\\___\\__的出版物上）\n答案：Australia\n解析：第四段提到她“published in Australia in a magazine called The Native Companion, which was her first paid writing work”。",
+          "text": "(2) 题目 8：first paid writing work was in a publication based in \\___\\___ （第一次有报酬的写作工作是在一份总部位于_\\___\\__的出版物上）\n答案：Australia\n解析：第四段提到她“published in Australia in a magazine called Native Companion, which was her first paid writing work”。",
           "questionId": "q8"
         },
         {
@@ -115,7 +115,7 @@
         },
         {
           "questionNumber": 10,
-          "text": "(4) 题目 10：\\___\\___ prevented Mansfield and Murry from staying together in Paris （\\___\\___阻止了曼斯菲尔德和穆里在巴黎待在一起）\n答案：bankruptcy\n解析：第六段提到他们留在巴黎的尝试因穆里的“bankruptcy”（破产）而中断。",
+          "text": "(4) 题目 10：\\___\\___ prevented Mansfield and Murry from staying longer in Paris （\\___\\___阻止了曼斯菲尔德和穆里在巴黎待更久）\n答案：bankruptcy\n解析：第六段提到他们留在巴黎的尝试因穆里的“bankruptcy”（破产）而中断。",
           "questionId": "q10"
         },
         {

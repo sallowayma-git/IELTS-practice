@@ -13,7 +13,8 @@
     "pdfFilename": "159. P1 - Scented Plants 植物的味道.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/",
     "legacyFilename": "159. P1 - Scented Plants 植物的味道.html",
-    "questionIntroHtml": ""
+    "questionIntroHtml": "",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -77,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/159. P1 - Scented Plants 植物的味道.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/159. P1 - Scented Plants 植物的味道.pdf",
+    "pdf": "ReadingPractice/PDF/159. P1 - Scented Plants 植物的味道.pdf",
     "ieltsHtml": null
   },
   "audit": {

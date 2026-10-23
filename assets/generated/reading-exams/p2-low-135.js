@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/47. P2 - Skyscraper Farming 摩天大楼种植/47. P2 - Skyscraper Farming 摩天大楼种植.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/47. P2 - Skyscraper Farming 摩天大楼种植/47. P2 - Skyscraper Farming 摩天大楼种植.pdf",
+    "pdf": "ReadingPractice/PDF/47. P2 - Skyscraper Farming 摩天大楼种植.pdf",
     "ieltsHtml": "IELTS/P2/Skyscraper Farming.html"
   },
   "audit": {

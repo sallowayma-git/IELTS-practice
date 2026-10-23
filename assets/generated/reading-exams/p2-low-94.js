@@ -9,11 +9,12 @@
   "meta": {
     "title": "The importance of being playful 玩耍的重要性",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "183. P2 - The importance of being playful 玩耍的重要性.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/",
     "legacyFilename": "183. P2 - The importance of being playful 玩耍的重要性.html",
-    "questionIntroHtml": "<h3>Questions 14–18</h3>"
+    "questionIntroHtml": "<h3>Questions 14–18</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -79,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/183. P2 - The importance of being playful 玩耍的重要性.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/183. P2 - The importance of being playful 玩耍的重要性.pdf",
+    "pdf": "ReadingPractice/PDF/183. P2 - The importance of being playful 玩耍的重要性.pdf",
     "ieltsHtml": "IELTS/P2/The importance of being playful.html"
   },
   "audit": {

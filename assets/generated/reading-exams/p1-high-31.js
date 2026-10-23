@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/126. P1 - Dolls through the ages 玩偶的变迁史【高】/126. P1 - Dolls through the ages 玩偶的变迁史【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/126. P1 - Dolls through the ages 玩偶的变迁史【高】/126. P1 - Dolls through the ages 玩偶的变迁史【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/126. P1 - Dolls through the ages 玩偶的变迁史【高】/126. P1 - Dolls through the ages 玩偶的变迁史【高】.pdf",
     "ieltsHtml": "IELTS/P1/Dolls through the ages.html"
   },
   "audit": {

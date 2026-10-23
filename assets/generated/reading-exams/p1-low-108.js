@@ -78,7 +78,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/22. P1 - The nature of Yawning 打哈欠的本质/22. P1 - The nature of Yawning 打哈欠的本质.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/22. P1 - The nature of Yawning 打哈欠的本质/22. P1 - The nature of Yawning 打哈欠的本质.pdf",
+    "pdf": "ReadingPractice/PDF/22. P1 - The nature of Yawning 打哈欠的本质.pdf",
     "ieltsHtml": null
   },
   "audit": {

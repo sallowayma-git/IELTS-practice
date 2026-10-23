@@ -81,7 +81,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/109. P3 - Humanities and the health professional 人文医学/109. P3 - Humanities and the health professional 人文医学.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/109. P3 - Humanities and the health professional 人文医学/109. P3 - Humanities and the health professional 人文医学.pdf",
+    "pdf": "ReadingPractice/PDF/109. P3 - Humanities and the health professional 人文医学.pdf",
     "ieltsHtml": null
   },
   "audit": {
