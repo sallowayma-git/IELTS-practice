@@ -12,7 +12,11 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
 const SHUI_ROOT = path.join(REPO_ROOT, '睡着过项目组', '2. 所有文章(11.20)[192篇]');
 const IELTS_ROOT = path.join(REPO_ROOT, 'IELTS');
-const INDEX_SCRIPT = path.join(REPO_ROOT, 'assets', 'scripts', 'complete-exam-data.js');
+const INDEX_SCRIPT = path.join(REPO_ROOT, 'assets', 'generated', 'reading-exams', 'manifest.js');
+const DEFAULT_PATH_ROOT = {
+    reading: '三月/',
+    listening: 'ListeningPractice/'
+};
 const SOURCE_DIR = path.join(REPO_ROOT, 'developer', 'reading-exams');
 const GENERATED_DIR = path.join(REPO_ROOT, 'assets', 'generated', 'reading-exams');
 const CROSSWALK_FILE = path.join(REPO_ROOT, 'developer', 'tests', 'fixtures', 'reading-crosswalk.json');
@@ -125,15 +129,38 @@ function resetGeneratedDir(dirPath, preserveFileNames = new Set()) {
     }
 }
 
+function buildGeneratedPreserveFileNames(readingIndex) {
+    // This HTML is maintained independently. Only build-bundles.mjs owns its
+    // marked inline diagnostic block; data regeneration must preserve every byte.
+    const preserveFileNames = new Set(['reading-practice-unified.html']);
+    for (const entry of Array.isArray(readingIndex) ? readingIndex : []) {
+        if (!entry || typeof entry.script !== 'string' || !entry.script.trim()) {
+            continue;
+        }
+        preserveFileNames.add(path.basename(entry.script));
+    }
+    return preserveFileNames;
+}
+
 function loadReadingIndex() {
-    const context = { window: {} };
+    const context = {};
+    context.window = context;
+    context.globalThis = context;
     vm.createContext(context);
     vm.runInContext(readFile(INDEX_SCRIPT), context, { filename: INDEX_SCRIPT });
-    const items = context.window.completeExamIndex;
+    const manifest = context.__READING_EXAM_MANIFEST__;
+    const items = manifest && typeof manifest === 'object'
+        ? Object.keys(manifest).map((id) => Object.assign({ id: manifest[id].examId || id }, manifest[id]))
+        : (typeof context.getReadingExamIndex === 'function'
+            ? context.getReadingExamIndex()
+            : context.__READING_EXAM_INDEX__);
     if (!Array.isArray(items)) {
-        throw new Error('无法从 complete-exam-data.js 读取阅读索引');
+        throw new Error('无法从 reading-exams manifest.js 读取阅读索引');
     }
-    return items;
+    return {
+        items,
+        pathRoot: context.__READING_EXAM_PATH_ROOT__ || (context.getReadingExamIndex && context.getReadingExamIndex.pathRoot) || DEFAULT_PATH_ROOT
+    };
 }
 
 function loadCrosswalkOverrides() {
@@ -783,6 +810,106 @@ function sortQuestionIds(questionIds) {
     });
 }
 
+function expandLetterRange(startLetter, endLetter) {
+    const start = String(startLetter || '').toUpperCase().charCodeAt(0);
+    const end = String(endLetter || '').toUpperCase().charCodeAt(0);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || end - start > 25) {
+        return [];
+    }
+    const letters = [];
+    for (let code = start; code <= end; code += 1) {
+        letters.push(String.fromCharCode(code));
+    }
+    return letters;
+}
+
+function extractParagraphMatchLetters(groupHtml) {
+    const html = groupHtml || '';
+    const match = html.match(/<strong>\s*([A-Z])\s*[–-]\s*([A-Z])\s*<\/strong>/i)
+        || html.match(/\b([A-Z])\s*[–-]\s*([A-Z])\b/);
+    if (!match) {
+        return [];
+    }
+    return expandLetterRange(match[1], match[2]);
+}
+
+function isParagraphLetterSelectionGroup(groupHtml) {
+    const html = groupHtml || '';
+    return /Which\s+(?:paragraph|section)\s+contains the following information\?/i.test(html)
+        && /Write the correct letter/i.test(html)
+        && /type=["']text["']/i.test(html);
+}
+
+function rewriteParagraphLetterSelectionGroup(groupHtml) {
+    if (!isParagraphLetterSelectionGroup(groupHtml)) {
+        return groupHtml;
+    }
+
+    const letters = extractParagraphMatchLetters(groupHtml);
+    if (!letters.length) {
+        return groupHtml;
+    }
+
+    const questionItemPattern = /<div[^>]*>\s*<p>([\s\S]*?)<input[^>]*name=["'](q\d+)["'][^>]*>\s*<\/p>\s*<\/div>|<div[^>]*>\s*<p>([\s\S]*?)<\/p>\s*<input[^>]*name=["'](q\d+)["'][^>]*>[\s\S]*?<\/div>/gi;
+    const questionItems = Array.from(groupHtml.matchAll(questionItemPattern));
+    if (!questionItems.length) {
+        return groupHtml;
+    }
+
+    const wrapperMatch = groupHtml.match(/<div class="group"([^>]*)>/i);
+    const headingMatch = groupHtml.match(/<h4>[\s\S]*?<\/h4>/i);
+    const firstQuestionIndex = typeof questionItems[0].index === 'number' ? questionItems[0].index : -1;
+    if (!wrapperMatch || !headingMatch || firstQuestionIndex === -1) {
+        return groupHtml;
+    }
+
+    const wrapperAttributes = wrapperMatch[1] || '';
+    const headingHtml = headingMatch[0];
+    const introHtml = groupHtml
+        .slice((headingMatch.index || 0) + headingHtml.length, firstQuestionIndex)
+        .trim();
+
+    const headerCells = letters.map((letter) => `<th>${letter}</th>`).join('');
+    const rowsHtml = questionItems.map((match) => {
+        const promptHtml = (match[1] || match[3] || '').trim();
+        const questionId = match[2] || match[4] || '';
+        const prompt = promptHtml.replace(/\s+/g, ' ');
+        const optionCells = letters
+            .map((letter) => `<td><input type="radio" name="${questionId}" value="${letter}"></td>`)
+            .join('');
+        return [
+            '                            <tr>',
+            `                                <td>${prompt}</td>`,
+            `                                ${optionCells}`,
+            '                            </tr>'
+        ].join('\n');
+    }).join('\n');
+
+    return [
+        `<div class="group"${wrapperAttributes}>`,
+        `                ${headingHtml}`,
+        introHtml ? `                ${introHtml}` : null,
+        '                <div style="overflow-x: auto;">',
+        '                    <table class="matching-table">',
+        '                        <thead>',
+        '                            <tr>',
+        '                                <th></th>',
+        `                                ${headerCells}`,
+        '                            </tr>',
+        '                        </thead>',
+        '                        <tbody>',
+        rowsHtml,
+        '                        </tbody>',
+        '                    </table>',
+        '                </div>',
+        '            </div>'
+    ].filter(Boolean).join('\n');
+}
+
+function normalizeQuestionGroupHtml(groupHtml) {
+    return rewriteParagraphLetterSelectionGroup(groupHtml);
+}
+
 function detectGroupKind(groupHtml) {
     const html = groupHtml || '';
     if (/paragraph-dropzone|match-dropzone|drag-item|headings-pool|options-pool/i.test(html)) {
@@ -934,7 +1061,7 @@ function buildQuestionGroups(groupBlocks, introHtml, answerKey, originalToIntern
     const groups = [];
     let introAttached = false;
     for (let index = 0; index < groupBlocks.length; index += 1) {
-        const bodyHtml = rewriteQuestionReferences(groupBlocks[index], renumberMap);
+        const bodyHtml = normalizeQuestionGroupHtml(rewriteQuestionReferences(groupBlocks[index], renumberMap));
         const htmlQuestionIds = extractQuestionIdsFromHtml(bodyHtml);
         const headingQuestionIds = inferQuestionIdsFromHeading(groupBlocks[index], originalToInternalMap);
         const finalQuestionIds = sortQuestionIds([...htmlQuestionIds, ...headingQuestionIds])
@@ -1001,7 +1128,7 @@ function buildQuestionGroupsLegacy(groupBlocks, introHtml, answerKey) {
     const groups = [];
     let introAttached = false;
     for (let index = 0; index < groupBlocks.length; index += 1) {
-        const bodyHtml = groupBlocks[index];
+        const bodyHtml = normalizeQuestionGroupHtml(groupBlocks[index]);
         const questionIds = extractQuestionIdsFromHtml(bodyHtml);
         const filteredQuestionIds = questionIds.length
             ? questionIds.filter((questionId) => Object.prototype.hasOwnProperty.call(answerKey, questionId) || /-/.test(questionId))
@@ -1047,9 +1174,10 @@ function buildAuditNotes(sourceProvider, signature) {
 
 function buildSourceRefs(examEntry, pilotRow, sourceHtmlPath, sourceProvider) {
     const shuiHtml = sourceProvider === 'shui' ? sourceHtmlPath : (pilotRow.shuiPath || null);
+    const pdfFilename = String(examEntry.pdfFilename || '').replace(/\\/g, '/').split('/').pop();
     const sourceRefs = {
         shuiHtml,
-        shuiPdf: `${examEntry.path}${examEntry.pdfFilename || ''}`,
+        pdf: pdfFilename ? `ReadingPractice/PDF/${pdfFilename}` : '',
         ieltsHtml: sourceProvider === 'ielts' ? sourceHtmlPath : (pilotRow.ieltsPath || null)
     };
 
@@ -1147,18 +1275,108 @@ function buildSourceRecord(examEntry, pilotRow) {
     };
 }
 
-function buildManifest(sourceRecords) {
+function buildManifest(readingIndex, sourceRecords) {
+    const sourceById = new Map(sourceRecords.map((record) => [record.examId, record]));
     const manifest = {};
+    for (const entry of readingIndex) {
+        const examId = entry.examId || entry.id;
+        if (!examId) {
+            continue;
+        }
+        const record = sourceById.get(examId);
+        manifest[examId] = {
+            examId,
+            dataKey: record ? examId : (entry.dataKey ?? null),
+            script: record ? `./${examId}.js` : (entry.script ?? null),
+            title: record ? record.meta.title : (entry.title || ''),
+            category: record ? record.meta.category : (entry.category || ''),
+            frequency: entry.frequency || '',
+            difficultyScore: entry.difficultyScore ?? null,
+            path: entry.path || '',
+            filename: entry.filename || '',
+            hasHtml: record ? true : entry.hasHtml === true,
+            hasPdf: entry.hasPdf === true,
+            pdfFilename: entry.pdfFilename || '',
+            sourceKind: entry.sourceKind || (record || entry.script ? 'generated-reading' : 'pdf-only')
+        };
+    }
     for (const record of sourceRecords) {
+        if (manifest[record.examId]) {
+            continue;
+        }
         manifest[record.examId] = {
             examId: record.examId,
             dataKey: record.examId,
             script: `./${record.examId}.js`,
             title: record.meta.title,
-            category: record.meta.category
+            category: record.meta.category,
+            frequency: '',
+            difficultyScore: null,
+            path: '',
+            filename: '',
+            hasHtml: true,
+            hasPdf: false,
+            pdfFilename: '',
+            sourceKind: 'generated-reading'
         };
     }
     return manifest;
+}
+
+function buildManifestScript(manifest, pathRoot = DEFAULT_PATH_ROOT) {
+    return [
+        '(function registerReadingExamManifest(global) {',
+        "  'use strict';",
+        `  const PATH_ROOT = ${JSON.stringify(pathRoot, null, 2).replace(/\n/g, '\n  ')};`,
+        `  const manifest = ${JSON.stringify(manifest, null, 2).replace(/\n/g, '\n  ')};`,
+        '',
+        '  function clonePathRoot() {',
+        '    return Object.assign({}, PATH_ROOT);',
+        '  }',
+        '',
+        '  function cloneIndexEntry(entry) {',
+        '    return Object.assign({}, entry);',
+        '  }',
+        '',
+        '  function buildReadingExamIndex() {',
+        '    const index = Object.keys(manifest).map(function mapEntry(id) {',
+        '      const entry = manifest[id] || {};',
+        '      return {',
+        '        id: entry.examId || id,',
+        "        title: entry.title || '',",
+        "        category: entry.category || '',",
+        "        frequency: entry.frequency || '',",
+        '        difficultyScore: entry.difficultyScore,',
+        "        path: entry.path || '',",
+        "        filename: entry.filename || '',",
+        '        hasHtml: entry.hasHtml === true,',
+        '        hasPdf: entry.hasPdf === true,',
+        "        pdfFilename: entry.pdfFilename || '',",
+        "        sourceKind: entry.sourceKind || (entry.script ? 'generated-reading' : 'pdf-only'),",
+        "        type: 'reading'",
+        '      };',
+        '    });',
+        '    index.pathRoot = clonePathRoot();',
+        '    return index;',
+        '  }',
+        '',
+        '  function getReadingExamIndex() {',
+        '    const index = global.__READING_EXAM_INDEX__;',
+        '    const cloned = Array.isArray(index) ? index.map(cloneIndexEntry) : buildReadingExamIndex();',
+        '    cloned.pathRoot = clonePathRoot();',
+        '    return cloned;',
+        '  }',
+        '',
+        '  global.__READING_EXAM_MANIFEST__ = manifest;',
+        '  global.__READING_EXAM_INDEX__ = buildReadingExamIndex();',
+        '  global.__READING_EXAM_INDEX__.pathRoot = clonePathRoot();',
+        '  global.__READING_EXAM_PATH_ROOT__ = clonePathRoot();',
+        '  global.getReadingExamIndex = getReadingExamIndex;',
+        '  global.getReadingExamIndex.pathRoot = clonePathRoot();',
+        '  global.completeExamIndex = getReadingExamIndex();',
+        '})(typeof window !== "undefined" ? window : globalThis);',
+        ''
+    ].join('\n');
 }
 
 function buildWrapper(record) {
@@ -1306,11 +1524,14 @@ function buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, fail
 }
 
 function main() {
+    const maintainedEntry = path.join(GENERATED_DIR, 'reading-practice-unified.html');
+    const entryBefore = fs.readFileSync(maintainedEntry);
     const existingSourceRecords = loadBaselineSourceRecords();
+    const readingIndexData = loadReadingIndex();
+    const readingIndex = readingIndexData.items;
     resetGeneratedDir(SOURCE_DIR);
-    resetGeneratedDir(GENERATED_DIR, new Set(['reading-practice-unified.html']));
+    resetGeneratedDir(GENERATED_DIR, buildGeneratedPreserveFileNames(readingIndex));
 
-    const readingIndex = loadReadingIndex();
     const overrides = loadCrosswalkOverrides();
     const crosswalk = buildCrosswalk(readingIndex, overrides);
     writeJson(CROSSWALK_FILE, crosswalk);
@@ -1353,16 +1574,10 @@ function main() {
 
     writeSchemaFile();
 
-    const manifest = buildManifest(sourceRecords);
+    const manifest = buildManifest(readingIndex, sourceRecords);
     writeText(
         path.join(GENERATED_DIR, 'manifest.js'),
-        [
-            '(function registerReadingExamManifest(global) {',
-            "  'use strict';",
-            `  global.__READING_EXAM_MANIFEST__ = ${JSON.stringify(manifest, null, 2)};`,
-            '})(typeof window !== "undefined" ? window : globalThis);',
-            ''
-        ].join('\n')
+        buildManifestScript(manifest, readingIndexData.pathRoot)
     );
 
     const migrationReport = {
@@ -1378,7 +1593,19 @@ function main() {
     writeJson(MIGRATION_REPORT_FILE, migrationReport);
     writeJson(CROSSWALK_REVIEW_FILE, buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, failures, overrides));
 
+    if (!fs.readFileSync(maintainedEntry).equals(entryBefore)) throw new Error('Maintained reading entry changed during data generation');
     process.stdout.write(`Generated ${sourceRecords.length} reading exam assets. Failed: ${failures.length}.\n`);
 }
 
-main();
+export {
+    resetGeneratedDir,
+    buildGeneratedPreserveFileNames,
+    detectGroupKind,
+    extractParagraphMatchLetters,
+    isParagraphLetterSelectionGroup,
+    normalizeQuestionGroupHtml
+};
+
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+    main();
+}

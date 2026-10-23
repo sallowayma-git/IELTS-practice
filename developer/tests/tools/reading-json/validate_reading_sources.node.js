@@ -112,8 +112,8 @@ function validateRecord(record, filePath) {
         }
     }
 
-    if (!record.sourceRefs || !record.sourceRefs.shuiPdf) {
-        errors.push('sourceRefs.shuiPdf 缺失');
+    if (!record.sourceRefs || !record.sourceRefs.pdf) {
+        errors.push('sourceRefs.pdf 缺失');
     } else if (record.sourceRefs.primaryProvider && !['shui', 'ielts'].includes(record.sourceRefs.primaryProvider)) {
         errors.push(`sourceRefs.primaryProvider 非法: ${record.sourceRefs.primaryProvider}`);
     }
