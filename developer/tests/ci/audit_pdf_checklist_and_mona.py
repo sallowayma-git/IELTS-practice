@@ -7,7 +7,6 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -46,14 +45,6 @@ BANNED_PATTERNS = [
     r"本篇解析已按",
     r"移除此前错绑",
 ]
-
-
-def safe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
 
 
 def load_json_from_register_js(path: Path, register_key: str) -> dict:
@@ -136,8 +127,6 @@ console.log(JSON.stringify({ allPass, checks }));
             cwd=str(repo_root),
             capture_output=True,
             text=True,
-            encoding="utf-8",
-            errors="replace",
             check=False,
         )
     except Exception as error:  # noqa: BLE001
@@ -153,19 +142,18 @@ console.log(JSON.stringify({ allPass, checks }));
             "node_exec_ok": False,
             "all_pass": False,
             "checks": {},
-            "stderr": safe_text(result.stderr).strip(),
+            "stderr": result.stderr.strip(),
         }
 
     try:
-        output_lines = [line for line in safe_text(result.stdout).strip().splitlines() if line.strip()]
-        payload = json.loads(output_lines[-1] if output_lines else "{}")
+        payload = json.loads((result.stdout or "").strip().splitlines()[-1])
     except Exception as error:  # noqa: BLE001
         return {
             "node_exec_ok": False,
             "all_pass": False,
             "checks": {},
             "error": f"json_parse_error: {error}",
-            "stdout": safe_text(result.stdout).strip(),
+            "stdout": (result.stdout or "").strip(),
         }
 
     checks = payload.get("checks", {}) if isinstance(payload, dict) else {}
@@ -177,25 +165,18 @@ console.log(JSON.stringify({ allPass, checks }));
 
 
 def main() -> int:
-    if not CHECKLIST.exists():
-        report = {
-            "status": "skipped",
-            "reason": f"missing_checklist:{CHECKLIST}",
-            "onlyInMapping": [],
-            "onlyInChecklist": [],
-            "invalidStatusRows": [],
-            "missingEvidenceForVerified": [],
-            "monaBannedPatternHits": [],
-            "monaCoverageOk": True,
-            "monaAnswerMismatches": [],
-        }
-        REPORT.parent.mkdir(parents=True, exist_ok=True)
-        REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(json.dumps(report, ensure_ascii=False))
-        return 0
-
     mapping = json.loads(MAPPING.read_text(encoding="utf-8"))
     mapping_ids = [item["id"] for item in mapping.get("issues", [])]
+
+    if not CHECKLIST.exists():
+        result = {
+            "skipped": True,
+            "reason": "checklist.md 已移除，跳过 checklist 相关 PDF/MONA 对账审计"
+        }
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        REPORT.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
 
     checklist_text = CHECKLIST.read_text(encoding="utf-8")
     checklist_rows = parse_checklist_rows(checklist_text)
@@ -326,7 +307,7 @@ def main() -> int:
             plastic_exam.get("meta", {}).get("pdfFilename", "")
         ),
         "source_ref_present": "116. P1 - The Development of Plastics 塑料的发展史【次】.pdf" in str(
-            plastic_exam.get("sourceRefs", {}).get("pdf", "")
+            plastic_exam.get("sourceRefs", {}).get("shuiPdf", "")
         ),
     }
 
@@ -394,9 +375,11 @@ def main() -> int:
 
     # Mark persistence in suite replay
     marks_checks = {
+        "unified_getter_exposed": "global.getPracticeMarkedQuestions = getPracticeMarkedQuestions;" in unified_page_text,
+        "unified_setter_exposed": "global.setPracticeMarkedQuestions = setPracticeMarkedQuestions;" in unified_page_text,
         "suite_entry_contains_marks": "markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : []" in suite_mixin_text,
         "replay_payload_contains_marks": "markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : []" in suite_mixin_text,
-        "unified_submit_contains_marks": "markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')" in unified_page_text,
+        "unified_submit_contains_marks": "markedQuestions: getPracticeMarkedQuestions()," in unified_page_text,
     }
 
     # Answer comparison robustness (TF/YN/顺序无关)
@@ -419,8 +402,8 @@ def main() -> int:
 
     # Drag/heading answer-state sync guard
     drag_status_checks = {
-        "dropzone_restore_supported": "function applyDropzoneAnswer(" in unified_page_text,
-        "drag_draft_replay_supported": "if (applyDropzoneAnswer(normalized, value)) {" in unified_page_text,
+        "dropzone_binding_covered": "bindDropTarget(dropzone, (payload) => {" in unified_page_text,
+        "nav_status_updated_after_drop": "handleDropOnDropzone(dropzone, payload);" in unified_page_text,
         "unified_nav_updates_on_input_change": "document.addEventListener('change', () => updateNavStatuses());" in unified_page_text
         and "document.addEventListener('input', () => updateNavStatuses());" in unified_page_text,
     }
