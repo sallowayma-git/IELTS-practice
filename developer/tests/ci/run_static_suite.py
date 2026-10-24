@@ -187,6 +187,10 @@ def main() -> int:
             ["node", "developer/tests/js/readingAssetPayloadShape.test.mjs"],
         ),
         run_command(
+            "Reading explanation resource export",
+            ["node", "--test", "developer/tests/js/readingExplanationExport.test.mjs"],
+        ),
+        run_command(
             "Reading drag keyboard behavior",
             ["node", "developer/tests/js/readingDragSelection.test.mjs"],
         ),
