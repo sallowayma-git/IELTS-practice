@@ -999,6 +999,12 @@
           "markdownDescription": "Enables the reading_export_archive command without any pre-configured scope."
         },
         {
+          "description": "Enables the reading_get_asset_explanation command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reading-get-asset-explanation",
+          "markdownDescription": "Enables the reading_get_asset_explanation command without any pre-configured scope."
+        },
+        {
           "description": "Enables the reading_get_asset_payload command without any pre-configured scope.",
           "type": "string",
           "const": "allow-reading-get-asset-payload",
@@ -1933,6 +1939,12 @@
           "type": "string",
           "const": "deny-reading-export-archive",
           "markdownDescription": "Denies the reading_export_archive command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reading_get_asset_explanation command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reading-get-asset-explanation",
+          "markdownDescription": "Denies the reading_get_asset_explanation command without any pre-configured scope."
         },
         {
           "description": "Denies the reading_get_asset_payload command without any pre-configured scope.",

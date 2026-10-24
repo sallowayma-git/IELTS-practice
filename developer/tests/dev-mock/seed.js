@@ -8,6 +8,11 @@
 import payloadP1 from './fixtures/reading/p1-high-01.json' with { type: 'json' }
 import payloadP2 from './fixtures/reading/p2-high-235.json' with { type: 'json' }
 import payloadP3 from './fixtures/reading/p3-high-229.json' with { type: 'json' }
+// Explanations come straight from the generated resource pack (dev-only import):
+// one source of truth with the bundled data the Rust command serves.
+import explanationP1 from '../../../assets/resource-pack/reading-explanations/payloads/p1-high-01.json' with { type: 'json' }
+import explanationP2 from '../../../assets/resource-pack/reading-explanations/payloads/p2-high-235.json' with { type: 'json' }
+import explanationP3 from '../../../assets/resource-pack/reading-explanations/payloads/p3-high-229.json' with { type: 'json' }
 
 const DAY_MS = 86_400_000
 
@@ -632,7 +637,16 @@ export function createSeedState(now = Date.now()) {
   const history = buildHistory(now, assets)
   return {
     now,
-    reading: { assets, payloads: buildReadingPayloads(assets), drafts: {} },
+    reading: {
+      assets,
+      payloads: buildReadingPayloads(assets),
+      explanations: {
+        'p1-high-01': explanationP1,
+        'p2-high-235': explanationP2,
+        'p3-high-229': explanationP3,
+      },
+      drafts: {},
+    },
     history: { items: history.items, details: history.details, retention: { maxTerminalAttempts: 200 }, clearTokens: {} },
     topics: buildTopics(now),
     prompts: buildWritingPrompts(now),

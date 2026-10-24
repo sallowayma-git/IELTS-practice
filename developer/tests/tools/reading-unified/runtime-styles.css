@@ -1,0 +1,124 @@
+/* ===== ensureExplanationStyles (from opensource js/bundles/reading-page.bundle.js) ===== */
+.reading-explanation-card {
+                margin: 10px 0 14px;
+                padding: 10px 12px;
+                border: 1px solid rgba(37, 99, 235, 0.22);
+                border-left: 4px solid rgba(37, 99, 235, 0.9);
+                border-radius: 8px;
+                background: rgba(239, 246, 255, 0.75);
+            }
+            .reading-explanation-card__label {
+                font-size: 12px;
+                line-height: 1.3;
+                margin-bottom: 6px;
+                font-weight: 700;
+                color: #1d4ed8;
+            }
+            .reading-explanation-card__text {
+                font-size: 14px;
+                line-height: 1.6;
+                color: #1f2937;
+                white-space: pre-wrap;
+            }
+            .reading-group-explanation {
+                margin-top: 10px;
+            }
+            .reading-question-explanation {
+                margin-top: 8px;
+            }
+            .reading-question-explanation-list {
+                margin-top: 10px;
+                padding: 10px 12px;
+                border: 1px dashed rgba(59, 130, 246, 0.45);
+                border-radius: 8px;
+                background: rgba(239, 246, 255, 0.45);
+            }
+            .reading-question-explanation-list h5 {
+                margin: 0 0 8px;
+                font-size: 13px;
+                color: #1e3a8a;
+            }
+            .reading-question-explanation-list .reading-question-explanation-item + .reading-question-explanation-item {
+                margin-top: 8px;
+            }
+
+/* ===== ensureMemorizeStyles (from opensource js/bundles/reading-page.bundle.js) ===== */
+.reading-answer-key-card {
+                margin: 8px 0 10px;
+                padding: 9px 11px;
+                border: 1px solid rgba(22, 163, 74, 0.24);
+                border-left: 4px solid rgba(22, 163, 74, 0.9);
+                border-radius: 8px;
+                background: rgba(240, 253, 244, 0.82);
+            }
+            .reading-answer-key-card__label {
+                font-size: 12px;
+                line-height: 1.35;
+                margin-bottom: 4px;
+                font-weight: 700;
+                color: #166534;
+            }
+            .reading-answer-key-card__value {
+                font-size: 14px;
+                line-height: 1.55;
+                color: #14532d;
+                white-space: pre-wrap;
+            }
+            .reading-locator-highlight {
+                border-radius: 3px;
+                background: rgba(250, 204, 21, 0.42);
+                box-shadow: 0 0 0 1px rgba(202, 138, 4, 0.18);
+                cursor: pointer;
+            }
+            .reading-locator-highlight:hover {
+                background: rgba(250, 204, 21, 0.62);
+            }
+            .reading-locator-overlap { cursor:pointer; text-decoration:underline #dc2626 2px; text-underline-offset:3px; }
+            .reading-locator-highlight.is-review-jump-target,.reading-locator-overlap.is-review-jump-target { outline:2px solid rgba(37,99,235,.45); outline-offset:2px; }
+            .reading-locator-block { display:inline-block;width:1px;height:1em;overflow:hidden;opacity:0;pointer-events:none;vertical-align:baseline; }
+            .reading-passage-locator-target.is-review-jump-target { border-radius:4px;outline:2px solid rgba(37,99,235,.38);background:rgba(96,165,250,.12); }
+            .results-table .question-jump-btn { border:0;padding:0;background:transparent;color:#2563eb;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px; }
+
+/* ===== ensureReadingNoteStyles (from opensource js/bundles/reading-page.bundle.js) ===== */
+/* Noted text uses the reference's .note-anchor blue on white. The
+               page stylesheet sets the same pair; keeping it here too means a
+               note reads correctly before that sheet's rule wins the cascade. */
+            .hl[data-note-id]{position:relative;cursor:pointer;background:rgb(32,76,207)!important;color:#fff!important}
+            .hl[data-note-id].reading-note-flash{outline:2px solid #60a5fa;outline-offset:2px}.reading-notes-btn{position:relative}
+            .reading-note-count{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#16a34a;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700;display:none}
+            #reading-note-drawer{position:fixed;inset:0 0 0 auto;width:min(360px,92vw);background:#fff;border-left:1px solid #dbe4ef;box-shadow:-18px 0 36px rgba(15,23,42,.16);z-index:3600;transform:translateX(105%);transition:transform 180ms ease;display:flex;flex-direction:column}
+            #reading-note-drawer.open{transform:translateX(0)}.reading-note-drawer-head,.reading-note-editor-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #e2e8f0}
+            .reading-note-drawer-title{display:flex;align-items:center;gap:8px}.reading-note-drawer-head h3,.reading-note-editor-head h3{margin:0;font-size:16px}.reading-note-list{padding:10px;overflow:auto;flex:1}
+            .reading-note-outline{border:1px solid #dbeafe;border-radius:8px;margin-bottom:10px;overflow:hidden;background:#f8fbff}.reading-note-outline-head{display:grid;grid-template-columns:30px 1fr 30px;align-items:center;padding:5px;background:#eff6ff}.reading-note-outline.collapsed .reading-note-outline-body{display:none}
+            .reading-note-outline-body,.reading-note-loose-list{min-height:26px;padding:4px 8px}.reading-note-row{display:grid;grid-template-columns:1fr 28px 30px;align-items:center;gap:4px;border-bottom:1px solid #edf2f7}.reading-note-row.dragging{opacity:.45}.reading-note-row.drag-over{box-shadow:inset 0 2px #2563eb}
+            .reading-note-open,.reading-note-outline-title{border:0;background:transparent;color:#0f172a;text-align:left;padding:9px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.reading-note-open:hover{background:#eff6ff;color:#1d4ed8}
+            .reading-note-close,.reading-note-delete,.reading-note-outline-toggle,.reading-note-outline-delete,.reading-note-drag-handle,.reading-note-outline-add{border:0;background:transparent;color:#64748b;cursor:pointer;width:30px;height:30px;border-radius:6px}.reading-note-outline-add{background:#eff6ff;color:#1d4ed8;font-size:18px}.reading-note-outline-title-input{min-width:0;border:1px solid #93c5fd;border-radius:5px;padding:6px}
+            #reading-note-editor{position:fixed;z-index:3700;width:min(620px,calc(100vw - 24px));height:min(520px,calc(100vh - 24px));min-width:320px;min-height:320px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 22px 50px rgba(15,23,42,.22);display:none;flex-direction:column;overflow:hidden;resize:both}
+            .reading-note-editor-head{cursor:move;background:#f8fafc;user-select:none}.reading-note-editor-body{display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0}.reading-note-quote{margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto}
+            .reading-note-body{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box;min-height:190px;resize:vertical;flex:1}
+            body.dark-mode #reading-note-drawer,body.dark-mode #reading-note-editor{background:#1e293b;border-color:#475569;color:#e2e8f0}body.dark-mode .reading-note-open,body.dark-mode .reading-note-outline-title{color:#f8fafc}
+            @media(max-width:520px){#reading-note-editor{inset:12px!important;width:calc(100vw - 24px);height:calc(100vh - 24px);min-width:0;min-height:0;resize:none}}
+
+/* ===== ensureReadingDisplayControlStyles (from opensource js/bundles/reading-page.bundle.js) ===== */
+.reading-display-toggle-group{display:inline-flex;align-items:center;gap:4px;padding:2px;border:1px solid #dbe4ef;border-radius:8px;background:#f8fafc}
+            .reading-display-toggle{border:0;border-radius:6px;min-width:30px;height:28px;padding:0 8px;cursor:pointer;color:#64748b;background:transparent;font-size:12px;font-weight:700}
+            .reading-display-toggle:hover{background:#eef2f7;color:#0f172a}.reading-display-toggle.is-on{background:#dbeafe;color:#1d4ed8}
+            body.hide-reading-locators .reading-locator-highlight{background:transparent!important;box-shadow:none!important;outline:none!important}
+            body.hide-reading-locators .reading-locator-overlap{text-decoration:none!important;outline:none!important}
+            body.hide-reading-locators .reading-passage-locator-target.is-review-jump-target{background:transparent!important;outline:none!important}
+            body.hide-reading-notes .hl[data-hl-type="note"],body.hide-reading-notes .hl[data-note-id]{background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important;pointer-events:none}
+            body.hide-reading-highlights .hl:not([data-hl-type="note"]):not([data-note-id]){background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important}
+            body.reading-question-nav-collapsed .practice-nav{display:none}
+            body.dark-mode .reading-display-toggle-group{background:#1e293b;border-color:#475569;color:#cbd5e1}
+
+/* ===== ensureOptionConsumedStyles (from opensource js/bundles/reading-page.bundle.js) ===== */
+.drag-item.option-consumed,
+            .draggable-word.option-consumed,
+            .card.option-consumed {
+                opacity: 0.45 !important;
+                cursor: not-allowed !important;
+                background: #f1f5f9 !important;
+                border-color: #cbd5e1 !important;
+                color: #94a3b8 !important;
+                pointer-events: none !important;
+            }

@@ -102,7 +102,14 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
   }
 
   function isDragDropControl(questionId: string): boolean {
-    return getInteraction(questionId)?.control === 'dragdrop'
+    const interaction = getInteraction(questionId)
+    if (interaction?.control) {
+      return interaction.control === 'dragdrop'
+    }
+    // Bundled payloads ship no interactionModel, and the opensource engine this
+    // page mirrors has none either: the native dropzone markup (data-question /
+    // data-target attributes) is the source of truth for dragdrop questions.
+    return findNativeDropzonesByQuestionId(questionId).length > 0
   }
 
   function getOptions(questionId: string): ReadingInteractionOption[] {
@@ -598,6 +605,28 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     })
   }
 
+  function nativeDragOptionLabel(value: string): string {
+    if (typeof document === 'undefined' || !value) {
+      return ''
+    }
+    const escaped = escapeCss(value)
+    const source = document.querySelector(
+      `[data-drag-value="${escaped}"], [data-answer-value="${escaped}"], [data-heading="${escaped}"], [data-option="${escaped}"], [data-word="${escaped}"]`
+    )
+    return String(source?.textContent || '').trim()
+  }
+
+  function isDragOptionUsedByAnyQuestion(value: string): boolean {
+    const normalized = String(value || '').trim()
+    if (!normalized) return false
+    return (payload()?.questionOrder || []).some((questionId) => {
+      const current = options.getRawAnswer(questionId)
+      return Array.isArray(current)
+        ? current.includes(normalized)
+        : String(current || '').trim() === normalized
+    })
+  }
+
   function syncDropzoneControl(questionId: string, explicitValue: ReadingAnswerValue = options.getRawAnswer(questionId)) {
     const dropzones = findNativeDropzonesByQuestionId(questionId)
     if (!dropzones.length) {
@@ -605,7 +634,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     }
     const value = String(Array.isArray(explicitValue) ? explicitValue[0] || '' : explicitValue || '').trim()
     const option = getOptions(questionId).find((entry) => String(entry.value || '').trim() === value)
-    const label = option?.label || value
+    const label = option?.label || nativeDragOptionLabel(value) || value
     const readOnly = readOnlyMode()
     dropzones.forEach((dropzone) => {
       dropzone.dataset.answerValue = value
@@ -640,6 +669,19 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       chip.draggable = !readOnly
       chip.disabled = readOnly
       holder.appendChild(chip)
+    })
+  }
+
+  function syncPoolConsumedState() {
+    if (typeof document === 'undefined') return
+    document.querySelectorAll(
+      '[data-drag-value], [data-answer-value], [data-heading], .drag-item, .draggable-word, .card'
+    ).forEach((node) => {
+      const element = node as HTMLElement
+      if (element.dataset.dropzoneClear === 'true') return
+      const dragPayload = buildDragPayloadFromElement(element)
+      const used = Boolean(dragPayload?.value && isDragOptionUsedByAnyQuestion(dragPayload.value))
+      element.classList.toggle('option-consumed', used)
     })
   }
 
@@ -706,6 +748,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     clearDropzoneInlineStyle,
     syncDropzoneVisualStyles,
     syncDropzoneControl,
+    syncPoolConsumedState,
     setReadOnlyDomControls,
     aliasesFor,
     expandQuestionSequence,

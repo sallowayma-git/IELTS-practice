@@ -1,0 +1,359 @@
+/* GENERATED FILE — do not edit by hand.
+   Source: developer/tests/tools/reading-unified/build_unified_skin.mjs
+     1. <style> of assets/generated/reading-exams/reading-practice-unified.html
+     2. developer/tests/tools/reading-unified/runtime-styles.css (opensource bundle)
+   Re-scope root: .runified (dark mode: .runified.dark-mode, font sizes: .runified.font-*) */
+
+/* ---- SPA embedding preamble (added by build_unified_skin.mjs) ----
+   The standalone page scaled type via html{font-size}; the SPA root element is
+   shared, so the scale is re-anchored here instead. The heading reset undoes
+   the host app's global h1..h6 paper theme (serif face + fixed ink), which
+   would otherwise punch through the skin: the unified page styles headings
+   through inheritance and its own per-context rules. */
+.runified {
+    --runified-rem: 1rem;
+    font-size: 16px;
+}
+.runified h1, .runified h2, .runified h3,
+.runified h4, .runified h5, .runified h6 {
+    color: inherit;
+    font-family: inherit;
+    /* UA default for headings — the original page relies on it wherever it
+       does not set a weight itself. */
+    font-weight: bold;
+    letter-spacing: normal;
+}
+.runified.font-small { --runified-rem: 0.875rem; }
+.runified.font-normal { --runified-rem: 1rem; }
+.runified.font-large { --runified-rem: 1.125rem; }
+.runified.font-xlarge { --runified-rem: 1.25rem; }
+
+/* ===== 1. page stylesheet (unified reading page) ===== */
+.runified { color-scheme: light; --header-height: 56px; --intro-height: 34px; --footer-height: 53.5px; --splitter-width: 2px; --ink: #111; --muted-ink: #565656; --line: #c9c9c9; --soft-line: #d8d8d5; --intro-bg: #f2f3ef; --panel: #ffffff; --panel-alt: #ffffff; --text: #111111; --muted: #565656; --accent: #418fc6; --focus: #1f6387; --focus-soft: rgba(31, 99, 135, 0.18); --control-bg: #fff; --control-hover: #f2f2f2; --choice-hover-bg: rgb(228, 228, 228); --choice-selected-bg: rgb(187, 216, 240); --success: #237a3b; --correct: #237a3b; --correct-bg: #eaf5ec; --danger: #b3261e; --incorrect: #b3261e; --incorrect-bg: #fbeaea; --partial: #8a5a00; --partial-bg: #fff4d6; --unanswered: #666; --unanswered-bg: #f2f2f2; --shadow: 0 3px 12px rgba(0, 0, 0, 0.24); }
+.runified, .runified * { box-sizing: border-box; margin: 0; padding: 0; }
+.runified { font-size: 16px; }
+.runified.font-small { font-size: 14px !important; }
+.runified.font-normal { font-size: 16px !important; }
+.runified.font-large { font-size: 18px !important; }
+.runified.font-xlarge { font-size: 20px !important; }
+.runified { font-family: Arial, Helvetica, "PingFang SC", "Noto Sans SC", sans-serif; font-synthesis: none; background: #fff; color: var(--ink); height: 100vh; height: 100dvh; overflow: hidden; display: grid; grid-template-rows: var(--header-height) auto minmax(0, 1fr) var(--footer-height); min-height: 0; }
+.runified button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; }
+.runified button:focus-visible, .runified a:focus-visible, .runified input:focus-visible, .runified textarea:focus-visible, .runified select:focus-visible, .runified [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.runified .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.runified .header { z-index: 20; grid-row: 1; display: flex; align-items: center; justify-content: space-between; min-width: 0; height: var(--header-height); padding: 0 0 0 16px; border-bottom: 1px solid #c8c8c8; background: #fff; }
+.runified .header-left, .runified .header-right { display: flex; align-items: center; align-self: stretch; }
+.runified .header-left { min-width: 0; gap: 32px; }
+.runified .header-right { gap: 0; }
+.runified .ielts-brand { font-size: 20px; font-weight: 900; color: #e31b23; font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; letter-spacing: -0.5px; white-space: nowrap; }
+.runified .candidate-details { align-self: stretch; display: flex; flex-direction: column; justify-content: center; min-width: 150px; gap: 2px; }
+.runified .candidate-id { align-self: flex-start; margin: 0; font-size: 16px; font-weight: 600; line-height: 18px; white-space: nowrap; }
+.runified #timer { min-width: 0; margin: 0; padding: 0; border: 0; background: transparent; color: #333; font-size: 13px; font-weight: 600; line-height: 16px; font-variant-numeric: tabular-nums; text-align: left; white-space: nowrap; cursor: pointer; }
+.runified #timer:hover { color: #111; }
+.runified #timer.paused { opacity: 0.55; }
+.runified #timer.is-low, .runified #timer.countdown-warn-10, .runified #timer.countdown-warn-5, .runified #timer.countdown-expired, .runified #timer.endless-countdown { color: #9c1d17; font-weight: 700; }
+.runified .header-status, .runified .header-btn { position: relative; display: flex; align-self: stretch; height: var(--header-height); align-items: center; justify-content: center; padding: 0; color: #333; background: transparent; border: 0; border-radius: 0; }
+.runified .header-status { flex: 0 0 59.43px; width: 59.43px; cursor: default; }
+.runified .header-btn { flex: 0 0 56px; width: 56px; }
+.runified .header-btn:hover { background: rgba(0, 0, 0, 0.03); }
+.runified .header-btn:active { background: rgba(0, 0, 0, 0.05); }
+.runified .header-icon { display: block; margin: 0 16px; color: #333; }
+.runified #notes-drawer-btn.header-btn .reading-note-count { top: 12px; right: 10px; }
+.runified .sub-header-bar { grid-row: 2; display: flex; align-items: baseline; gap: 8px; min-width: 0; min-height: 0; height: var(--intro-height); margin: 0; padding: 0 16px; border: 0; border-bottom: 1px solid var(--soft-line); border-radius: 0; background: var(--intro-bg); }
+.runified #sub-header-part, .runified #sub-header-instruction { margin: 0; font-size: 15px; line-height: var(--intro-height); }
+.runified #sub-header-part { flex: 0 0 auto; font-weight: 700; }
+.runified #sub-header-instruction { min-width: 0; color: var(--muted-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runified .shell { --reading-left-pane-width: clamp(320px, 50%, calc(100% - 320px)); --reading-divider-width: var(--splitter-width); position: relative; z-index: 1; grid-row: 3; display: grid; grid-template-columns: minmax(280px, var(--reading-left-pane-width)) var(--reading-divider-width) minmax(300px, 1fr); min-width: 0; min-height: 0; padding-bottom: 17px; overflow: hidden; background: #fff; }
+.runified .pane { position: relative; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; background: #fff; padding: 27px 16px 110px; }
+.runified .pane::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.runified #right { background: #fff; padding-left: 17px; padding-right: 31px; }
+.runified #left > :first-child, .runified #right > :first-child, .runified #question-groups > :first-child { margin-top: 0; }
+.runified #left p, .runified #right p { line-height: 1.55; margin: 0 0 13px; }
+.runified #left h2, .runified #left h3, .runified #left h4 { margin: 20px 0 8px; font-size: 17px; line-height: 1.4; }
+.runified #divider { position: relative; z-index: 8; grid-column: 2; width: var(--splitter-width); min-width: var(--splitter-width); min-height: 0; touch-action: none; user-select: none; outline: none; border: 0; background: #7f7f7f; cursor: col-resize; }
+.runified #divider::before { position: absolute; top: 0; bottom: 0; left: -7px; width: 16px; content: ""; }
+.runified #divider::after { position: absolute; top: 50%; left: 50%; display: grid; width: 36px; height: 36px; place-items: center; border: 2px solid #535353; background: #f9f9f9; color: #535353; content: "\2194"; font-size: 16px; line-height: 1; transform: translate(-50%, calc(-50% + 2px)); pointer-events: none; }
+.runified #divider:hover, .runified #divider:focus-visible, .runified #divider.is-dragging { background: #5d5d5d; }
+.runified.reading-pane-resizing, .runified.reading-pane-resizing * { cursor: col-resize !important; user-select: none !important; }
+.runified .unified-group { min-width: 0; margin: 0 0 31px; }
+.runified .unified-group + .unified-group { padding-top: 1px; }
+.runified .group { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.runified .unified-group h2, .runified .unified-group h3, .runified .group > h3, .runified .group > h4 { margin: 0 0 5px; font-size: 16px; font-weight: 700; line-height: 1.45; }
+.runified .unified-group > .group > p:first-of-type, .runified .question-instructions, .runified .group-instructions { margin: 0 0 15px; line-height: 1.48; }
+.runified .question-item, .runified .match-question-item, .runified .choice-item, .runified .mc-question-item, .runified .tfng-item { position: relative; min-width: 0; margin: 0 0 27px; scroll-margin-block: 24px 110px; }
+.runified .options, .runified .choice-item { width: 100%; min-width: 0; }
+.runified .question-item:last-child, .runified .match-question-item:last-child, .runified .choice-item:last-child, .runified .mc-question-item:last-child, .runified .tfng-item:last-child { margin-bottom: 0; }
+.runified .mc-question-item > p { margin: 0 0 8px; line-height: 1.5; }
+.runified #right .tfng-item > p { margin: 0 0 6px; line-height: 1.5; }
+.runified label.mc-option, .runified .choice-item label, .runified .checkbox-options label, .runified .options-list label, .runified .multiple-choice-options label, .runified .matching-options label, .runified .mcq-group label, .runified .radio-options label, .runified .radio-group label, .runified .multiple-choice label, .runified .true-false-ng label { position: relative; display: flex; width: 100%; max-width: 100%; min-width: 0; min-height: 29px; align-items: flex-start; gap: 0; margin: 0 0 14px; padding: 2px 4px 2px 0; line-height: 24px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; cursor: pointer; }
+.runified label.mc-option:last-child { margin-bottom: 0; }
+.runified label.mc-option:hover:not(:has(input:disabled)), .runified .choice-item label:hover:not(:has(input:disabled)), .runified .multiple-choice-options label:hover:not(:has(input:disabled)), .runified .radio-options label:hover:not(:has(input:disabled)) { background: rgba(0, 0, 0, 0.035); }
+.runified label.mc-option input[type="radio"], .runified label.mc-option input[type="checkbox"], .runified .choice-item label input[type="radio"], .runified .choice-item label input[type="checkbox"], .runified .checkbox-options label input[type="checkbox"], .runified .options-list label input[type="checkbox"], .runified .multiple-choice-options label input[type="radio"], .runified .matching-options label input[type="radio"], .runified .mcq-group label input[type="radio"], .runified .radio-options label input[type="radio"], .runified .radio-group label input[type="radio"], .runified .multiple-choice label input[type="radio"], .runified .true-false-ng label input[type="radio"] { appearance: auto; flex: 0 0 13px; width: 13px; height: 13px; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
+.runified label.mc-option input[type="radio"], .runified .choice-item label input[type="radio"], .runified .multiple-choice-options label input[type="radio"], .runified .radio-options label input[type="radio"], .runified .true-false-ng label input[type="radio"] { margin: 5px 6px 0 5px; }
+.runified label.mc-option input[type="checkbox"], .runified .choice-item label input[type="checkbox"], .runified .checkbox-options label input[type="checkbox"] { margin: 3px 8px 3px 4px; }
+.runified .tfng-options { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 0 12px; }
+.runified .tfng-options label { display: inline-flex; align-items: center; gap: 4px; min-height: 29px; margin: 0; padding: 2px 4px 2px 0; line-height: 24px; cursor: pointer; }
+.runified .tfng-options input[type="radio"] { flex: 0 0 13px; width: 13px; height: 13px; margin: 0 6px 0 5px; }
+.runified input.blank, .runified input[type="text"].blank, .runified #right input[type="text"] { min-width: 120px; padding: 3px 7px; border: 1px solid #858585; border-radius: 0; background: #fff; color: var(--ink); font: inherit; vertical-align: middle; }
+.runified #right input[type="text"]:focus { border-color: var(--focus); box-shadow: 0 0 0 2px var(--focus-soft); outline: none; }
+.runified .matching-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; }
+.runified .matching-table thead th { padding: 0 3px 4px; text-align: center; font-size: calc(0.9 * var(--runified-rem)); font-weight: 700; }
+.runified .matching-table tbody td { padding: 2px 3px; text-align: center; vertical-align: middle; }
+.runified .matching-table tbody td:first-child { padding: 3px 10px 3px 0; text-align: left; line-height: 1.35; }
+.runified .matching-table tbody td.option-correct { background: var(--correct-bg); box-shadow: inset 0 0 0 1px var(--correct); }
+.runified .matching-table tbody td.option-wrong { background: var(--incorrect-bg); box-shadow: inset 0 0 0 1px var(--incorrect); }
+.runified .heading-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.runified .heading-option { display: inline-flex; align-items: center; gap: 6px; min-width: 42px; padding: 4px 8px; border: 1px solid transparent; cursor: pointer; }
+.runified .paragraph-dropzone, .runified .match-dropzone { min-height: 40px; border: 1px dashed #8f8f8f; border-radius: 0; background: #fafafa; padding: 8px 10px; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.runified .paragraph-dropzone.drag-over, .runified .match-dropzone.drag-over { border-color: var(--focus); background: #eaf1f6; }
+.runified .paragraph-dropzone.dropzone-filled, .runified .match-dropzone.dropzone-filled { border-style: solid; border-color: #6d6d6d; background: #f2f2f2; }
+.runified .paragraph-dropzone.dropzone-filled.correct, .runified .match-dropzone.dropzone-filled.correct { border-color: var(--correct); background: var(--correct-bg); }
+.runified .paragraph-dropzone.dropzone-filled.wrong, .runified .match-dropzone.dropzone-filled.wrong { border-color: var(--incorrect); background: var(--incorrect-bg); }
+.runified .paragraph-label { font-size: calc(0.9 * var(--runified-rem)); color: var(--muted-ink); font-weight: 700; white-space: nowrap; }
+.runified .pool-items, .runified .dropped-items { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.runified .pool-items { min-height: 40px; }
+.runified .pool-items.drag-over { border-color: var(--focus); background: rgba(31, 99, 135, 0.08); }
+.runified .dropped-items:empty::after { content: "拖到这里"; font-size: calc(0.82 * var(--runified-rem)); color: #7b8a98; }
+.runified .drag-item, .runified .draggable-word { border: 1px solid #6d6d6d; border-radius: 0; background: #fff; padding: 5px 9px; cursor: grab; font-size: calc(0.95 * var(--runified-rem)); user-select: none; }
+.runified .draggable-word { display: inline-block; margin: 4px; }
+.runified .drag-item:hover, .runified .draggable-word:hover { background: var(--control-hover); }
+.runified .drag-item.dragging, .runified .draggable-word.dragging { opacity: 0.55; cursor: grabbing; }
+.runified .drag-item--assigned, .runified .drag-item[draggable="false"] { border-style: solid; }
+.runified .drag-item[draggable="false"] { cursor: pointer; }
+.runified .drag-item.option-consumed, .runified .draggable-word.option-consumed, .runified .card.option-consumed { opacity: 0.45; cursor: not-allowed; background: #f2f2f2; border-color: #cfcfcf; color: #949494; pointer-events: none; }
+.runified .drop-target-summary { display: inline-flex; min-width: 80px; min-height: 28px; border-bottom: 2px solid var(--muted-ink); margin: 0 4px; vertical-align: bottom; align-items: center; justify-content: center; padding: 0 8px; background: rgba(0, 0, 0, 0.02); position: relative; }
+.runified .drop-target-summary.drag-over { border-bottom-color: var(--focus); background: #eaf1f6; }
+.runified .drop-target-summary.dropzone-filled { border-bottom-color: #6d6d6d; background: #f2f2f2; font-weight: 600; }
+.runified .drop-target-summary.dropzone-filled.correct { border-bottom-color: var(--correct); background: var(--correct-bg); color: var(--correct); }
+.runified .drop-target-summary.dropzone-filled.wrong { border-bottom-color: var(--incorrect); background: var(--incorrect-bg); color: var(--incorrect); }
+.runified .drop-target-summary .drag-item { border: none; background: transparent; padding: 0; margin: 0; cursor: grab; color: inherit; font-weight: inherit; }
+.runified .option-correct:not(label):not(td) { background: var(--correct-bg); color: #174e28; box-shadow: inset 0 0 0 1px var(--correct); }
+.runified .option-wrong:not(label):not(td) { background: var(--incorrect-bg); color: #7c1d18; box-shadow: inset 0 0 0 1px var(--incorrect); }
+.runified label.option-correct, .runified .choice-item label.option-correct, .runified .checkbox-options label.option-correct, .runified .options label.option-correct, .runified .options-list label.option-correct, .runified .multiple-choice-options label.option-correct, .runified .matching-options label.option-correct, .runified .mcq-group label.option-correct, .runified .mcq label.mcq-item.option-correct, .runified .mcq-options label.option-correct, .runified .mcq-question label.option-correct, .runified .mc-question-item label.option-correct, .runified label.mc-option.option-correct, .runified .checkbox-list label.option-correct, .runified .radio-options label.option-correct, .runified .radio-options-list label.option-correct, .runified .radio-group label.option-correct, .runified .multiple-choice label.option-correct, .runified .question-item label.option-correct, .runified .para-match-option label.option-correct, .runified .person-match-option label.option-correct, .runified .location-options label.option-correct, .runified .tfng-options label.option-correct, .runified .tfng-item label.option-correct, .runified .true-false-ng label.option-correct { background: var(--correct-bg); border: 1px solid var(--correct); color: #174e28; border-radius: 0; padding: 4px 8px; }
+.runified label.option-wrong, .runified .choice-item label.option-wrong, .runified .checkbox-options label.option-wrong, .runified .options label.option-wrong, .runified .options-list label.option-wrong, .runified .multiple-choice-options label.option-wrong, .runified .matching-options label.option-wrong, .runified .mcq-group label.option-wrong, .runified .mcq label.mcq-item.option-wrong, .runified .mcq-options label.option-wrong, .runified .mcq-question label.option-wrong, .runified .mc-question-item label.option-wrong, .runified label.mc-option.option-wrong, .runified .checkbox-list label.option-wrong, .runified .radio-options label.option-wrong, .runified .radio-options-list label.option-wrong, .runified .radio-group label.option-wrong, .runified .multiple-choice label.option-wrong, .runified .question-item label.option-wrong, .runified .para-match-option label.option-wrong, .runified .person-match-option label.option-wrong, .runified .location-options label.option-wrong, .runified .tfng-options label.option-wrong, .runified .tfng-item label.option-wrong, .runified .true-false-ng label.option-wrong { background: var(--incorrect-bg); border: 1px solid var(--incorrect); color: #7c1d18; border-radius: 0; padding: 4px 8px; }
+.runified .table-section { margin-top: 12px; overflow-x: auto; border: 1px solid #6d6d6d; background: #fff; padding: 0; }
+.runified .table-section table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.runified .table-section thead th { border: 1px solid var(--line); background: #f2f2f2; font-weight: 700; text-align: center; padding: 10px 8px; }
+.runified .table-section tbody td { border: 1px solid var(--line); padding: 10px; vertical-align: top; line-height: 1.45; }
+.runified .table-section ul { margin: 0; padding-left: 20px; }
+.runified .table-section li + li { margin-top: 6px; }
+.runified .practice-nav { z-index: 25; grid-row: 4; position: relative; display: flex; min-width: 0; height: var(--footer-height); border-top: 1px solid #e4e4e4; background: #fff; }
+.runified .part-nav-section { position: relative; display: flex; flex: 1 1 0; min-width: 0; align-items: center; gap: 9px; height: 100%; margin: 0 1px; padding: 9px 12px 4px 20px; }
+.runified .part-nav-section.active { gap: 36px; padding-top: 6px; padding-bottom: 4px; }
+.runified .part-nav-section:not(.active) { justify-content: center; padding: 0; cursor: default; }
+.runified .part-nav-section.active::before { position: absolute; top: -1px; left: 1px; z-index: 2; display: block; width: 98.5px; height: 3px; background: #d7d7d7; content: ""; pointer-events: none; }
+.runified .part-nav-section:not(.active) .part-nav-info { position: absolute; z-index: 0; inset: 2px 0 0; display: flex; flex-direction: row; align-items: center; gap: 20px; padding: 3px 20px 0; }
+.runified .part-nav-section.is-switchable:not(.active) .part-nav-info { cursor: pointer; }
+.runified .part-nav-section.is-switchable:not(.active):hover .part-nav-info { background: #efefef; }
+.runified .part-nav-section.is-switchable:not(.active):active .part-nav-info { background: #e5e5e5; }
+.runified .part-nav-info { display: flex; flex: 0 0 auto; flex-direction: column; justify-content: center; min-width: 0; }
+.runified .part-nav-name { font-size: 16px; font-weight: 400; line-height: 27px; color: var(--ink); white-space: nowrap; }
+.runified .part-nav-section.active .part-nav-name { font-weight: 600; }
+.runified .part-nav-name.inactive { color: var(--ink); }
+.runified .part-nav-status { font-size: 12px; line-height: 14px; color: var(--muted-ink); white-space: nowrap; }
+.runified .part-nav-section:not(.active) .part-nav-status { display: none; }
+.runified .part-nav-questions { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; gap: 0; }
+.runified .part-nav-section:not(.active) .part-nav-questions { display: none; }
+.runified .q-column { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; }
+.runified .q-bar-segment { display: none; }
+.runified .q-item { position: relative; display: inline-flex; min-width: 20.9px; height: 27.3px; align-items: center; justify-content: center; padding: 2.4px 4px; border: 2px solid transparent; border-radius: 3px; background: transparent; color: #333; font-family: inherit; font-size: 16px; line-height: normal; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.runified .q-item:hover { border-color: #999; background: #f5f5f5; }
+.runified .q-item.active { border-color: #418fc6; box-shadow: none; background: #fff; font-weight: 700; }
+.runified .q-item.answered { font-weight: 700; }
+.runified .q-item.answered::after { position: absolute; right: 3px; bottom: 1px; left: 3px; height: 2px; background: #555; content: ""; }
+.runified .q-item.correct { border-color: var(--correct); background: var(--correct-bg); color: #174e28; }
+.runified .q-item.incorrect { border-color: var(--incorrect); background: var(--incorrect-bg); color: #7c1d18; }
+.runified .q-item.partial { border-color: var(--partial); background: var(--partial-bg); color: #6b4600; }
+.runified .q-item.disabled { cursor: not-allowed; pointer-events: none; }
+.runified .nav-controls-right { display: flex; flex: 0 0 auto; align-items: center; align-self: stretch; gap: 0; margin-left: auto; }
+.runified #submit-btn { position: relative; top: -1px; display: grid; flex: 0 0 76.8px; width: 76.8px; height: calc(100% + 1px); place-items: center; padding: 0; border: 0; border-radius: 0; background: #efefef; color: #535353; font-size: 19.2px; font-weight: 400; line-height: 19.2px; }
+.runified #submit-btn:hover:not(:disabled) { background: #c3d8ec; color: #535353; }
+.runified #submit-btn:active:not(:disabled) { background: #b2cce5; }
+.runified #submit-btn:disabled { color: #a5a5a5; cursor: not-allowed; }
+.runified #submit-btn .submit-btn-icon { display: block; }
+.runified #reset-btn, .runified #exit-btn { align-self: center; height: 33px; margin-right: 12px; padding: 0 14px; border: 1px solid #8f8f8f; border-radius: 3px; background: #fff; color: #333; font-size: 14px; font-weight: 400; }
+.runified #reset-btn:hover:not(:disabled), .runified #exit-btn:hover:not(:disabled) { background: var(--control-hover); }
+.runified #reset-btn:disabled, .runified #exit-btn:disabled { color: #a5a5a5; border-color: #d5d5d5; cursor: not-allowed; }
+.runified #settings-panel { position: fixed; z-index: 4000; inset: 0; display: none; overflow: auto; background: #fff; }
+.runified #settings-panel.is-open { display: block; }
+.runified .options-header { position: sticky; top: 0; display: grid; height: 78px; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 17px; background: #fff; border-bottom: 1px solid #e4e4e4; }
+.runified .options-header h2 { grid-column: 2; margin: 0; font-size: 28px; font-weight: 400; line-height: 1; }
+.runified .options-close-button { grid-column: 3; justify-self: end; display: grid; width: 66.66px; height: 56px; place-items: center; color: #333; }
+.runified .options-close-button:hover { background: rgba(0, 0, 0, 0.04); }
+.runified .options-content { max-width: 760px; margin: 0 auto; padding: 26px 20px 60px; }
+.runified .settings-section { margin-bottom: 30px; }
+.runified .settings-section:last-child { margin-bottom: 0; }
+.runified .settings-title { margin-bottom: 10px; font-size: 17px; font-weight: 700; line-height: 1.4; color: var(--ink); }
+.runified .settings-hint { margin: -4px 0 10px; font-size: 14px; line-height: 1.5; color: var(--muted-ink); }
+.runified .settings-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.runified .settings-option { min-width: 96px; padding: 10px 16px; border: 1px solid #8f8f8f; border-radius: 3px; background: #fff; color: var(--ink); font-size: 15px; text-align: center; }
+.runified .settings-option:hover { background: var(--control-hover); }
+.runified .settings-option.active { border-color: #418fc6; border-width: 2px; background: #eaf1f8; font-weight: 700; }
+.runified #options-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.runified #options-tools .reading-display-toggle-group { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; }
+.runified #options-tools .reading-display-toggle, .runified #options-tools #notes-drawer-btn { min-width: 44px; height: 40px; padding: 0 14px; border: 1px solid #8f8f8f; border-radius: 3px; background: #fff; color: var(--ink); font-size: 15px; line-height: 38px; }
+.runified #options-tools .reading-display-toggle:hover, .runified #options-tools #notes-drawer-btn:hover { background: var(--control-hover); }
+.runified #options-tools .reading-display-toggle[aria-pressed="true"] { border-color: #418fc6; border-width: 2px; background: #eaf1f8; font-weight: 700; }
+.runified .floating-nav-box { position: absolute; z-index: 35; right: 32px; bottom: 34px; display: flex; gap: 2.4px; padding: 0; background: transparent; border-radius: 0; box-shadow: none; pointer-events: none; }
+.runified .float-nav-btn { display: grid; width: 55.88px; height: 55.2px; place-items: center; padding: 0; border: 0; border-radius: 3px; color: #fff; pointer-events: auto; }
+.runified #float-prev-btn:not(:disabled) { background: #535353; }
+.runified #float-next-btn:not(:disabled) { background: #000; }
+.runified .float-nav-btn:disabled { background: #ddd; color: #fff; cursor: not-allowed; }
+.runified #floating-passage-nav { display: none !important; }
+.runified body[data-suite-mode="true"] #floating-passage-nav { display: flex !important; }
+.runified body[data-suite-mode="true"] #right { padding-bottom: 220px; }
+.runified #selbar { position: fixed; z-index: 3600; max-width: calc(100vw - 16px); display: none; gap: 0; overflow: visible; padding: 0; border: 1px solid #737373; border-radius: 4px; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
+.runified #selbar::before { position: absolute; top: -5px; right: 0; left: 0; width: 7px; height: 7px; margin: 0 auto; border-right: 1px solid #737373; border-bottom: 1px solid #737373; background: #fff; content: ""; transform: rotate(-135deg); transform-origin: 4px 4px; pointer-events: none; }
+.runified #selbar.is-above::before { top: auto; bottom: -5px; transform: rotate(45deg); transform-origin: 4px 4px; }
+.runified #selbar button { display: flex; height: 53px; min-width: 58px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 10px 12px 7px; border: 0; border-radius: 0; background: transparent; color: #737373; font-size: 12px; line-height: 12px; text-align: center; white-space: nowrap; }
+.runified #selbar button:hover { background: var(--control-hover); }
+.runified .hl { background-color: rgb(125, 74, 90); color: #fff; }
+.runified .hl[data-hl-type="note"] { background-color: rgb(32, 76, 207); color: #fff; cursor: pointer; }
+.runified .hl[data-hl-level="secondary"] { background-color: rgb(255, 112, 255); color: #1c1c1c; }
+.runified #results { display: none; margin-top: 18px; padding: 18px 20px 20px; border: 1px solid #6d6d6d; border-radius: 0; background: #fff; box-shadow: none; }
+.runified .results-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: calc(0.95 * var(--runified-rem)); }
+.runified .results-table th, .runified .results-table td { border: 1px solid var(--line); padding: 8px 10px; text-align: center; }
+.runified .results-table th { background: #f2f2f2; font-weight: 700; }
+.runified .result-correct { color: var(--correct); font-weight: 700; }
+.runified .result-incorrect { color: var(--incorrect); font-weight: 700; }
+.runified .overlay { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.12); z-index: 800; }
+.runified #notes-panel { display: none; }
+.runified.dark-mode { --ink: #f2f2f2; --muted-ink: #b8b8b8; --line: #4a4a4a; --soft-line: #4a4a4a; --intro-bg: #1c2128; --panel: #14181d; --panel-alt: #14181d; --text: #f2f2f2; --muted: #b8b8b8; --control-bg: #1c2128; --control-hover: #262c34; --correct-bg: rgba(35, 122, 59, 0.22); --incorrect-bg: rgba(179, 38, 30, 0.22); --partial-bg: rgba(138, 90, 0, 0.26); background: #0d1014; color: var(--ink); }
+.runified.dark-mode .header, .runified.dark-mode .shell, .runified.dark-mode .pane, .runified.dark-mode #right, .runified.dark-mode .practice-nav, .runified.dark-mode #settings-panel, .runified.dark-mode .options-header { background: #14181d; color: var(--ink); }
+.runified.dark-mode .header { border-bottom-color: #333b44; }
+.runified.dark-mode .practice-nav { border-top-color: #333b44; }
+.runified.dark-mode .sub-header-bar { background: var(--intro-bg); border-color: #333b44; }
+.runified.dark-mode #timer, .runified.dark-mode .candidate-id, .runified.dark-mode .header-icon, .runified.dark-mode .part-nav-name, .runified.dark-mode .q-item { color: #e9e9e9; }
+.runified.dark-mode .header-btn:hover, .runified.dark-mode .q-item:hover { background: #262c34; }
+.runified.dark-mode .q-item.active { background: #14181d; }
+.runified.dark-mode .q-item.answered::after { background: #d0d0d0; }
+.runified.dark-mode #submit-btn { background: #2b323a; color: #e9e9e9; }
+.runified.dark-mode #submit-btn:hover:not(:disabled) { background: #3a4855; }
+.runified.dark-mode #reset-btn, .runified.dark-mode #exit-btn, .runified.dark-mode .settings-option, .runified.dark-mode #options-tools .reading-display-toggle, .runified.dark-mode #options-tools #notes-drawer-btn { background: #1c2128; border-color: #55606b; color: #e9e9e9; }
+.runified.dark-mode .settings-option.active, .runified.dark-mode #options-tools .reading-display-toggle[aria-pressed="true"] { background: #1e3346; border-color: #418fc6; }
+.runified.dark-mode .drag-item, .runified.dark-mode .draggable-word, .runified.dark-mode #right input[type="text"], .runified.dark-mode input.blank { background: #1c2128; border-color: #6a6a6a; color: #f2f2f2; }
+.runified.dark-mode .paragraph-dropzone, .runified.dark-mode .match-dropzone { background: #1c2128; border-color: #6a6a6a; }
+.runified.dark-mode .table-section thead th, .runified.dark-mode .results-table th { background: #262c34; }
+.runified.dark-mode #selbar, .runified.dark-mode #results { background: #14181d; border-color: #55606b; color: var(--ink); }
+.runified.dark-mode #selbar::before { background: #14181d; border-color: #55606b; }
+.runified.dark-mode #selbar button { color: #d4d4d4; }
+@media (max-width: 1180px) {
+  .runified .header-left { gap: 20px; }
+  .runified .header-status, .runified .header-btn { flex-basis: 47px; width: 47px; }
+  .runified .header-icon { margin: 0 12px; }
+  .runified .part-nav-section { padding-left: 10px; }
+  .runified #submit-btn { flex-basis: 64px; width: 64px; }
+}
+@media (max-width: 980px) {
+  .runified { grid-template-rows: var(--header-height) auto minmax(0, 1fr) auto; overflow: auto; }
+  .runified .shell { display: block; overflow: visible; padding-bottom: 0; }
+  .runified #left, .runified #right { width: 100%; min-width: 0; overflow: visible; }
+  .runified #divider { display: none; }
+  .runified .practice-nav { position: sticky; bottom: 0; height: auto; min-height: var(--footer-height); flex-wrap: nowrap; overflow: hidden; }
+  .runified .part-nav-section { padding: 0 8px; }
+  .runified .part-nav-section:not(.active) { flex: 0 0 clamp(42px, 11vw, 56px); }
+  .runified .part-nav-section.active { flex: 1 1 auto; gap: 10px; }
+  .runified .part-nav-section.active .part-nav-questions { overflow-x: auto; scrollbar-width: none; }
+  .runified .part-nav-section.active .part-nav-questions::-webkit-scrollbar { display: none; }
+  .runified .floating-nav-box { position: fixed; right: 16px; bottom: calc(var(--footer-height) + 16px); }
+}
+@media (max-width: 480px) {
+  .runified #connection-indicator { display: none; }
+}
+@media (max-width: 400px) {
+  .runified #messages-indicator { display: none; }
+}
+@media (max-width: 360px) {
+  .runified .ielts-brand { display: none; }
+}
+@media (max-width: 520px) {
+  .runified .header { padding-left: 10px; }
+  .runified .header-left { flex: 1 1 auto; gap: 8px; overflow: hidden; }
+  .runified .header-right { flex: 0 0 auto; }
+  .runified .header-btn { flex-basis: 44px; width: 44px; }
+  .runified .header-icon { margin-inline: 10px; }
+  .runified .ielts-brand { flex: 0 0 auto; font-size: 17px; }
+  .runified .candidate-details { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .runified #timer { overflow: hidden; text-overflow: ellipsis; }
+  .runified #notes-drawer-btn.header-btn .reading-note-count { top: 10px; right: 6px; }
+  .runified .part-nav-status { display: none; }
+  .runified .float-nav-btn { width: 44px; height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .runified, .runified * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+.runified .results-header-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.runified .results-header-bar h4 { margin: 0; }
+.runified .results-score-text { margin: 4px 0 0 0; color: var(--muted, #64748b); font-size: calc(0.95 * var(--runified-rem)); }
+
+/* ===== 2. runtime-injected styles (opensource reading-page.bundle.js) ===== */
+.runified .reading-explanation-card { margin: 10px 0 14px; padding: 10px 12px; border: 1px solid rgba(37, 99, 235, 0.22); border-left: 4px solid rgba(37, 99, 235, 0.9); border-radius: 8px; background: rgba(239, 246, 255, 0.75); }
+.runified .reading-explanation-card__label { font-size: 12px; line-height: 1.3; margin-bottom: 6px; font-weight: 700; color: #1d4ed8; }
+.runified .reading-explanation-card__text { font-size: 14px; line-height: 1.6; color: #1f2937; white-space: pre-wrap; }
+.runified .reading-group-explanation { margin-top: 10px; }
+.runified .reading-question-explanation { margin-top: 8px; }
+.runified .reading-question-explanation-list { margin-top: 10px; padding: 10px 12px; border: 1px dashed rgba(59, 130, 246, 0.45); border-radius: 8px; background: rgba(239, 246, 255, 0.45); }
+.runified .reading-question-explanation-list h5 { margin: 0 0 8px; font-size: 13px; color: #1e3a8a; }
+.runified .reading-question-explanation-list .reading-question-explanation-item + .reading-question-explanation-item { margin-top: 8px; }
+.runified .reading-answer-key-card { margin: 8px 0 10px; padding: 9px 11px; border: 1px solid rgba(22, 163, 74, 0.24); border-left: 4px solid rgba(22, 163, 74, 0.9); border-radius: 8px; background: rgba(240, 253, 244, 0.82); }
+.runified .reading-answer-key-card__label { font-size: 12px; line-height: 1.35; margin-bottom: 4px; font-weight: 700; color: #166534; }
+.runified .reading-answer-key-card__value { font-size: 14px; line-height: 1.55; color: #14532d; white-space: pre-wrap; }
+.runified .reading-locator-highlight { border-radius: 3px; background: rgba(250, 204, 21, 0.42); box-shadow: 0 0 0 1px rgba(202, 138, 4, 0.18); cursor: pointer; }
+.runified .reading-locator-highlight:hover { background: rgba(250, 204, 21, 0.62); }
+.runified .reading-locator-overlap { cursor:pointer; text-decoration:underline #dc2626 2px; text-underline-offset:3px; }
+.runified .reading-locator-highlight.is-review-jump-target, .runified .reading-locator-overlap.is-review-jump-target { outline:2px solid rgba(37,99,235,.45); outline-offset:2px; }
+.runified .reading-locator-block { display:inline-block;width:1px;height:1em;overflow:hidden;opacity:0;pointer-events:none;vertical-align:baseline; }
+.runified .reading-passage-locator-target.is-review-jump-target { border-radius:4px;outline:2px solid rgba(37,99,235,.38);background:rgba(96,165,250,.12); }
+.runified .results-table .question-jump-btn { border:0;padding:0;background:transparent;color:#2563eb;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px; }
+.runified .hl[data-note-id] { position:relative;cursor:pointer;background:rgb(32,76,207)!important;color:#fff!important }
+.runified .hl[data-note-id].reading-note-flash { outline:2px solid #60a5fa;outline-offset:2px }
+.runified .reading-notes-btn { position:relative }
+.runified .reading-note-count { position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#16a34a;color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700;display:none }
+.runified #reading-note-drawer { position:fixed;inset:0 0 0 auto;width:min(360px,92vw);background:#fff;border-left:1px solid #dbe4ef;box-shadow:-18px 0 36px rgba(15,23,42,.16);z-index:3600;transform:translateX(105%);transition:transform 180ms ease;display:flex;flex-direction:column }
+.runified #reading-note-drawer.open { transform:translateX(0) }
+.runified .reading-note-drawer-head, .runified .reading-note-editor-head { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #e2e8f0 }
+.runified .reading-note-drawer-title { display:flex;align-items:center;gap:8px }
+.runified .reading-note-drawer-head h3, .runified .reading-note-editor-head h3 { margin:0;font-size:16px }
+.runified .reading-note-list { padding:10px;overflow:auto;flex:1 }
+.runified .reading-note-outline { border:1px solid #dbeafe;border-radius:8px;margin-bottom:10px;overflow:hidden;background:#f8fbff }
+.runified .reading-note-outline-head { display:grid;grid-template-columns:30px 1fr 30px;align-items:center;padding:5px;background:#eff6ff }
+.runified .reading-note-outline.collapsed .reading-note-outline-body { display:none }
+.runified .reading-note-outline-body, .runified .reading-note-loose-list { min-height:26px;padding:4px 8px }
+.runified .reading-note-row { display:grid;grid-template-columns:1fr 28px 30px;align-items:center;gap:4px;border-bottom:1px solid #edf2f7 }
+.runified .reading-note-row.dragging { opacity:.45 }
+.runified .reading-note-row.drag-over { box-shadow:inset 0 2px #2563eb }
+.runified .reading-note-open, .runified .reading-note-outline-title { border:0;background:transparent;color:#0f172a;text-align:left;padding:9px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer }
+.runified .reading-note-open:hover { background:#eff6ff;color:#1d4ed8 }
+.runified .reading-note-close, .runified .reading-note-delete, .runified .reading-note-outline-toggle, .runified .reading-note-outline-delete, .runified .reading-note-drag-handle, .runified .reading-note-outline-add { border:0;background:transparent;color:#64748b;cursor:pointer;width:30px;height:30px;border-radius:6px }
+.runified .reading-note-outline-add { background:#eff6ff;color:#1d4ed8;font-size:18px }
+.runified .reading-note-outline-title-input { min-width:0;border:1px solid #93c5fd;border-radius:5px;padding:6px }
+.runified #reading-note-editor { position:fixed;z-index:3700;width:min(620px,calc(100vw - 24px));height:min(520px,calc(100vh - 24px));min-width:320px;min-height:320px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 22px 50px rgba(15,23,42,.22);display:none;flex-direction:column;overflow:hidden;resize:both }
+.runified .reading-note-editor-head { cursor:move;background:#f8fafc;user-select:none }
+.runified .reading-note-editor-body { display:flex;flex-direction:column;gap:10px;padding:14px;flex:1;min-height:0 }
+.runified .reading-note-quote { margin:0;color:#475569;background:#eff6ff;border-left:3px solid #60a5fa;padding:8px 10px;max-height:74px;overflow:auto }
+.runified .reading-note-body { width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;box-sizing:border-box;min-height:190px;resize:vertical;flex:1 }
+.runified.dark-mode #reading-note-drawer, .runified.dark-mode #reading-note-editor { background:#1e293b;border-color:#475569;color:#e2e8f0 }
+.runified.dark-mode .reading-note-open, .runified.dark-mode .reading-note-outline-title { color:#f8fafc }
+@media(max-width:520px) {
+  .runified #reading-note-editor { inset:12px!important;width:calc(100vw - 24px);height:calc(100vh - 24px);min-width:0;min-height:0;resize:none }
+}
+.runified .reading-display-toggle-group { display:inline-flex;align-items:center;gap:4px;padding:2px;border:1px solid #dbe4ef;border-radius:8px;background:#f8fafc }
+.runified .reading-display-toggle { border:0;border-radius:6px;min-width:30px;height:28px;padding:0 8px;cursor:pointer;color:#64748b;background:transparent;font-size:12px;font-weight:700 }
+.runified .reading-display-toggle:hover { background:#eef2f7;color:#0f172a }
+.runified .reading-display-toggle.is-on { background:#dbeafe;color:#1d4ed8 }
+.runified.hide-reading-locators .reading-locator-highlight { background:transparent!important;box-shadow:none!important;outline:none!important }
+.runified.hide-reading-locators .reading-locator-overlap { text-decoration:none!important;outline:none!important }
+.runified.hide-reading-locators .reading-passage-locator-target.is-review-jump-target { background:transparent!important;outline:none!important }
+.runified.hide-reading-notes .hl[data-hl-type="note"], .runified.hide-reading-notes .hl[data-note-id] { background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important;pointer-events:none }
+.runified.hide-reading-highlights .hl:not([data-hl-type="note"]):not([data-note-id]) { background:transparent!important;color:inherit!important;box-shadow:none!important;outline:none!important }
+.runified.reading-question-nav-collapsed .practice-nav { display:none }
+.runified.dark-mode .reading-display-toggle-group { background:#1e293b;border-color:#475569;color:#cbd5e1 }
+.runified .drag-item.option-consumed, .runified .draggable-word.option-consumed, .runified .card.option-consumed { opacity: 0.45 !important; cursor: not-allowed !important; background: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #94a3b8 !important; pointer-events: none !important; }
+
+/* ---- SPA visibility overrides (appended by build_unified_skin.mjs) ----
+   The standalone page unhides #selbar and the note badge by setting inline
+   display from the bundle; the Vue page drives visibility through reactive
+   class/conditional rendering, so the stylesheet defaults need class-based
+   escapes that land after the rules they beat. */
+.runified #selbar.is-open { display: flex; }
+.runified .reading-note-count { display: block; }
+

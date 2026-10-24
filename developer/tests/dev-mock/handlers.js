@@ -177,7 +177,33 @@ function recordReadingSubmission(state, cmd) {
       annotations: [],
     },
   }
-  return { attemptId, sessionId: item.sessionId, assetId: cmd.assetId, scoreValue: ratio, scoreDisplay: item.scoreDisplay, correctCount, questionCount, percentage: ratio * 100, durationMs: item.durationMs, submittedAt, status: 'completed' }
+  // Mirror the Tauri ReadingSubmitResult contract (attempt + score + comparisons)
+  // so view-model mapping in useReadingAttempt behaves like production.
+  return {
+    attempt: {
+      id: attemptId,
+      activity: 'reading',
+      assetId: cmd.assetId,
+      status: 'completed',
+      correctCount,
+      questionCount,
+      scoreValue: ratio,
+      durationMs: item.durationMs,
+      submittedAt,
+      titleSnapshot: item.title,
+    },
+    score: { correct: correctCount, total: questionCount, accuracy: ratio, percentage: ratio * 100 },
+    comparisons: answers.map((row) => ({
+      questionId: row.questionId,
+      userAnswer: row.answer,
+      correctAnswer: key[row.questionId] ?? null,
+      isCorrect: row.isCorrect,
+      weight: row.weight,
+      questionKind: row.questionKind,
+    })),
+    idempotentReplay: false,
+    analysisSignals: null,
+  }
 }
 
 // ------------------------------------------------------------ writing ----
@@ -246,6 +272,8 @@ export function createHandlers(state, host) {
       const pick = pool[Math.floor(Math.random() * pool.length)] || state.reading.assets[0]
       return { assetId: pick.id }
     },
+    // Bundled explanation payloads for the three fixture exams; null elsewhere.
+    reading_get_asset_explanation: ({ assetId }) => state.reading.explanations[assetId] || null,
     reading_get_pdf_data_url: () => null,
     reading_export_archive: () => ({ schemaVersion: 1, activity: 'reading', exportedAt: new Date().toISOString(), count: 0, submissions: [] }),
     reading_import_archive: () => ({ committed: true, imported: 0, failed: 0 }),

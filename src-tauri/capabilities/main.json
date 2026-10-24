@@ -97,6 +97,7 @@
     "allow-memory-record-feedback",
     "allow-pick-backup-import-path",
     "allow-reading-export-archive",
+    "allow-reading-get-asset-explanation",
     "allow-reading-get-asset-payload",
     "allow-reading-get-open-draft",
     "allow-reading-get-pdf-data-url",

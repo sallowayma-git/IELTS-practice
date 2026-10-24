@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import os
 import re
+
+# CI hosts are Windows (npm.cmd); local dev on POSIX uses npm directly.
+NPM = "npm.cmd" if os.name == "nt" else "npm"
 import subprocess
 import sys
 import time
@@ -181,7 +184,7 @@ def main() -> int:
             "Current document drift",
             [sys.executable, "developer/tests/ci/check_doc_drift.py"],
         ),
-        run_command("Vue typecheck", ["npm.cmd", "--prefix", "apps/writing-vue", "run", "typecheck"]),
+        run_command("Vue typecheck", [NPM, "--prefix", "apps/writing-vue", "run", "typecheck"]),
         run_command(
             "Reading payload contract",
             ["node", "developer/tests/js/readingAssetPayloadShape.test.mjs"],
@@ -239,7 +242,7 @@ def main() -> int:
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
-        run_command("Vue production build", ["npm.cmd", "--prefix", "apps/writing-vue", "run", "build"]),
+        run_command("Vue production build", [NPM, "--prefix", "apps/writing-vue", "run", "build"]),
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),
         run_command(
             "Rust cognitive runtime contract",

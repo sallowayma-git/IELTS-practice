@@ -3,7 +3,7 @@
 use ielts_domain::domain::Activity;
 use ielts_domain::dto::CommandResponse;
 use ielts_domain::ErrorEnvelope;
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::app::state::AppDb;
 use ielts_db::{
@@ -147,4 +147,123 @@ pub fn reading_submit_attempt(
         Ok(r) => CommandResponse::success(r),
         Err(e) => CommandResponse::failure(map_err(e)),
     }
+}
+
+fn explanation_error(code: &str, message: String) -> ErrorEnvelope {
+    ErrorEnvelope {
+        code: code.into(),
+        message,
+        retryable: false,
+        context: None,
+        cause_id: None,
+    }
+}
+
+/// Explanations are static bundled JSON (schema ReadingExplanationV1). They carry
+/// no practice state, so they are read straight from the packed resources and
+/// verified against the pack manifest's sha256 on every read — no SQLite seeding.
+#[tauri::command]
+pub fn reading_get_asset_explanation(
+    app: tauri::AppHandle,
+    asset_id: String,
+) -> CommandResponse<serde_json::Value> {
+    // Asset ids look like "p1-high-01"; anything else never matches a payload
+    // file and must not be allowed to traverse paths.
+    if asset_id.is_empty()
+        || !asset_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return CommandResponse::failure(explanation_error(
+            "reading.explanation_invalid_id",
+            format!("invalid reading asset id: {asset_id}"),
+        ));
+    }
+    let pack_dir = match app.path().resource_dir() {
+        Ok(dir) => dir.join("reading-explanations"),
+        Err(error) => {
+            return CommandResponse::failure(explanation_error(
+                "reading.explanation_pack_unavailable",
+                format!("reading explanation pack unavailable: {error}"),
+            ))
+        }
+    };
+    let command = load_bundled_explanation(&pack_dir, &asset_id);
+    match command {
+        Ok(value) => CommandResponse::success(value),
+        Err(error) => CommandResponse::failure(error),
+    }
+}
+
+fn load_bundled_explanation(
+    pack_dir: &std::path::Path,
+    asset_id: &str,
+) -> Result<serde_json::Value, ErrorEnvelope> {
+    use sha2::{Digest, Sha256};
+
+    let manifest_path = pack_dir.join("manifest.json");
+    let manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path).map_err(|error| {
+            explanation_error(
+                "reading.explanation_pack_unavailable",
+                format!("reading explanation manifest unreadable: {error}"),
+            )
+        })?,
+    )
+    .map_err(|error| {
+        explanation_error(
+            "reading.explanation_pack_invalid",
+            format!("reading explanation manifest invalid: {error}"),
+        )
+    })?;
+
+    let entries = manifest
+        .get("entries")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            explanation_error(
+                "reading.explanation_pack_invalid",
+                "reading explanation manifest has no entries".into(),
+            )
+        })?;
+    let entry = entries
+        .iter()
+        .find(|entry| entry.get("examId").and_then(|v| v.as_str()) == Some(asset_id))
+        .ok_or_else(|| {
+            explanation_error(
+                "reading.explanation_not_found",
+                format!("no bundled explanation for asset {asset_id}"),
+            )
+        })?;
+
+    let file = entry
+        .get("file")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default();
+    if file.contains("..") {
+        return Err(explanation_error(
+            "reading.explanation_pack_invalid",
+            format!("reading explanation entry has unsafe path: {file}"),
+        ));
+    }
+    let raw = std::fs::read(pack_dir.join(file)).map_err(|error| {
+        explanation_error(
+            "reading.explanation_not_found",
+            format!("reading explanation payload unreadable: {error}"),
+        )
+    })?;
+    let expected = entry.get("sha256").and_then(|value| value.as_str()).unwrap_or_default();
+    let actual = hex::encode(Sha256::digest(&raw));
+    if !expected.is_empty() && actual != expected {
+        return Err(explanation_error(
+            "reading.explanation_checksum_mismatch",
+            format!("reading explanation payload checksum mismatch for {asset_id}"),
+        ));
+    }
+    serde_json::from_slice(&raw).map_err(|error| {
+        explanation_error(
+            "reading.explanation_pack_invalid",
+            format!("reading explanation payload invalid: {error}"),
+        )
+    })
 }

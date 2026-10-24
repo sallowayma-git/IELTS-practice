@@ -64,6 +64,14 @@ const router = createRouter({
             props: true
         },
         {
+            // Isolated unified reading page: mirrors the opensource
+            // reading-practice-unified.html visual, reusing the same data layer.
+            path: '/reading-unified/:assetId',
+            name: 'ReadingUnified',
+            component: () => import('./views/ReadingUnifiedPage.vue'),
+            props: true
+        },
+        {
             path: '/reading-suite/:sessionId',
             name: 'PracticeReadingSuite',
             component: () => import('./views/PracticeReadingSuitePage.vue'),

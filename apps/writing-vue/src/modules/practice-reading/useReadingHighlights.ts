@@ -725,6 +725,13 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
       return
     }
     if (!keepSelectionToolbar.value) {
+      // A drag-selection ends with a click on the selected element; that click
+      // races the selectionchange timeout that opens the toolbar. While a
+      // non-collapsed selection exists the toolbar must stay up.
+      const selection = window.getSelection?.()
+      if (selection && selection.rangeCount && !selection.isCollapsed) {
+        return
+      }
       selectionToolbarVisible.value = false
     }
     closeDictionaryBubble()

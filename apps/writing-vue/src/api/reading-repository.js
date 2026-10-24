@@ -41,6 +41,21 @@ export async function pickReadingPracticeAsset(category = null) {
   return unwrapCommandResponse(response, 'reading_pick_practice_asset')
 }
 
+/**
+ * Bundled explanation payload (ReadingExplanationV1) for one asset. Static data:
+ * fetched lazily by review views, returns null when the asset has no explanation.
+ */
+export async function getReadingAssetExplanation(assetId) {
+  const normalizedAssetId = String(assetId || '').trim()
+  if (!normalizedAssetId) {
+    throw new Error('reading_get_asset_explanation: assetId is required')
+  }
+  const response = await invokeCommand('reading_get_asset_explanation', {
+    assetId: normalizedAssetId
+  })
+  return unwrapCommandResponse(response, 'reading_get_asset_explanation')
+}
+
 export async function getReadingPdfDataUrl(assetId) {
   const normalizedAssetId = String(assetId || '').trim()
   if (!normalizedAssetId) {
@@ -133,6 +148,7 @@ export const readingRepository = {
   listReadingAssets,
   pickReadingPracticeAsset,
   getReadingAssetPayload,
+  getReadingAssetExplanation,
   getReadingPdfDataUrl,
   normalizeReadingAssetEnvelope,
   saveReadingDraft,
