@@ -74,7 +74,7 @@
             type="button"
             class="reading-display-toggle"
             :class="{ 'is-on': !questionNavCollapsed }"
-            aria-pressed="true"
+            :aria-pressed="(!questionNavCollapsed).toString()"
             @click="$emit('toggle-question-nav')"
           >Q</button>
         </div>

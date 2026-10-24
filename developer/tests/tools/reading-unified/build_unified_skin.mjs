@@ -146,12 +146,14 @@ const remOverrides = `
 // and runtime rules above (same specificity, later position).
 const spaOverrides = `
 /* ---- SPA visibility overrides (appended by build_unified_skin.mjs) ----
-   The standalone page unhides #selbar and the note badge by setting inline
-   display from the bundle; the Vue page drives visibility through reactive
-   class/conditional rendering, so the stylesheet defaults need class-based
-   escapes that land after the rules they beat. */
+   The standalone page unhides #selbar, the note badge and #results by setting
+   inline display from the bundle; the Vue page drives visibility through
+   reactive class/conditional rendering (#results is v-if'd to review mode),
+   so the stylesheet defaults need class-based escapes that land after the
+   rules they beat. */
 .runified #selbar.is-open { display: flex; }
 .runified .reading-note-count { display: block; }
+.runified #results { display: block; }
 `
 
 const banner = `/* GENERATED FILE — do not edit by hand.

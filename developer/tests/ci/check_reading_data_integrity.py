@@ -4,6 +4,8 @@
 Checks:
 1) Duplicate entries by (type=reading, category, normalized title)
 2) PDF source path consistency for entries that define pdfFilename
+3) Every generated exam file must appear in the shipped resource-pack manifest
+4) meta.frequencyMonth, when present, must match YYYY-MM (month 01-12)
 """
 
 from __future__ import annotations
@@ -15,8 +17,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 READING_DIR = ROOT / "assets" / "generated" / "reading-exams"
+PACK_MANIFEST_PATH = ROOT / "assets" / "resource-pack" / "reading" / "manifest.json"
 REPORT_PATH = ROOT / "developer" / "tests" / "e2e" / "reports" / "reading-data-integrity-report.json"
 ALLOWLIST_PATH = ROOT / "developer" / "tests" / "ci" / "reading-duplicate-allowlist.json"
+FREQUENCY_MONTH_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def load_pack_exam_ids():
+    """Return (examIds in the shipped pack manifest or None on error, error message or None)."""
+    if not PACK_MANIFEST_PATH.exists():
+        return None, f"pack manifest missing: {PACK_MANIFEST_PATH.relative_to(ROOT)}"
+    try:
+        payload = json.loads(PACK_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001 - any decode/parse failure is fatal
+        return None, f"pack manifest unreadable: {exc}"
+    entries = payload.get("entries") if isinstance(payload, dict) else None
+    exam_ids = set()
+    for entry in entries or []:
+        exam_id = str(entry.get("examId") or "").strip()
+        if exam_id:
+            exam_ids.add(exam_id)
+    return exam_ids, None
 
 
 def norm_text(value: str) -> str:
@@ -55,6 +76,10 @@ def main() -> int:
     malformed_pdf_ref = []
     parse_failures = []
     paragraph_match_text_inputs = []
+    missing_pack_entries = []
+    invalid_frequency_month = []
+
+    pack_exam_ids, pack_manifest_error = load_pack_exam_ids()
 
     seen = {}
     for path in files:
@@ -63,6 +88,9 @@ def main() -> int:
         title = extract_field(r'"title":\s*"([^"]+)"', content)
         category = extract_field(r'"category":\s*"([^"]+)"', content)
         pdf_filename = extract_field(r'"pdfFilename":\s*"([^"]*)"', content)
+
+        if exam_id and pack_exam_ids is not None and exam_id not in pack_exam_ids:
+            missing_pack_entries.append(exam_id)
 
         key = f"{norm_text(category)}::{norm_text(title)}"
         if key in seen:
@@ -86,6 +114,13 @@ def main() -> int:
                 missing_pdf_ref.append(exam_id or path.stem)
             elif not pdf_ref.endswith(".pdf"):
                 malformed_pdf_ref.append({"examId": exam_id or path.stem, "pdf": pdf_ref})
+
+        meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+        frequency_month = str(meta.get("frequencyMonth") or "").strip()
+        if frequency_month and not FREQUENCY_MONTH_PATTERN.match(frequency_month):
+            invalid_frequency_month.append(
+                {"examId": exam_id or path.stem, "frequencyMonth": frequency_month}
+            )
 
         for group in payload.get("questionGroups") or []:
             body_html = str(group.get("bodyHtml") or "")
@@ -127,6 +162,9 @@ def main() -> int:
         "malformedPdfRef": malformed_pdf_ref,
         "parseFailures": parse_failures,
         "paragraphMatchTextInputs": paragraph_match_text_inputs,
+        "packManifestError": pack_manifest_error,
+        "missingPackEntries": missing_pack_entries,
+        "invalidFrequencyMonth": invalid_frequency_month,
     }
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -137,6 +175,9 @@ def main() -> int:
         or duplicate_blocking
         or parse_failures
         or paragraph_match_text_inputs
+        or pack_manifest_error
+        or missing_pack_entries
+        or invalid_frequency_month
     )
     if fatal_issue:
         print("[reading-data-integrity] fatal issues found")

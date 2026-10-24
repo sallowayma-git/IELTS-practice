@@ -102,7 +102,10 @@ pub fn seed_builtin_reading_pack(
     let tx = conn.unchecked_transaction()?;
     for entry in &manifest.entries {
         let relative = Path::new(&entry.file);
-        if relative.is_absolute() || entry.file.contains("..") {
+        // Manifest paths are always forward-slash relative. A rooted path like
+        // "\Windows\x" has no drive prefix, so is_absolute() is false on
+        // Windows and join would discard the pack dir: reject any backslash.
+        if relative.is_absolute() || entry.file.contains("..") || entry.file.contains('\\') {
             return Err(DbError::Validation(format!(
                 "invalid reading resource path: {}",
                 entry.file
@@ -695,6 +698,47 @@ mod resource_pack_tests {
                 .unwrap()
                 .payload["answerKey"]["q1"],
             "A"
+        );
+    }
+
+    #[test]
+    fn seed_rejects_backslash_paths_that_escape_the_pack_dir() {
+        // "\Windows\x" has a root but no drive prefix, so is_absolute() is
+        // false on Windows and join would discard the pack dir entirely.
+        let temp = tempfile::tempdir().unwrap();
+        let pack = temp.path().join("reading");
+        fs::create_dir_all(&pack).unwrap();
+        let manifest = json!({
+            "schemaVersion": 1,
+            "packId": "test-pack",
+            "assetCount": 1,
+            "entries": [{
+                "examId": "evil-1",
+                "file": "\\Windows\\evil.json",
+                "title": "Escape",
+                "category": null,
+                "difficulty": null,
+                "frequency": null,
+                "sha256": "0".repeat(64)
+            }]
+        });
+        fs::write(
+            pack.join("manifest.json"),
+            serde_json::to_string_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        let mut conn =
+            open_connection(&DbOpenOptions::create(temp.path().join("test.db"))).unwrap();
+        migrate(&mut conn).unwrap();
+        let err = seed_builtin_reading_pack(&conn, &pack).unwrap_err();
+        assert!(
+            matches!(&err, DbError::Validation(msg) if msg.contains("invalid reading resource path")),
+            "{err}"
+        );
+        assert_eq!(
+            list_assets(&conn, Some(Activity::Reading)).unwrap().len(),
+            0
         );
     }
 

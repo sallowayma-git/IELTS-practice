@@ -42,22 +42,9 @@ export async function pickReadingPracticeAsset(category = null) {
 }
 
 /**
- * Bundled explanation payload (ReadingExplanationV1) for one asset. Static data:
- * fetched lazily by review views. Throws `reading.explanation_not_found` when the
- * asset has no bundled explanation — callers must catch (dev-mock returns null
- * instead, so treat both outcomes as "no explanations").
+ * Bundled explanations ride inside the exam payload itself
+ * (`payload.reviewExplanations`) — there is no separate explanation IPC.
  */
-export async function getReadingAssetExplanation(assetId) {
-  const normalizedAssetId = String(assetId || '').trim()
-  if (!normalizedAssetId) {
-    throw new Error('reading_get_asset_explanation: assetId is required')
-  }
-  const response = await invokeCommand('reading_get_asset_explanation', {
-    assetId: normalizedAssetId
-  })
-  return unwrapCommandResponse(response, 'reading_get_asset_explanation')
-}
-
 export async function getReadingPdfDataUrl(assetId) {
   const normalizedAssetId = String(assetId || '').trim()
   if (!normalizedAssetId) {
@@ -150,7 +137,6 @@ export const readingRepository = {
   listReadingAssets,
   pickReadingPracticeAsset,
   getReadingAssetPayload,
-  getReadingAssetExplanation,
   getReadingPdfDataUrl,
   normalizeReadingAssetEnvelope,
   saveReadingDraft,

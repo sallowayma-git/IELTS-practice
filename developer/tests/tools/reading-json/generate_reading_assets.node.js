@@ -19,6 +19,7 @@ const DEFAULT_PATH_ROOT = {
 };
 const SOURCE_DIR = path.join(REPO_ROOT, 'developer', 'reading-exams');
 const GENERATED_DIR = path.join(REPO_ROOT, 'assets', 'generated', 'reading-exams');
+const MAINTAINED_ENTRY_FILE = path.join(GENERATED_DIR, 'reading-practice-unified.html');
 const CROSSWALK_FILE = path.join(REPO_ROOT, 'developer', 'tests', 'fixtures', 'reading-crosswalk.json');
 const CROSSWALK_OVERRIDES_FILE = path.join(REPO_ROOT, 'developer', 'tests', 'fixtures', 'reading-crosswalk-overrides.json');
 const PILOT_FILE = path.join(REPO_ROOT, 'developer', 'tests', 'fixtures', 'reading-pilot-selection.json');
@@ -72,6 +73,29 @@ function tryReadJson(filePath) {
         return null;
     }
     return readJson(filePath);
+}
+
+function stripGeneratedAt(text) {
+    const parsed = JSON.parse(text);
+    delete parsed.generatedAt;
+    return JSON.stringify(parsed);
+}
+
+function writeStableJson(filePath, value) {
+    // tracked 报告文件包含 generatedAt 时间戳：忽略该字段比较后内容一致则跳过写入，
+    // 避免 reading-migration-report.json / reading-crosswalk-review.json 每次运行都被打脏。
+    const nextText = `${JSON.stringify(value, null, 2)}\n`;
+    if (fs.existsSync(filePath)) {
+        try {
+            const existingText = readFile(filePath);
+            if (existingText === nextText || stripGeneratedAt(existingText) === stripGeneratedAt(nextText)) {
+                return;
+            }
+        } catch (error) {
+            // 现有文件不可读或非法 JSON 时直接覆盖。
+        }
+    }
+    writeJson(filePath, value);
 }
 
 function loadExistingSourceRecords() {
@@ -1240,18 +1264,24 @@ function buildSourceRecord(examEntry, pilotRow) {
     );
     const normalizedLeftHtml = rewriteQuestionReferences(leftHtml, renumberMap);
 
+    const meta = {
+        title: examEntry.title,
+        category: examEntry.category,
+        frequency: examEntry.frequency,
+        pdfFilename: examEntry.pdfFilename || '',
+        legacyPath: examEntry.path,
+        legacyFilename: examEntry.filename,
+        questionIntroHtml: introHtml || ''
+    };
+    // frequencyMonth 由人工维护在 manifest.js（既是输入也是输出），重建时原样透传，防止再生丢失。
+    if (examEntry.frequencyMonth) {
+        meta.frequencyMonth = examEntry.frequencyMonth;
+    }
+
     return {
         schemaVersion: 'ReadingExamSourceV1',
         examId: examEntry.id,
-        meta: {
-            title: examEntry.title,
-            category: examEntry.category,
-            frequency: examEntry.frequency,
-            pdfFilename: examEntry.pdfFilename || '',
-            legacyPath: examEntry.path,
-            legacyFilename: examEntry.filename,
-            questionIntroHtml: introHtml || ''
-        },
+        meta,
         passage: {
             blocks: [
                 {
@@ -1284,7 +1314,7 @@ function buildManifest(readingIndex, sourceRecords) {
             continue;
         }
         const record = sourceById.get(examId);
-        manifest[examId] = {
+        const manifestEntry = {
             examId,
             dataKey: record ? examId : (entry.dataKey ?? null),
             script: record ? `./${examId}.js` : (entry.script ?? null),
@@ -1299,12 +1329,17 @@ function buildManifest(readingIndex, sourceRecords) {
             pdfFilename: entry.pdfFilename || '',
             sourceKind: entry.sourceKind || (record || entry.script ? 'generated-reading' : 'pdf-only')
         };
+        // frequencyMonth 透传：manifest.js 是输入也是输出，不透传会在再生时丢字段。
+        if (entry.frequencyMonth) {
+            manifestEntry.frequencyMonth = entry.frequencyMonth;
+        }
+        manifest[examId] = manifestEntry;
     }
     for (const record of sourceRecords) {
         if (manifest[record.examId]) {
             continue;
         }
-        manifest[record.examId] = {
+        const manifestEntry = {
             examId: record.examId,
             dataKey: record.examId,
             script: `./${record.examId}.js`,
@@ -1319,6 +1354,10 @@ function buildManifest(readingIndex, sourceRecords) {
             pdfFilename: '',
             sourceKind: 'generated-reading'
         };
+        if (record.meta.frequencyMonth) {
+            manifestEntry.frequencyMonth = record.meta.frequencyMonth;
+        }
+        manifest[record.examId] = manifestEntry;
     }
     return manifest;
 }
@@ -1523,17 +1562,53 @@ function buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, fail
     };
 }
 
+function isExistingDirectory(targetPath) {
+    try {
+        return fs.statSync(targetPath).isDirectory();
+    } catch (error) {
+        return false;
+    }
+}
+
+function collectInputErrors() {
+    const errors = [];
+    for (const sourceRoot of [SHUI_ROOT, IELTS_ROOT]) {
+        if (!isExistingDirectory(sourceRoot)) {
+            errors.push(`机器本地源根目录缺失: ${sourceRoot}`);
+        }
+    }
+    if (!fs.existsSync(INDEX_SCRIPT)) {
+        errors.push(`阅读索引缺失: ${INDEX_SCRIPT}`);
+    }
+    if (!fs.existsSync(MAINTAINED_ENTRY_FILE)) {
+        errors.push(`受维护入口 HTML 缺失: ${MAINTAINED_ENTRY_FILE}`);
+    }
+    return errors;
+}
+
 function main() {
-    const maintainedEntry = path.join(GENERATED_DIR, 'reading-practice-unified.html');
+    // 输入校验必须先于任何 resetGeneratedDir：源根目录/索引缺失时直接退出，
+    // 不清空 developer/reading-exams 与 assets/generated/reading-exams。
+    const inputErrors = collectInputErrors();
+    if (inputErrors.length > 0) {
+        process.stderr.write(`[reading-assets] 输入校验失败，已中止且未改动任何输出:\n  ${inputErrors.join('\n  ')}\n`);
+        process.exitCode = 1;
+        return;
+    }
+
+    const maintainedEntry = MAINTAINED_ENTRY_FILE;
     const entryBefore = fs.readFileSync(maintainedEntry);
     const existingSourceRecords = loadBaselineSourceRecords();
     const readingIndexData = loadReadingIndex();
     const readingIndex = readingIndexData.items;
+    const overrides = loadCrosswalkOverrides();
+    const crosswalk = buildCrosswalk(readingIndex, overrides);
+
+    // 所有机器本地输入（源根目录、override、manifest）已读取并校验完毕，
+    // 此时重置输出目录才是安全的。
     resetGeneratedDir(SOURCE_DIR);
     resetGeneratedDir(GENERATED_DIR, buildGeneratedPreserveFileNames(readingIndex));
 
-    const overrides = loadCrosswalkOverrides();
-    const crosswalk = buildCrosswalk(readingIndex, overrides);
     writeJson(CROSSWALK_FILE, crosswalk);
 
     const pilots = selectPilotRows(crosswalk);
@@ -1590,11 +1665,15 @@ function main() {
         migratedExamIds: sourceRecords.map((record) => record.examId).sort((a, b) => a.localeCompare(b, 'en')),
         failures
     };
-    writeJson(MIGRATION_REPORT_FILE, migrationReport);
-    writeJson(CROSSWALK_REVIEW_FILE, buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, failures, overrides));
+    writeStableJson(MIGRATION_REPORT_FILE, migrationReport);
+    writeStableJson(CROSSWALK_REVIEW_FILE, buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, failures, overrides));
 
     if (!fs.readFileSync(maintainedEntry).equals(entryBefore)) throw new Error('Maintained reading entry changed during data generation');
     process.stdout.write(`Generated ${sourceRecords.length} reading exam assets. Failed: ${failures.length}.\n`);
+    // 存在单卷迁移失败时必须以非零码退出，否则失败会被静默吞掉。
+    if (failures.length > 0) {
+        process.exitCode = 1;
+    }
 }
 
 export {

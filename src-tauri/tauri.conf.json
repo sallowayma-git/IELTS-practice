@@ -45,7 +45,6 @@
     },
     "resources": {
       "../assets/resource-pack/reading": "reading",
-      "../assets/resource-pack/reading-explanations": "reading-explanations",
       "../assets/generated/writing-topics": "writing-topics",
       "../assets/wordlists/ecdict_reading.bundle.js": "wordlists/ecdict_reading.bundle.js",
       "../assets/wordlists/ECDICT_LICENSE.txt": "wordlists/ECDICT_LICENSE.txt"

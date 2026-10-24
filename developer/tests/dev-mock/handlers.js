@@ -31,6 +31,22 @@ const dateOf = (iso) => String(iso || '').slice(0, 10)
 /** Lowercase trimmed comparison for reading answers; both sides are strings. */
 const sameAnswer = (left, right) => String(left ?? '').trim().toLowerCase() === String(right ?? '').trim().toLowerCase()
 
+// Ids come from invoke args, so bracket lookups must only ever see own keys:
+// '__proto__'/'constructor' would otherwise resolve to Object.prototype members.
+const hasOwn = (obj, key) => obj != null && Object.prototype.hasOwnProperty.call(obj, key)
+const ownOf = (obj, key) => (hasOwn(obj, key) ? obj[key] : undefined)
+
+/** String tokens of an answer value, mirroring scoring.rs split_answer_tokens. */
+const answerTokens = (value) => (Array.isArray(value) ? value : [value])
+  .map((item) => String(item ?? '').trim())
+  .filter((token) => token !== '')
+
+/** Mirrors scoring.rs resolve_match_mode: checkbox arrays are sets, other arrays alternatives. */
+const matchModeOf = (correct, control) => {
+  if (Array.isArray(correct)) return control === 'checkbox' ? 'set' : 'alternatives'
+  return 'single'
+}
+
 // Mirrors crates/ielts-db/src/soul.rs validate_soul_field_at.
 const SOUL_KEYS = new Set([
   'soul.nickname', 'soul.address', 'soul.tone', 'soul.toneSuggestion', 'soul.targetBand',
@@ -122,11 +138,12 @@ function clearableCount(state, activity) {
 
 function recordReadingSubmission(state, cmd) {
   const asset = state.reading.assets.find((entry) => entry.id === cmd.assetId)
-  const payload = state.reading.payloads[cmd.assetId]?.payload
+  const payload = ownOf(state.reading.payloads, cmd.assetId)?.payload
   const key = payload?.answerKey || {}
+  const interactions = payload?.interactionModel || {}
   const questionIds = Object.keys(key)
   const answers = questionIds.map((questionId) => {
-    const answer = cmd.answers?.[questionId] ?? null
+    const answer = ownOf(cmd.answers, questionId) ?? null
     return {
       questionId,
       answer,
@@ -141,6 +158,7 @@ function recordReadingSubmission(state, cmd) {
   const ratio = Math.round((correctCount / questionCount) * 100) / 100
   const attemptId = cmd.attemptId || idFrom('reading')
   const submittedAt = new Date().toISOString()
+  const startedAt = new Date(Date.parse(submittedAt) - (cmd.durationMs ?? 0)).toISOString()
   const item = {
     id: attemptId,
     activity: 'reading',
@@ -158,50 +176,51 @@ function recordReadingSubmission(state, cmd) {
     sessionId: `session-${attemptId}`,
   }
   state.history.items.unshift(item)
-  state.history.details[attemptId] = {
-    summary: item,
-    attempt: {
-      id: attemptId,
-      activity: 'reading',
-      mode: 'single',
-      status: 'completed',
-      submittedAt,
-      durationMs: item.durationMs,
-      scoreValue: ratio,
-      scoreScale: 'ratio',
-      correctCount,
-      questionCount,
-      assetId: cmd.assetId,
-      titleSnapshot: item.title,
-      answers,
-      annotations: [],
-    },
+  // Same AttemptRecord shape as AttemptRecord in crates/ielts-domain/src/dto/attempt.rs.
+  const attempt = {
+    schemaVersion: 1,
+    id: attemptId,
+    activity: 'reading',
+    mode: 'single',
+    suiteId: null,
+    status: 'completed',
+    startedAt,
+    submittedAt,
+    completedAt: submittedAt,
+    durationMs: item.durationMs,
+    scoreValue: ratio,
+    scoreScale: 'ratio',
+    correctCount,
+    questionCount,
+    assetId: cmd.assetId,
+    titleSnapshot: item.title,
+    answers,
+    annotations: [],
   }
+  state.history.details[attemptId] = { summary: item, attempt: clone(attempt) }
   // Mirror the Tauri ReadingSubmitResult contract (attempt + score + comparisons)
   // so view-model mapping in useReadingAttempt behaves like production.
   return {
-    attempt: {
-      id: attemptId,
-      activity: 'reading',
-      assetId: cmd.assetId,
-      status: 'completed',
-      correctCount,
-      questionCount,
-      scoreValue: ratio,
-      durationMs: item.durationMs,
-      submittedAt,
-      titleSnapshot: item.title,
-    },
-    score: { correct: correctCount, total: questionCount, accuracy: ratio, percentage: ratio * 100 },
-    comparisons: answers.map((row) => ({
-      questionId: row.questionId,
-      userAnswer: row.answer,
-      correctAnswer: key[row.questionId] ?? null,
-      isCorrect: row.isCorrect,
-      weight: row.weight,
-      questionKind: row.questionKind,
-    })),
+    attempt,
+    score: { correct: correctCount, total: questionCount, accuracy: ratio, percentage: Math.round(ratio * 100) },
+    comparisons: answers.map((row) => {
+      const correctAnswer = ownOf(key, row.questionId) ?? null
+      const control = ownOf(interactions, row.questionId)?.control
+      return {
+        questionId: row.questionId,
+        userAnswer: row.answer,
+        correctAnswer,
+        matchMode: matchModeOf(correctAnswer, control),
+        normalizedUser: answerTokens(row.answer),
+        normalizedCorrect: answerTokens(correctAnswer),
+        isCorrect: row.isCorrect,
+        weight: row.weight,
+        questionKind: row.questionKind,
+      }
+    }),
     idempotentReplay: false,
+    // Known dev-mock gap: the real backend derives analysisSignals from the
+    // scored attempt (analyze_reading_attempt); the mock ships none.
     analysisSignals: null,
   }
 }
@@ -214,7 +233,7 @@ function emitEvaluation(state, host, evaluationId, attemptId, channel, taskType)
     const band = taskType === 'task1' ? 6.0 : 6.5
     const evaluation = buildWritingEvaluation({ id: evaluationId, band, taskType })
     state.writing.evaluations[attemptId] = { ...evaluation, attemptId }
-    const attempt = state.writing.attempts[attemptId]
+    const attempt = ownOf(state.writing.attempts, attemptId)
     const submittedAt = attempt?.submittedAt || new Date().toISOString()
     const item = {
       id: attemptId,
@@ -232,7 +251,7 @@ function emitEvaluation(state, host, evaluationId, attemptId, channel, taskType)
       sessionId: attemptId,
     }
     state.history.items = [item, ...state.history.items.filter((row) => row.id !== attemptId)]
-    const draft = state.writing.drafts[attemptId] || {}
+    const draft = ownOf(state.writing.drafts, attemptId) || {}
     state.history.details[attemptId] = writingDetail(item, band, { contentText: draft.contentText, promptSnapshot: draft.promptSnapshot })
   }
   EVAL_EVENT_TEMPLATE.forEach((step, index) => {
@@ -263,7 +282,7 @@ export function createHandlers(state, host) {
   return {
     reading_list_assets: () => clone(state.reading.assets),
     reading_get_asset_payload: ({ assetId }) => {
-      const entry = state.reading.payloads[assetId]
+      const entry = ownOf(state.reading.payloads, assetId)
       if (!entry) throw fail('reading.asset_not_found', `asset not found: ${assetId}`)
       return clone(entry)
     },
@@ -272,8 +291,6 @@ export function createHandlers(state, host) {
       const pick = pool[Math.floor(Math.random() * pool.length)] || state.reading.assets[0]
       return { assetId: pick.id }
     },
-    // Bundled explanation payloads for the three fixture exams; null elsewhere.
-    reading_get_asset_explanation: ({ assetId }) => state.reading.explanations[assetId] || null,
     reading_get_pdf_data_url: () => null,
     reading_export_archive: () => ({ schemaVersion: 1, activity: 'reading', exportedAt: new Date().toISOString(), count: 0, submissions: [] }),
     reading_import_archive: () => ({ committed: true, imported: 0, failed: 0 }),
@@ -283,7 +300,7 @@ export function createHandlers(state, host) {
     },
     reading_get_open_draft: () => null,
     reading_patch_answer: ({ attemptId, questionId, answer, marked }) => {
-      const draft = state.reading.drafts[attemptId]
+      const draft = ownOf(state.reading.drafts, attemptId)
       if (draft) {
         draft.answers = { ...(draft.answers || {}), [questionId]: answer }
         draft.markedQuestions = marked ? [...new Set([...(draft.markedQuestions || []), questionId])] : (draft.markedQuestions || []).filter((id) => id !== questionId)
@@ -311,7 +328,7 @@ export function createHandlers(state, host) {
       return { items: clone(matches.slice(offset, offset + limit)), total: matches.length, limit, offset, nextCursor: null }
     },
     get_history_detail: ({ attemptId }) => {
-      const detail = state.history.details[attemptId]
+      const detail = ownOf(state.history.details, attemptId)
       if (!detail) throw fail('history.not_found', `attempt not found: ${attemptId}`)
       return clone(detail)
     },
@@ -430,9 +447,9 @@ export function createHandlers(state, host) {
       state.writing.drafts[cmd.attemptId] = draft
       return clone(draft)
     },
-    writing_get_draft: ({ attemptId }) => clone(state.writing.drafts[attemptId] || null),
+    writing_get_draft: ({ attemptId }) => clone(ownOf(state.writing.drafts, attemptId) ?? null),
     writing_clone_draft: ({ cmd }) => {
-      const source = state.writing.drafts[cmd.sourceAttemptId]
+      const source = ownOf(state.writing.drafts, cmd.sourceAttemptId)
       if (!source) throw fail('writing.draft_not_found', 'draft not found')
       const attemptId = idFrom('writing')
       const copy = { ...source, attemptId, updatedAt: new Date().toISOString() }
@@ -440,31 +457,31 @@ export function createHandlers(state, host) {
       return clone(copy)
     },
     writing_submit_attempt: ({ cmd }) => {
-      const draft = state.writing.drafts[cmd.attemptId] || { contentText: '', promptSnapshot: null, mode: 'freeform' }
+      const draft = ownOf(state.writing.drafts, cmd.attemptId) || { contentText: '', promptSnapshot: null, mode: 'freeform' }
       const submittedAt = new Date().toISOString()
       state.writing.attempts[cmd.attemptId] = { attemptId: cmd.attemptId, submittedAt, mode: draft.mode, promptSnapshot: draft.promptSnapshot, taskType: draft.taskType }
       return { id: cmd.attemptId, attemptId: cmd.attemptId, status: 'submitted', submittedAt, contentText: draft.contentText }
     },
     writing_start_evaluation: ({ cmd, onEvent }) => {
       const evaluationId = `eval-${cmd.attemptId}-${Date.now().toString(36)}`
-      const taskType = cmd.taskType || state.writing.attempts[cmd.attemptId]?.taskType || 'task2'
+      const taskType = cmd.taskType || ownOf(state.writing.attempts, cmd.attemptId)?.taskType || 'task2'
       state.writing.events[evaluationId] = []
       state.writing.evaluations[cmd.attemptId] = { id: evaluationId, status: 'running', stage: 'preparing', taskType, attemptId: cmd.attemptId }
       emitEvaluation(state, host, evaluationId, cmd.attemptId, onEvent, taskType)
       return { evaluationId, attemptId: cmd.attemptId, status: 'running' }
     },
-    writing_list_evaluation_events: ({ evaluationId, afterSequence = 0 }) => clone((state.writing.events[evaluationId] || []).filter((event) => event.sequence > Number(afterSequence))),
+    writing_list_evaluation_events: ({ evaluationId, afterSequence = 0 }) => clone((ownOf(state.writing.events, evaluationId) || []).filter((event) => event.sequence > Number(afterSequence))),
     writing_cancel_evaluation: ({ evaluationId }) => {
-      ;(state.writing.timers[evaluationId] || []).forEach((timer) => clearTimeout(timer))
+      ;(ownOf(state.writing.timers, evaluationId) || []).forEach((timer) => clearTimeout(timer))
       for (const evaluation of Object.values(state.writing.evaluations)) {
         if (evaluation.id === evaluationId && evaluation.status === 'running') evaluation.status = 'cancelled'
       }
       return true
     },
     writing_get_evaluation: ({ attemptId }) => {
-      const live = state.writing.evaluations[attemptId]
+      const live = ownOf(state.writing.evaluations, attemptId)
       if (live) return clone(live)
-      const detail = state.history.details[attemptId]
+      const detail = ownOf(state.history.details, attemptId)
       return detail?.evaluation ? clone({ ...detail.evaluation, attemptId }) : null
     },
     list_settings: ({ namespace }) => clone(state.settings.filter((row) => !namespace || row.namespace === namespace)),
@@ -641,7 +658,7 @@ export function createHandlers(state, host) {
     },
     coach_list_messages: () => [],
     coach_run: () => ({ status: 'completed', messages: [] }),
-    journal_get_daily: ({ query = {} }) => clone(notebook.journals[query.journalDate] || {
+    journal_get_daily: ({ query = {} }) => clone(ownOf(notebook.journals, query.journalDate) || {
       id: `journal-${query.journalDate}`, userId: 'local', journalDate: query.journalDate, version: 1, status: 'published',
       facts: { journalDate: query.journalDate, timeSpentMs: 0, writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [], memoryChanges: ZERO_MEMORY_CHANGES, coachFeedbackCount: 0, coachReaskCount: 0, sourceHash: 'mock', todayObservationIds: [], memoryEvents: [] },
       sourceHash: 'mock', renderedMarkdown: null, supersededBy: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),

@@ -8,11 +8,17 @@
 import payloadP1 from './fixtures/reading/p1-high-01.json' with { type: 'json' }
 import payloadP2 from './fixtures/reading/p2-high-235.json' with { type: 'json' }
 import payloadP3 from './fixtures/reading/p3-high-229.json' with { type: 'json' }
-// Explanations come straight from the generated resource pack (dev-only import):
-// one source of truth with the bundled data the Rust command serves.
-import explanationP1 from '../../../assets/resource-pack/reading-explanations/payloads/p1-high-01.json' with { type: 'json' }
-import explanationP2 from '../../../assets/resource-pack/reading-explanations/payloads/p2-high-235.json' with { type: 'json' }
-import explanationP3 from '../../../assets/resource-pack/reading-explanations/payloads/p3-high-229.json' with { type: 'json' }
+// Review explanations ride inside the shipped pack payload
+// (`payload.reviewExplanations`); import the pack copies so the mock serves
+// exactly what the packaged app seeds. Static JSON imports only: seed.js runs
+// in the browser (VITE_TAURI_MOCK), as Node ESM, and transpiled to CommonJS +
+// new Function by integrationContracts.test.mjs — no top-level await and no
+// node-only APIs are allowed here.
+import packP1 from '../../../assets/resource-pack/reading/payloads/p1-high-01.json' with { type: 'json' }
+import packP2 from '../../../assets/resource-pack/reading/payloads/p2-high-235.json' with { type: 'json' }
+import packP3 from '../../../assets/resource-pack/reading/payloads/p3-high-229.json' with { type: 'json' }
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key)
 
 const DAY_MS = 86_400_000
 
@@ -28,8 +34,27 @@ function rng(seed = 20261019) {
   }
 }
 
-const FIXTURE_BY_CATEGORY = { P1: payloadP1, P2: payloadP2, P3: payloadP3 }
-const FIXTURE_BY_EXAM = { 'p1-high-01': payloadP1, 'p2-high-235': payloadP2, 'p3-high-229': payloadP3 }
+// One fixture table: exam payloads the mock actually serves plus the category
+// every other row borrows its content from. reviewExplanations are keyed by the
+// fixture exam whose passage/questions are really on screen, so derived rows
+// (same fixture content, swapped meta) reuse that fixture's explanations.
+const READING_FIXTURES = [
+  { examId: 'p1-high-01', category: 'P1', payload: payloadP1 },
+  { examId: 'p2-high-235', category: 'P2', payload: payloadP2 },
+  { examId: 'p3-high-229', category: 'P3', payload: payloadP3 },
+]
+const FIXTURE_BY_EXAM = Object.fromEntries(READING_FIXTURES.map((row) => [row.examId, row]))
+const FIXTURE_BY_CATEGORY = Object.fromEntries(READING_FIXTURES.map((row) => [row.category, row]))
+const REVIEW_EXPLANATIONS = {
+  'p1-high-01': packP1.reviewExplanations || null,
+  'p2-high-235': packP2.reviewExplanations || null,
+  'p3-high-229': packP3.reviewExplanations || null,
+}
+
+function fixtureFor(entry) {
+  if (hasOwn(FIXTURE_BY_EXAM, entry.id)) return FIXTURE_BY_EXAM[entry.id]
+  return FIXTURE_BY_CATEGORY[entry.category]
+}
 
 // ---------------------------------------------------------------- reading ---
 
@@ -91,14 +116,20 @@ export function buildReadingAssets() {
 /**
  * Payload for one asset. The three real fixtures are used as-is; the others
  * reuse the passage of their category under their own title and id.
+ * reviewExplanations come from the matching generated explanation data, same
+ * as the resource-pack export embeds into payload.reviewExplanations.
  */
 export function buildReadingPayload(entry) {
-  const base = FIXTURE_BY_EXAM[entry.id] || FIXTURE_BY_CATEGORY[entry.category]
-  return {
+  const fixture = fixtureFor(entry)
+  const base = fixture.payload
+  const payload = {
     ...base,
     examId: entry.id,
     meta: { ...base.meta, title: entry.title, category: entry.category, frequency: entry.frequency },
   }
+  const fixtureExplanations = REVIEW_EXPLANATIONS[fixture.examId]
+  if (fixtureExplanations) payload.reviewExplanations = fixtureExplanations
+  return payload
 }
 
 /** Index of { asset, payload } envelopes, keyed by asset id. */
@@ -355,11 +386,15 @@ function readingDetail(item, asset, ratio) {
   return {
     summary: item,
     attempt: {
+      schemaVersion: 1,
       id: item.id,
       activity: 'reading',
       mode: 'single',
+      suiteId: null,
       status: 'completed',
+      startedAt: new Date(Date.parse(item.submittedAt) - item.durationMs).toISOString(),
       submittedAt: item.submittedAt,
+      completedAt: item.submittedAt,
       durationMs: item.durationMs,
       scoreValue: ratio,
       scoreScale: 'ratio',
@@ -640,11 +675,6 @@ export function createSeedState(now = Date.now()) {
     reading: {
       assets,
       payloads: buildReadingPayloads(assets),
-      explanations: {
-        'p1-high-01': explanationP1,
-        'p2-high-235': explanationP2,
-        'p3-high-229': explanationP3,
-      },
       drafts: {},
     },
     history: { items: history.items, details: history.details, retention: { maxTerminalAttempts: 200 }, clearTokens: {} },

@@ -196,6 +196,7 @@
       @scroll-to-question="scrollToQuestion"
       @submit="submitAnswers"
       @reset="handleReset"
+      @leave="handleLeaveReview"
     />
 
     <UnifiedOptionsPanel
@@ -220,11 +221,8 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import {
-  getOpenReadingDraft,
-  getReadingAssetExplanation
-} from '@/api/reading-repository.js'
+import { useRoute, useRouter } from 'vue-router'
+import { getOpenReadingDraft } from '@/api/reading-repository.js'
 import { isTauriRuntime } from '@/api/tauri-bridge.js'
 import { useReadingAsset } from '@/modules/practice-reading/useReadingAsset'
 import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
@@ -253,6 +251,7 @@ const props = defineProps({
 })
 
 const route = useRoute()
+const router = useRouter()
 const {
   rootClassList,
   fontSize,
@@ -759,6 +758,7 @@ function handleReset() {
     return
   }
   if (submitting.value || answeredCount.value === 0) return
+  if (!window.confirm('确定要清空全部作答吗？')) return
   initializeAnswers(payload.value)
   void nextTick(() => {
     syncDomAnswers()
@@ -797,15 +797,20 @@ async function submitAnswers() {
   }
 }
 
-async function loadExplanations() {
-  const explanationAssetId = String(submission.value?.assetId || asset.value?.id || '').trim()
-  if (!explanationAssetId) return
-  try {
-    reviewExplanations.value = await getReadingAssetExplanation(explanationAssetId)
-  } catch (explanationLoadError) {
-    console.warn('unified reading page: explanation load failed', explanationLoadError)
-    reviewExplanations.value = null
+function loadExplanations() {
+  // Explanations ride inside the exam payload itself (same source as
+  // PracticeReadingPage's officialReviewExplanations); no separate IPC fetch.
+  reviewExplanations.value = payload.value?.reviewExplanations || null
+}
+
+function handleLeaveReview() {
+  // Exit review: go back to where the user came from; the practice library
+  // (route '/' / PracticeLibrary) is the fallback when history is empty.
+  if (window.history?.state?.back == null) {
+    router.push({ name: 'PracticeLibrary' })
+    return
   }
+  router.back()
 }
 
 function scrollToQuestion(questionId) {

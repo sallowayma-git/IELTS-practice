@@ -125,6 +125,11 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       return cached
     }
     const result = findNativeDropzonesByQuestionId(questionId).length > 0
+    // A false probe before the question DOM is mounted would poison the cache
+    // for the whole session — only cache once [data-question] markup exists.
+    if (!result && typeof document !== 'undefined' && !document.querySelector('[data-question]')) {
+      return false
+    }
     dropzoneGateCache.set(questionId, result)
     return result
   }
