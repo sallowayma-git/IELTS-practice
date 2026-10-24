@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
 const GENERATED_ROOT = path.join(REPO_ROOT, 'assets', 'generated', 'reading-exams');
 const MANIFEST_PATH = path.join(GENERATED_ROOT, 'manifest.js');
+const EXPLANATION_MANIFEST_PATH = path.join(GENERATED_ROOT, '../reading-explanations/manifest.js');
 
 function fail(message, code = 1) {
   process.stderr.write(`${message}\n`);
@@ -52,6 +53,7 @@ function sha256(text) {
 }
 
 function exportResourcePack(context, registry, manifest, outputDir) {
+  const explanations = loadManifest(context, EXPLANATION_MANIFEST_PATH, '__READING_EXPLANATION_MANIFEST__');
   const resolvedOutput = path.resolve(REPO_ROOT, outputDir);
   const payloadDir = path.join(resolvedOutput, 'payloads');
   fs.mkdirSync(payloadDir, { recursive: true });
@@ -59,6 +61,10 @@ function exportResourcePack(context, registry, manifest, outputDir) {
   const entries = buildEntryList(manifest).map((entry) => {
     const dataset = loadDataset(context, registry, manifest[entry.examId] || entry);
     const payload = { ...dataset, examId: dataset.examId || entry.examId };
+    const explanationEntry = pickManifestEntry(explanations, entry.examId);
+    if (explanationEntry) {
+      payload.reviewExplanations = loadDataset(context, context.__READING_EXPLANATION_DATA__, explanationEntry);
+    }
     const text = stableJson(payload);
     const file = `payloads/${entry.examId}.json`;
     fs.writeFileSync(path.join(resolvedOutput, file), text, 'utf8');
@@ -109,13 +115,14 @@ function createContext() {
   context.window = context;
   context.self = context;
   context.__READING_EXAM_DATA__ = registry;
+  context.__READING_EXPLANATION_DATA__ = createRegistry();
   vm.createContext(context);
   return { context, registry };
 }
 
-function loadManifest(context) {
-  vm.runInContext(readText(MANIFEST_PATH), context, { filename: MANIFEST_PATH });
-  const manifest = context.__READING_EXAM_MANIFEST__;
+function loadManifest(context, manifestPath = MANIFEST_PATH, manifestKey = '__READING_EXAM_MANIFEST__') {
+  vm.runInContext(readText(manifestPath), context, { filename: manifestPath });
+  const manifest = context[manifestKey];
   if (!manifest || typeof manifest !== 'object') {
     fail('reading_manifest_missing_or_invalid');
   }
