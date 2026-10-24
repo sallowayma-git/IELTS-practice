@@ -703,6 +703,23 @@ function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId))
   if (interaction?.name) names.add(interaction.name)
   names.forEach((name) => {
     const escaped = escapeCss(name)
+    // Checkbox groups share one native name across a question sequence
+    // ("choose TWO letters"): a box is ticked when ANY question in the group
+    // holds its value — the inverse of collectCheckboxGroup's assignment.
+    const groupValues = new Set()
+    expandQuestionSequence(name).forEach((groupId) => {
+      const raw = getRawAnswer(groupId)
+      if (Array.isArray(raw)) {
+        raw.forEach((entry) => { const v = String(entry || '').trim(); if (v) groupValues.add(v) })
+      } else {
+        const v = String(raw || '').trim()
+        if (v) groupValues.add(v)
+      }
+    })
+    document.querySelectorAll(`input[type="checkbox"][name="${escaped}"]`).forEach((input) => {
+      input.checked = groupValues.has(String(input.value || '').trim())
+      input.disabled = readOnlyMode.value
+    })
     document.querySelectorAll(`input[type="radio"][name="${escaped}"]`).forEach((input) => {
       input.checked = String(input.value || '').trim() === String(explicitValue || '').trim()
       input.disabled = readOnlyMode.value
