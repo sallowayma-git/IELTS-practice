@@ -22,9 +22,13 @@ class PackagedReceiptTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.db = self.root / "IELTS Practice/db/ielts-practice-v2.db"
         self.db.parent.mkdir(parents=True)
-        with closing(sqlite3.connect(self.db)) as conn:
+        # Avoid a durable disk commit for every migration statement. Each test
+        # still gets a fresh file-backed database for the real receipt helpers.
+        with closing(sqlite3.connect(":memory:")) as schema:
             for migration in sorted((flow.ROOT / "crates/ielts-db/migrations").glob("*.sql")):
-                conn.executescript(migration.read_text(encoding="utf-8"))
+                schema.executescript(migration.read_text(encoding="utf-8"))
+            with closing(sqlite3.connect(self.db)) as conn:
+                schema.backup(conn)
 
     def test_missing_database_is_never_created(self):
         empty = self.root / "empty"
