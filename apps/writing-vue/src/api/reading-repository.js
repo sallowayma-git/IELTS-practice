@@ -43,7 +43,9 @@ export async function pickReadingPracticeAsset(category = null) {
 
 /**
  * Bundled explanation payload (ReadingExplanationV1) for one asset. Static data:
- * fetched lazily by review views, returns null when the asset has no explanation.
+ * fetched lazily by review views. Throws `reading.explanation_not_found` when the
+ * asset has no bundled explanation — callers must catch (dev-mock returns null
+ * instead, so treat both outcomes as "no explanations").
  */
 export async function getReadingAssetExplanation(assetId) {
   const normalizedAssetId = String(assetId || '').trim()

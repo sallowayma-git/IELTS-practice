@@ -202,20 +202,19 @@ fn load_bundled_explanation(
     use sha2::{Digest, Sha256};
 
     let manifest_path = pack_dir.join("manifest.json");
-    let manifest: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(&manifest_path).map_err(|error| {
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_path).map_err(|error| {
             explanation_error(
                 "reading.explanation_pack_unavailable",
                 format!("reading explanation manifest unreadable: {error}"),
             )
-        })?,
-    )
-    .map_err(|error| {
-        explanation_error(
-            "reading.explanation_pack_invalid",
-            format!("reading explanation manifest invalid: {error}"),
-        )
-    })?;
+        })?)
+        .map_err(|error| {
+            explanation_error(
+                "reading.explanation_pack_invalid",
+                format!("reading explanation manifest invalid: {error}"),
+            )
+        })?;
 
     let entries = manifest
         .get("entries")
@@ -240,7 +239,9 @@ fn load_bundled_explanation(
         .get("file")
         .and_then(|value| value.as_str())
         .unwrap_or_default();
-    if file.contains("..") {
+    // Mirrors the seed path's guard (assets.rs): reject absolute paths (Path::join
+    // would discard the pack dir entirely) and any parent traversal.
+    if file.is_empty() || std::path::Path::new(file).is_absolute() || file.contains("..") {
         return Err(explanation_error(
             "reading.explanation_pack_invalid",
             format!("reading explanation entry has unsafe path: {file}"),
@@ -248,13 +249,24 @@ fn load_bundled_explanation(
     }
     let raw = std::fs::read(pack_dir.join(file)).map_err(|error| {
         explanation_error(
-            "reading.explanation_not_found",
+            "reading.explanation_payload_unreadable",
             format!("reading explanation payload unreadable: {error}"),
         )
     })?;
-    let expected = entry.get("sha256").and_then(|value| value.as_str()).unwrap_or_default();
+    let expected = entry
+        .get("sha256")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default();
+    // Fail closed: an absent checksum invalidates the pack rather than skipping
+    // verification (mirrors the seed path, which hard-fails on mismatch).
+    if expected.is_empty() {
+        return Err(explanation_error(
+            "reading.explanation_pack_invalid",
+            format!("reading explanation entry for {asset_id} has no sha256"),
+        ));
+    }
     let actual = hex::encode(Sha256::digest(&raw));
-    if !expected.is_empty() && actual != expected {
+    if actual != expected {
         return Err(explanation_error(
             "reading.explanation_checksum_mismatch",
             format!("reading explanation payload checksum mismatch for {asset_id}"),

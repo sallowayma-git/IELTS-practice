@@ -101,6 +101,12 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     return ['radio', 'checkbox', 'select'].includes(String(interaction?.control || ''))
   }
 
+  // Dragdrop gate results are static per payload (dropzone markup does not
+  // change while answers move), and the fallback does DOM lookups — memoize
+  // so hot answer-sync paths pay the query cost once per question.
+  let dropzoneGateCache = new Map<string, boolean>()
+  let dropzoneGateCachePayload: unknown = null
+
   function isDragDropControl(questionId: string): boolean {
     const interaction = getInteraction(questionId)
     if (interaction?.control) {
@@ -109,7 +115,18 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     // Bundled payloads ship no interactionModel, and the opensource engine this
     // page mirrors has none either: the native dropzone markup (data-question /
     // data-target attributes) is the source of truth for dragdrop questions.
-    return findNativeDropzonesByQuestionId(questionId).length > 0
+    const source = payload()
+    if (dropzoneGateCachePayload !== source) {
+      dropzoneGateCache = new Map()
+      dropzoneGateCachePayload = source
+    }
+    const cached = dropzoneGateCache.get(questionId)
+    if (cached !== undefined) {
+      return cached
+    }
+    const result = findNativeDropzonesByQuestionId(questionId).length > 0
+    dropzoneGateCache.set(questionId, result)
+    return result
   }
 
   function getOptions(questionId: string): ReadingInteractionOption[] {
@@ -611,7 +628,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     }
     const escaped = escapeCss(value)
     const source = document.querySelector(
-      `[data-drag-value="${escaped}"], [data-answer-value="${escaped}"], [data-heading="${escaped}"], [data-option="${escaped}"], [data-word="${escaped}"]`
+      `[data-drag-value="${escaped}"], [data-answer-value="${escaped}"], [data-heading="${escaped}"], [data-option="${escaped}"], [data-word="${escaped}"], [data-value="${escaped}"]`
     )
     return String(source?.textContent || '').trim()
   }

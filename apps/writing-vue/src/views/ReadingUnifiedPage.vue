@@ -18,7 +18,7 @@
         <div class="candidate-details">
           <span
             id="timer"
-            :class="{ paused: !timerRunning && !reviewMode }"
+            :class="{ paused: !timerRunning }"
             title="点击启停"
             @click="toggleTimer"
           >{{ timerText }}</span>
@@ -312,6 +312,7 @@ const {
   dragInteractionStatus,
   getInteraction,
   getDisplayLabel,
+  isDragDropControl,
   handleWorkspaceClick,
   handleWorkspaceKeydown,
   handleDragStart,
@@ -381,7 +382,10 @@ const canSubmit = computed(() => Boolean(
   && !readOnlyMode.value
 ))
 const resetDisabled = computed(() => submitting.value || (!reviewMode.value && answeredCount.value === 0))
-const timerText = computed(() => (reviewMode.value ? 'Time over' : formattedTimer.value))
+// The original freezes the timer at its elapsed value on submit (paused style);
+// it never shows a textual replacement.
+const timerText = computed(() => formattedTimer.value)
+
 const partIndex = computed(() => {
   const category = String(payload.value?.meta?.category || asset.value?.category || 'P1').toUpperCase()
   if (category === 'P2') return 2
@@ -490,6 +494,111 @@ watch(
   { flush: 'post' }
 )
 
+// Post-submit feedback: mirror the original applyResultsToQuestionArea — mark
+// chosen options green/red and dropzones correct/wrong inside the question area.
+// canonicalToken mirrors the bundle's canonicalizeAnswerToken: punctuation and
+// boolean foldings, single letters uppercased, everything else case-preserved.
+function canonicalToken(value) {
+  const cleaned = String(value ?? '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[‐‑‒–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[\s"'`()[\]{}<>.,;:!?]+|[\s"'`()[\]{}<>.,;:!?]+$/g, '')
+  if (!cleaned) return ''
+  const lowered = cleaned.toLowerCase()
+  if (['true', 't', 'yes', 'y'].includes(lowered)) return 'true'
+  if (['false', 'f', 'no', 'n'].includes(lowered)) return 'false'
+  if (['ng', 'notgiven', 'not-given'].includes(lowered)) return 'not given'
+  if (/^[a-z]$/i.test(cleaned)) return cleaned.toUpperCase()
+  const leadingOption = cleaned.match(/^([A-Za-z])[.)]\s+/)
+  if (leadingOption && cleaned.length > 2) return leadingOption[1].toUpperCase()
+  return cleaned
+}
+
+function collectChoiceInputs(questionId) {
+  const inputs = []
+  for (const alias of resolveAnswerAliasesFromIds(questionId, payload.value?.questionDisplayMap || null)) {
+    const escaped = escapeCss(alias)
+    document.querySelectorAll(
+      `input[type="radio"][name="${escaped}"], input[type="checkbox"][name="${escaped}"]`
+    ).forEach((input) => inputs.push(input))
+  }
+  return inputs
+}
+
+function applyResultsToQuestionArea() {
+  document.querySelectorAll(
+    '.option-correct, .option-wrong, .drop-target-summary.correct, .drop-target-summary.wrong, .paragraph-dropzone.correct, .paragraph-dropzone.wrong, .match-dropzone.correct, .match-dropzone.wrong, [data-result-filled="true"]'
+  ).forEach((node) => {
+    node.classList.remove('correct', 'wrong', 'option-correct', 'option-wrong')
+    if (node.dataset?.resultFilled === 'true') {
+      node.classList.remove('dropzone-filled')
+      delete node.dataset.resultFilled
+    }
+  })
+  const comparison = submission.value?.answerComparison || {}
+  const groupEntries = new Map()
+  Object.values(comparison).forEach((entry) => {
+    const questionId = normalizeQuestionId(entry?.questionId)
+    const inputNodes = collectChoiceInputs(questionId)
+    if (!inputNodes.length) return
+    const correctValues = (Array.isArray(entry?.correctAnswer) ? entry.correctAnswer : [entry?.correctAnswer])
+      .map(canonicalToken)
+      .filter(Boolean)
+    if (!correctValues.length) return
+    const groupKey = inputNodes[0].name || questionId
+    if (!groupEntries.has(groupKey)) {
+      groupEntries.set(groupKey, { inputs: inputNodes, correctValues: new Set(), userValues: new Set() })
+    }
+    const group = groupEntries.get(groupKey)
+    correctValues.forEach((value) => group.correctValues.add(value))
+    ;(Array.isArray(entry?.userAnswer) ? entry.userAnswer : [entry?.userAnswer])
+      .map(canonicalToken)
+      .filter(Boolean)
+      .forEach((value) => group.userValues.add(value))
+  })
+  groupEntries.forEach((group) => {
+    group.inputs.forEach((input) => {
+      const target = input.closest('label') || input.parentElement
+      const value = canonicalToken(input.value)
+      if (!target || !value) return
+      if (group.correctValues.has(value)) {
+        target.classList.add('option-correct')
+      } else if (input.checked || group.userValues.has(value)) {
+        target.classList.add('option-wrong')
+      }
+    })
+  })
+  Object.values(comparison).forEach((entry) => {
+    const questionId = normalizeQuestionId(entry?.questionId)
+    if (collectChoiceInputs(questionId).length) return
+    if (entry?.isCorrect !== true && entry?.isCorrect !== false) return
+    for (const alias of resolveAnswerAliasesFromIds(questionId, payload.value?.questionDisplayMap || null)) {
+      const escaped = escapeCss(alias)
+      const dropzone = document.querySelector(
+        `.drop-target-summary[data-question="${escaped}"], .paragraph-dropzone[data-question="${escaped}"], .match-dropzone[data-question="${escaped}"]`
+      )
+      if (dropzone) {
+        dropzone.classList.add(entry.isCorrect ? 'correct' : 'wrong')
+        if (!dropzone.classList.contains('dropzone-filled')) {
+          dropzone.classList.add('dropzone-filled')
+          dropzone.dataset.resultFilled = 'true'
+        }
+        break
+      }
+    }
+  })
+}
+
+// Runs on both transitions: entering review applies marks, leaving review
+// (Reset) clears them — the clearing pass at the top handles the empty case.
+watch(reviewMode, async () => {
+  await nextTick()
+  applyResultsToQuestionArea()
+})
+
 async function loadAsset() {
   const normalizedAssetId = String(props.assetId || route.params.assetId || '').trim()
   if (!normalizedAssetId) return
@@ -585,7 +694,9 @@ function syncDomAnswers() {
 function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId)) {
   if (typeof document === 'undefined') return
   const interaction = getInteraction(questionId)
-  if (interaction?.control === 'dragdrop') {
+  // Bundled payloads carry no interactionModel: questions whose native markup
+  // has dropzones route to the dropzone sync (isDragDropControl falls back).
+  if (interaction?.control === 'dragdrop' || (!interaction?.control && isDragDropControl(questionId))) {
     syncDropzoneControl(questionId, explicitValue)
     return
   }

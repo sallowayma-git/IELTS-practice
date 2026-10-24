@@ -130,6 +130,27 @@ function handleKeydown(event) {
   if (event.key === 'Escape') {
     event.preventDefault()
     emit('close')
+    return
+  }
+  // Focus circle: keep Tab cycling inside the full-screen overlay like the
+  // original panel does. Note offsetParent is null inside a fixed container,
+  // so visibility is probed via getClientRects instead.
+  if (event.key !== 'Tab') return
+  const panel = document.getElementById('settings-panel')
+  if (!panel) return
+  const focusable = Array.from(
+    panel.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+  ).filter((node) => !node.disabled && (node.getClientRects().length > 0 || node === document.activeElement))
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
+  if (event.shiftKey && (active === first || !panel.contains(active))) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (active === last || !panel.contains(active))) {
+    event.preventDefault()
+    first.focus()
   }
 }
 
