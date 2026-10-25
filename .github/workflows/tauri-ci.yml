@@ -104,19 +104,6 @@ jobs:
         run: python -m unittest discover -s developer/tests/e2e -p visual_test_support_test.py -v
       - name: Run visual regression matrix
         run: python developer/tests/e2e/run_visual_regressions.py
-      # TEMP (PR #254, round 2): passage explanation cards now render for every
-      # paragraph (review surfaces) after the R7 fix — refresh the exam-freeze
-      # baseline from this runner once more, then remove these two steps.
-      - name: TEMP capture exam-freeze baseline on this runner
-        if: always()
-        run: python developer/tests/e2e/exam_freeze_visual_check.py --update-baseline
-      - name: TEMP upload captured exam-freeze baseline
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: exam-freeze-baseline-capture
-          path: developer/tests/e2e/baselines/exam-freeze
-          if-no-files-found: error
       - name: Upload visual regression evidence
         if: always()
         uses: actions/upload-artifact@v4
