@@ -165,7 +165,22 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     if (typeof interaction?.allowOptionReuse === 'boolean') {
       return interaction.allowOptionReuse
     }
-    return Boolean(getDragDropGroup(questionId)?.allowOptionReuse)
+    const group = getDragDropGroup(questionId)
+    if (typeof group?.allowOptionReuse === 'boolean') {
+      return group.allowOptionReuse
+    }
+    return nativeGroupAllowsClone(questionId)
+  }
+
+  // Native groups can express reuse without normalized metadata: their pool
+  // cards carry data-clone="true" (e.g. p2-high-201 "may be used more than
+  // once", where q7 and q8 both need C). Derive from the question's rendered
+  // group container so option consumption and duplicate-use validation agree.
+  function nativeGroupAllowsClone(questionId: string): boolean {
+    if (typeof document === 'undefined') return false
+    const dropzone = findNativeDropzonesByQuestionId(questionId)[0]
+    const container = dropzone?.closest('[data-group-id]')
+    return Boolean(container?.querySelector('[data-clone="true"]'))
   }
 
   function getSelectedOption(questionId: string): ReadingInteractionOption | null {

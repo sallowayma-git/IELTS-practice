@@ -10,7 +10,7 @@ from exam_freeze_visual_check import serve
 ROOT = Path(__file__).resolve().parents[3]
 PACK = ROOT / 'assets/resource-pack/reading/payloads'
 IDS = ('p1-high-01', 'p1-medium-57', 'p1-low-11', 'p1-low-61', 'p2-medium-217',
-       'p2-high-134', 'p3-high-156', 'p3-low-175', 'p3-low-54')
+       'p2-high-134', 'p2-high-201', 'p3-high-156', 'p3-low-175', 'p3-low-54')
 PAYLOADS = {asset_id: json.loads((PACK / f'{asset_id}.json').read_bytes()) for asset_id in IDS}
 
 MOCK = r"""
@@ -160,6 +160,19 @@ def run(browser, base):
         expect(page.locator('[data-question="q8"]')).to_contain_text('B Bovinae')
         expect(page.locator('[data-question="q5"] [data-dropzone-clear]')).to_have_count(0)
     print('PASS: reusable drag answers and removal autosave survive reload')
+
+    # R12: native reuse expressed only via data-clone="true" pool cards (no
+    # allowOptionReuse metadata) — p2-high-201 group 2, q7 and q8 both need C.
+    with practice(browser, base, 'p2-high-201') as page:
+        source = page.locator('#card-C')
+        source.click()
+        page.locator('[data-question="q7"]').click()
+        assert 'option-consumed' not in (source.get_attribute('class') or '')
+        source.click()
+        page.locator('[data-question="q8"]').click()
+        wait_save(page, "String(call.args.cmd.answers.q7).toUpperCase() === 'C' && String(call.args.cmd.answers.q8).toUpperCase() === 'C'")
+        expect(page.locator('[data-question="q8"]')).to_contain_text('C')
+    print('PASS: data-clone native reuse keeps clone cards interactive for both questions')
 
     for route in ('reading-unified', 'reading'):
         with practice(browser, base, 'p2-medium-217', route=route) as page:
