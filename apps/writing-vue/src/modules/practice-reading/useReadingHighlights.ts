@@ -35,6 +35,8 @@ export interface HighlightRecord {
   [key: string]: unknown
 }
 
+export type ReadingAnnotationKind = 'highlight' | 'note'
+
 export interface NormalizedHighlight {
   id: string | null
   scope: 'passage' | 'questions' | 'unknown'
@@ -194,7 +196,8 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
   async function loadPersistedHighlights(
     targetAssetId: string | null | undefined,
     targetAttemptId: string | null = null,
-    documentText: string | null = null
+    documentText: string | null = null,
+    kinds: ReadingAnnotationKind[] = ['highlight']
   ) {
     // Highlights belong to an attempt. Never turn an absent attempt into an
     // asset-wide query, because that mixes highlights from unrelated attempts.
@@ -203,8 +206,9 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
       const { items } = documentText
         ? await revalidateAnnotations(targetAssetId, targetAttemptId, 'passage', documentText)
         : await listAnnotations(targetAssetId, targetAttemptId)
+      const requestedKinds = new Set<string>(kinds)
       return normalizeHighlightSnapshot(
-        (items || []).filter((item) => item.kind === 'highlight').map((item: AnnotationRecord) => ({
+        (items || []).filter((item) => requestedKinds.has(String(item.kind || ''))).map((item: AnnotationRecord) => ({
           scope: item.scope,
           text: item.anchor?.text,
           kind: item.kind,
@@ -766,13 +770,14 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
   async function hydrateHighlightsFromStore(
     targetAssetId: string | null | undefined,
     targetAttemptId: string | null = null,
-    documentText: string | null = null
+    documentText: string | null = null,
+    kinds: ReadingAnnotationKind[] = ['highlight']
   ) {
     if (!isTauriRuntime() || !targetAssetId) {
       highlightRestoreWarning.value = ''
       return [] as NormalizedHighlight[]
     }
-    const loaded = await loadPersistedHighlights(targetAssetId, targetAttemptId, documentText || null)
+    const loaded = await loadPersistedHighlights(targetAssetId, targetAttemptId, documentText || null, kinds)
     const valid = loaded.filter((entry) => !entry.mismatch)
     const mismatchCount = loaded.length - valid.length
     highlightRestoreWarning.value = mismatchCount

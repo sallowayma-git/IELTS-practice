@@ -65,14 +65,17 @@
       <section id="left" class="pane reading-html">
         <template v-for="(block, index) in passageBlocks" :key="block.blockId || index">
           <div v-html="block.html || block.bodyHtml"></div>
-          <div
-            v-if="passageNotes[index]"
-            class="reading-explanation-card reading-passage-explanation"
-          >
-            <div class="reading-explanation-card__label">{{ passageNotes[index].label }}</div>
-            <div class="reading-explanation-card__text">{{ passageNotes[index].text }}</div>
-          </div>
         </template>
+        <!-- Passage explanations are per-paragraph (up to nine), not per-block
+             (usually one): render the full list after the passage itself. -->
+        <div
+          v-for="(note, noteIndex) in passageNotes"
+          :key="`passage-note-${noteIndex}`"
+          class="reading-explanation-card reading-passage-explanation"
+        >
+          <div class="reading-explanation-card__label">{{ note.label }}</div>
+          <div class="reading-explanation-card__text">{{ note.text }}</div>
+        </div>
       </section>
 
       <div
@@ -281,6 +284,10 @@ const optionsOpen = ref(false)
 const noteDrawerOpen = ref(false)
 const activeQuestionId = ref('')
 const leftPanePercent = ref(50)
+// True only while initializeAnswers/hydrateOpenDraft rebuild the answer map on
+// load; mutations during that window are hydration, not user input, and must
+// not schedule draft autosaves.
+const hydratingAnswers = ref(false)
 let dividerDragging = false
 let dividerPointerId = null
 let draftAutosaveTimer = null
@@ -304,7 +311,12 @@ const {
   payloadSource: () => payload.value,
   readOnlySource: readOnlyMode,
   onSyncNative: syncNativeControl,
-  onMutate: () => { submitError.value = '' }
+  // Drag/drop and click-to-place answers only flow through onMutate
+  // (handleQuestionInput is never fired for them), so autosave hooks here.
+  onMutate: () => {
+    submitError.value = ''
+    if (!hydratingAnswers.value) scheduleDraftAutosave()
+  }
 })
 
 const {
@@ -338,7 +350,7 @@ const {
   getPracticeTimerSnapshot,
   startPracticeTimer,
   stopPracticeTimer,
-  toggleTimer: togglePracticeTimer,
+  toggleTimer,
   resetPracticeTimerClock,
   setPracticeTimerElapsedSeconds
 } = useReadingTimer({
@@ -608,9 +620,14 @@ async function loadAsset() {
   resetPracticeTimerClock()
   try {
     const data = await loadReadingAsset(normalizedAssetId)
-    initializeAnswers(data?.payload)
-    if (isTauriRuntime()) {
-      await hydrateOpenDraft(normalizedAssetId)
+    hydratingAnswers.value = true
+    try {
+      initializeAnswers(data?.payload)
+      if (isTauriRuntime()) {
+        await hydrateOpenDraft(normalizedAssetId)
+      }
+    } finally {
+      hydratingAnswers.value = false
     }
   } catch (assetError) {
     console.error('unified reading page: load failed', assetError)
@@ -620,7 +637,8 @@ async function loadAsset() {
     await nextTick()
     syncDomAnswers()
     if (isTauriRuntime()) {
-      await hydrateHighlightsFromStore(asset.value.id, tauriAttemptId || null, null)
+      // Both kinds: the Notes drawer reads kind === 'note' snapshot entries.
+      await hydrateHighlightsFromStore(asset.value.id, tauriAttemptId || null, null, ['highlight', 'note'])
     }
     restoreHighlightsFromRecords(highlightSnapshot.value)
     if (readOnlyMode.value) {
@@ -671,22 +689,82 @@ function handleQuestionInput(event) {
   scheduleDraftAutosave()
 }
 
+// --- unified checkbox core (pure; extracted by
+// developer/tests/js/readingUnifiedCheckbox.test.mjs) ---
+// Checkbox groups come in two shapes: a compound native name ("q9_10",
+// "q11-12-13") owning one answer slot per member id, and a single-id name
+// ("q11") where ONE logical question owns the whole checked-value array
+// (answerKey q11 = ["C","E","G"]).
+function planCheckboxAnswerWrites(expandedIds, checkedValues) {
+  if (!expandedIds.length) return []
+  if (expandedIds.length === 1) {
+    return [{ questionId: expandedIds[0], value: checkedValues.slice() }]
+  }
+  return expandedIds.map((questionId, index) => ({
+    questionId,
+    value: checkedValues[index] || ''
+  }))
+}
+
+// Inverse of planCheckboxAnswerWrites: which boxes a native group ticks,
+// given the raw answers of every member id (arrays spread, non-empty
+// strings added, '' means unchecked).
+function collectCheckboxGroupTicks(groupIds, getRawAnswer) {
+  const ticks = new Set()
+  groupIds.forEach((groupId) => {
+    const raw = getRawAnswer(groupId)
+    if (Array.isArray(raw)) {
+      raw.forEach((entry) => {
+        const value = String(entry || '').trim()
+        if (value) ticks.add(value)
+      })
+    } else {
+      const value = String(raw || '').trim()
+      if (value) ticks.add(value)
+    }
+  })
+  return ticks
+}
+// --- end unified checkbox core ---
+
 function collectCheckboxGroup(name) {
-  const questionIds = expandQuestionSequence(name)
-  if (!questionIds.length) return
   const checkedValues = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${escapeCss(name)}"]`))
     .filter((input) => input.checked)
     .map((input) => String(input.value || '').trim())
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right, 'en'))
-  questionIds.forEach((questionId, index) => {
-    setAnswer(questionId, checkedValues[index] || '')
+  planCheckboxAnswerWrites(expandQuestionSequence(name), checkedValues).forEach((write) => {
+    setAnswer(write.questionId, write.value)
   })
 }
 
 function syncDomAnswers() {
   getAnswerEntries().forEach(([questionId, value]) => {
     syncNativeControl(questionId, value)
+  })
+}
+
+// Compound checkbox names ("q9_10", "q11-12-13", "q11") never appear in a
+// question's alias list, so checkbox sync inverts the lookup: group every
+// checkbox by its native name and tick any group this question owns a slot
+// in — the exact inverse of collectCheckboxGroup's assignment.
+function syncNativeCheckboxGroups(questionId) {
+  const groups = new Map()
+  document.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    const name = String(input.name || '')
+    if (!name) return
+    const members = groups.get(name) || []
+    members.push(input)
+    groups.set(name, members)
+  })
+  groups.forEach((inputs, name) => {
+    const memberIds = expandQuestionSequence(name)
+    if (!memberIds.includes(questionId)) return
+    const ticks = collectCheckboxGroupTicks(memberIds, getRawAnswer)
+    inputs.forEach((input) => {
+      input.checked = ticks.has(String(input.value || '').trim())
+      input.disabled = readOnlyMode.value
+    })
   })
 }
 
@@ -699,27 +777,11 @@ function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId))
     syncDropzoneControl(questionId, explicitValue)
     return
   }
+  syncNativeCheckboxGroups(questionId)
   const names = new Set(resolveAnswerAliasesFromIds(questionId, payload.value?.questionDisplayMap || null))
   if (interaction?.name) names.add(interaction.name)
   names.forEach((name) => {
     const escaped = escapeCss(name)
-    // Checkbox groups share one native name across a question sequence
-    // ("choose TWO letters"): a box is ticked when ANY question in the group
-    // holds its value — the inverse of collectCheckboxGroup's assignment.
-    const groupValues = new Set()
-    expandQuestionSequence(name).forEach((groupId) => {
-      const raw = getRawAnswer(groupId)
-      if (Array.isArray(raw)) {
-        raw.forEach((entry) => { const v = String(entry || '').trim(); if (v) groupValues.add(v) })
-      } else {
-        const v = String(raw || '').trim()
-        if (v) groupValues.add(v)
-      }
-    })
-    document.querySelectorAll(`input[type="checkbox"][name="${escaped}"]`).forEach((input) => {
-      input.checked = groupValues.has(String(input.value || '').trim())
-      input.disabled = readOnlyMode.value
-    })
     document.querySelectorAll(`input[type="radio"][name="${escaped}"]`).forEach((input) => {
       input.checked = String(input.value || '').trim() === String(explicitValue || '').trim()
       input.disabled = readOnlyMode.value

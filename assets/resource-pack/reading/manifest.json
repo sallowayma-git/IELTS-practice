@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packId": "ielts-reading-builtin-v1",
-  "assetCount": 239,
+  "assetCount": 242,
   "entries": [
     {
       "examId": "p1-high-01",
@@ -748,7 +748,7 @@
       "category": "P2",
       "difficulty": null,
       "frequency": "high",
-      "sha256": "93f5f49449f2d6e76fa0458bf3d6d3bd5898400fe5cbe62903063eed2a974fcc"
+      "sha256": "443d87d4a02fdf7a47d30c96ece75da686efd9376b9c2359e79557b131eb94a0"
     },
     {
       "examId": "p2-high-136",
@@ -1414,7 +1414,7 @@
       "category": "P3",
       "difficulty": null,
       "frequency": "high",
-      "sha256": "802aaa0d2c674ed759aeb27f0ec8249bf8a525079873b6c671254a4df0c1cbf3"
+      "sha256": "bf3cc4fe69748c480cf8edc1452c26c55d5abb62be0df20d912ac501e54df2b8"
     },
     {
       "examId": "p3-high-157",
@@ -1729,7 +1729,7 @@
       "category": "P3",
       "difficulty": null,
       "frequency": "medium",
-      "sha256": "202f782bd87acbadf8cf59a2abe3ad98cb19f31fe008c92a2fb6e2132f87ef4e"
+      "sha256": "2a455dfd91e1e413f0908a2a0a8ad98bb77538423a53b11581e5ba75a69ab3ec"
     },
     {
       "examId": "p3-low-186",
@@ -1846,7 +1846,7 @@
       "category": "P3",
       "difficulty": null,
       "frequency": "low",
-      "sha256": "1baa5d9fdf261068006bde7e2f5e559488d3fa6e5794c96fd0df8dab3043947b"
+      "sha256": "04384c447a109c01fec0f5c1fbb86e94eb286192d7f3813c730342e6b34fb4a9"
     },
     {
       "examId": "p3-low-55",
@@ -2153,6 +2153,33 @@
       "difficulty": null,
       "frequency": "high",
       "sha256": "f188e1ed3df5ffcd0c85526d964c7c47fd5a2e5f1d1fbd97219717adefaa3691"
+    },
+    {
+      "examId": "p2-high-192",
+      "file": "payloads/p2-high-192.json",
+      "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
+      "category": "P2",
+      "difficulty": null,
+      "frequency": "high",
+      "sha256": "c2771dee04262308d4757adecd8df9b3610fd0d9b679c72f7e3f5ce5dda40277"
+    },
+    {
+      "examId": "p2-low-051",
+      "file": "payloads/p2-low-051.json",
+      "title": "The dingo debate 澳洲野犬_澳洲野狗",
+      "category": "P2",
+      "difficulty": null,
+      "frequency": "low",
+      "sha256": "17ff06780e72f3463e06f7cda05a9f0e6dd29aa3f3ae6ae9b740bec0d9536295"
+    },
+    {
+      "examId": "p2-medium-058",
+      "file": "payloads/p2-medium-058.json",
+      "title": "Who wrote Shakespeare's plays 莎士比亚",
+      "category": "P2",
+      "difficulty": null,
+      "frequency": "medium",
+      "sha256": "ef3d4d17c1de34f41ef559f3333b0c200bfc0afab88f06fcff5219e20c7d88fd"
     }
   ]
 }

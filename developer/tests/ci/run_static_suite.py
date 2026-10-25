@@ -198,6 +198,10 @@ def main() -> int:
             ["node", "developer/tests/js/readingDragSelection.test.mjs"],
         ),
         run_command(
+            "Reading unified checkbox answers",
+            ["node", "developer/tests/js/readingUnifiedCheckbox.test.mjs"],
+        ),
+        run_command(
             "Reading highlight core",
             ["node", "developer/tests/js/readingHighlightCore.test.mjs"],
         ),

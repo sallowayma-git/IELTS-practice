@@ -52,6 +52,67 @@ function sha256(text) {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
+// Retired-on-opensource exam ids kept in the shipped pack so existing installs
+// (practice_assets rows, drafts, history) still resolve their passage. They are
+// byte-duplicates of their renumbered twins (p2-high-192 ≡ p2-low-104 etc.) and
+// are no longer produced by the generator; export preserves the payload file
+// already sitting in the output dir instead of regenerating it.
+const COMPAT_RETAINED_EXAMS = ['p2-high-192', 'p2-low-051', 'p2-medium-058'];
+
+const MEDIA_MIME_BY_EXT = {
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.avif': 'image/avif'
+};
+
+const MEDIA_REF_PATTERN = /media\/([\w.-]+?\.(?:png|svg|jpe?g|webp|gif|avif))/g;
+
+// Diagram-style payloads reference `media/<file>` siblings of the standalone
+// HTML page. Neither the Tauri webview nor the dev server serves that path, so
+// the export embeds each referenced file (when present in the generated media
+// dir) as a data URL — the shipped payload becomes self-contained. File
+// existence is the guard: only real bundled media filenames are rewritten.
+function embedMediaRefs(value) {
+  if (typeof value === 'string') {
+    return value.replace(MEDIA_REF_PATTERN, (ref, filename) => {
+      const mediaPath = path.join(GENERATED_ROOT, 'media', filename);
+      const mime = MEDIA_MIME_BY_EXT[path.extname(filename).toLowerCase()];
+      if (!mime || !fs.existsSync(mediaPath)) return ref;
+      const base64 = fs.readFileSync(mediaPath).toString('base64');
+      return `data:${mime};base64,${base64}`;
+    });
+  }
+  if (Array.isArray(value)) return value.map(embedMediaRefs);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = embedMediaRefs(entry);
+    }
+    return out;
+  }
+  return value;
+}
+
+function compatEntryFromExistingPayload(resolvedOutput, payloadDir, examId) {
+  const file = `payloads/${examId}.json`;
+  const payloadPath = path.join(resolvedOutput, file);
+  if (!fs.existsSync(payloadPath)) return null;
+  const payload = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
+  return {
+    examId,
+    file,
+    title: payload.meta?.title || examId,
+    category: payload.meta?.category || null,
+    difficulty: payload.meta?.difficulty || null,
+    frequency: payload.meta?.frequency || null,
+    sha256: sha256(fs.readFileSync(payloadPath, 'utf8'))
+  };
+}
+
 function exportResourcePack(context, registry, manifest, outputDir) {
   const explanations = loadManifest(context, EXPLANATION_MANIFEST_PATH, '__READING_EXPLANATION_MANIFEST__');
   const resolvedOutput = path.resolve(REPO_ROOT, outputDir);
@@ -65,7 +126,7 @@ function exportResourcePack(context, registry, manifest, outputDir) {
     if (explanationEntry) {
       payload.reviewExplanations = loadDataset(context, context.__READING_EXPLANATION_DATA__, explanationEntry);
     }
-    const text = stableJson(payload);
+    const text = stableJson(embedMediaRefs(payload));
     const file = `payloads/${entry.examId}.json`;
     fs.writeFileSync(path.join(resolvedOutput, file), text, 'utf8');
     return {
@@ -78,6 +139,11 @@ function exportResourcePack(context, registry, manifest, outputDir) {
       sha256: sha256(text)
     };
   });
+
+  for (const examId of COMPAT_RETAINED_EXAMS) {
+    const entry = compatEntryFromExistingPayload(resolvedOutput, payloadDir, examId);
+    if (entry) entries.push(entry);
+  }
 
   const packManifest = {
     schemaVersion: 1,
