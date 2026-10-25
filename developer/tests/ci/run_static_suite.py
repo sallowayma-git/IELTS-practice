@@ -398,6 +398,10 @@ def main() -> int:
             [sys.executable, "developer/tests/ci/verify_reading_resources.py"],
         ),
         run_command(
+            "Reading resource checkout and upgrade compatibility",
+            [sys.executable, "developer/tests/ci/reading_resource_test.py"],
+        ),
+        run_command(
             "Python cognitive protocol",
             [
                 sys.executable,

@@ -24,6 +24,7 @@ export interface ReadingInteraction {
 }
 
 export interface ReadingQuestionGroup {
+  groupId?: string
   questionIds?: string[]
   allowOptionReuse?: boolean
   [key: string]: unknown
@@ -42,6 +43,7 @@ export interface DragPayload {
   value: string
   label: string
   sourceQuestionId: string
+  groupId?: string
 }
 
 interface AssignAnswerOptions {
@@ -229,7 +231,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       return
     }
     const dragPayload = getDragPayloadFromEvent(event)
-    if (!dragPayload?.value) {
+    if (!dragPayload?.value || !belongsToQuestionGroup(dragPayload, questionId)) {
       return
     }
     setDragDropAnswer(questionId, dragPayload.value, {
@@ -278,6 +280,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
   function placeSelectedDragOption(questionId: string) {
     if (!questionId || !isDragDropControl(questionId)) return false
     return selectionController.place(questionId, (_target: string, selected: DragPayload) => {
+      if (!belongsToQuestionGroup(selected, questionId)) return false
       const usedBy = findQuestionUsingDragOption(questionId, selected.value)
       if (usedBy) {
         dragInteractionStatus.value = `该选项已用于第 ${getDisplayLabel(usedBy)} 题。`
@@ -356,7 +359,8 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     const dropzone = getNativeDropzoneElement(event.target)
     if (dropzone) {
       const questionId = resolveDropzoneQuestionId(dropzone)
-      if (!questionId || !isDragDropControl(questionId) || !dragPayload?.value) {
+      if (!questionId || !isDragDropControl(questionId) || !dragPayload?.value
+        || !belongsToQuestionGroup(dragPayload, questionId)) {
         return
       }
       event.preventDefault()
@@ -394,7 +398,8 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       return {
         value: String((parsed as DragPayload).value || '').trim(),
         label: String((parsed as DragPayload).label || (parsed as DragPayload).value || '').trim(),
-        sourceQuestionId: normalizeQuestionId((parsed as DragPayload).sourceQuestionId)
+        sourceQuestionId: normalizeQuestionId((parsed as DragPayload).sourceQuestionId),
+        groupId: String((parsed as DragPayload).groupId || '')
       }
     } catch (_) {
       const fallback = String(rawValue || '').trim()
@@ -426,11 +431,16 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       dataset.dragLabel
       || dataset.answerLabel
       || dataset.word
-      || dataset.value
       || element.textContent
       || value
     ).trim()
-    return value ? { value, label: label || value, sourceQuestionId } : null
+    const groupId = element.closest<HTMLElement>('[data-group-id]')?.dataset.groupId
+      || (sourceQuestionId ? getDragDropGroup(sourceQuestionId)?.groupId : '')
+    return value ? { value, label: label || value, sourceQuestionId, groupId } : null
+  }
+
+  function belongsToQuestionGroup(selected: DragPayload, questionId: string): boolean {
+    return !selected.groupId || selected.groupId === getDragDropGroup(questionId)?.groupId
   }
 
   function inferDragValueFromLabel(label: unknown): string {
@@ -602,6 +612,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
         selected && payload
         && selected.value === payload.value
         && selected.sourceQuestionId === payload.sourceQuestionId
+        && selected.groupId === payload.groupId
       )
       if (!['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName)) {
         element.tabIndex = readOnly ? -1 : 0
@@ -676,7 +687,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
   // own group's questions holds it, and never when the group allows reuse.
   // When the owning group cannot be resolved, fail open (stay interactive).
   function isDragOptionConsumedByGroup(group: ReadingQuestionGroup | null, value: string): boolean {
-    if (!group || group.allowOptionReuse === true) {
+    if (!group) {
       return false
     }
     const normalized = String(value || '').trim()
@@ -684,6 +695,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       return false
     }
     return (Array.isArray(group.questionIds) ? group.questionIds : []).some((questionId) => {
+      if (allowsDragOptionReuse(questionId)) return false
       const current = options.getRawAnswer(questionId)
       return Array.isArray(current)
         ? current.includes(normalized)

@@ -52,65 +52,23 @@ function sha256(text) {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
-// Retired-on-opensource exam ids kept in the shipped pack so existing installs
-// (practice_assets rows, drafts, history) still resolve their passage. They are
-// byte-duplicates of their renumbered twins (p2-high-192 ≡ p2-low-104 etc.) and
-// are no longer produced by the generator; export preserves the payload file
-// already sitting in the output dir instead of regenerating it.
-const COMPAT_RETAINED_EXAMS = ['p2-high-192', 'p2-low-051', 'p2-medium-058'];
-
-const MEDIA_MIME_BY_EXT = {
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.avif': 'image/avif'
-};
-
-const MEDIA_REF_PATTERN = /media\/([\w.-]+?\.(?:png|svg|jpe?g|webp|gif|avif))/g;
-
-// Diagram-style payloads reference `media/<file>` siblings of the standalone
-// HTML page. Neither the Tauri webview nor the dev server serves that path, so
-// the export embeds each referenced file (when present in the generated media
-// dir) as a data URL — the shipped payload becomes self-contained. File
-// existence is the guard: only real bundled media filenames are rewritten.
-function embedMediaRefs(value) {
-  if (typeof value === 'string') {
-    return value.replace(MEDIA_REF_PATTERN, (ref, filename) => {
-      const mediaPath = path.join(GENERATED_ROOT, 'media', filename);
-      const mime = MEDIA_MIME_BY_EXT[path.extname(filename).toLowerCase()];
-      if (!mime || !fs.existsSync(mediaPath)) return ref;
-      const base64 = fs.readFileSync(mediaPath).toString('base64');
-      return `data:${mime};base64,${base64}`;
-    });
-  }
-  if (Array.isArray(value)) return value.map(embedMediaRefs);
+// Inline local diagrams in the immutable payload so both WebView reading
+// surfaces can render them offline without a host-relative media URL.
+function embedLocalMedia(value) {
+  if (Array.isArray(value)) return value.map(embedLocalMedia);
   if (value && typeof value === 'object') {
-    const out = {};
-    for (const [key, entry] of Object.entries(value)) {
-      out[key] = embedMediaRefs(entry);
-    }
-    return out;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, embedLocalMedia(item)]));
   }
-  return value;
-}
-
-function compatEntryFromExistingPayload(resolvedOutput, payloadDir, examId) {
-  const file = `payloads/${examId}.json`;
-  const payloadPath = path.join(resolvedOutput, file);
-  if (!fs.existsSync(payloadPath)) return null;
-  const payload = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
-  return {
-    examId,
-    file,
-    title: payload.meta?.title || examId,
-    category: payload.meta?.category || null,
-    difficulty: payload.meta?.difficulty || null,
-    frequency: payload.meta?.frequency || null,
-    sha256: sha256(fs.readFileSync(payloadPath, 'utf8'))
-  };
+  if (typeof value !== 'string') return value;
+  return value.replace(/(<img\b[^>]*\bsrc\s*=\s*)(["'])(?:\.\/)?(media\/[^"']+)\2/gi,
+    (_match, prefix, quote, relative) => {
+      const mediaRoot = path.join(GENERATED_ROOT, 'media');
+      const filename = path.resolve(GENERATED_ROOT, relative);
+      if (!filename.startsWith(`${mediaRoot}${path.sep}`)) throw new Error(`invalid_reading_media:${relative}`);
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.avif': 'image/avif', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[path.extname(filename).toLowerCase()];
+      if (!mime) throw new Error(`unsupported_reading_media:${relative}`);
+      return `${prefix}${quote}data:${mime};base64,${fs.readFileSync(filename).toString('base64')}${quote}`;
+    });
 }
 
 function exportResourcePack(context, registry, manifest, outputDir) {
@@ -119,14 +77,19 @@ function exportResourcePack(context, registry, manifest, outputDir) {
   const payloadDir = path.join(resolvedOutput, 'payloads');
   fs.mkdirSync(payloadDir, { recursive: true });
 
-  const entries = buildEntryList(manifest).map((entry) => {
-    const dataset = loadDataset(context, registry, manifest[entry.examId] || entry);
+  // Keep the original payloads for retired IDs: existing draft/history answers
+  // and SQLite content_ref paths still use these IDs after an upgrade.
+  const retired = Object.keys(context.__READING_EXAM_ALIASES__ || {}).map((examId) => ({ examId, retired: true }));
+  const entries = [...buildEntryList(manifest), ...retired].sort((a, b) => a.examId.localeCompare(b.examId, 'en')).map((entry) => {
+    const dataset = entry.retired
+      ? JSON.parse(readText(path.join(GENERATED_ROOT, 'retired', `${entry.examId}.json`)))
+      : loadDataset(context, registry, manifest[entry.examId] || entry);
     const payload = { ...dataset, examId: dataset.examId || entry.examId };
     const explanationEntry = pickManifestEntry(explanations, entry.examId);
     if (explanationEntry) {
       payload.reviewExplanations = loadDataset(context, context.__READING_EXPLANATION_DATA__, explanationEntry);
     }
-    const text = stableJson(embedMediaRefs(payload));
+    const text = stableJson(embedLocalMedia(payload));
     const file = `payloads/${entry.examId}.json`;
     fs.writeFileSync(path.join(resolvedOutput, file), text, 'utf8');
     return {
@@ -139,11 +102,6 @@ function exportResourcePack(context, registry, manifest, outputDir) {
       sha256: sha256(text)
     };
   });
-
-  for (const examId of COMPAT_RETAINED_EXAMS) {
-    const entry = compatEntryFromExistingPayload(resolvedOutput, payloadDir, examId);
-    if (entry) entries.push(entry);
-  }
 
   const packManifest = {
     schemaVersion: 1,

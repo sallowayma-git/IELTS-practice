@@ -66,8 +66,6 @@
         <template v-for="(block, index) in passageBlocks" :key="block.blockId || index">
           <div v-html="block.html || block.bodyHtml"></div>
         </template>
-        <!-- Passage explanations are per-paragraph (up to nine), not per-block
-             (usually one): render the full list after the passage itself. -->
         <div
           v-for="(note, noteIndex) in passageNotes"
           :key="`passage-note-${noteIndex}`"
@@ -284,14 +282,11 @@ const optionsOpen = ref(false)
 const noteDrawerOpen = ref(false)
 const activeQuestionId = ref('')
 const leftPanePercent = ref(50)
-// True only while initializeAnswers/hydrateOpenDraft rebuild the answer map on
-// load; mutations during that window are hydration, not user input, and must
-// not schedule draft autosaves.
-const hydratingAnswers = ref(false)
 let dividerDragging = false
 let dividerPointerId = null
 let draftAutosaveTimer = null
 let tauriAttemptId = ''
+let hydratingAsset = false
 
 const reviewMode = computed(() => Boolean(submission.value))
 const readOnlyMode = computed(() => reviewMode.value)
@@ -311,11 +306,9 @@ const {
   payloadSource: () => payload.value,
   readOnlySource: readOnlyMode,
   onSyncNative: syncNativeControl,
-  // Drag/drop and click-to-place answers only flow through onMutate
-  // (handleQuestionInput is never fired for them), so autosave hooks here.
-  onMutate: () => {
+  onMutate: (_questionId, _value, metadata) => {
     submitError.value = ''
-    if (!hydratingAnswers.value) scheduleDraftAutosave()
+    if (metadata.changed && metadata.options.track) scheduleDraftAutosave()
   }
 })
 
@@ -350,7 +343,7 @@ const {
   getPracticeTimerSnapshot,
   startPracticeTimer,
   stopPracticeTimer,
-  toggleTimer,
+  toggleTimer: togglePracticeTimer,
   resetPracticeTimerClock,
   setPracticeTimerElapsedSeconds
 } = useReadingTimer({
@@ -529,14 +522,18 @@ function canonicalToken(value) {
 }
 
 function collectChoiceInputs(questionId) {
-  const inputs = []
-  for (const alias of resolveAnswerAliasesFromIds(questionId, payload.value?.questionDisplayMap || null)) {
-    const escaped = escapeCss(alias)
-    document.querySelectorAll(
-      `input[type="radio"][name="${escaped}"], input[type="checkbox"][name="${escaped}"]`
-    ).forEach((input) => inputs.push(input))
-  }
-  return inputs
+  return Array.from(document.querySelectorAll(
+    '#question-groups input[type="radio"][name], #question-groups input[type="checkbox"][name]'
+  )).filter((input) => resolveNativeQuestionIds(input.name).includes(questionId))
+}
+
+function resolveNativeQuestionIds(name) {
+  const order = payload.value?.questionOrder || []
+  const expanded = expandQuestionSequence(name)
+  const direct = expanded.filter((id) => order.includes(id))
+  if (direct.length === expanded.length) return direct
+  return order.filter((id) => getInteraction(id)?.name === name
+    || resolveAnswerAliasesFromIds(id, payload.value?.questionDisplayMap).includes(name))
 }
 
 function applyResultsToQuestionArea() {
@@ -613,6 +610,16 @@ watch(reviewMode, async () => {
 async function loadAsset() {
   const normalizedAssetId = String(props.assetId || route.params.assetId || '').trim()
   if (!normalizedAssetId) return
+  if (draftAutosaveTimer) clearTimeout(draftAutosaveTimer)
+  draftAutosaveTimer = null
+  if (asset.value && !reviewMode.value && !hydratingAsset) {
+    await persistTauriDraft().catch((draftError) => {
+      console.warn('unified reading page: draft save before asset change failed', draftError)
+    })
+  }
+  hydratingAsset = true
+  tauriAttemptId = ''
+  let restoredTimer = null
   submission.value = null
   reviewExplanations.value = null
   submitError.value = ''
@@ -620,34 +627,30 @@ async function loadAsset() {
   resetPracticeTimerClock()
   try {
     const data = await loadReadingAsset(normalizedAssetId)
-    hydratingAnswers.value = true
-    try {
-      initializeAnswers(data?.payload)
-      if (isTauriRuntime()) {
-        await hydrateOpenDraft(normalizedAssetId)
-      }
-    } finally {
-      hydratingAnswers.value = false
+    initializeAnswers(data?.payload)
+    if (isTauriRuntime()) {
+      restoredTimer = await hydrateOpenDraft(normalizedAssetId)
     }
   } catch (assetError) {
     console.error('unified reading page: load failed', assetError)
+    hydratingAsset = false
     return
   }
   if (asset.value && payload.value) {
     await nextTick()
     syncDomAnswers()
     if (isTauriRuntime()) {
-      // Both kinds: the Notes drawer reads kind === 'note' snapshot entries.
       await hydrateHighlightsFromStore(asset.value.id, tauriAttemptId || null, null, ['highlight', 'note'])
     }
     restoreHighlightsFromRecords(highlightSnapshot.value)
     if (readOnlyMode.value) {
       setPracticeTimerElapsedSeconds(Math.max(0, Number(submission.value?.duration || 0)))
       setReadOnlyDomControls(true)
-    } else {
+    } else if (restoredTimer?.running !== false) {
       startPracticeTimer()
     }
   }
+  hydratingAsset = false
 }
 
 async function hydrateOpenDraft(assetIdValue) {
@@ -659,9 +662,10 @@ async function hydrateOpenDraft(assetIdValue) {
     for (const entry of attempt.answers || []) {
       const questionId = String(entry.questionId || entry.question_id || '').trim()
       if (questionId && entry.answer != null) {
-        setAnswer(questionId, entry.answer)
+        assignAnswer(questionId, entry.answer)
       }
     }
+    return timer
   } catch (draftError) {
     console.warn('unified reading page: draft hydration failed', draftError)
   }
@@ -673,7 +677,6 @@ function handleQuestionInput(event) {
   if (!target || !target.name) return
   if (target.type === 'checkbox') {
     collectCheckboxGroup(target.name)
-    scheduleDraftAutosave()
     return
   }
   const questionId = normalizeQuestionId(target.name)
@@ -681,20 +684,13 @@ function handleQuestionInput(event) {
   if (target.type === 'radio') {
     if (target.checked) {
       setAnswer(questionId, target.value)
-      scheduleDraftAutosave()
     }
     return
   }
   setAnswer(questionId, target.value)
-  scheduleDraftAutosave()
 }
 
-// --- unified checkbox core (pure; extracted by
-// developer/tests/js/readingUnifiedCheckbox.test.mjs) ---
-// Checkbox groups come in two shapes: a compound native name ("q9_10",
-// "q11-12-13") owning one answer slot per member id, and a single-id name
-// ("q11") where ONE logical question owns the whole checked-value array
-// (answerKey q11 = ["C","E","G"]).
+// --- unified checkbox core (pure; exercised by readingUnifiedCheckbox.test.mjs) ---
 function planCheckboxAnswerWrites(expandedIds, checkedValues) {
   if (!expandedIds.length) return []
   if (expandedIds.length === 1) {
@@ -706,34 +702,23 @@ function planCheckboxAnswerWrites(expandedIds, checkedValues) {
   }))
 }
 
-// Inverse of planCheckboxAnswerWrites: which boxes a native group ticks,
-// given the raw answers of every member id (arrays spread, non-empty
-// strings added, '' means unchecked).
 function collectCheckboxGroupTicks(groupIds, getRawAnswer) {
-  const ticks = new Set()
-  groupIds.forEach((groupId) => {
-    const raw = getRawAnswer(groupId)
-    if (Array.isArray(raw)) {
-      raw.forEach((entry) => {
-        const value = String(entry || '').trim()
-        if (value) ticks.add(value)
-      })
-    } else {
-      const value = String(raw || '').trim()
-      if (value) ticks.add(value)
-    }
-  })
-  return ticks
+  return new Set(groupIds.flatMap((id) => {
+    const raw = getRawAnswer(id)
+    return Array.isArray(raw) ? raw : [raw]
+  }).map((value) => String(value || '').trim()).filter(Boolean))
 }
 // --- end unified checkbox core ---
 
 function collectCheckboxGroup(name) {
+  const questionIds = resolveNativeQuestionIds(name)
+  if (!questionIds.length) return
   const checkedValues = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${escapeCss(name)}"]`))
     .filter((input) => input.checked)
     .map((input) => String(input.value || '').trim())
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right, 'en'))
-  planCheckboxAnswerWrites(expandQuestionSequence(name), checkedValues).forEach((write) => {
+  planCheckboxAnswerWrites(questionIds, checkedValues).forEach((write) => {
     setAnswer(write.questionId, write.value)
   })
 }
@@ -742,29 +727,15 @@ function syncDomAnswers() {
   getAnswerEntries().forEach(([questionId, value]) => {
     syncNativeControl(questionId, value)
   })
-}
-
-// Compound checkbox names ("q9_10", "q11-12-13", "q11") never appear in a
-// question's alias list, so checkbox sync inverts the lookup: group every
-// checkbox by its native name and tick any group this question owns a slot
-// in — the exact inverse of collectCheckboxGroup's assignment.
-function syncNativeCheckboxGroups(questionId) {
-  const groups = new Map()
-  document.querySelectorAll('input[type="checkbox"]').forEach((input) => {
-    const name = String(input.name || '')
-    if (!name) return
-    const members = groups.get(name) || []
-    members.push(input)
-    groups.set(name, members)
-  })
-  groups.forEach((inputs, name) => {
-    const memberIds = expandQuestionSequence(name)
-    if (!memberIds.includes(questionId)) return
-    const ticks = collectCheckboxGroupTicks(memberIds, getRawAnswer)
-    inputs.forEach((input) => {
-      input.checked = ticks.has(String(input.value || '').trim())
-      input.disabled = readOnlyMode.value
-    })
+  // Native names own checkbox groups; a compound name is absent from the
+  // per-question alias list. Restore the union once, including empty answers.
+  const valuesByName = new Map()
+  document.querySelectorAll('#question-groups input[type="checkbox"][name]').forEach((input) => {
+    if (!valuesByName.has(input.name)) {
+      valuesByName.set(input.name, collectCheckboxGroupTicks(resolveNativeQuestionIds(input.name), getRawAnswer))
+    }
+    input.checked = valuesByName.get(input.name).has(String(input.value || '').trim())
+    input.disabled = readOnlyMode.value
   })
 }
 
@@ -777,7 +748,6 @@ function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId))
     syncDropzoneControl(questionId, explicitValue)
     return
   }
-  syncNativeCheckboxGroups(questionId)
   const names = new Set(resolveAnswerAliasesFromIds(questionId, payload.value?.questionDisplayMap || null))
   if (interaction?.name) names.add(interaction.name)
   names.forEach((name) => {
@@ -794,7 +764,7 @@ function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId))
 }
 
 function scheduleDraftAutosave() {
-  if (!isTauriRuntime() || readOnlyMode.value) return
+  if (!isTauriRuntime() || readOnlyMode.value || hydratingAsset || submitting.value) return
   if (draftAutosaveTimer) clearTimeout(draftAutosaveTimer)
   draftAutosaveTimer = setTimeout(() => {
     draftAutosaveTimer = null
@@ -805,7 +775,7 @@ function scheduleDraftAutosave() {
 }
 
 async function persistTauriDraft() {
-  if (!isTauriRuntime() || !asset.value?.id || readOnlyMode.value) return
+  if (!isTauriRuntime() || !asset.value?.id || readOnlyMode.value || hydratingAsset || submitting.value) return
   if (!tauriAttemptId) tauriAttemptId = readingAttempt.newAttemptId()
   await readingAttempt.persistDraft({
     attemptId: tauriAttemptId,
@@ -818,6 +788,12 @@ async function persistTauriDraft() {
     titleSnapshot: asset.value.title || asset.value.name || null,
     timerSnapshot: getPracticeTimerSnapshot()
   })
+}
+
+function toggleTimer() {
+  if (readOnlyMode.value || hydratingAsset) return
+  togglePracticeTimer()
+  scheduleDraftAutosave()
 }
 
 function handleReset() {
@@ -839,6 +815,7 @@ function handleReset() {
   if (submitting.value || answeredCount.value === 0) return
   if (!window.confirm('确定要清空全部作答吗？')) return
   initializeAnswers(payload.value)
+  scheduleDraftAutosave()
   void nextTick(() => {
     syncDomAnswers()
   })

@@ -208,18 +208,18 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 // and the sibling review fixes (R5/R7/R8) must stay in place.
 {
   const syncBody = page.slice(page.indexOf('function syncNativeControl'), page.indexOf('function scheduleDraftAutosave'))
-  assert.ok(syncBody.includes('syncNativeCheckboxGroups(questionId)'),
-    'syncNativeControl must route checkboxes through syncNativeCheckboxGroups')
   assert.ok(!syncBody.includes('checkbox"][name='),
     'syncNativeControl must not query checkboxes through per-alias names')
-  const collectBody = page.slice(page.indexOf('function collectCheckboxGroup'), page.indexOf('function syncNativeCheckboxGroups'))
-  assert.ok(collectBody.includes('planCheckboxAnswerWrites(expandQuestionSequence(name), checkedValues)'),
+  const collectBody = page.slice(page.indexOf('function collectCheckboxGroup(name)'), page.indexOf('function syncNativeControl'))
+  assert.ok(collectBody.includes('planCheckboxAnswerWrites(questionIds, checkedValues)'),
     'collectCheckboxGroup must write answers through planCheckboxAnswerWrites')
+  assert.ok(collectBody.includes('collectCheckboxGroupTicks(resolveNativeQuestionIds(input.name), getRawAnswer)'),
+    'DOM synchronization must collect the union of each native checkbox group')
 
   // R5: drag mutations autosave via onMutate, hydration excluded.
-  assert.ok(page.includes('if (!hydratingAnswers.value) scheduleDraftAutosave()'),
-    'onMutate must autosave outside hydration')
-  assert.ok(page.includes('hydratingAnswers.value = true'),
+  assert.ok(page.includes('metadata.changed && metadata.options.track'),
+    'onMutate must autosave user mutations')
+  assert.ok(page.includes('hydratingAsset = true'),
     'loadAsset must mark the hydration window')
 
   // R7: every passage note is rendered, not just passageNotes[blockIndex].
@@ -230,8 +230,8 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 
   // R8: the timer click binding resolves.
   assert.ok(page.includes('@click="toggleTimer"'))
-  assert.ok(!page.includes('toggleTimer: togglePracticeTimer'),
-    'toggleTimer must be bound without the dead rename')
+  assert.ok(page.includes('function toggleTimer()'),
+    'toggleTimer must resolve to a wrapper that persists the timer state')
 }
 
 console.log('reading unified checkbox answers: ok')
