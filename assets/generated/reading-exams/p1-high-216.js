@@ -4,7 +4,8 @@
   "meta": {
     "title": "Australia’s cane toad problem 澳洲蟾蜍【高】",
     "category": "P1",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

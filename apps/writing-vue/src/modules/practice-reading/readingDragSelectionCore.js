@@ -33,14 +33,16 @@ export function createDragSelectionController(options = {}) {
     }
     const value = String(payload?.value || '').trim()
     if (!value) return false
-    if (selected?.value === value && selected?.sourceQuestionId === String(payload?.sourceQuestionId || '')) {
+    if (selected?.value === value && selected?.sourceQuestionId === String(payload?.sourceQuestionId || '')
+      && (selected?.groupId || '') === String(payload?.groupId || '')) {
       clear('已取消选择。')
       return false
     }
     selected = {
       value,
       label: String(payload?.label || value).trim() || value,
-      sourceQuestionId: String(payload?.sourceQuestionId || '').trim()
+      sourceQuestionId: String(payload?.sourceQuestionId || '').trim(),
+      ...(payload?.groupId ? { groupId: String(payload.groupId) } : {})
     }
     changed()
     status(`已选择 ${selected.label}，请选择目标位置。`)

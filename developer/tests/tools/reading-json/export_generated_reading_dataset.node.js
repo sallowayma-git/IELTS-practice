@@ -52,20 +52,44 @@ function sha256(text) {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
+// Inline local diagrams in the immutable payload so both WebView reading
+// surfaces can render them offline without a host-relative media URL.
+function embedLocalMedia(value) {
+  if (Array.isArray(value)) return value.map(embedLocalMedia);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, embedLocalMedia(item)]));
+  }
+  if (typeof value !== 'string') return value;
+  return value.replace(/(<img\b[^>]*\bsrc\s*=\s*)(["'])(?:\.\/)?(media\/[^"']+)\2/gi,
+    (_match, prefix, quote, relative) => {
+      const mediaRoot = path.join(GENERATED_ROOT, 'media');
+      const filename = path.resolve(GENERATED_ROOT, relative);
+      if (!filename.startsWith(`${mediaRoot}${path.sep}`)) throw new Error(`invalid_reading_media:${relative}`);
+      const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.avif': 'image/avif', '.gif': 'image/gif', '.svg': 'image/svg+xml' }[path.extname(filename).toLowerCase()];
+      if (!mime) throw new Error(`unsupported_reading_media:${relative}`);
+      return `${prefix}${quote}data:${mime};base64,${fs.readFileSync(filename).toString('base64')}${quote}`;
+    });
+}
+
 function exportResourcePack(context, registry, manifest, outputDir) {
   const explanations = loadManifest(context, EXPLANATION_MANIFEST_PATH, '__READING_EXPLANATION_MANIFEST__');
   const resolvedOutput = path.resolve(REPO_ROOT, outputDir);
   const payloadDir = path.join(resolvedOutput, 'payloads');
   fs.mkdirSync(payloadDir, { recursive: true });
 
-  const entries = buildEntryList(manifest).map((entry) => {
-    const dataset = loadDataset(context, registry, manifest[entry.examId] || entry);
+  // Keep the original payloads for retired IDs: existing draft/history answers
+  // and SQLite content_ref paths still use these IDs after an upgrade.
+  const retired = Object.keys(context.__READING_EXAM_ALIASES__ || {}).map((examId) => ({ examId, retired: true }));
+  const entries = [...buildEntryList(manifest), ...retired].sort((a, b) => a.examId.localeCompare(b.examId, 'en')).map((entry) => {
+    const dataset = entry.retired
+      ? JSON.parse(readText(path.join(GENERATED_ROOT, 'retired', `${entry.examId}.json`)))
+      : loadDataset(context, registry, manifest[entry.examId] || entry);
     const payload = { ...dataset, examId: dataset.examId || entry.examId };
     const explanationEntry = pickManifestEntry(explanations, entry.examId);
     if (explanationEntry) {
       payload.reviewExplanations = loadDataset(context, context.__READING_EXPLANATION_DATA__, explanationEntry);
     }
-    const text = stableJson(payload);
+    const text = stableJson(embedLocalMedia(payload));
     const file = `payloads/${entry.examId}.json`;
     fs.writeFileSync(path.join(resolvedOutput, file), text, 'utf8');
     return {

@@ -13,7 +13,8 @@
     "pdfFilename": "164. P2 - The Power of Smell 嗅觉的力量.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/",
     "legacyFilename": "164. P2 - The Power of Smell 嗅觉的力量.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -79,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/164. P2 - The Power of Smell 嗅觉的力量.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/164. P2 - The Power of Smell 嗅觉的力量.pdf",
+    "pdf": "ReadingPractice/PDF/164. P2 - The Power of Smell 嗅觉的力量.pdf",
     "ieltsHtml": "IELTS/P2/The Power of Smell.html"
   },
   "audit": {

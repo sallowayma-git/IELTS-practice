@@ -4,7 +4,8 @@
   "meta": {
     "title": "A mechanical friend for children 孩子的机器人朋友【次】",
     "category": "P2",
-    "frequency": "medium"
+    "frequency": "low",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

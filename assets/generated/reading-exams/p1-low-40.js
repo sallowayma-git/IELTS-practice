@@ -13,7 +13,8 @@
     "pdfFilename": "134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/",
     "legacyFilename": "134. P1 - Dyes and fabric dyeing 染料的历史.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -71,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/134. P1 - Dyes and fabric dyeing 染料的历史.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
+    "pdf": "ReadingPractice/PDF/134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
     "ieltsHtml": "IELTS/P1/Dyes and fabric dyeing.html"
   },
   "audit": {

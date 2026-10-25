@@ -13,7 +13,8 @@
     "pdfFilename": "43. P2 - Learning from the Romans 罗马混凝土【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/",
     "legacyFilename": "43. P2 - Learning from the Romans 罗马混凝土【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -47,7 +48,7 @@
         "q8",
         "q9"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q8-9-anchor\">\n                <h4>Questions 21 and 22</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>According to the passage, which <strong>TWO</strong> of the following statements about fly ash are true?</p>\n                <div class=\"options-list\">\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"A\"> A Fly ash results in less damage to the environment than Portland cement.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"B\"> B Fly ash was used by the Romans as an alternative to volcanic ash.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"C\"> C Fly ash is already used in the production of some concrete.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"D\"> D All countries have access to fly ash resources.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"E\"> E Fly ash will soon replace volcanic ash.</label>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-anchor\">\n                <h4>Questions 21 and 22</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>According to the passage, which <strong>TWO</strong> of the following statements about fly ash are true?</p>\n                <div class=\"options-list\">\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q8-9\" value=\"A\"> A Fly ash results in less damage to the environment than Portland cement.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q8-9\" value=\"B\"> B Fly ash was used by the Romans as an alternative to volcanic ash.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q8-9\" value=\"C\"> C Fly ash is already used in the production of some concrete.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q8-9\" value=\"D\"> D All countries have access to fly ash resources.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q8-9\" value=\"E\"> E Fly ash will soon replace volcanic ash.</label></div>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -78,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/43. P2 - Learning from the Romans 罗马混凝土【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/43. P2 - Learning from the Romans 罗马混凝土【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/43. P2 - Learning from the Romans 罗马混凝土【高】.pdf",
     "ieltsHtml": "IELTS/P2/Learning from the Romans.html"
   },
   "audit": {

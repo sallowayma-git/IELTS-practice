@@ -9,11 +9,12 @@
   "meta": {
     "title": "Antarctic research 南极考察",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "182. P2 - Antarctic research 南极考察.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/",
     "legacyFilename": "182. P2 - Antarctic research 南极考察.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -79,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/182. P2 - Antarctic research 南极考察.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/182. P2 - Antarctic research 南极考察.pdf",
+    "pdf": "ReadingPractice/PDF/182. P2 - Antarctic research 南极考察.pdf",
     "ieltsHtml": "IELTS/P2/Antarctic research.html"
   },
   "audit": {

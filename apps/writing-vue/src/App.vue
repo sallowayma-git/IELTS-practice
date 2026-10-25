@@ -1,5 +1,5 @@
 <template>
-  <div :class="['app-shell', 'atlas-source-ui', showShellNav ? 'atlas-paper' : 'atlas-exam']">
+  <div :class="['app-shell', 'atlas-source-ui', shellSkinClass]">
     <a class="a11y-skip-link" href="#app-main-content">跳到主要内容</a>
     <div id="a11y-status-live" class="a11y-status-live" role="status" aria-live="polite" aria-atomic="true"></div>
     <ShuiBackground />
@@ -31,8 +31,15 @@ const route = useRoute()
 const framelessRouteNames = new Set([
   'PracticeReading',
   'PracticeReadingSuite',
-  'PracticeReadingReview'
+  'PracticeReadingReview',
+  // The unified reading page owns its whole viewport (opensource paper skin);
+  // neither shell skin applies, so it runs under a neutral root class.
+  'ReadingUnified'
 ])
+const shellSkinClass = computed(() => {
+  if (route.name === 'ReadingUnified') return 'atlas-unified'
+  return showShellNav.value ? 'atlas-paper' : 'atlas-exam'
+})
 const showShellNav = computed(() => !framelessRouteNames.has(route.name))
 const prefersReducedMotion = computed(() => {
   if (typeof window === 'undefined' || !window.matchMedia) return false

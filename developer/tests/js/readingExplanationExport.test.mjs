@@ -60,6 +60,26 @@ test('shipped carnivorous-plants payload and manifest match a fresh export byte 
   assert.deepEqual(shippingManifest.entries.find((item) => item.examId === examId), entry)
 })
 
+test('local diagram media is embedded byte for byte in the hashed shipping payload', () => {
+  const media = new Map(fs.readdirSync(path.join(root, 'assets/generated/reading-exams/media'))
+    .map((name) => [name, fs.readFileSync(path.join(root, 'assets/generated/reading-exams/media', name)).toString('base64')]))
+  const used = new Set()
+  for (const item of manifest.entries) {
+    const raw = fs.readFileSync(path.join(generatedPack, item.file), 'utf8')
+    const payload = JSON.parse(raw)
+    const html = [...(payload.passage?.blocks || []).map((block) => block.html || block.bodyHtml || ''),
+      ...(payload.questionGroups || []).map((group) => group.bodyHtml || '')].join('\n')
+    assert.doesNotMatch(html, /<img\b[^>]*\bsrc=["'](?:\.\/)?media\//i, item.examId)
+    for (const match of html.matchAll(/<img\b[^>]*\bsrc=["']data:image\/[^;]+;base64,([^"']+)/gi)) {
+      const filename = [...media].find(([, bytes]) => bytes === match[1])?.[0]
+      assert.ok(filename, `embedded diagram must match a generated source: ${item.examId}`)
+      used.add(filename)
+      assert.equal(fs.readFileSync(path.join(shippingPack, item.file), 'utf8'), raw, item.examId)
+    }
+  }
+  assert.equal(used.size, 4)
+})
+
 function reviewGetters(payloadValue) {
   const page = fs.readFileSync(path.join(root, 'apps/writing-vue/src/views/PracticeReadingPage.vue'), 'utf8')
   const getters = page.slice(page.indexOf('const officialReviewExplanations ='), page.indexOf('const suiteSequence ='))

@@ -24,6 +24,7 @@ export interface ReadingInteraction {
 }
 
 export interface ReadingQuestionGroup {
+  groupId?: string
   questionIds?: string[]
   allowOptionReuse?: boolean
   [key: string]: unknown
@@ -42,6 +43,7 @@ export interface DragPayload {
   value: string
   label: string
   sourceQuestionId: string
+  groupId?: string
 }
 
 interface AssignAnswerOptions {
@@ -50,6 +52,8 @@ interface AssignAnswerOptions {
   sourceQuestionId?: string
   [key: string]: unknown
 }
+
+const DROPZONE_ELEMENT_SELECTOR = '.paragraph-dropzone, .match-dropzone, .drop-target-summary, .dropzone'
 
 interface ReadingInteractionsOptions {
   payloadSource?: MaybeRefOrGetter<ReadingInteractionPayload | null | undefined>
@@ -101,8 +105,37 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     return ['radio', 'checkbox', 'select'].includes(String(interaction?.control || ''))
   }
 
+  // Dragdrop gate results are static per payload (dropzone markup does not
+  // change while answers move), and the fallback does DOM lookups — memoize
+  // so hot answer-sync paths pay the query cost once per question.
+  let dropzoneGateCache = new Map<string, boolean>()
+  let dropzoneGateCachePayload: unknown = null
+
   function isDragDropControl(questionId: string): boolean {
-    return getInteraction(questionId)?.control === 'dragdrop'
+    const interaction = getInteraction(questionId)
+    if (interaction?.control) {
+      return interaction.control === 'dragdrop'
+    }
+    // Bundled payloads ship no interactionModel, and the opensource engine this
+    // page mirrors has none either: the native dropzone markup (data-question /
+    // data-target attributes) is the source of truth for dragdrop questions.
+    const source = payload()
+    if (dropzoneGateCachePayload !== source) {
+      dropzoneGateCache = new Map()
+      dropzoneGateCachePayload = source
+    }
+    const cached = dropzoneGateCache.get(questionId)
+    if (cached !== undefined) {
+      return cached
+    }
+    const result = findNativeDropzonesByQuestionId(questionId).length > 0
+    // A false probe before the question DOM is mounted would poison the cache
+    // for the whole session — only cache once [data-question] markup exists.
+    if (!result && typeof document !== 'undefined' && !document.querySelector('[data-question]')) {
+      return false
+    }
+    dropzoneGateCache.set(questionId, result)
+    return result
   }
 
   function getOptions(questionId: string): ReadingInteractionOption[] {
@@ -132,7 +165,22 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     if (typeof interaction?.allowOptionReuse === 'boolean') {
       return interaction.allowOptionReuse
     }
-    return Boolean(getDragDropGroup(questionId)?.allowOptionReuse)
+    const group = getDragDropGroup(questionId)
+    if (typeof group?.allowOptionReuse === 'boolean') {
+      return group.allowOptionReuse
+    }
+    return nativeGroupAllowsClone(questionId)
+  }
+
+  // Native groups can express reuse without normalized metadata: their pool
+  // cards carry data-clone="true" (e.g. p2-high-201 "may be used more than
+  // once", where q7 and q8 both need C). Derive from the question's rendered
+  // group container so option consumption and duplicate-use validation agree.
+  function nativeGroupAllowsClone(questionId: string): boolean {
+    if (typeof document === 'undefined') return false
+    const dropzone = findNativeDropzonesByQuestionId(questionId)[0]
+    const container = dropzone?.closest('[data-group-id]')
+    return Boolean(container?.querySelector('[data-clone="true"]'))
   }
 
   function getSelectedOption(questionId: string): ReadingInteractionOption | null {
@@ -198,7 +246,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       return
     }
     const dragPayload = getDragPayloadFromEvent(event)
-    if (!dragPayload?.value) {
+    if (!dragPayload?.value || !belongsToQuestionGroup(dragPayload, questionId)) {
       return
     }
     setDragDropAnswer(questionId, dragPayload.value, {
@@ -247,6 +295,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
   function placeSelectedDragOption(questionId: string) {
     if (!questionId || !isDragDropControl(questionId)) return false
     return selectionController.place(questionId, (_target: string, selected: DragPayload) => {
+      if (!belongsToQuestionGroup(selected, questionId)) return false
       const usedBy = findQuestionUsingDragOption(questionId, selected.value)
       if (usedBy) {
         dragInteractionStatus.value = `该选项已用于第 ${getDisplayLabel(usedBy)} 题。`
@@ -325,7 +374,8 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     const dropzone = getNativeDropzoneElement(event.target)
     if (dropzone) {
       const questionId = resolveDropzoneQuestionId(dropzone)
-      if (!questionId || !isDragDropControl(questionId) || !dragPayload?.value) {
+      if (!questionId || !isDragDropControl(questionId) || !dragPayload?.value
+        || !belongsToQuestionGroup(dragPayload, questionId)) {
         return
       }
       event.preventDefault()
@@ -363,7 +413,8 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       return {
         value: String((parsed as DragPayload).value || '').trim(),
         label: String((parsed as DragPayload).label || (parsed as DragPayload).value || '').trim(),
-        sourceQuestionId: normalizeQuestionId((parsed as DragPayload).sourceQuestionId)
+        sourceQuestionId: normalizeQuestionId((parsed as DragPayload).sourceQuestionId),
+        groupId: String((parsed as DragPayload).groupId || '')
       }
     } catch (_) {
       const fallback = String(rawValue || '').trim()
@@ -395,11 +446,16 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       dataset.dragLabel
       || dataset.answerLabel
       || dataset.word
-      || dataset.value
       || element.textContent
       || value
     ).trim()
-    return value ? { value, label: label || value, sourceQuestionId } : null
+    const groupId = element.closest<HTMLElement>('[data-group-id]')?.dataset.groupId
+      || (sourceQuestionId ? getDragDropGroup(sourceQuestionId)?.groupId : '')
+    return value ? { value, label: label || value, sourceQuestionId, groupId } : null
+  }
+
+  function belongsToQuestionGroup(selected: DragPayload, questionId: string): boolean {
+    return !selected.groupId || selected.groupId === getDragDropGroup(questionId)?.groupId
   }
 
   function inferDragValueFromLabel(label: unknown): string {
@@ -571,6 +627,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
         selected && payload
         && selected.value === payload.value
         && selected.sourceQuestionId === payload.sourceQuestionId
+        && selected.groupId === payload.groupId
       )
       if (!['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName)) {
         element.tabIndex = readOnly ? -1 : 0
@@ -598,6 +655,69 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     })
   }
 
+  function isInsideDropzoneElement(element: Element | null | undefined): boolean {
+    return Boolean(element?.closest?.(DROPZONE_ELEMENT_SELECTOR))
+  }
+
+  // Pool selectors overlap dropzone markup ([data-answer-value], .drag-item),
+  // so dropzones and their chips must never count as pool items.
+  function isPoolDropzoneCandidate(element: Element | null | undefined): boolean {
+    return Boolean(element?.hasAttribute?.('data-question')) || isInsideDropzoneElement(element)
+  }
+
+  // Label lookup is group-scoped: the same value ("A") can label different
+  // options in sibling groups, so a document-global query returns the wrong one.
+  function nativeDragOptionLabel(value: string, scopeRoot: ParentNode | null = null): string {
+    if (typeof document === 'undefined' || !value) {
+      return ''
+    }
+    const escaped = escapeCss(value)
+    const selector = [
+      `[data-drag-value="${escaped}"]`,
+      `[data-answer-value="${escaped}"]`,
+      `[data-heading="${escaped}"]`,
+      `[data-option="${escaped}"]`,
+      `[data-word="${escaped}"]`,
+      `[data-value="${escaped}"]`
+    ].join(', ')
+    const root = scopeRoot || document
+    const source = Array.from(root.querySelectorAll(selector)).find(
+      (element) => !isInsideDropzoneElement(element)
+    )
+    return String(source?.textContent || '').trim()
+  }
+
+  function findQuestionGroupByElement(element: Element | null | undefined): ReadingQuestionGroup | null {
+    const container = element?.closest?.('[data-group-id]') as HTMLElement | null
+    const groupId = String(container?.dataset?.groupId || '').trim()
+    if (!groupId) {
+      return null
+    }
+    return payload()?.questionGroups?.find(
+      (group) => String(group.groupId || '').trim() === groupId
+    ) || null
+  }
+
+  // Consumption is group-scoped: a pool value is consumed only when one of its
+  // own group's questions holds it, and never when the group allows reuse.
+  // When the owning group cannot be resolved, fail open (stay interactive).
+  function isDragOptionConsumedByGroup(group: ReadingQuestionGroup | null, value: string): boolean {
+    if (!group) {
+      return false
+    }
+    const normalized = String(value || '').trim()
+    if (!normalized) {
+      return false
+    }
+    return (Array.isArray(group.questionIds) ? group.questionIds : []).some((questionId) => {
+      if (allowsDragOptionReuse(questionId)) return false
+      const current = options.getRawAnswer(questionId)
+      return Array.isArray(current)
+        ? current.includes(normalized)
+        : String(current || '').trim() === normalized
+    })
+  }
+
   function syncDropzoneControl(questionId: string, explicitValue: ReadingAnswerValue = options.getRawAnswer(questionId)) {
     const dropzones = findNativeDropzonesByQuestionId(questionId)
     if (!dropzones.length) {
@@ -605,9 +725,15 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     }
     const value = String(Array.isArray(explicitValue) ? explicitValue[0] || '' : explicitValue || '').trim()
     const option = getOptions(questionId).find((entry) => String(entry.value || '').trim() === value)
-    const label = option?.label || value
     const readOnly = readOnlyMode()
     dropzones.forEach((dropzone) => {
+      // Resolve the label inside the dropzone's own group so sibling groups'
+      // pools (same letters, different labels) cannot shadow it. Fall back to
+      // the global lookup only when no group container exists (old markup).
+      const groupScope = dropzone.closest('[data-group-id]')
+      const label = option?.label
+        || (groupScope ? nativeDragOptionLabel(value, groupScope) : nativeDragOptionLabel(value))
+        || value
       dropzone.dataset.answerValue = value
       dropzone.dataset.answerLabel = label
       dropzone.dataset.sourceQuestionId = questionId
@@ -640,6 +766,22 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
       chip.draggable = !readOnly
       chip.disabled = readOnly
       holder.appendChild(chip)
+    })
+  }
+
+  function syncPoolConsumedState() {
+    if (typeof document === 'undefined') return
+    document.querySelectorAll(
+      '[data-drag-value], [data-answer-value], [data-heading], .drag-item, .draggable-word, .card'
+    ).forEach((node) => {
+      const element = node as HTMLElement
+      if (element.dataset.dropzoneClear === 'true') return
+      const dragPayload = buildDragPayloadFromElement(element)
+      const used = !isPoolDropzoneCandidate(element) && Boolean(
+        dragPayload?.value
+        && isDragOptionConsumedByGroup(findQuestionGroupByElement(element), dragPayload.value)
+      )
+      element.classList.toggle('option-consumed', used)
     })
   }
 
@@ -706,6 +848,7 @@ export function useReadingInteractions(options: ReadingInteractionsOptions) {
     clearDropzoneInlineStyle,
     syncDropzoneVisualStyles,
     syncDropzoneControl,
+    syncPoolConsumedState,
     setReadOnlyDomControls,
     aliasesFor,
     expandQuestionSequence,

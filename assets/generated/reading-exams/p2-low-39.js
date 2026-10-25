@@ -9,11 +9,12 @@
   "meta": {
     "title": "How to be Happy 如何获得幸福",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "133. P2 - How to be Happy 如何获得幸福.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/",
     "legacyFilename": "133. P2 - How to be Happy 如何获得幸福.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -79,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/133. P2 - How to be Happy 如何获得幸福.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/133. P2 - How to be Happy 如何获得幸福.pdf",
+    "pdf": "ReadingPractice/PDF/133. P2 - How to be Happy 如何获得幸福.pdf",
     "ieltsHtml": "IELTS/P2/How to be Happy.html"
   },
   "audit": {

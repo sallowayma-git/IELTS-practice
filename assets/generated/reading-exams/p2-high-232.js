@@ -13,7 +13,8 @@
     "pdfFilename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -79,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
+    "pdf": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
     "ieltsHtml": null
   },
   "audit": {

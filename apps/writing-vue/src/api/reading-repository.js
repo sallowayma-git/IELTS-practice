@@ -41,6 +41,10 @@ export async function pickReadingPracticeAsset(category = null) {
   return unwrapCommandResponse(response, 'reading_pick_practice_asset')
 }
 
+/**
+ * Bundled explanations ride inside the exam payload itself
+ * (`payload.reviewExplanations`) — there is no separate explanation IPC.
+ */
 export async function getReadingPdfDataUrl(assetId) {
   const normalizedAssetId = String(assetId || '').trim()
   if (!normalizedAssetId) {

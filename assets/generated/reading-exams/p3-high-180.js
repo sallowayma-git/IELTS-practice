@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/88. P3 - The fluoridation controversy 氟化水争议【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/88. P3 - The fluoridation controversy 氟化水争议【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/88. P3 - The fluoridation controversy 氟化水争议【高】.pdf",
     "ieltsHtml": null
   },
   "audit": {

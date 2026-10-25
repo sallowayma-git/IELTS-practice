@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/75. P3 - Life on Mars_ 火星地球化改造.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/75. P3 - Life on Mars_ 火星地球化改造.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/75. P3 - Life on Mars_ 火星地球化改造.pdf",
     "ieltsHtml": null
   },
   "audit": {

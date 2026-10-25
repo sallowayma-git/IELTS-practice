@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/138. P3 - Conformity 从众心理/138. P3 - Conformity 从众心理.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/138. P3 - Conformity 从众心理/138. P3 - Conformity 从众心理.pdf",
+    "pdf": "ReadingPractice/PDF/138. P3 - Conformity 从众心理.pdf",
     "ieltsHtml": "IELTS/P3/Conformity.html"
   },
   "audit": {

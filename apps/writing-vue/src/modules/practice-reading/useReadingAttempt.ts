@@ -91,6 +91,7 @@ interface PersistDraftInput {
   assetFingerprint?: string | null
   titleSnapshot?: string | null
   idempotencyKey?: string | null
+  timerSnapshot?: JsonMap | null
 }
 
 interface SubmitInput extends PersistDraftInput {
@@ -217,7 +218,8 @@ export function useReadingAttempt(options: ReadingAttemptDependencies = {}) {
     assetRevision,
     assetFingerprint,
     titleSnapshot,
-    idempotencyKey
+    idempotencyKey,
+    timerSnapshot
   }: PersistDraftInput) {
     const id = attemptId || newAttemptId()
     return deps.saveReadingDraft({
@@ -228,6 +230,7 @@ export function useReadingAttempt(options: ReadingAttemptDependencies = {}) {
       questionTimeline: questionTimeline || [],
       assetRevision: assetRevision ?? null,
       assetFingerprint: assetFingerprint || null,
+      timerSnapshot: timerSnapshot || null,
       titleSnapshot: titleSnapshot || null,
       idempotencyKey: idempotencyKey || readingRepository.newKey('draft')
     })

@@ -1549,7 +1549,9 @@ function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId))
     return
   }
   const interaction = getInteraction(questionId)
-  if (interaction?.control === 'dragdrop') {
+  // Bundled payloads carry no interactionModel: questions whose native markup
+  // has dropzones route to the dropzone sync (isDragDropControl falls back).
+  if (interaction?.control === 'dragdrop' || (!interaction?.control && isDragDropControl(questionId))) {
     syncDropzoneControl(questionId, explicitValue)
     return
   }

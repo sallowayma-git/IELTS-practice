@@ -9,11 +9,12 @@
   "meta": {
     "title": "Images and Places 风景与印记",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "123. P3 - Images and Places 风景与印记.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/123. P3 - Images and Places 风景与印记/",
     "legacyFilename": "123. P3 - Images and Places 风景与印记.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -82,7 +83,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/123. P3 - Images and Places 风景与印记/123. P3 - Images and Places 风景与印记.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/123. P3 - Images and Places 风景与印记/123. P3 - Images and Places 风景与印记.pdf",
+    "pdf": "ReadingPractice/PDF/123. P3 - Images and Places 风景与印记.pdf",
     "ieltsHtml": "IELTS/P3/Images and Places.html"
   },
   "audit": {

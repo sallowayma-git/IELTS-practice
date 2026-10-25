@@ -4,7 +4,8 @@
   "meta": {
     "title": "Child’s Play in Medieval England 中世纪的游戏",
     "category": "P3",
-    "frequency": "low"
+    "frequency": "medium",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

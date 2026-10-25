@@ -13,7 +13,8 @@
     "pdfFilename": "229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -71,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": "ReadingPractice/PDF/229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
+    "pdf": "ReadingPractice/PDF/229. P1 - New Understanding of Giraffes in the Wild 野生长颈鹿.pdf",
     "ieltsHtml": null
   },
   "audit": {

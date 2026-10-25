@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/6. P1 - Categorizing societies 社会分类/6. P1 - Categorizing societies 社会分类html.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/6. P1 - Categorizing societies 社会分类/6. P1 - Categorizing societies 社会分类.pdf",
+    "pdf": "ReadingPractice/PDF/6. P1 - Categorizing societies 社会分类.pdf",
     "ieltsHtml": null
   },
   "audit": {

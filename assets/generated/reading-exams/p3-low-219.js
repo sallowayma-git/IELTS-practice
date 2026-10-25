@@ -4,7 +4,8 @@
   "meta": {
     "title": "The origin of language 语言的起源",
     "category": "P3",
-    "frequency": "low"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

@@ -9,11 +9,12 @@
   "meta": {
     "title": "The return of monkey life 猴群回归",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "56. P2 - The return of monkey life 猴群回归【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/",
     "legacyFilename": "56. P2 - The return of monkey life 猴群回归【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -78,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/56. P2 - The return of monkey life 猴群回归【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/56. P2 - The return of monkey life 猴群回归【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/56. P2 - The return of monkey life 猴群回归【高】.pdf",
     "ieltsHtml": "IELTS/P2/The return of monkey life.html"
   },
   "audit": {

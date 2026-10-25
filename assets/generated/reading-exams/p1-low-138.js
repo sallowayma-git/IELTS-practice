@@ -71,7 +71,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.pdf",
+    "pdf": "ReadingPractice/PDF/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.pdf",
     "ieltsHtml": null
   },
   "audit": {

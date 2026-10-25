@@ -75,7 +75,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/166. P2 - Lean Production Innovation 精益生产/166. P2 - Lean Production Innovation 精益生产.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/166. P2 - Lean Production Innovation 精益生产/166. P2 - Lean Production Innovation 精益生产.pdf",
+    "pdf": "ReadingPractice/PDF/166. P2 - Lean Production Innovation 精益生产.pdf",
     "ieltsHtml": null
   },
   "audit": {

@@ -57,6 +57,10 @@ controller.select({ value: 'D', label: 'Heading D', sourceQuestionId: 'q4' })
 assert.equal(controller.select({ value: 'D', label: 'Heading D', sourceQuestionId: 'q4' }), false)
 assert.equal(controller.getSelected(), null, 'selecting the same option toggles it off')
 
+controller.select({ value: 'A', label: 'Paragraph A', groupId: 'paragraphs' })
+assert.equal(controller.select({ value: 'A', label: 'Person A', groupId: 'people' }), true)
+assert.equal(controller.getSelected().groupId, 'people', 'equal values in different pools remain distinct')
+
 assert.ok(statuses.some((message) => message.includes('请选择目标位置')))
 assert.ok(statuses.some((message) => message.includes('回顾模式为只读')))
 assert.ok(changes.length >= 4)

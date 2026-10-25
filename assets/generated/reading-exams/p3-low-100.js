@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/189. P3 - Mirror 镜子研究/189. P3 - Mirror 镜子研究.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/189. P3 - Mirror 镜子研究/189. P3 - Mirror 镜子研究.pdf",
+    "pdf": "ReadingPractice/PDF/189. P3 - Mirror 镜子研究.pdf",
     "ieltsHtml": null
   },
   "audit": {

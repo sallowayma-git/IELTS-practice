@@ -13,7 +13,8 @@
     "pdfFilename": "227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -71,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/227. P1 - The Whale Goes to Court 鲸鱼油/227. P1 - The Whale Goes to Court 鲸鱼油.html",
-    "shuiPdf": "ReadingPractice/PDF/227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
+    "pdf": "ReadingPractice/PDF/227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
     "ieltsHtml": null
   },
   "audit": {

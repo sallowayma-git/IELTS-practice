@@ -9,11 +9,12 @@
   "meta": {
     "title": "Fluorescence Deep sea discovery深海发光生物研究",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "161. P1 - Fluorescence Deep sea discovery深海发光生物研究.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/",
     "legacyFilename": "161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html",
-    "questionIntroHtml": "<h3>Questions 1–6</h3>"
+    "questionIntroHtml": "<h3>Questions 1–6</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -71,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/161. P1 - Fluorescence Deep sea discovery深海发光生物研究.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/161. P1 - Fluorescence Deep sea discovery深海发光生物研究.pdf",
     "ieltsHtml": null
   },
   "audit": {

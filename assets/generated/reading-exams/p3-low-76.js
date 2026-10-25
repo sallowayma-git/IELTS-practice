@@ -72,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/167. P3 - Sign, Baby, Sign! 美国手语.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
+    "pdf": "ReadingPractice/PDF/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
     "ieltsHtml": "IELTS/P3/Sign, Baby, Sign!.html"
   },
   "audit": {

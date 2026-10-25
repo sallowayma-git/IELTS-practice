@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Development of Plastics 塑料的发展史",
     "category": "P1",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "116. P1 - The Development of Plastics 塑料的发展史.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "116. P1 - The Development of Plastics 塑料的发展史.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -71,7 +72,7 @@
   },
   "sourceRefs": {
     "sourcePdf": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
-    "shuiPdf": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
+    "pdf": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
     "previousShuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/116. P1 - The Development of Plastics 塑料的发展史【次】.html",
     "previousShuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/116. P1 - The Development of Plastics 塑料的发展史【次】.pdf",
     "ieltsHtml": "IELTS/P1/The Development of Plastics.html"

@@ -30,6 +30,7 @@ export interface ReadingDraftInput {
   questionTimeline?: Array<{ questionId: string; changeCount?: number; visitCount?: number; elapsedMs?: number; answeredAt?: string | null }>
   assetRevision?: number | null; assetFingerprint?: string | null
   titleSnapshot?: string | null; idempotencyKey?: string
+  timerSnapshot?: Record<string, unknown> | null
 }
 export function newKey(prefix?: string): string
 export function listReadingAssets(): Promise<ReadingListResult>

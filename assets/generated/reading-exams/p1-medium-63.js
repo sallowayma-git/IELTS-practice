@@ -13,7 +13,8 @@
     "pdfFilename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/",
     "legacyFilename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
-    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+    "questionIntroHtml": "<h3>Questions 1–5</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -71,7 +72,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.pdf",
     "ieltsHtml": "IELTS/P1/A Brief History of Humans and Food.html"
   },
   "audit": {

@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 11–13</h4>\n                <p>Choose <strong>THREE</strong> letters, <strong>A–F</strong>.</p>\n                <p>Which <strong>THREE</strong> of the following are parts of Gilbert's discovery?</p>\n\n                <div class=\"question-item\">\n                    <div class=\"options\">\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"A\"> A. Metal can be transformed into another.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"B\"> B. Garlic can remove magnetism.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"C\"> C. Metals can be magnetised.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"D\"> D. Stars are at different distances from the Earth.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"E\"> E. The Earth wobbles on its axis.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"F\"> F. There are two charges of electricity.</label>\n                    </div>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 11–13</h4>\n                <p>Choose <strong>THREE</strong> letters, <strong>A–F</strong>.</p>\n                <p>Which <strong>THREE</strong> of the following are parts of Gilbert's discovery?</p>\n\n                <div class=\"question-item\">\n                    <div class=\"options\">\n                        <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q11-12-13\" value=\"A\"> A. Metal can be transformed into another.</label></div>\n                        <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q11-12-13\" value=\"B\"> B. Garlic can remove magnetism.</label></div>\n                        <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q11-12-13\" value=\"C\"> C. Metals can be magnetised.</label></div>\n                        <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q11-12-13\" value=\"D\"> D. Stars are at different distances from the Earth.</label></div>\n                        <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q11-12-13\" value=\"E\"> E. The Earth wobbles on its axis.</label></div>\n                        <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q11-12-13\" value=\"F\"> F. There are two charges of electricity.</label></div>\n                    </div>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -79,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/31. P1 - William Gilbert and Magnetism 电磁学之父【高】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/31. P1 - William Gilbert and Magnetism 电磁学之父【高】.pdf",
+    "pdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/31. P1 - William Gilbert and Magnetism 电磁学之父【高】.pdf",
     "ieltsHtml": "IELTS/P1/William Gilbert and Magnetism.html"
   },
   "audit": {

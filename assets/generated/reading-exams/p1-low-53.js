@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Early History of Olive Oil 橄榄油的历史",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/",
     "legacyFilename": "146. P1 - The Early History of Olive Oil 橄榄油的历史.html",
-    "questionIntroHtml": "<h3>Questions 1–6</h3>"
+    "questionIntroHtml": "<h3>Questions 1–6</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -78,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/146. P1 - The Early History of Olive Oil 橄榄油的历史.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
+    "pdf": "ReadingPractice/PDF/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf",
     "ieltsHtml": "IELTS/P1/The Early History of Olive Oil.html"
   },
   "audit": {

@@ -45,6 +45,7 @@ BASE_URL_ENV_NAMES = (
     "READING_CUSTOM_SUITE_VISUAL_BASE_URL",
     "READING_SUITE_VISUAL_BASE_URL",
     "READING_HISTORY_VISUAL_BASE_URL",
+    "READING_UNIFIED_VISUAL_BASE_URL",
     "EXAM_FREEZE_VISUAL_BASE_URL",
 )
 
@@ -90,6 +91,7 @@ SCRIPT_GROUPS = (
         (
             "reading_suite_visual_check.py",
             "reading_history_record_visual_check.py",
+            "reading_unified_review_check.py",
         ),
     ),
     (

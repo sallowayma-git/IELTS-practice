@@ -9,11 +9,12 @@
   "meta": {
     "title": "Keeping the water away 洪水防控",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "131. P2 - Keeping the water away 洪水防控.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/131. P2 - Keeping the water away 洪水防控/",
     "legacyFilename": "131. P2 - Keeping the water away 洪水防控.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
@@ -46,7 +47,7 @@
         "q7",
         "q8"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q7-8-anchor\">\n                <h4>Questions 20 and 21</h4>\n                <p>Choose <strong>TWO</strong> letters <strong>A–E</strong>.</p>\n                <p>According to the article, which <strong>TWO</strong> of these statements are true of the new approach to flood control?</p>\n                <div class=\"options-list\">\n                    <label><input type=\"checkbox\" name=\"q7-8\" value=\"A\"> A It aims to slow the movement of water to the sea.</label>\n                    <label><input type=\"checkbox\" name=\"q7-8\" value=\"B\"> B It aims to channel water more directly into rivers.</label>\n                    <label><input type=\"checkbox\" name=\"q7-8\" value=\"C\"> C It will cost more than twice as much as former measures.</label>\n                    <label><input type=\"checkbox\" name=\"q7-8\" value=\"D\"> D It will involve the loss of some areas of land.</label>\n                    <label><input type=\"checkbox\" name=\"q7-8\" value=\"E\"> E It has been tested only in the Netherlands.</label>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-anchor\">\n                <h4>Questions 20 and 21</h4>\n                <p>Choose <strong>TWO</strong> letters <strong>A–E</strong>.</p>\n                <p>According to the article, which <strong>TWO</strong> of these statements are true of the new approach to flood control?</p>\n                <div class=\"options-list\">\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q7-8\" value=\"A\"> A It aims to slow the movement of water to the sea.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q7-8\" value=\"B\"> B It aims to channel water more directly into rivers.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q7-8\" value=\"C\"> C It will cost more than twice as much as former measures.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q7-8\" value=\"D\"> D It will involve the loss of some areas of land.</label></div>\n                    <div class=\"choice-item\"><label><input type=\"checkbox\" name=\"q7-8\" value=\"E\"> E It has been tested only in the Netherlands.</label></div>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -78,7 +79,7 @@
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/131. P2 - Keeping the water away 洪水防控/131. P2 - Keeping the water away 洪水防控.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/131. P2 - Keeping the water away 洪水防控/131. P2 - Keeping the water away 洪水防控.pdf",
+    "pdf": "ReadingPractice/PDF/131. P2 - Keeping the water away 洪水防控.pdf",
     "ieltsHtml": "IELTS/P2/Keeping the water away.html"
   },
   "audit": {
