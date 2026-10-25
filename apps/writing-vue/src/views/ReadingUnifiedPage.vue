@@ -524,15 +524,22 @@ function canonicalToken(value) {
 function collectChoiceInputs(questionId) {
   return Array.from(document.querySelectorAll(
     '#question-groups input[type="radio"][name], #question-groups input[type="checkbox"][name]'
-  )).filter((input) => resolveNativeQuestionIds(input.name).includes(questionId))
+  )).filter((input) => resolveNativeQuestionIds(input).includes(questionId))
 }
 
-function resolveNativeQuestionIds(name) {
+function resolveNativeQuestionIds(input) {
+  const name = input.name
   const order = payload.value?.questionOrder || []
-  const expanded = expandQuestionSequence(name)
-  const direct = expanded.filter((id) => order.includes(id))
-  if (direct.length === expanded.length) return direct
-  return order.filter((id) => getInteraction(id)?.name === name
+  const groupId = input.closest('[data-group-id]')?.dataset.groupId
+  const group = questionGroups.value.find((entry) => entry.groupId === groupId)
+  const candidates = Array.isArray(group?.questionIds)
+    ? order.filter((id) => group.questionIds.includes(id))
+    : order
+  // Native names can mix logical IDs and display numbers (q12_40).
+  // Only the owning group's logical questions receive the selected values.
+  const direct = expandQuestionSequence(name).filter((id) => candidates.includes(id))
+  if (direct.length) return direct
+  return candidates.filter((id) => getInteraction(id)?.name === name
     || resolveAnswerAliasesFromIds(id, payload.value?.questionDisplayMap).includes(name))
 }
 
@@ -676,7 +683,7 @@ function handleQuestionInput(event) {
   const target = event.target
   if (!target || !target.name) return
   if (target.type === 'checkbox') {
-    collectCheckboxGroup(target.name)
+    collectCheckboxGroup(target)
     return
   }
   const questionId = normalizeQuestionId(target.name)
@@ -710,8 +717,9 @@ function collectCheckboxGroupTicks(groupIds, getRawAnswer) {
 }
 // --- end unified checkbox core ---
 
-function collectCheckboxGroup(name) {
-  const questionIds = resolveNativeQuestionIds(name)
+function collectCheckboxGroup(input) {
+  const name = input.name
+  const questionIds = resolveNativeQuestionIds(input)
   if (!questionIds.length) return
   const checkedValues = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${escapeCss(name)}"]`))
     .filter((input) => input.checked)
@@ -732,7 +740,7 @@ function syncDomAnswers() {
   const valuesByName = new Map()
   document.querySelectorAll('#question-groups input[type="checkbox"][name]').forEach((input) => {
     if (!valuesByName.has(input.name)) {
-      valuesByName.set(input.name, collectCheckboxGroupTicks(resolveNativeQuestionIds(input.name), getRawAnswer))
+      valuesByName.set(input.name, collectCheckboxGroupTicks(resolveNativeQuestionIds(input), getRawAnswer))
     }
     input.checked = valuesByName.get(input.name).has(String(input.value || '').trim())
     input.disabled = readOnlyMode.value

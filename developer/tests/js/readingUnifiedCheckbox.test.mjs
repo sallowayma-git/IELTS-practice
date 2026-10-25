@@ -18,7 +18,7 @@ const idsSource = fs.readFileSync(
 const idsModule = { exports: {} }
 const idsCompiled = ts.transpileModule(idsSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
 new Function('exports', idsCompiled)(idsModule.exports)
-const { expandQuestionSequence } = idsModule.exports
+const { expandQuestionSequence, resolveAnswerAliases } = idsModule.exports
 
 // The pure checkbox core lives inside ReadingUnifiedPage.vue between slice
 // markers and is evaluated here directly (the page script is plain JS).
@@ -32,15 +32,40 @@ ${page.slice(coreStart, coreEnd)}
 return { planCheckboxAnswerWrites, collectCheckboxGroupTicks }
 `)()
 
-function checkboxBox(name, value) {
-  return { name, value, checked: false, disabled: false }
+// Exercise the page's actual ownership resolver too; expanding names alone
+// misses mixed logical/display numbering in shipping payloads.
+const resolverSource = page.slice(
+  page.indexOf('function resolveNativeQuestionIds('),
+  page.indexOf('function applyResultsToQuestionArea(')
+)
+function createNativeResolver(source) {
+  return new Function('payload', 'questionGroups', 'expandQuestionSequence', 'getInteraction', 'resolveAnswerAliasesFromIds', `
+${resolverSource}
+return resolveNativeQuestionIds
+`)(
+    { value: source },
+    { value: source.questionGroups || [] },
+    expandQuestionSequence,
+    (id) => source.interactionModel?.[id],
+    resolveAnswerAliases
+  )
+}
+
+function checkboxBox(name, value, groupId) {
+  return {
+    name, value, checked: false, disabled: false,
+    closest() { return groupId ? { dataset: { groupId } } : null }
+  }
 }
 
 // Harness mirroring the page wiring end to end: collectCheckboxGroup writes
 // answers through planCheckboxAnswerWrites + setAnswer (what gets SUBMITTED),
 // syncNativeCheckboxGroups ticks boxes through collectCheckboxGroupTicks.
-function createHarness(boxDefinitions) {
-  const boxes = boxDefinitions.map(([name, value]) => checkboxBox(name, value))
+function createHarness(boxDefinitions, source = null, groupId = null) {
+  const boxes = boxDefinitions.map(([name, value]) => checkboxBox(name, value, groupId))
+  const resolve = createNativeResolver(source || {
+    questionOrder: [...new Set(boxDefinitions.flatMap(([name]) => expandQuestionSequence(name)))]
+  })
   const answers = new Map()
   const store = {
     setAnswer(questionId, value) { answers.set(questionId, value) },
@@ -61,7 +86,7 @@ function createHarness(boxDefinitions) {
         .map((box) => String(box.value || '').trim())
         .filter(Boolean)
         .sort((left, right) => left.localeCompare(right, 'en'))
-      planCheckboxAnswerWrites(expandQuestionSequence(name), checkedValues)
+      planCheckboxAnswerWrites(resolve(boxes.find((box) => box.name === name)), checkedValues)
         .forEach((write) => store.setAnswer(write.questionId, write.value))
     },
     sync(questionId, { readOnly = false } = {}) {
@@ -72,7 +97,7 @@ function createHarness(boxDefinitions) {
         groups.set(box.name, members)
       })
       groups.forEach((members, name) => {
-        const memberIds = expandQuestionSequence(name)
+        const memberIds = resolve(members[0])
         if (!memberIds.includes(questionId)) return
         const ticks = collectCheckboxGroupTicks(memberIds, store.getRawAnswer)
         members.forEach((box) => {
@@ -88,6 +113,53 @@ function createHarness(boxDefinitions) {
 }
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+
+// R11: the real q12_40 markup belongs to one logical q12 array, including
+// when q40 happens to exist elsewhere in an exam. Never write another group.
+{
+  const shipping = JSON.parse(fs.readFileSync(
+    path.join(root, 'assets/resource-pack/reading/payloads/p3-low-219.json'), 'utf8'
+  ))
+  const owner = shipping.questionGroups.find((group) => group.questionIds.includes('q12'))
+  assert.ok(owner.bodyHtml.includes('name="q12_40"'))
+  for (const source of [shipping, {
+    ...shipping,
+    questionOrder: [...shipping.questionOrder, 'q40'],
+    questionGroups: [...shipping.questionGroups, { groupId: 'other-group', questionIds: ['q40'] }]
+  }]) {
+    const harness = createHarness(LETTERS.map((letter) => ['q12_40', letter]), source, owner.groupId)
+    ;['A', 'D', 'E'].forEach((letter) => {
+      harness.boxes.find((box) => box.value === letter).checked = true
+    })
+    harness.collect('q12_40')
+    assert.deepEqual([...harness.store.raw], [['q12', ['A', 'D', 'E']]])
+    harness.boxes.forEach((box) => { box.checked = false })
+    harness.sync('q12')
+    assert.deepEqual(harness.checkedValues('q12_40'), ['A', 'D', 'E'])
+    harness.store.resetAll(['q12'])
+    harness.sync('q12')
+    assert.deepEqual(harness.checkedValues('q12_40'), [])
+    harness.collect('q12_40')
+    assert.deepEqual([...harness.store.raw], [['q12', []]])
+  }
+}
+
+// Group-scoped resolution still supports explicit native names and display
+// aliases, while rejecting names belonging only to another group.
+{
+  const resolve = createNativeResolver({
+    questionOrder: ['q1', 'q2'],
+    questionGroups: [{ groupId: 'group-1', questionIds: ['q1'] }],
+    questionDisplayMap: { q1: '27', q2: '27' },
+    interactionModel: { q1: { name: 'native-choice' }, q2: { name: 'native-choice' } }
+  })
+  for (const name of ['q1', 'q27', 'native-choice']) {
+    assert.deepEqual(resolve(checkboxBox(name, 'A', 'group-1')), ['q1'])
+  }
+  for (const name of ['q2', 'unknown']) {
+    assert.deepEqual(resolve(checkboxBox(name, 'A', 'group-1')), [])
+  }
+}
 
 // R1: single-id groups (p1-medium-57 name="q11", answerKey q11 = ["C","E","G"])
 // must store the FULL sorted array — not just the first checked value.
@@ -210,10 +282,10 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
   const syncBody = page.slice(page.indexOf('function syncNativeControl'), page.indexOf('function scheduleDraftAutosave'))
   assert.ok(!syncBody.includes('checkbox"][name='),
     'syncNativeControl must not query checkboxes through per-alias names')
-  const collectBody = page.slice(page.indexOf('function collectCheckboxGroup(name)'), page.indexOf('function syncNativeControl'))
+  const collectBody = page.slice(page.indexOf('function collectCheckboxGroup(input)'), page.indexOf('function syncNativeControl'))
   assert.ok(collectBody.includes('planCheckboxAnswerWrites(questionIds, checkedValues)'),
     'collectCheckboxGroup must write answers through planCheckboxAnswerWrites')
-  assert.ok(collectBody.includes('collectCheckboxGroupTicks(resolveNativeQuestionIds(input.name), getRawAnswer)'),
+  assert.ok(collectBody.includes('collectCheckboxGroupTicks(resolveNativeQuestionIds(input), getRawAnswer)'),
     'DOM synchronization must collect the union of each native checkbox group')
 
   // R5: drag mutations autosave via onMutate, hydration excluded.

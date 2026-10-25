@@ -10,7 +10,7 @@ from exam_freeze_visual_check import serve
 ROOT = Path(__file__).resolve().parents[3]
 PACK = ROOT / 'assets/resource-pack/reading/payloads'
 IDS = ('p1-high-01', 'p1-medium-57', 'p1-low-11', 'p1-low-61', 'p2-medium-217',
-       'p2-high-134', 'p2-high-201', 'p3-high-156', 'p3-low-175', 'p3-low-54')
+       'p2-high-134', 'p2-high-201', 'p3-high-156', 'p3-low-175', 'p3-low-54', 'p3-low-219')
 PAYLOADS = {asset_id: json.loads((PACK / f'{asset_id}.json').read_bytes()) for asset_id in IDS}
 
 MOCK = r"""
@@ -104,6 +104,35 @@ def practice(browser, base, asset_id, draft=None, route='reading-unified', paylo
 
 
 def run(browser, base):
+    with practice(browser, base, 'p3-low-219') as page:
+        page.locator('.header #timer').click()
+        expect(page.locator('.header #timer')).to_have_class('paused')
+        for value in ('A', 'D', 'E'):
+            page.locator(f'input[name="q12_40"][value="{value}"]').check()
+        assert selected(page, 'q12_40') == ['A', 'D', 'E']
+        wait_save(page, "JSON.stringify(call.args.cmd.answers.q12) === '[\"A\",\"D\",\"E\"]'")
+        saved = calls(page, 'reading_save_draft')[-1]['cmd']['answers']
+        assert set(saved) == set(PAYLOADS['p3-low-219']['questionOrder'])
+        page.reload()
+        expect(page.locator('input[name="q12_40"]:checked')).to_have_count(3)
+        assert selected(page, 'q12_40') == ['A', 'D', 'E']
+        page.wait_for_timeout(900)
+        assert calls(page, 'reading_save_draft') == [], 'hydration must not write a draft'
+        page.locator('#submit-btn').click()
+        expect(page.locator('#results')).to_be_visible()
+        submitted = calls(page, 'reading_submit_attempt')[-1]['cmd']['answers']
+        assert submitted['q12'] == ['A', 'D', 'E']
+        assert set(submitted) == set(PAYLOADS['p3-low-219']['questionOrder'])
+        expect(page.locator('input[name="q12_40"]:checked')).to_have_count(3)
+        for value in ('A', 'D', 'E'):
+            expect(page.locator(f'label.option-correct input[name="q12_40"][value="{value}"]')).to_be_checked()
+        page.locator('#reset-btn').click()
+        expect(page.locator('input[name="q12_40"]:checked')).to_have_count(0)
+        page.reload()
+        expect(page.locator('#question-groups .unified-group')).to_have_count(3)
+        expect(page.locator('input[name="q12_40"]:checked')).to_have_count(0)
+    print('PASS: mixed checkbox name preserves its logical answer across save, reload, submit and reset')
+
     with practice(browser, base, 'p1-medium-57') as page:
         for value in ('C', 'E', 'G'):
             page.locator(f'input[name="q11"][value="{value}"]').check()
@@ -135,7 +164,9 @@ def run(browser, base):
     compound = json.loads(json.dumps(PAYLOADS))
     p = compound['p1-medium-57']
     for group in p['questionGroups']:
-        group['bodyHtml'] = group['bodyHtml'].replace('name="q11"', 'name="q11-12-13"')
+        if 'name="q11"' in group['bodyHtml']:
+            group['bodyHtml'] = group['bodyHtml'].replace('name="q11"', 'name="q11-12-13"')
+            group['questionIds'] += ['q12', 'q13']
     p['questionOrder'] += ['q12', 'q13']
     p['answerKey'].update(q11='C', q12='E', q13='G')
     draft['answers'] = [{'questionId': q, 'answer': a} for q, a in zip(('q11', 'q12', 'q13'), ('C', 'E', 'G'))]
