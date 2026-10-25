@@ -55,6 +55,7 @@ pnpm-debug.log*
 !/apps/writing-vue/src/utils/
 !/apps/writing-vue/src/utils/evaluation-result.js
 /ReadingPractice/
+/ListeningPractice/
 /developer/design/
 
 
