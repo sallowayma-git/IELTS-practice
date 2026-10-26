@@ -331,3 +331,28 @@ fn provider_payload_cannot_claim_strategy_or_memory_provenance() {
         assert!(payload.get(field).is_none());
     }
 }
+
+fn run_result(conn: &Connection, run: &str) -> Value {
+    let raw: String = conn
+        .query_row("SELECT result_json FROM agent_runs WHERE id=?1", [run], |row| row.get(0))
+        .unwrap();
+    serde_json::from_str(&raw).unwrap()
+}
+
+#[test]
+fn teaching_notes_rejected_is_on_the_run_only_when_some_notes_were_rejected() {
+    let (_dir, conn, thread, user) = fixture();
+    let clean = begin(&conn, &thread, &user);
+    complete_traced_coach(&conn, &clean, &thread, "because", json!({"answer":"because"}), &response()).unwrap();
+    assert!(run_result(&conn, &clean).get("teachingNotesRejected").is_none());
+
+    let second_user = append_coach_message(&conn, &AppendCoachMessageCommand {
+        thread_id: thread.clone(), role: "user".into(), content: "again".into(),
+        structured_payload: None, status: "completed".into(),
+    }).unwrap();
+    let mut with_rejects = response();
+    with_rejects["teachingNotesRejected"] = json!(2);
+    let rejected = begin(&conn, &thread, &second_user.id);
+    complete_traced_coach(&conn, &rejected, &thread, "because", json!({"answer":"because"}), &with_rejects).unwrap();
+    assert_eq!(run_result(&conn, &rejected)["teachingNotesRejected"], 2);
+}

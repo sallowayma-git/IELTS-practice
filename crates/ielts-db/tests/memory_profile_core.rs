@@ -827,6 +827,71 @@ fn capacity_eviction_skips_memories_the_same_batch_targets() {
 }
 
 #[test]
+fn capacity_tie_breaks_on_recall_count_before_memory_id() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-recall", "2026-08-13T03:00:00Z");
+    fill_reading_scope(&conn, "observed");
+    // Identical on every earlier key. Id order alone would pick mem-capacity-20; recall picks mem-capacity-9.
+    conn.execute("UPDATE memory_items SET importance=0.1, recall_count=0 WHERE id='mem-capacity-9'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.1, recall_count=5 WHERE id='mem-capacity-20'", []).unwrap();
+    add_reading_strategy(&conn, "request-recall", "strategy.reading.recall_tie");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-9"), "archived");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-20"), "active");
+}
+
+#[test]
+fn capacity_eviction_skips_a_memory_an_earlier_candidate_of_the_batch_resolved_into() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-resolved-guard", "2026-08-13T03:00:00Z");
+    let observation_id = first_observation_id(&conn);
+    fill_reading_scope(&conn, "observed");
+    // One free slot: the first add lands without eviction, the second must evict.
+    conn.execute("UPDATE memory_items SET status='archived' WHERE id='mem-capacity-127'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.1 WHERE id='mem-capacity-8'", []).unwrap();
+    let add = |key: &str, statement: &str| MemoryMutationProposal::Add {
+        namespace: MemoryNamespace::Strategy,
+        canonical_key: key.into(),
+        scope: MemoryScope::Activity { key: Activity::Reading },
+        statement: statement.into(),
+        evidence_observation_ids: vec![observation_id.clone()],
+    };
+    let batch = MemoryMutationProposalBatch {
+        schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION,
+        proposals: vec![
+            add("strategy.reading.resolved_first", "The first batch add lands."),
+            add("strategy.reading.resolved_second", "The second batch add evicts."),
+        ],
+    };
+    let snapshot = load_memory_validation_snapshot(&conn, "local", &[observation_id.clone()]).unwrap();
+    let validation = candidate_validator::MemoryProposalValidator::default().validate(
+        &batch,
+        candidate_validator::MemoryProposalOrigin::CognitiveRuntime { source_class: MemorySourceClass::Inferred },
+        &snapshot,
+    );
+    assert!(validation.decisions.iter().all(|d| d.disposition == MemoryProposalDisposition::Pending), "{validation:?}");
+    let receipt = persist_memory_candidate_batch(&conn, &MemoryCandidatePersistenceInput {
+        request_id: "request-resolved-guard".into(),
+        user_id: "local".into(),
+        run_id: None,
+        source_class: MemorySourceClass::Inferred,
+        batch,
+        validation,
+        snapshot,
+    }).unwrap();
+    promote(&conn, &receipt.candidates[0].id, 1);
+    let landed: String = conn.query_row(
+        "SELECT resolved_memory_id FROM memory_candidates WHERE id=?1",
+        [&receipt.candidates[0].id],
+        |row| row.get(0),
+    ).unwrap();
+    // The first candidate's memory is now the scope's least valuable one, but its batch resolved into it.
+    conn.execute("UPDATE memory_items SET importance=0.0 WHERE id=?1", [&landed]).unwrap();
+    promote(&conn, &receipt.candidates[1].id, 1);
+    assert_eq!(scope_memory_status(&conn, &landed), "active");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-8"), "archived");
+}
+
+#[test]
 fn active_memory_capacity_fails_only_when_every_memory_is_protected() {
     let (_dir, conn) = open_db();
     insert_reading_event(&conn, "event-capacity", "2026-08-13T03:00:00Z");
