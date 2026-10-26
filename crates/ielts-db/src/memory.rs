@@ -1357,16 +1357,21 @@ fn make_room_for_insert(
     if active_count < MAX_ACTIVE_MEMORY_PER_SCOPE as i64 {
         return Ok(());
     }
+    // Explicit user statements, host policy, and the preference/goal namespaces
+    // are never capacity victims. Times compare as instants (julianday), so
+    // mixed offsets order by real time rather than by text.
     let victim: String = tx
         .query_row(
             "SELECT m.id FROM memory_items m
              WHERE m.user_id=?1 AND m.scope=?2 AND m.status='active'
-               AND m.source_class != 'user_explicit'
+               AND m.source_class NOT IN ('user_explicit','system_policy')
+               AND m.namespace NOT IN ('preference','goal')
                AND NOT EXISTS (
                  SELECT 1 FROM memory_candidates c
                  WHERE c.batch_id=(SELECT batch_id FROM memory_candidates WHERE id=?3)
                    AND (c.target_memory_id=m.id OR c.resolved_memory_id=m.id))
-             ORDER BY m.importance ASC, COALESCE(m.last_observed_at, m.updated_at) ASC,
+             ORDER BY m.importance ASC, m.contradicted_count DESC, m.confidence ASC,
+                      julianday(COALESCE(m.last_observed_at, m.updated_at)) ASC,
                       m.recall_count ASC, m.id ASC
              LIMIT 1",
             params![user_id, scope.storage_key(), command.candidate_id],

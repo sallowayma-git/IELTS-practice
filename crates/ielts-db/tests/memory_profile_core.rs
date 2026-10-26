@@ -716,6 +716,68 @@ fn capacity_add_archives_least_valuable_non_explicit_memory() {
     assert_eq!(active, 128);
 }
 
+fn add_reading_strategy(conn: &Connection, request: &str, key: &str) {
+    let observation_id = first_observation_id(conn);
+    let receipt = persist_memory_candidate_batch(conn, &pending_input(
+        conn,
+        request,
+        MemoryMutationProposal::Add {
+            namespace: MemoryNamespace::Strategy,
+            canonical_key: key.into(),
+            scope: MemoryScope::Activity { key: Activity::Reading },
+            statement: format!("{key} statement."),
+            evidence_observation_ids: vec![observation_id],
+        },
+        MemorySourceClass::Inferred,
+    )).unwrap();
+    promote(conn, &receipt.candidates[0].id, 1);
+}
+
+#[test]
+fn capacity_never_evicts_system_policy_preference_or_goal_memories() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-protected", "2026-08-13T03:00:00Z");
+    fill_reading_scope(&conn, "observed");
+    conn.execute("UPDATE memory_items SET source_class='system_policy', importance=0.0
+                  WHERE id='mem-capacity-0'", []).unwrap();
+    conn.execute("UPDATE memory_items SET namespace='preference', importance=0.0
+                  WHERE id='mem-capacity-1'", []).unwrap();
+    conn.execute("UPDATE memory_items SET namespace='goal', importance=0.0
+                  WHERE id='mem-capacity-2'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.1 WHERE id='mem-capacity-3'", []).unwrap();
+    add_reading_strategy(&conn, "request-protected", "strategy.reading.protected_add");
+
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-3"), "archived");
+    for id in ["mem-capacity-0", "mem-capacity-1", "mem-capacity-2"] {
+        assert_eq!(scope_memory_status(&conn, id), "active", "{id} is protected");
+    }
+}
+
+#[test]
+fn capacity_victims_rank_by_contradictions_then_confidence_then_real_time() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-rank", "2026-08-13T03:00:00Z");
+    fill_reading_scope(&conn, "observed");
+    // Same importance: the contradicted memory goes first, though it was observed more recently.
+    conn.execute("UPDATE memory_items SET importance=0.1, contradicted_count=2,
+                  last_observed_at='2026-08-10T00:00:00Z' WHERE id='mem-capacity-4'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.1, last_observed_at='2026-07-01T00:00:00Z'
+                  WHERE id='mem-capacity-5'", []).unwrap();
+    add_reading_strategy(&conn, "request-rank-1", "strategy.reading.rank_one");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-4"), "archived");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-5"), "active");
+
+    // Mixed offsets: 10:00+08:00 is 02:00Z, older than 05:00Z even though its text sorts later.
+    conn.execute("UPDATE memory_items SET importance=0.5 WHERE id='mem-capacity-5'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.1, last_observed_at='2026-08-01T10:00:00+08:00'
+                  WHERE id='mem-capacity-6'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.1, last_observed_at='2026-08-01T05:00:00Z'
+                  WHERE id='mem-capacity-7'", []).unwrap();
+    add_reading_strategy(&conn, "request-rank-2", "strategy.reading.rank_two");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-6"), "archived");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-7"), "active");
+}
+
 #[test]
 fn capacity_eviction_skips_memories_the_same_batch_targets() {
     let (_dir, conn) = open_db();
