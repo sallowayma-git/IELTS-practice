@@ -4,6 +4,11 @@
 //! `evidence` is a literal quote of the learner's current message, so a note
 //! can say nothing the learner did not write. Kept notes are stored on the
 //! assistant message and read by the weekly pack; this module never writes memory.
+//!
+//! The gate proves only that the learner wrote the quote. It does not prove the
+//! model's reading of it is right: "not helpful" can be a negation the model
+//! misread, and the quote still passes. Downstream code treats notes as
+//! learner-reported facts only in the learner's own words, never as verified.
 
 use ielts_domain::is_safe_for_prompt;
 use serde::{Deserialize, Serialize};
@@ -63,9 +68,12 @@ pub fn review_teaching_notes(raw: Option<&Value>, learner_message: &str) -> Teac
             return review;
         }
     };
-    for item in items {
+    for (index, item) in items.iter().enumerate() {
+        if review.notes.len() == MAX_TEACHING_NOTES {
+            review.rejected += items.len() - index;
+            break;
+        }
         let kept = candidate(item, learner_message)
-            .filter(|_| review.notes.len() < MAX_TEACHING_NOTES)
             .filter(|note| !review.notes.iter().any(|earlier| identity(earlier) == identity(note)));
         match kept {
             Some(note) => review.notes.push(note),
@@ -73,6 +81,17 @@ pub fn review_teaching_notes(raw: Option<&Value>, learner_message: &str) -> Teac
         }
     }
     review
+}
+
+/// Drops every note of a turn the host itself generated (the automatic review,
+/// a preset prompt): those carry no learner words to quote, so none may be kept.
+pub fn reject_all_teaching_notes(raw: Option<&Value>) -> TeachingNoteReview {
+    let rejected = match raw {
+        None | Some(Value::Null) => 0,
+        Some(Value::Array(items)) => items.len(),
+        Some(_) => 1,
+    };
+    TeachingNoteReview { notes: Vec::new(), rejected }
 }
 
 fn candidate(item: &Value, learner_message: &str) -> Option<TeachingNote> {
@@ -102,7 +121,8 @@ fn candidate(item: &Value, learner_message: &str) -> Option<TeachingNote> {
     let within_limits = within(&note.text, TEXT_CHARS)
         && note.strategy.as_deref().map_or(true, |text| within(text, STRATEGY_CHARS))
         && note.skill_key.as_deref().map_or(true, |text| within(text, SKILL_KEY_CHARS))
-        && within(&note.evidence, EVIDENCE_CHARS);
+        && within(&note.evidence, EVIDENCE_CHARS)
+        && meaningful(&note.evidence);
     let quoted = learner_message.trim().contains(note.evidence.as_str());
     let safe = [Some(&note.text), note.strategy.as_ref(), note.skill_key.as_ref()]
         .into_iter()
@@ -116,17 +136,36 @@ fn within(text: &str, max: usize) -> bool {
     !text.is_empty() && text.chars().count() <= max
 }
 
+/// Evidence must carry real words, not a stray "I", "a" or "?": at least four
+/// CJK characters, or at least eight non-whitespace characters over two words.
+fn meaningful(evidence: &str) -> bool {
+    let cjk = evidence.chars().filter(|c| is_cjk(*c)).count();
+    let visible = evidence.chars().filter(|c| !c.is_whitespace()).count();
+    cjk >= 4 || (visible >= 8 && evidence.split_whitespace().count() >= 2)
+}
+
+fn is_cjk(c: char) -> bool {
+    matches!(c, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}')
+}
+
 fn optional(value: Option<String>) -> Option<String> {
     value.map(|text| text.trim().to_owned()).filter(|text| !text.is_empty())
 }
 
 /// What makes two notes the same one: a strategy's name, or a preference's text.
+/// Case, hyphens, underscores and spacing do not make a different note.
 fn identity(note: &TeachingNote) -> (TeachingNoteKind, String) {
     let subject = match note.kind {
         TeachingNoteKind::StrategyOutcome => note.strategy.as_deref().unwrap_or_default(),
         TeachingNoteKind::Preference => note.text.as_str(),
     };
-    (note.kind, subject.to_lowercase())
+    let normalized = subject
+        .to_lowercase()
+        .replace(['-', '_'], " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    (note.kind, normalized)
 }
 
 #[cfg(test)]
@@ -212,6 +251,53 @@ mod tests {
         ]));
         assert_eq!(review.notes.len(), 2);
         assert_eq!(review.rejected, 2);
+    }
+
+    #[test]
+    fn filler_evidence_is_not_evidence() {
+        for filler in ["I", "a", "the", "?", "懂了"] {
+            let message = format!("{filler} ok");
+            let items = json!([{"kind": "preference", "text": "short examples", "evidence": filler}]);
+            let review = review_teaching_notes(Some(&items), &message);
+            assert!(review.notes.is_empty(), "{filler:?} must not be evidence");
+            assert_eq!(review.rejected, 1);
+        }
+        for real in ["now I get it", "现在懂了"] {
+            let message = format!("Oh, {real}.");
+            let items = json!([{"kind": "preference", "text": "short examples", "evidence": real}]);
+            assert_eq!(review_teaching_notes(Some(&items), &message).notes.len(), 1, "{real:?} must be evidence");
+        }
+    }
+
+    #[test]
+    fn identity_ignores_case_hyphens_underscores_and_spacing() {
+        let review = review(json!([
+            strategy("now I get it"),
+            {"kind": "strategy_outcome", "text": "again", "strategy": "Paraphrase_Matching   walk-through", "outcome": "helped", "evidence": "now I get it"},
+        ]));
+        assert_eq!(review.notes.len(), 1);
+        assert_eq!(review.rejected, 1);
+    }
+
+    #[test]
+    fn once_three_are_kept_the_rest_is_counted_without_validation() {
+        let review = review(json!([
+            {"kind": "preference", "text": "one", "evidence": "short examples"},
+            {"kind": "preference", "text": "two", "evidence": "short examples"},
+            {"kind": "preference", "text": "three", "evidence": "short examples"},
+            "not even an object",
+            null,
+        ]));
+        assert_eq!(review.notes.len(), MAX_TEACHING_NOTES);
+        assert_eq!(review.rejected, 2);
+    }
+
+    #[test]
+    fn reject_all_counts_every_raw_note_and_keeps_none() {
+        let items = json!([strategy("now I get it"), {"kind": "preference", "text": "x", "evidence": "short examples"}]);
+        assert_eq!(reject_all_teaching_notes(Some(&items)), TeachingNoteReview { notes: vec![], rejected: 2 });
+        assert_eq!(reject_all_teaching_notes(Some(&json!("x"))).rejected, 1);
+        assert_eq!(reject_all_teaching_notes(None), TeachingNoteReview::default());
     }
 
     #[test]

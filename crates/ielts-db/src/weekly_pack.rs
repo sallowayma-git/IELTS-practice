@@ -50,6 +50,10 @@ const MAX_COACH_LINES: usize = 20;
 /// with them. A note that would overflow is skipped whole, never cut.
 const MAX_COACH_NOTES: usize = 2;
 const COACH_LINE_CHARS: usize = 320;
+/// Longest strategy label and learner quote a note may put in the prompt; over
+/// either, the whole note is skipped.
+const NOTE_STRATEGY_CHARS: usize = 80;
+const NOTE_EVIDENCE_CHARS: usize = 120;
 const MEMORY_CHARS: usize = 160;
 const PREFERENCE_CHARS: usize = 200;
 const ANSWER_CHARS: usize = 40;
@@ -565,7 +569,7 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
            JOIN coach_threads t ON t.id = m.thread_id
            LEFT JOIN attempts a ON a.id = t.attempt_id
           WHERE m.role = 'assistant' AND m.status = 'completed'
-            AND json_extract(m.structured_payload, '$.teachingNotes') IS NOT NULL
+            AND CASE WHEN json_valid(m.structured_payload) THEN json_extract(m.structured_payload, '$.teachingNotes') END IS NOT NULL
             AND julianday(m.created_at) > julianday(?1) AND julianday(m.created_at) <= julianday(?2)
           ORDER BY julianday(m.created_at), m.id",
     )?;
@@ -629,37 +633,50 @@ fn with_notes(mut parts: Vec<String>, title: &str, notes: &[String]) -> Vec<Stri
     parts
 }
 
-/// One phrase per stored teaching note. The host validated them at write time;
-/// they are checked again here because they are read straight into the prompt.
+/// The phrases for one assistant message's stored notes. The host validated them
+/// at write time; they are checked again here because they are read into the prompt.
 fn teaching_note_phrases(payload: &Value) -> Vec<String> {
     payload["teachingNotes"].as_array().into_iter().flatten().filter_map(teaching_note_phrase).collect()
 }
 
+/// One phrase per stored teaching note. Only the learner's verified quote and the
+/// coach's strategy label reach the prompt: the model's own `text` never does, so
+/// it cannot pass as the learner's words or steer the weekly pass.
 fn teaching_note_phrase(note: &Value) -> Option<String> {
-    let text = flat(field(note, "text"));
-    if text.is_empty() || !is_safe_for_prompt(&text) {
-        return None;
-    }
+    let evidence = note_field(field(note, "evidence"), NOTE_EVIDENCE_CHARS)?;
     match field(note, "kind") {
-        "preference" => Some(format!("prefers: {text}")),
+        "preference" => Some(format!("learner asked: \"{evidence}\"")),
         "strategy_outcome" => {
-            let strategy = flat(field(note, "strategy"));
-            if strategy.is_empty() || !is_safe_for_prompt(&strategy) {
-                return None;
-            }
+            let strategy = note_field(field(note, "strategy"), NOTE_STRATEGY_CHARS)?;
             let verdict = match field(note, "outcome") {
                 "helped" => "helped",
                 "not_helped" => "did not help",
                 _ => return None,
             };
-            Some(format!("learner said \"{strategy}\" {verdict}"))
+            Some(format!("coach tried \"{strategy}\": {verdict} (learner: \"{evidence}\")"))
         }
         _ => None,
     }
 }
 
-fn flat(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+/// A stored field on its way into the prompt. Quotes, semicolons and colons are
+/// removed (they could pose as a field or a separator), whitespace is flattened,
+/// and id-shaped tokens are dropped. A value still over `max` characters is
+/// skipped whole, never cut mid-word.
+fn note_field(raw: &str, max: usize) -> Option<String> {
+    let stripped: String = raw.chars().filter(|c| !matches!(c, '"' | ';' | ':')).collect();
+    let text = stripped
+        .split_whitespace()
+        .filter(|token| !is_id_token(token))
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!text.is_empty() && text.chars().count() <= max && is_safe_for_prompt(&text)).then_some(text)
+}
+
+/// A token shaped like a citable `obs-`/`mem-` id, whatever punctuation leads it.
+fn is_id_token(token: &str) -> bool {
+    let lower = token.trim_start_matches(|c: char| !c.is_alphanumeric()).to_ascii_lowercase();
+    lower.starts_with("obs-") || lower.starts_with("mem-")
 }
 
 /// A coach thread opened in the window on an attempt finished before it: the
