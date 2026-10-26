@@ -789,9 +789,7 @@ fn insert_skill_observations(conn: &Connection, observations: &[SkillObservation
 fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> (Vec<f64>, u64) {
     let mut attempts = BTreeMap::new();
     for observation in observations {
-        if observation.asset_id.is_empty()
-            || ielts_domain::effective_observation_weight(observation) <= 0.0
-        {
+        if !counts_as_asset(observation) {
             continue;
         }
         let practice = observation
@@ -917,10 +915,12 @@ fn build_states_and_schedules(
             state.stability_days =
                 Some(update_stability(previous_stability, elapsed_days, outcome, weight));
         }
-        assets
-            .entry(key.clone())
-            .or_default()
-            .insert(observation.asset_id.clone());
+        if counts_as_asset(observation) {
+            assets
+                .entry(key.clone())
+                .or_default()
+                .insert(observation.asset_id.clone());
+        }
         state.distinct_asset_count = assets.get(&key).map_or(0, |items| items.len() as u64);
         let outcomes = recent_outcomes.entry(key.clone()).or_default();
         outcomes.push(observation.outcome.clamp(0.0, 1.0));
@@ -1347,6 +1347,13 @@ fn review_delay_days(state: &SkillState) -> f64 {
 /// Mastery ceiling by independent attempt count: one first attempt on one
 /// article cannot establish mastery, two cannot exceed 0.8, and from three on
 /// the Beta posterior speaks for itself.
+/// The one definition of an article that counts as evidence: a named asset and a
+/// non-zero observation weight. Both the mastery ceiling and `distinct_asset_count`
+/// (the weak-skill and review-priority gate) read it, so they cannot disagree.
+fn counts_as_asset(observation: &SkillObservation) -> bool {
+    !observation.asset_id.is_empty() && ielts_domain::effective_observation_weight(observation) > 0.0
+}
+
 fn mastery_ceiling(independent_attempts: u64) -> f64 {
     match independent_attempts {
         0 | 1 => 0.5,
@@ -1576,6 +1583,68 @@ mod tests {
                 results.push(states[0].stability_days);
             }
         }
+        assert!(results.windows(2).all(|pair| pair[0] == pair[1]), "{results:?}");
+    }
+
+    fn asset_observation(id: &str, asset: &str, outcome: f64, familiarity: f64) -> SkillObservation {
+        SkillObservation {
+            familiarity_weight: familiarity,
+            asset_id: asset.into(),
+            ..same_instant_observation(id, outcome)
+        }
+    }
+
+    fn built_state(observations: &[SkillObservation]) -> SkillState {
+        let (states, _, _) = build_states_and_schedules(
+            observations,
+            "2026-08-12T12:00:00Z",
+            LearnerModelConfig::default(),
+        )
+        .unwrap();
+        states.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn weight_zero_and_unnamed_observations_are_not_articles() {
+        let real = asset_observation("real", "asset-real", 1.0, 1.0);
+        let zero_first = asset_observation("zero-1", "asset-zero", 1.0, 0.0);
+        let zero_second = asset_observation("zero-2", "asset-zero", 1.0, 0.0);
+        let unnamed = asset_observation("unnamed", "", 1.0, 1.0);
+        let state = built_state(&[real, zero_first, zero_second, unnamed]);
+        // Only the one weighted, named article is evidence of breadth; the ceiling agrees.
+        assert_eq!(state.distinct_asset_count, 1);
+        assert!(state.mastery_mean <= 0.5 + 1e-12, "{}", state.mastery_mean);
+    }
+
+    #[test]
+    fn repeated_correct_answers_on_a_weight_zero_article_are_not_breadth() {
+        let observations = [
+            asset_observation("zero-1", "asset-zero", 1.0, 0.0),
+            asset_observation("zero-2", "asset-zero", 1.0, 0.0),
+        ];
+        assert_eq!(built_state(&observations).distinct_asset_count, 0);
+    }
+
+    #[test]
+    fn same_instant_stability_is_independent_of_order_with_three_observations() {
+        let mut prior = same_instant_observation("prior", 1.0);
+        prior.observed_at = "2026-08-11T00:00:00Z".into();
+        let mut weighted_down = same_instant_observation("b-wrong", 0.0);
+        weighted_down.familiarity_weight = 0.4;
+        let items = [
+            same_instant_observation("a-correct", 1.0),
+            weighted_down,
+            same_instant_observation("c-middle", 0.5),
+        ];
+        let results: Vec<_> = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+            .into_iter()
+            .map(|order| {
+                let mut observations = vec![prior.clone()];
+                observations.extend(order.iter().map(|&index| items[index].clone()));
+                built_state(&observations).stability_days
+            })
+            .collect();
+        assert!(results[0].is_some());
         assert!(results.windows(2).all(|pair| pair[0] == pair[1]), "{results:?}");
     }
 }
