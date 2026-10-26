@@ -1,0 +1,893 @@
+<title>IELTS Atlas 短片</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap">
+<style>
+/* Layout: one 1920×1080 film stage scaled to the column, a transport bar under it,
+   then the storyboard and export notes. The film is a single dark look on purpose. */
+:root {
+  --void: #050505;
+  --ink: #F4F1EA;
+  --mute: #8F897E;
+  --ember: #E8743F;
+  --paper: #F4F1EA;
+  --paper-ink: #1B1915;
+  --rule: rgba(244, 241, 234, 0.14);
+  --panel: #12110F;
+  --f-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --f-en: "Newsreader", "Iowan Old Style", Georgia, serif;
+  color-scheme: dark;
+}
+html, body { background: var(--void); color: var(--ink); }
+body {
+  font-family: var(--f-sans);
+  font-size: 15px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.page { max-width: 1280px; margin: 0 auto; display: grid; gap: 22px; }
+.masthead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+.masthead h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.masthead h1 span { color: var(--ember); }
+.masthead p { margin: 0; color: var(--mute); font-size: 14px; }
+
+.viewport { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; background: #000; box-shadow: 0 0 0 1px var(--rule); cursor: pointer; }
+.viewport:fullscreen { border-radius: 0; box-shadow: none; }
+
+.transport { display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 12px; }
+.btn { appearance: none; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); height: 40px; min-width: 40px; padding: 0 12px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: 500 14px var(--f-sans); cursor: pointer; }
+.btn:hover { border-color: rgba(244, 241, 234, 0.32); }
+.btn:focus-visible, input[type=range]:focus-visible, .chip:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.btn svg { width: 16px; height: 16px; fill: currentColor; }
+.time { font-variant-numeric: tabular-nums; color: var(--mute); font-size: 13px; white-space: nowrap; }
+input[type=range] { width: 100%; min-width: 0; accent-color: var(--ember); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { appearance: none; border: 1px solid var(--rule); background: transparent; color: var(--mute); border-radius: 999px; padding: 6px 12px; font: 500 13px var(--f-sans); cursor: pointer; }
+.chip b { color: var(--ink); font-weight: 500; margin-left: 6px; }
+.chip[aria-current="true"] { border-color: var(--ember); color: var(--ink); }
+
+.notes { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
+.notes section { min-width: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; padding: 22px 24px; }
+.notes h2 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
+.notes .lede { margin: 0 0 16px; color: var(--mute); font-size: 14px; line-height: 1.6; }
+.board { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.board li { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule); }
+.board .tc { font-variant-numeric: tabular-nums; color: var(--ember); font-size: 13px; padding-top: 2px; }
+.board strong { display: block; font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+.board span { color: var(--mute); font-size: 14px; line-height: 1.6; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 10px; color: var(--mute); line-height: 1.65; font-size: 14px; }
+.steps b { color: var(--ink); font-weight: 500; }
+code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12.5px; background: rgba(244, 241, 234, 0.07); padding: 2px 6px; border-radius: 6px; color: var(--ink); overflow-wrap: anywhere; }
+.spec { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); color: var(--mute); font-size: 13px; }
+.spec i { font-style: normal; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+@media (max-width: 820px) {
+  .notes { grid-template-columns: 1fr; }
+  .transport { grid-template-columns: auto auto 1fr; }
+  .transport .time { grid-column: 1 / -1; order: 5; }
+  .transport .fs { display: none; }
+}
+
+/* ───────── Film stage (fixed 1920×1080 coordinates) ───────── */
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; background: var(--void); color: var(--ink); font-family: var(--f-sans); -webkit-font-smoothing: antialiased; }
+#stage * { box-sizing: border-box; }
+.layer { position: absolute; inset: 0; display: none; }
+.abs { position: absolute; }
+.ch { display: inline-block; will-change: transform, opacity; }
+.chi { will-change: opacity; }
+.eyebrow { font: 500 22px var(--f-sans); letter-spacing: 0.24em; color: var(--ember); text-transform: uppercase; }
+.mute { color: var(--mute); }
+
+#dot { left: 0; top: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--ember); display: none; will-change: transform; z-index: 30; }
+
+/* S1 */
+#s1-text { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 150px; font-weight: 900; line-height: 1.16; letter-spacing: -0.02em; }
+.anchor { display: inline-block; width: 0.42em; height: 0.8em; vertical-align: baseline; }
+
+/* S2 */
+#card { left: 0; top: 0; overflow: hidden; color: var(--paper-ink); }
+#card-in { position: absolute; left: 0; top: 0; width: 860px; padding: 64px 68px; }
+#card .meta { font: 500 18px var(--f-sans); letter-spacing: 0.2em; color: #8A8276; }
+#card h3 { margin: 14px 0 26px; font: 600 54px/1.1 var(--f-en); letter-spacing: -0.01em; }
+#card p { margin: 0; font: 400 33px/1.62 var(--f-en); color: #2A2722; }
+#card p b { font: 600 33px var(--f-sans); color: var(--ember); margin-right: 10px; }
+#evi { background-image: linear-gradient(rgba(232, 116, 63, 0.34), rgba(232, 116, 63, 0.34)); background-repeat: no-repeat; background-position: 0 70%; background-size: 0% 62%; color: var(--paper-ink); }
+#s2-title { left: 1140px; top: 160px; }
+#s2-title h2 { margin: 20px 0 0; font-size: 104px; font-weight: 900; line-height: 1.12; letter-spacing: -0.02em; }
+#q { left: 1140px; top: 500px; width: 620px; }
+#q .q-num { font: 700 24px var(--f-sans); color: var(--mute); letter-spacing: 0.08em; }
+#q .q-text { margin: 12px 0 26px; font: 400 36px/1.4 var(--f-en); }
+.opts { display: flex; gap: 14px; }
+.opt { display: inline-block; padding: 14px 26px; border-radius: 999px; border: 2px solid rgba(244, 241, 234, 0.28); font: 700 24px var(--f-sans); letter-spacing: 0.04em; }
+#verdict { margin-top: 22px; font: 500 24px var(--f-sans); color: var(--mute); }
+#verdict b { color: var(--ink); font-weight: 700; }
+#coach { left: 400px; top: 690px; overflow: hidden; background: #191714; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(244, 241, 234, 0.12); }
+#coach-in { position: absolute; left: 0; top: 0; width: 700px; padding: 34px 40px; }
+.coach-head { display: flex; align-items: center; gap: 14px; font: 700 26px var(--f-sans); margin-bottom: 16px; }
+.coach-head svg { width: 46px; height: 46px; }
+.coach-head .mute { font-weight: 500; }
+#coach-text { margin: 0; font: 500 30px/1.6 var(--f-sans); }
+#coach-text em { font: italic 400 32px var(--f-en); color: #F6A47E; }
+
+/* S3 */
+#s3 { background: var(--paper); color: var(--paper-ink); }
+#w-title { left: 160px; top: 84px; transform-origin: 0 0; font-size: 150px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.15; white-space: nowrap; }
+#w-sub { left: 164px; top: 196px; font-size: 40px; font-weight: 500; color: #6E685E; }
+#essay { left: 160px; top: 300px; width: 860px; }
+#essay .meta { font: 500 18px var(--f-sans); letter-spacing: 0.2em; color: #8A8276; margin-bottom: 18px; }
+#essay p { margin: 0; font: 400 34px/2.25 var(--f-en); color: #2A2722; }
+.err { position: relative; white-space: nowrap; }
+.wave { position: absolute; left: 0; bottom: -8px; width: 100%; height: 12px; overflow: visible; }
+.wave path { fill: none; stroke: #D2452F; stroke-width: 2.6; stroke-linecap: round; }
+.fix { position: absolute; left: 0; top: 100%; margin-top: 6px; white-space: nowrap; background: #D2452F; color: #fff; font: 700 18px/1.3 var(--f-sans); padding: 5px 14px; border-radius: 999px; transform-origin: 12px 0; box-shadow: 0 10px 24px rgba(210, 69, 47, 0.28); }
+#rings { left: 1130px; top: 250px; width: 640px; display: grid; grid-template-columns: 1fr 1fr; row-gap: 26px; }
+.ring { display: grid; justify-items: center; gap: 12px; }
+.ring-dial { position: relative; width: 180px; height: 180px; }
+.ring-dial svg { width: 180px; height: 180px; transform: rotate(-90deg); }
+.ring-dial .val { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 900 54px var(--f-sans); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.ring-name { font: 700 26px var(--f-sans); }
+.ring-name small { font: 500 18px var(--f-sans); color: #8A8276; margin-left: 8px; letter-spacing: 0.08em; }
+#band { left: 1150px; top: 800px; display: flex; align-items: flex-end; gap: 30px; }
+#band .eyebrow { color: #8A8276; display: block; margin-bottom: 6px; font-size: 20px; }
+.odo { display: flex; font: 900 150px/1 var(--f-sans); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.odo .col { height: 1em; overflow: hidden; }
+.odo .col > div { will-change: transform; }
+.odo .col span { display: block; height: 1em; }
+#band-note { font: 500 22px/1.5 var(--f-sans); color: #6E685E; padding-bottom: 18px; }
+
+/* S4 */
+#fx { left: 0; top: 0; width: 1920px; height: 1080px; display: none; }
+.cap { left: 0; right: 0; text-align: center; font-size: 60px; font-weight: 700; letter-spacing: -0.01em; }
+#moon { left: 905px; top: 120px; width: 110px; height: 110px; border-radius: 50%; background: var(--ink); overflow: hidden; box-shadow: 0 0 80px rgba(244, 241, 234, 0.25); }
+#moon i { position: absolute; top: -6px; width: 112px; height: 112px; border-radius: 50%; background: var(--void); }
+#s4-head { left: 0; right: 0; top: 150px; text-align: center; }
+#s4-head h2 { margin: 18px 0 0; font-size: 112px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; }
+#s4-sub { left: 0; right: 0; top: 820px; text-align: center; font-size: 36px; font-weight: 500; }
+.mem { top: 470px; width: 480px; height: 260px; padding: 34px 36px; border-radius: 30px; background: #151412; box-shadow: 0 0 0 1px rgba(244, 241, 234, 0.12), 0 30px 70px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; justify-content: space-between; }
+.mem .tag { align-self: flex-start; font: 700 20px var(--f-sans); padding: 6px 16px; border-radius: 999px; color: #0B0A09; }
+.mem p { margin: 0; font: 700 34px/1.4 var(--f-sans); }
+.mem .ev { font: 500 20px var(--f-sans); color: var(--mute); }
+
+/* S5 */
+#s5-head { left: 180px; top: 300px; }
+#s5-head h2 { margin: 22px 0 0; font-size: 150px; font-weight: 900; line-height: 1.12; letter-spacing: -0.03em; }
+#s5-sub { margin-top: 30px; font-size: 34px; font-weight: 500; color: var(--mute); }
+#radar { left: 0; top: 0; width: 1920px; height: 1080px; overflow: visible; }
+#radar text { font: 500 27px var(--f-sans); fill: var(--ink); }
+#week { left: 1180px; top: 950px; width: 200px; height: 48px; overflow: hidden; text-align: center; font: 700 30px/48px var(--f-sans); color: var(--ember); }
+
+/* S6 */
+#lock { left: 0; top: 0; will-change: transform; }
+#lockbody { position: absolute; background: var(--ember); }
+#keyhole { position: absolute; left: 50%; top: 50%; width: 30px; height: 64px; margin: -30px 0 0 -15px; }
+#keyhole::before { content: ""; position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--void); }
+#keyhole::after { content: ""; position: absolute; left: 10px; top: 22px; width: 10px; height: 38px; border-radius: 5px; background: var(--void); }
+#shackle { position: absolute; width: 170px; height: 170px; overflow: visible; }
+#shackle path { fill: none; stroke: var(--ink); stroke-width: 28; stroke-linecap: butt; }
+#s6-text { left: 0; right: 0; top: 700px; text-align: center; }
+#s6-text h2 { margin: 0; font-size: 92px; font-weight: 900; letter-spacing: -0.02em; }
+#s6-text p { margin: 26px 0 0; font-size: 36px; font-weight: 500; color: var(--mute); }
+
+/* S7 */
+.mascot { left: 0; top: 0; width: 150px; height: 150px; will-change: transform; }
+.mascot svg { width: 150px; height: 150px; display: block; }
+#wordmark { left: 0; right: 0; top: 340px; text-align: center; font: 600 190px/1.1 var(--f-en); letter-spacing: -0.03em; white-space: nowrap; }
+#tagline { left: 0; right: 0; top: 610px; text-align: center; font-size: 72px; font-weight: 900; letter-spacing: -0.01em; }
+#features { left: 0; right: 0; top: 760px; text-align: center; font-size: 30px; font-weight: 500; color: var(--mute); letter-spacing: 0.04em; }
+#platforms { left: 0; right: 0; top: 820px; text-align: center; font-size: 22px; font-weight: 500; color: #5E594F; letter-spacing: 0.12em; }
+
+/* Export mode: the stage alone, unscaled, for frame capture. */
+body.export { padding: 0; overflow: hidden; }
+body.export .page > :not(.viewport) { display: none; }
+body.export .page { max-width: none; }
+body.export .viewport { position: fixed; inset: 0; width: 1920px; height: 1080px; border-radius: 0; box-shadow: none; aspect-ratio: auto; }
+</style>
+
+<div class="page">
+  <div class="masthead">
+    <h1>IELTS Atlas <span>·</span> 越练，越懂你。</h1>
+    <p>44 秒品牌短片 · 1920×1080 · 点击画面暂停或播放</p>
+  </div>
+
+  <div class="viewport" id="viewport" role="img" aria-label="IELTS Atlas 介绍短片：阅读 Coach、写作评分、自进化记忆、学习画像与本地优先存储">
+    <div id="stage">
+      <!-- S1 · 开场 -->
+      <div class="layer" id="s1">
+        <div id="s1-text" class="abs">
+          <div id="l1">每一道错题，</div>
+          <div id="l2">都有原因<span class="anchor nosplit" id="a1"></span></div>
+        </div>
+      </div>
+
+      <!-- S2 · 阅读 Coach -->
+      <div class="layer" id="s2">
+        <div id="card" class="abs">
+          <div id="card-in">
+            <div class="meta">READING PASSAGE 2 · PARAGRAPH C</div>
+            <h3>The Glassmakers of Venice</h3>
+            <p><b>C</b>By the thirteenth century, Venetian glass was prized across Europe, and the city guarded its secrets closely. Craftsmen were moved to the island of Murano, partly to contain the risk of fire. <span id="evi">Even so, some glassmakers were allowed to travel abroad, provided they returned.</span> Those who left without permission faced severe penalties.</p>
+          </div>
+        </div>
+        <div id="s2-title" class="abs">
+          <div class="eyebrow" id="s2-eb">Reading Coach</div>
+          <h2 id="s2-h">错在哪，<br>讲到你懂。</h2>
+        </div>
+        <div id="q" class="abs">
+          <div class="q-num">QUESTION 14 · TRUE / FALSE / NOT GIVEN</div>
+          <div class="q-text">Venetian glassmakers were never permitted to leave the city.</div>
+          <div class="opts">
+            <span class="opt" id="o-t">TRUE</span>
+            <span class="opt" id="o-f">FALSE</span>
+            <span class="opt" id="o-ng">NOT GIVEN</span>
+          </div>
+          <div id="verdict">你的答案 <b>NOT GIVEN</b>　·　正确答案 <b>FALSE</b></div>
+        </div>
+        <div id="coach" class="abs">
+          <div id="coach-in">
+            <div class="coach-head" id="coach-head"></div>
+            <p id="coach-text">原文写的是 <em>some glassmakers were allowed to travel abroad</em>，和题干里的 <em>never</em> 直接矛盾。所以是 FALSE，不是 NOT GIVEN。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- S3 · 写作评分 -->
+      <div class="layer" id="s3">
+        <div id="w-title" class="abs">写作评分</div>
+        <div id="w-sub" class="abs">四项标准，逐句批注。</div>
+        <div id="essay" class="abs">
+          <div class="meta">TASK 2 · 278 WORDS</div>
+          <p id="essay-p">Some people believe that university education should be free for everyone. Admittedly, <span class="err" id="e1">a lot of people thinks</span> that free tuition mainly helps the rich, but this view ignores the long-term benefit to society. When talented students from poor families can study without debt, the whole economy <span class="err" id="e2">become stronger</span>.</p>
+        </div>
+        <div id="rings" class="abs"></div>
+        <div id="band" class="abs">
+          <div>
+            <span class="eyebrow">Overall Band</span>
+            <div class="odo"><div class="col"><div id="odo-i"></div></div><div class="col"><span>.</span></div><div class="col"><div id="odo-d"></div></div></div>
+          </div>
+          <div id="band-note">四项平均 6.75<br>按 IELTS 规则进位为 7.0</div>
+        </div>
+      </div>
+
+      <!-- S4 · 自进化 -->
+      <canvas id="fx" class="abs" width="1920" height="1080"></canvas>
+      <div class="layer" id="s4">
+        <div id="cap1" class="abs cap" style="top:870px">白天，它记下你的每一次作答。</div>
+        <div id="moon" class="abs"><i></i></div>
+        <div id="cap2" class="abs cap" style="top:870px">夜里，它把今天整理成记忆。</div>
+        <div id="s4-head" class="abs">
+          <div class="eyebrow" id="s4-eb">Self-evolving Agent</div>
+          <h2 id="s4-h">它会自己进化。</h2>
+        </div>
+        <div class="abs mem" id="m0" style="left:200px"><span class="tag" style="background:#FF7A1A">弱项</span><p>判断题里，常把 FALSE 当成 NOT GIVEN</p><span class="ev">证据 14 条 · 本周</span></div>
+        <div class="abs mem" id="m1" style="left:720px"><span class="tag" style="background:#2AA8F2">偏好</span><p>讲解时先给原文例句，再讲规则</p><span class="ev">来自 6 次 Coach 反馈</span></div>
+        <div class="abs mem" id="m2" style="left:1240px"><span class="tag" style="background:#22A660">进步</span><p>同义替换题<br>54% → 71%</p><span class="ev">近 4 周 · 38 次作答</span></div>
+        <div id="s4-sub" class="abs mute">每天写学习日记，每周整理一次长期记忆。</div>
+      </div>
+
+      <!-- S5 · 学习画像 -->
+      <div class="layer" id="s5">
+        <svg id="radar" class="abs" viewBox="0 0 1920 1080"></svg>
+        <div id="week" class="abs"><div id="week-roll"><div>第 1 周</div><div>第 4 周</div></div></div>
+        <div id="s5-head" class="abs">
+          <div class="eyebrow" id="s5-eb">Learner Model · 学习画像</div>
+          <h2 id="s5-h">越练，<br>越懂你。</h2>
+          <div id="s5-sub">六项阅读技能，随每次练习更新。</div>
+        </div>
+      </div>
+
+      <!-- S6 · 本地优先 -->
+      <div class="layer" id="s6">
+        <div id="lock" class="abs">
+          <svg id="shackle" viewBox="0 0 170 170"><path d="M28 170V85a57 57 0 0 1 114 0v85"/></svg>
+          <div id="lockbody"><div id="keyhole"></div></div>
+        </div>
+        <div id="s6-text" class="abs">
+          <h2 id="s6-h">数据，只留在你的电脑里。</h2>
+          <p id="s6-p">练习记录、记忆、学习画像，全部存在本机 SQLite。</p>
+        </div>
+      </div>
+
+      <!-- S7 · 收尾 -->
+      <div class="layer" id="s7">
+        <div id="mascots"></div>
+        <div id="wordmark" class="abs">IELTS Atlas<span class="anchor nosplit" id="a7"></span></div>
+        <div id="tagline" class="abs">越练，越懂你。</div>
+        <div id="features" class="abs">AI 写作评分 · 阅读 Coach · 自进化学习画像</div>
+        <div id="platforms" class="abs">本地优先桌面应用 · WINDOWS · MACOS · LINUX</div>
+      </div>
+
+      <div id="dot" class="abs"></div>
+    </div>
+  </div>
+
+  <div class="transport">
+    <button class="btn" id="play" type="button" aria-label="暂停"><svg viewBox="0 0 16 16" id="play-ico"><path d="M4 2h3v12H4zM9 2h3v12H9z"/></svg></button>
+    <button class="btn" id="replay" type="button" aria-label="从头播放"><svg viewBox="0 0 16 16"><path d="M8 2a6 6 0 1 1-5.6 3.9l1.9.7A4 4 0 1 0 8 4v2.5L4.5 3 8 0z"/></svg></button>
+    <input type="range" id="scrub" min="0" max="44.5" step="0.01" value="0" aria-label="播放进度">
+    <span class="time" id="time">00:00.0 / 00:44.5</span>
+    <button class="btn fs" id="fs" type="button">全屏</button>
+  </div>
+  <div class="chips" id="chips" aria-label="跳到分镜"></div>
+
+  <div class="notes">
+    <section>
+      <h2>分镜</h2>
+      <p class="lede">主张「越练，越懂你。」一颗橙色圆点贯穿全片：它是开场的句号，长成阅读卷面，变成 Coach 气泡，散成夜里的记忆粒子，又收成一把锁，最后落在 Atlas 的句号上。</p>
+      <ol class="board" id="board"></ol>
+      <div class="spec">
+        <span><i style="background:#050505;box-shadow:0 0 0 1px rgba(244,241,234,.3)"></i>Void #050505</span>
+        <span><i style="background:#F4F1EA"></i>Paper #F4F1EA</span>
+        <span><i style="background:#E8743F"></i>Ember #E8743F</span>
+        <span>中文 Noto Sans SC 900 / 500</span>
+        <span>英文 Newsreader</span>
+      </div>
+    </section>
+    <section>
+      <h2>导出成视频</h2>
+      <p class="lede">成片 MP4 已经单独渲染好。想改文案或时长后自己重新导出，用仓库里的脚本逐帧截图再交给 ffmpeg 合成，画面和这里完全一致。</p>
+      <ol class="steps">
+        <li>拉取分支 <code>claude/project-thread-kmwwft</code>，文件在 <code>developer/promo/</code>。</li>
+        <li>装好 Node 18+ 和 ffmpeg，在该目录执行 <code>npm i playwright</code> 与 <code>npx playwright install chromium</code>。</li>
+        <li>运行 <code>node render-film.mjs atlas-film.html atlas-film.mp4 60</code>，最后一个参数是帧率，30 或 60 都行。</li>
+        <li>只想快速录屏：本页点「全屏」，用 OBS 或 Win+Alt+R 录制。逐帧导出的画面更稳，不会掉帧。</li>
+      </ol>
+      <p class="lede" style="margin:16px 0 0">片子目前没有配乐。节奏按每拍约 0.6 秒设计，配一段 100 BPM 左右的极简电子乐会很合拍。</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const DUR = 44.5;
+  const EMBER = '#E8743F', PAPER = '#F4F1EA', INK = '#F4F1EA', VOID = '#050505';
+  const RED = '#D2452F', GREEN = '#22A660';
+  const $ = (s) => document.querySelector(s);
+  const exportMode = /[?&]export\b/.test(location.search);
+
+  /* ── math ── */
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, p) => a + (b - a) * p;
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const E = {
+    inCubic: (p) => p * p * p,
+    outCubic: (p) => 1 - Math.pow(1 - p, 3),
+    inOutCubic: (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2),
+    inOutQuart: (p) => (p < 0.5 ? 8 * p ** 4 : 1 - Math.pow(-2 * p + 2, 4) / 2),
+    outExpo: (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p)),
+    inExpo: (p) => (p <= 0 ? 0 : Math.pow(2, 10 * p - 10)),
+  };
+  // Analytic damped spring: x seconds after release, w = angular frequency, z = damping ratio.
+  function spring(x, w = 12, z = 0.6) {
+    if (x <= 0) return 0;
+    if (z < 1) {
+      const wd = w * Math.sqrt(1 - z * z);
+      return 1 - Math.exp(-z * w * x) * (Math.cos(wd * x) + (z * w / wd) * Math.sin(wd * x));
+    }
+    return 1 - (1 + w * x) * Math.exp(-w * x);
+  }
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  function mix(a, b, p) {
+    const A = hex(a), B = hex(b);
+    return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], clamp(p)))).join(',')})`;
+  }
+  function rng(seed) {
+    return () => {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let r = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ── text splitting ── */
+  // mode 'block': each glyph is an inline-block that can move. 'inline': opacity only, so English still wraps by word.
+  function split(el, mode = 'block') {
+    const out = [];
+    const walk = (node) => {
+      [...node.childNodes].forEach((n) => {
+        if (n.nodeType === 3) {
+          const frag = document.createDocumentFragment();
+          for (const c of n.textContent) {
+            if (mode === 'block' && c === ' ') { frag.appendChild(document.createTextNode(' ')); continue; }
+            const s = document.createElement('span');
+            s.className = mode === 'block' ? 'ch' : 'chi';
+            s.textContent = c;
+            frag.appendChild(s);
+            out.push(s);
+          }
+          n.replaceWith(frag);
+        } else if (n.nodeType === 1 && !n.classList.contains('nosplit') && n.tagName !== 'BR' && n.tagName !== 'svg') {
+          walk(n);
+        }
+      });
+    };
+    walk(el);
+    return out;
+  }
+  function rise(chars, t, start, o = {}) {
+    const { stagger = 0.05, w = 13, z = 0.58, dy = 0.9, blur = 12, fade = 0.3 } = o;
+    chars.forEach((c, i) => {
+      const x = t - start - i * stagger;
+      const p = spring(x, w, z), a = clamp(x / fade);
+      c.style.transform = `translate3d(0,${((1 - p) * dy * 100).toFixed(2)}%,0)`;
+      c.style.opacity = a;
+      c.style.filter = a < 1 ? `blur(${((1 - a) * blur).toFixed(1)}px)` : 'none';
+    });
+  }
+  function type(chars, t, start, end) {
+    const n = Math.floor(chars.length * prog(t, start, end) + 0.0001);
+    chars.forEach((c, i) => { c.style.opacity = i < n ? 1 : 0; });
+  }
+  function fadeChars(chars, t, start, stagger) {
+    chars.forEach((c, i) => { c.style.opacity = clamp((t - start - i * stagger) / 0.18); });
+  }
+  // Exit: lift, swell and blur away.
+  function out(el, t, start, dur = 0.6, extra = '') {
+    const p = E.inCubic(prog(t, start, start + dur));
+    el.style.opacity = 1 - p;
+    el.style.transform = `${extra} scale(${1 + 0.07 * p})`;
+    el.style.filter = p > 0 ? `blur(${(p * 16).toFixed(1)}px)` : 'none';
+  }
+  function appear(el, t, start, dy = 40, dur = 0.7) {
+    const p = spring(t - start, 10, 0.75), a = clamp((t - start) / dur * 1.6);
+    el.style.opacity = a;
+    el.style.transform = `translate3d(0,${(1 - p) * dy}px,0)`;
+  }
+  const show = (el, on) => { el.style.display = on ? 'block' : 'none'; };
+
+  /* ── assets ── */
+  const MASCOTS = [
+    ['#FFC21A', 'M32 7a25 25 0 1 1 0 50a25 25 0 1 1 0-50Z', '<circle cx="25" cy="30" r="4.6" fill="#fff"/><circle cx="23.2" cy="28.6" r="2.3" fill="#1E1A16"/><circle cx="39" cy="30" r="4.6" fill="#fff"/><circle cx="37.2" cy="28.6" r="2.3" fill="#1E1A16"/><path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M26 40q6 6 12 0"/>'],
+    ['#FF7AB6', 'M32 56C12 44 6 32 8 24C10 15 22 11 32 22C42 11 54 15 56 24C58 32 52 44 32 56Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 31q3 3.5 6 0M36 31q3 3.5 6 0M26 41q6 5 12 0"/>'],
+    ['#FF7A1A', 'M10 56V24a7 7 0 0 1 14 0a8 8 0 0 1 16 0a7 7 0 0 1 14 0V56a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 36q3 3.5 6 0M36 36q3 3.5 6 0M27 44q5 4 10 0"/>'],
+    ['#2AA8F2', 'M22 7H42L57 22V42L42 57H22L7 42V22Z', '<circle cx="25" cy="31" r="3.6" fill="#fff"/><circle cx="25" cy="31" r="2" fill="#1E1A16"/><circle cx="39" cy="31" r="3.6" fill="#fff"/><circle cx="39" cy="31" r="2" fill="#1E1A16"/><path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M20 25h9M35 25h9M27 43h10"/>'],
+    ['#22A660', 'M8 40C8 30 18 26 32 26C46 26 56 30 56 40C56 52 46 56 32 56C18 56 8 52 8 40Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 38q3 3.5 6 0M36 38q3 3.5 6 0M28 46q4 2 8 0"/>'],
+    ['#9C6ADE', 'M8 34a24 20 0 1 0 48 0a24 20 0 1 0-48 0Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 32q3 3.5 6 0M36 32q3 3.5 6 0M25 42q7 4 14 0"/>'],
+    ['#1F6FE5', 'M10 12H54V34Q54 50 32 60Q10 50 10 34Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 30q3 3.5 6 0M36 30q3 3.5 6 0M24 40q8 7 16 0"/>'],
+  ];
+  const svgOf = ([fill, d, face]) => `<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="${fill}" d="${d}"/>${face}</svg>`;
+
+  /* ── build DOM ── */
+  const L = {}; ['s1', 's2', 's3', 's4', 's5', 's6', 's7'].forEach((id) => { L[id] = $('#' + id); });
+  const dot = $('#dot'), fx = $('#fx'), ctx = fx.getContext('2d');
+
+  const c1a = split($('#l1')), c1b = split($('#l2'));
+  const c2h = split($('#s2-h'));
+  $('#coach-head').innerHTML = svgOf(MASCOTS[3]) + '<span>Coach</span><span class="mute">· 第 14 题讲解</span>';
+  const cCoach = split($('#coach-text'), 'inline');
+  const c3t = split($('#w-title')), c3s = split($('#w-sub'));
+  const cEssay = split($('#essay-p'), 'inline');
+  const cCap1 = split($('#cap1')), cCap2 = split($('#cap2')), c4h = split($('#s4-h'));
+  const c5h = split($('#s5-h'));
+  const c6h = split($('#s6-h'));
+  const c7w = split($('#wordmark')), c7t = split($('#tagline'));
+
+  // writing: underline + correction chips
+  [['e1', '主谓一致 → people think'], ['e2', '主谓一致 → becomes']].forEach(([id, fix]) => {
+    const el = $('#' + id);
+    el.insertAdjacentHTML('beforeend', `<svg class="wave nosplit" viewBox="0 0 200 12" preserveAspectRatio="none"><path d="M0 6q5-6 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/></svg><span class="fix nosplit">${fix}</span>`);
+  });
+  const RINGS = [['任务回应', 'TR', 7.0, '#FF7A1A'], ['连贯与衔接', 'CC', 6.5, '#2AA8F2'], ['词汇资源', 'LR', 7.0, '#22A660'], ['语法范围与准确性', 'GRA', 6.5, '#9C6ADE']];
+  const RC = 2 * Math.PI * 74;
+  $('#rings').innerHTML = RINGS.map(([n, k, , col]) => `
+    <div class="ring"><div class="ring-dial"><svg viewBox="0 0 180 180"><circle cx="90" cy="90" r="74" fill="none" stroke="rgba(27,25,21,.08)" stroke-width="18"/><circle class="arc" cx="90" cy="90" r="74" fill="none" stroke="${col}" stroke-width="18" stroke-linecap="round" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${RC.toFixed(1)}"/></svg><div class="val">0.0</div></div>
+    <div class="ring-name">${n.length > 5 ? '语法' : n}<small>${k}</small></div></div>`).join('');
+  const ringEls = [...document.querySelectorAll('.ring')].map((r) => ({ r, arc: r.querySelector('.arc'), val: r.querySelector('.val') }));
+  $('#odo-i').innerHTML = [4, 5, 6, 7, 8].map((d) => `<span>${d}</span>`).join('');
+  $('#odo-d').innerHTML = [0, 5, 0, 5, 0, 5, 0, 5, 0].map((d) => `<span>${d}</span>`).join('');
+
+  // radar
+  const RAD = { cx: 1290, cy: 540, R: 330 };
+  const SK = ['定位信息', '同义替换', '判断题', '段落匹配', '词汇', '长难句'];
+  const W1 = [0.46, 0.30, 0.36, 0.50, 0.56, 0.40], W4 = [0.80, 0.72, 0.76, 0.70, 0.83, 0.71];
+  const ang = (k) => -Math.PI / 2 + (k * 2 * Math.PI) / 6;
+  const pt = (k, r) => [RAD.cx + Math.cos(ang(k)) * r, RAD.cy + Math.sin(ang(k)) * r];
+  const hexPath = (r) => SK.map((_, k) => pt(k, r).map((v) => v.toFixed(1)).join(',')).join(' ');
+  $('#radar').innerHTML =
+    [0.34, 0.67, 1].map((f) => `<polygon class="grid" points="${hexPath(RAD.R * f)}" fill="none" stroke="rgba(244,241,234,.18)" stroke-width="2" stroke-dasharray="${(6 * RAD.R * f).toFixed(1)}"/>`).join('') +
+    SK.map((_, k) => `<line class="axis" x1="${RAD.cx}" y1="${RAD.cy}" x2="${pt(k, RAD.R)[0].toFixed(1)}" y2="${pt(k, RAD.R)[1].toFixed(1)}" stroke="rgba(244,241,234,.12)" stroke-width="2"/>`).join('') +
+    `<polygon id="shape" fill="rgba(232,116,63,.24)" stroke="${EMBER}" stroke-width="4" stroke-linejoin="round"/>` +
+    SK.map(() => `<circle class="vtx" r="9" fill="${EMBER}"/>`).join('') +
+    SK.map((s, k) => { const [x, y] = pt(k, RAD.R + 62); return `<text class="lbl" x="${x.toFixed(1)}" y="${(y + 9).toFixed(1)}" text-anchor="middle">${s}</text>`; }).join('');
+  const rGrid = [...document.querySelectorAll('#radar .grid')], rAxis = [...document.querySelectorAll('#radar .axis')];
+  const rShape = $('#shape'), rVtx = [...document.querySelectorAll('#radar .vtx')], rLbl = [...document.querySelectorAll('#radar .lbl')];
+
+  // mascots
+  $('#mascots').innerHTML = MASCOTS.map((m) => `<div class="abs mascot">${svgOf(m)}</div>`).join('');
+  const mEls = [...document.querySelectorAll('.mascot')];
+
+  // particles
+  const P = [];
+  {
+    const r = rng(7);
+    const tint = ['#FF7A1A', '#2AA8F2', '#22A660', '#9C6ADE', '#FF7AB6'];
+    const centers = [440, 960, 1480];
+    for (let i = 0; i < 300; i++) {
+      const k = i % 3, a = r() * Math.PI * 2, d = Math.sqrt(r());
+      const roll = r();
+      P.push({
+        fx: 90 + r() * 1740, fy: 80 + r() * 900,
+        gx: centers[k] + Math.cos(a) * d * 210, gy: 600 + Math.sin(a) * d * 110,
+        d0: r() * 0.18, w: 4.2 + r() * 3.5, gd: r() * 0.7,
+        f1: 0.5 + r() * 0.9, f2: 0.4 + r() * 0.8, ph: r() * 6.28, amp: 10 + r() * 22,
+        size: 1.6 + r() * 3.6,
+        col: roll < 0.62 ? INK : roll < 0.85 ? EMBER : tint[Math.floor(r() * tint.length)],
+        alpha: 0.35 + r() * 0.6,
+      });
+    }
+  }
+
+  /* ── measured anchors (period positions) ── */
+  let A1 = { x: 1180, y: 640 }, A7 = { x: 1500, y: 520 }, BAND = { x: 1260, y: 905 };
+  function measure() {
+    const st = $('#stage').getBoundingClientRect(), sc = st.width / 1920 || 1;
+    const grab = (layer, el, prep) => {
+      const prev = layer.style.display; layer.style.display = 'block';
+      const restore = prep ? prep() : null;
+      const r = el.getBoundingClientRect();
+      if (restore) restore();
+      layer.style.display = prev;
+      return { x: (r.left - st.left) / sc, y: (r.bottom - st.top) / sc, h: r.height / sc };
+    };
+    const noT = (el) => () => { const tr = el.style.transform, f = el.style.filter; el.style.transform = 'none'; el.style.filter = 'none'; return () => { el.style.transform = tr; el.style.filter = f; }; };
+    const a1 = grab(L.s1, $('#a1'), noT($('#s1-text')));
+    A1 = { x: a1.x + 150 * 0.2, y: a1.y - 150 * 0.08 - 15 };
+    const a7 = grab(L.s7, $('#a7'));
+    A7 = { x: a7.x + 190 * 0.18, y: a7.y - 190 * 0.08 - 17 };
+    const b = grab(L.s3, $('#band .odo'));
+    BAND = { x: b.x + 110, y: b.y - 75 };
+  }
+
+  /* ── scenes ── */
+  const RANGES = { s1: [0, 4.5], s2: [4.4, 11.5], s3: [10.55, 19.7], s4: [19.4, 28.4], s5: [27.9, 34.1], s6: [33.7, 38.7], s7: [38.3, DUR + 1] };
+
+  function S1(t) {
+    rise(c1a, t, 1.0, { stagger: 0.07 });
+    rise(c1b, t, 1.55, { stagger: 0.07 });
+    out($('#s1-text'), t, 3.5, 0.7);
+  }
+
+  function S2(t) {
+    const card = $('#card');
+    const p = spring(t - 4.45, 8.5, 0.74);
+    card.style.left = lerp(0, 200, p) + 'px';
+    card.style.top = lerp(0, 150, p) + 'px';
+    card.style.width = lerp(1920, 860, p) + 'px';
+    card.style.height = lerp(1080, 780, p) + 'px';
+    card.style.borderRadius = lerp(0, 36, p) + 'px';
+    card.style.background = mix(EMBER, PAPER, E.outCubic(prog(t, 4.5, 5.1)));
+    appear($('#card-in'), t, 4.95, 30);
+
+    const eb = $('#s2-eb'); eb.style.opacity = prog(t, 5.0, 5.4); eb.style.transform = `translateX(${(1 - E.outExpo(prog(t, 5.0, 5.8))) * -30}px)`;
+    rise(c2h, t, 5.15, { stagger: 0.05 });
+    appear($('#q'), t, 5.6, 50);
+
+    const ng = $('#o-ng'), f = $('#o-f'), tr = $('#o-t');
+    const sel = t >= 6.1, wrong = t >= 6.6, ok = t >= 7.55;
+    tr.style.cssText = '';
+    const sh = wrong ? Math.sin((t - 6.6) * 52) * 16 * Math.exp(-(t - 6.6) * 5.5) : 0;
+    const ns = sel ? lerp(0.86, 1, spring(t - 6.1, 18, 0.32)) : 1;
+    ng.style.background = wrong ? RED : sel ? INK : 'transparent';
+    ng.style.borderColor = wrong ? RED : sel ? INK : '';
+    ng.style.color = sel && !wrong ? VOID : INK;
+    ng.style.transform = `translateX(${sh}px) scale(${ns})`;
+    const fs = ok ? lerp(0.55, 1, spring(t - 7.55, 15, 0.38)) : 1;
+    f.style.background = ok ? GREEN : 'transparent';
+    f.style.borderColor = ok ? GREEN : '';
+    f.style.transform = `scale(${fs})`;
+    appear($('#verdict'), t, 7.75, 20);
+
+    $('#evi').style.backgroundSize = `${(E.inOutCubic(prog(t, 7.0, 7.9)) * 100).toFixed(2)}% 62%`;
+
+    const coach = $('#coach'), b = spring(t - 8.05, 9, 0.6);
+    coach.style.display = t >= 8.0 ? 'block' : 'none';
+    coach.style.width = lerp(40, 700, b) + 'px';
+    coach.style.height = lerp(40, 330, b) + 'px';
+    coach.style.borderRadius = lerp(20, 30, clamp(b)) + 'px';
+    coach.style.background = mix(EMBER, '#191714', E.outCubic(prog(t, 8.05, 8.45)));
+    const ci = $('#coach-head'); ci.style.opacity = prog(t, 8.35, 8.65);
+    fadeChars(cCoach, t, 8.5, 0.017);
+  }
+
+  function S3(t) {
+    const s3 = L.s3;
+    let r, cx, cy;
+    if (t < 18.9) { r = 2300 * E.inOutQuart(prog(t, 10.6, 11.4)); cx = 750; cy = 855; }
+    else { r = 2300 * (1 - E.inOutQuart(prog(t, 18.9, 19.55))); cx = BAND.x; cy = BAND.y; }
+    s3.style.clipPath = `circle(${r.toFixed(1)}px at ${cx.toFixed(1)}px ${cy.toFixed(1)}px)`;
+
+    const tt = $('#w-title');
+    rise(c3t, t, 11.05, { stagger: 0.06 });
+    const m = spring(t - 12.15, 9, 0.72);
+    const dx0 = 960 - tt.offsetWidth / 2 - 160, dy0 = 540 - tt.offsetHeight / 2 - 84;
+    tt.style.transform = `translate(${lerp(dx0, 0, m)}px,${lerp(dy0, 0, m)}px) scale(${lerp(1, 0.5, m)})`;
+    rise(c3s, t, 12.45, { stagger: 0.03, dy: 0.5 });
+
+    appear($('#essay'), t, 12.55, 30);
+    type(cEssay, t, 12.7, 14.6);
+    [['#e1', 14.25], ['#e2', 14.85]].forEach(([id, s]) => {
+      const el = $(id);
+      const w = E.inOutCubic(prog(t, s, s + 0.45));
+      el.querySelector('.wave').style.clipPath = `inset(-6px ${((1 - w) * 100).toFixed(1)}% -6px 0)`;
+      const fx_ = el.querySelector('.fix');
+      const cp = spring(t - s - 0.3, 14, 0.5);
+      fx_.style.opacity = clamp((t - s - 0.3) / 0.15);
+      fx_.style.transform = `scale(${Math.max(0, cp).toFixed(3)})`;
+    });
+
+    ringEls.forEach((g, k) => {
+      const s = 14.9 + k * 0.14;
+      g.r.style.opacity = clamp((t - s) / 0.3);
+      g.r.style.transform = `scale(${lerp(0.6, 1, spring(t - s, 12, 0.55))})`;
+      const v = RINGS[k][2], p = spring(t - s - 0.15, 5.8, 0.66);
+      g.arc.setAttribute('stroke-dashoffset', (RC * (1 - (v / 9) * p)).toFixed(1));
+      g.val.textContent = (Math.round(v * clamp(p) * 2) / 2).toFixed(1);
+    });
+
+    appear($('#band'), t, 15.75, 40);
+    const bv = 4 + 3 * spring(t - 15.95, 5.2, 0.6);
+    $('#odo-i').style.transform = `translateY(${-(bv - 4)}em)`;
+    $('#odo-d').style.transform = `translateY(${-(bv - 4) * 2}em)`;
+    $('#band-note').style.opacity = prog(t, 17.3, 17.8);
+  }
+
+  function particles(t) {
+    ctx.clearRect(0, 0, 1920, 1080);
+    if (t < 19.5 || t > 26.2) return;
+    ctx.globalCompositeOperation = 'lighter';
+    const night = prog(t, 22.6, 23.4);
+    for (const q of P) {
+      const pb = spring(t - 19.55 - q.d0, q.w, 0.68);
+      let x = lerp(BAND.x, q.fx, pb), y = lerp(BAND.y, q.fy, pb);
+      const wob = clamp(pb) * (1 - 0.7 * night);
+      x += Math.sin(t * q.f1 + q.ph) * q.amp * wob;
+      y += Math.cos(t * q.f2 + q.ph) * q.amp * 0.7 * wob;
+      const pg = spring(t - 23.0 - q.gd, 4.4, 0.72);
+      x = lerp(x, q.gx, pg); y = lerp(y, q.gy, pg);
+      const ab = prog(t, 25.15, 25.9);
+      const a = q.alpha * clamp((t - 19.55) / 0.2) * (1 - ab) * lerp(1, 1.25, night);
+      const s = q.size * (1 + 0.5 * night * clamp(pg)) * (1 - 0.6 * ab);
+      ctx.fillStyle = q.col;
+      ctx.globalAlpha = clamp(a);
+      ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function S4(t) {
+    rise(cCap1, t, 19.95, { stagger: 0.045, dy: 0.6 });
+    out($('#cap1'), t, 22.2, 0.5);
+    rise(cCap2, t, 22.95, { stagger: 0.045, dy: 0.6 });
+    out($('#cap2'), t, 25.0, 0.5);
+
+    const moon = $('#moon');
+    const mp = spring(t - 22.6, 10, 0.55), mo = E.inCubic(prog(t, 25.0, 25.5));
+    moon.style.opacity = clamp((t - 22.6) / 0.3) * (1 - mo);
+    moon.style.transform = `translateY(${-mo * 60}px) scale(${clamp(mp, 0, 2)})`;
+    moon.firstElementChild.style.left = lerp(116, 34, E.inOutCubic(prog(t, 22.75, 23.6))) + 'px';
+
+    const eb = $('#s4-eb'); eb.style.opacity = prog(t, 25.35, 25.7) * (1 - E.inCubic(prog(t, 27.6, 28.1)));
+    rise(c4h, t, 25.45, { stagger: 0.06 });
+    out($('#s4-head'), t, 27.6, 0.55);
+    ['#m0', '#m1', '#m2'].forEach((id, k) => {
+      const el = $(id), s = 25.2 + k * 0.14;
+      const p = spring(t - s, 9.5, 0.55), o = E.inCubic(prog(t, 27.55 + k * 0.06, 28.1 + k * 0.06));
+      el.style.opacity = clamp((t - s) / 0.25) * (1 - o);
+      el.style.transform = `translateY(${-o * 120}px) scale(${lerp(0.25, 1, p).toFixed(3)})`;
+      el.style.filter = o > 0 ? `blur(${o * 12}px)` : 'none';
+    });
+    appear($('#s4-sub'), t, 26.0, 24);
+    if (t > 27.5) out($('#s4-sub'), t, 27.6, 0.5);
+  }
+
+  function radarVals(t) {
+    const col = E.inCubic(prog(t, 33.3, 33.85));
+    return SK.map((_, k) => {
+      let v = 0.05 + (W1[k] - 0.05) * spring(t - 28.95 - k * 0.05, 7, 0.45) + (W4[k] - W1[k]) * spring(t - 30.7 - k * 0.06, 6, 0.42);
+      return v * (1 - col);
+    });
+  }
+  function S5(t) {
+    const gone = E.inCubic(prog(t, 33.2, 33.7));
+    rGrid.forEach((g, i) => {
+      const len = 6 * RAD.R * [0.34, 0.67, 1][i];
+      g.setAttribute('stroke-dashoffset', (len * (1 - E.inOutCubic(prog(t, 28.2 + i * 0.12, 28.95 + i * 0.12)))).toFixed(1));
+      g.style.opacity = 1 - gone;
+    });
+    rAxis.forEach((a, k) => { a.style.opacity = prog(t, 28.5 + k * 0.04, 28.9 + k * 0.04) * (1 - gone); });
+    rLbl.forEach((l, k) => { l.style.opacity = prog(t, 28.7 + k * 0.05, 29.1 + k * 0.05) * (1 - gone); });
+    const v = radarVals(t);
+    const pts = v.map((r, k) => pt(k, Math.max(0, r) * RAD.R));
+    rShape.setAttribute('points', pts.map((p) => p.map((n) => n.toFixed(1)).join(',')).join(' '));
+    rShape.style.opacity = clamp((t - 28.85) / 0.2);
+    rVtx.forEach((c, k) => { c.setAttribute('cx', pts[k][0].toFixed(1)); c.setAttribute('cy', pts[k][1].toFixed(1)); c.style.opacity = clamp((t - 28.95) / 0.2) * (1 - prog(t, 33.5, 33.8)); });
+
+    const wk = $('#week'); wk.style.opacity = prog(t, 29.1, 29.5) * (1 - gone);
+    $('#week-roll').style.transform = `translateY(${-48 * clamp(spring(t - 30.65, 12, 0.6), 0, 1.1)}px)`;
+
+    const eb = $('#s5-eb'); eb.style.opacity = prog(t, 29.3, 29.7);
+    rise(c5h, t, 29.45, { stagger: 0.07 });
+    const sub = $('#s5-sub'); sub.style.opacity = prog(t, 31.2, 31.7); sub.style.transform = `translateY(${(1 - E.outCubic(prog(t, 31.2, 31.9))) * 20}px)`;
+    out($('#s5-head'), t, 33.2, 0.6);
+  }
+
+  function S6(t) {
+    const lock = $('#lock'), body = $('#lockbody'), sh = $('#shackle');
+    const CX = 960, CY = 430;
+    let w, h, r, col, sy = 1;
+    if (t < 37.9) {
+      const g = spring(t - 34.4, 10, 0.55);
+      w = lerp(40, 260, g); h = lerp(40, 200, g); r = lerp(20, 44, clamp(g));
+      col = mix(EMBER, PAPER, E.outCubic(prog(t, 34.4, 34.9)));
+      const click = t >= 35.35 ? Math.sin((t - 35.35) * 30) * 0.06 * Math.exp(-(t - 35.35) * 8) : 0;
+      sy = 1 - click;
+    } else {
+      const g = spring(t - 37.9, 13, 0.85);
+      w = lerp(260, 40, g); h = lerp(200, 40, g); r = lerp(44, 20, g);
+      col = mix(PAPER, EMBER, E.outCubic(prog(t, 37.9, 38.3)));
+    }
+    body.style.width = w + 'px'; body.style.height = h + 'px'; body.style.borderRadius = r + 'px';
+    body.style.left = (CX - w / 2) + 'px'; body.style.top = (CY - h / 2) + 'px';
+    body.style.background = col; body.style.transform = `scaleY(${sy}) scaleX(${2 - sy})`;
+    body.style.display = t >= 34.4 ? 'block' : 'none';
+    $('#keyhole').style.opacity = prog(t, 35.45, 35.8) * (1 - prog(t, 37.85, 38.05));
+
+    const drop = spring(t - 34.75, 11, 0.6), close = spring(t - 35.2, 16, 0.42);
+    const lift = E.inCubic(prog(t, 37.85, 38.2));
+    sh.style.left = (CX - 85) + 'px';
+    sh.style.top = (CY - 100 - 170 + 50) + 'px';
+    sh.style.opacity = clamp((t - 34.75) / 0.2) * (1 - lift);
+    sh.style.transform = `translateY(${lerp(-150, -46, drop) + 46 * close - lift * 80}px)`;
+
+    rise(c6h, t, 35.5, { stagger: 0.04, dy: 0.6 });
+    appear($('#s6-text p'), t, 36.15, 20);
+    out($('#s6-text'), t, 37.8, 0.5);
+  }
+
+  function S7(t) {
+    const CX = 960, CY = 430;
+    mEls.forEach((m, i) => {
+      const s = 38.62 + i * 0.06;
+      const sp = spring(t - s, 10, 0.55);
+      const tx = CX + (i - 3) * 215, ty = CY;
+      let x = lerp(CX, tx, sp), y = lerp(CY, ty, sp);
+      let sc = clamp(sp, 0, 1.3), rot = (1 - sp) * (i % 2 ? 50 : -50);
+      // hop wave
+      const hp = prog(t, 39.55 + i * 0.075, 40.05 + i * 0.075);
+      const hop = Math.sin(Math.PI * hp);
+      y -= hop * 70;
+      let sqy = 1 + 0.12 * hop - (hp >= 1 ? 0.14 * Math.sin((t - 40.05 - i * 0.075) * 26) * Math.exp(-(t - 40.05 - i * 0.075) * 9) : 0);
+      // gather
+      const g = spring(t - 40.75 - Math.abs(i - 3) * 0.04, 11, 0.8);
+      x = lerp(x, CX, g); y = lerp(y, CY, g); sc *= lerp(1, 0.2, g);
+      m.style.opacity = t < s ? 0 : t > 41.15 ? 0 : 1;
+      m.style.transform = `translate(${(x - 75).toFixed(1)}px,${(y - 75).toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${(sc * (2 - sqy)).toFixed(3)},${(sc * sqy).toFixed(3)})`;
+    });
+    rise(c7w, t, 41.25, { stagger: 0.045, dy: 0.5 });
+    rise(c7t, t, 42.0, { stagger: 0.06, dy: 0.5 });
+    appear($('#features'), t, 42.6, 20);
+    appear($('#platforms'), t, 43.0, 16);
+  }
+
+  function dotAt(t) {
+    let x = 960, y = 540, s = 0, on = false;
+    if (t >= 0.25 && t < 4.45) {
+      on = true;
+      const pop = spring(t - 0.25, 16, 0.38);
+      const go = spring(t - 0.85, 10.5, 0.62);
+      // arc toward the period: lift the path a little
+      x = lerp(960, A1.x, go); y = lerp(540, A1.y, go) - Math.sin(Math.PI * clamp(go)) * 120;
+      s = pop * lerp(1, 0.75, clamp(go)) * (1 + 0.05 * Math.sin(Math.max(0, t - 2.2) * 5) * Math.exp(-Math.max(0, t - 2.2) * 1.5));
+      s *= 1 + 95 * E.inExpo(prog(t, 3.7, 4.45));
+    } else if (t >= 33.75 && t < 34.42) {
+      on = true;
+      const g = spring(t - 33.8, 10, 0.75);
+      x = lerp(1290, 960, g); y = lerp(540, 430, g);
+      s = lerp(0.3, 1, spring(t - 33.75, 14, 0.5));
+    } else if (t >= 38.4 && t < 38.8) {
+      on = true; x = 960; y = 430; s = 1 - E.inCubic(prog(t, 38.6, 38.8));
+    } else if (t >= 41.05) {
+      on = true;
+      const pop = spring(t - 41.05, 16, 0.4);
+      const go = spring(t - 41.3, 9.5, 0.66);
+      x = lerp(960, A7.x, go); y = lerp(430, A7.y, go) - Math.sin(Math.PI * clamp(go)) * 140;
+      s = lerp(0.5, 1, pop) * lerp(1, 0.85, clamp(go));
+    }
+    dot.style.display = on && s > 0.001 ? 'block' : 'none';
+    dot.style.transform = `translate(${(x - 20).toFixed(1)}px,${(y - 20).toFixed(1)}px) scale(${s.toFixed(4)})`;
+  }
+
+  function render(t) {
+    t = clamp(t, 0, DUR);
+    for (const k in RANGES) show(L[k], t >= RANGES[k][0] && t <= RANGES[k][1]);
+    fx.style.display = t >= 19.4 && t <= 26.2 ? 'block' : 'none';
+    if (t <= RANGES.s1[1]) S1(t);
+    if (t >= RANGES.s2[0] && t <= RANGES.s2[1]) S2(t);
+    if (t >= RANGES.s3[0] && t <= RANGES.s3[1]) S3(t);
+    if (t >= 19.4 && t <= 26.2) particles(t);
+    if (t >= RANGES.s4[0] && t <= RANGES.s4[1]) S4(t);
+    if (t >= RANGES.s5[0] && t <= RANGES.s5[1]) S5(t);
+    if (t >= RANGES.s6[0] && t <= RANGES.s6[1]) S6(t);
+    if (t >= RANGES.s7[0]) S7(t);
+    dotAt(t);
+  }
+
+  /* ── player ── */
+  const SCENES = [
+    [0, '开场', '一颗橙点弹出，落成句号：「每一道错题，都有原因。」随后橙点吞没画面。'],
+    [4.45, '阅读 Coach', '橙色满屏收缩成卷面。选错 NOT GIVEN，原文证据被高亮，Coach 气泡从一个点长出来讲清为什么是 FALSE。'],
+    [10.6, '写作评分', '纸色从气泡处圆形扩散。标题弹到左上角，作文逐字打出，语法错误被波浪线和修改胶囊标出，四个评分环充满，总分滚轮停在 7.0。'],
+    [19.4, '自进化', '纸面收缩到分数上，炸成 300 颗作答粒子。月亮升起，粒子聚成三张长期记忆卡：弱项、偏好、进步。'],
+    [28.0, '学习画像', '六轴技能雷达从一个点弹开，第 1 周到第 4 周整体外扩。主张出现：「越练，越懂你。」'],
+    [33.8, '本地优先', '雷达塌回一颗点，长成锁身，锁梁落下扣紧：「数据，只留在你的电脑里。」'],
+    [38.4, '收尾', '锁缩回点，弹出七只情绪小怪兽排成一排跳一波浪，再合回橙点，落在 IELTS Atlas 的句号上。'],
+  ];
+  const fmt = (s) => { const m = Math.floor(s / 60), r = s - m * 60; return `${String(m).padStart(2, '0')}:${r.toFixed(1).padStart(4, '0')}`; };
+  $('#board').innerHTML = SCENES.map(([s, n, d]) => `<li><span class="tc">${fmt(s).slice(0, 5)}</span><div><strong>${n}</strong><span>${d}</span></div></li>`).join('');
+  $('#chips').innerHTML = SCENES.map(([s, n], i) => `<button class="chip" type="button" data-i="${i}">${fmt(s).slice(0, 5)}<b>${n}</b></button>`).join('');
+  const chipEls = [...document.querySelectorAll('.chip')];
+
+  let T = 0, playing = false, last = null;
+  const scrub = $('#scrub'), timeEl = $('#time'), playBtn = $('#play');
+  const ICON_PAUSE = '<path d="M4 2h3v12H4zM9 2h3v12H9z"/>', ICON_PLAY = '<path d="M4 2l10 6-10 6z"/>';
+  function setPlaying(p) {
+    playing = p; last = null;
+    $('#play-ico').innerHTML = p ? ICON_PAUSE : ICON_PLAY;
+    playBtn.setAttribute('aria-label', p ? '暂停' : '播放');
+  }
+  function syncUI() {
+    scrub.value = T.toFixed(2);
+    timeEl.textContent = `${fmt(T)} / ${fmt(DUR)}`;
+    let cur = 0; SCENES.forEach(([s], i) => { if (T >= s) cur = i; });
+    chipEls.forEach((c, i) => c.setAttribute('aria-current', i === cur ? 'true' : 'false'));
+  }
+  function tick(now) {
+    if (playing) {
+      if (last != null) T += Math.min(0.1, (now - last) / 1000);
+      last = now;
+      if (T >= DUR) { T = DUR; setPlaying(false); }
+    }
+    render(T); syncUI();
+    requestAnimationFrame(tick);
+  }
+  playBtn.addEventListener('click', () => { if (!playing && T >= DUR) T = 0; setPlaying(!playing); });
+  $('#viewport').addEventListener('click', () => playBtn.click());
+  $('#replay').addEventListener('click', () => { T = 0; setPlaying(true); });
+  scrub.addEventListener('input', () => { T = parseFloat(scrub.value); if (playing) last = null; });
+  $('#chips').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (!b) return; T = SCENES[+b.dataset.i][0] + 0.01; setPlaying(true); });
+  $('#fs').addEventListener('click', () => { const v = $('#viewport'); try { (v.requestFullscreen ? v.requestFullscreen() : Promise.reject()).catch(() => {}); } catch (_) {} });
+  document.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playBtn.click(); } });
+
+  const vp = $('#viewport'), stage = $('#stage');
+  function fit() { const s = exportMode ? 1 : vp.clientWidth / 1920; stage.style.transform = `scale(${s})`; }
+  new ResizeObserver(() => { fit(); measure(); }).observe(vp);
+  fit();
+
+  const allText = stage.textContent + '0123456789.→%';
+  const fontsReady = Promise.all([
+    document.fonts.load('900 100px "Noto Sans SC"', allText),
+    document.fonts.load('700 100px "Noto Sans SC"', allText),
+    document.fonts.load('500 100px "Noto Sans SC"', allText),
+    document.fonts.load('600 100px "Newsreader"', 'IELTS Atlas Glassmakers Venice'),
+    document.fonts.load('400 100px "Newsreader"', allText),
+    document.fonts.load('italic 400 100px "Newsreader"', allText),
+  ]).catch(() => {}).then(() => document.fonts.ready);
+
+  if (exportMode) {
+    document.body.classList.add('export');
+    window.__atlasFilm = { duration: DUR, ready: fontsReady.then(() => { fit(); measure(); }), render };
+    render(0);
+    return;
+  }
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  render(0); syncUI();
+  Promise.race([fontsReady, new Promise((r) => setTimeout(r, 3000))]).then(() => {
+    measure();
+    if (reduce) { T = 43.5; setPlaying(false); } else { setPlaying(true); }
+    requestAnimationFrame(tick);
+  });
+})();
+</script>
