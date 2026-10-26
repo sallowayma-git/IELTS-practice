@@ -83,8 +83,8 @@ pub fn review_teaching_notes(raw: Option<&Value>, learner_message: &str) -> Teac
     review
 }
 
-/// Drops every note of a turn the host itself generated (the automatic review,
-/// a preset prompt): those carry no learner words to quote, so none may be kept.
+/// Drops every note of a turn that is not learner free input (the automatic
+/// review, preset or reask lines, model follow-ups): none has learner words to quote.
 pub fn reject_all_teaching_notes(raw: Option<&Value>) -> TeachingNoteReview {
     let rejected = match raw {
         None | Some(Value::Null) => 0,

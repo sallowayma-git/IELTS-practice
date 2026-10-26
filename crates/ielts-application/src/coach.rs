@@ -59,12 +59,20 @@ const LEARNER_PROFILE_LABEL: &str =
 
 /// `action` carried by the automatic whole-attempt review request.
 const REVIEW_ACTION: &str = "review_set";
-/// `promptKind` the frontend sends for a preset prompt (a button, not learner words).
-const PRESET_PROMPT_KIND: &str = "preset";
+/// `promptKind` the frontend sends for learner free input (its default). Older
+/// clients omit the kind entirely, which counts as freeform too.
+const FREEFORM_PROMPT_KIND: &str = "freeform";
 
-/// Turns the host wrote for the learner, with no learner words behind them.
-fn is_host_generated(metadata: &Value) -> bool {
-    metadata["action"] == REVIEW_ACTION || metadata["promptKind"] == PRESET_PROMPT_KIND
+/// Teaching notes may only be minted from the learner's own typed words. This is
+/// an allow-list: preset buttons, the fixed reask line, model-written follow-ups,
+/// the automatic review and any future prompt kind all fail it.
+fn is_learner_free_input(metadata: &Value) -> bool {
+    let freeform = match &metadata["promptKind"] {
+        Value::Null => true,
+        Value::String(kind) => kind == FREEFORM_PROMPT_KIND,
+        _ => false,
+    };
+    freeform && metadata["action"] != REVIEW_ACTION
 }
 
 pub struct CoachService;
@@ -97,7 +105,7 @@ impl CoachService {
                 return Ok(done);
             }
         }
-        let host_generated = is_host_generated(&context.message_metadata);
+        let learner_free_input = is_learner_free_input(&context.message_metadata);
         let profile = store.learner_profile(&command.thread_id)?;
         let history = store.load_history(&command.thread_id, COACH_HISTORY_MESSAGE_LIMIT)?;
         let mut request = build_request(&history, Some(&context), &profile, &command.content)?;
@@ -139,7 +147,7 @@ impl CoachService {
         let mut metadata = serde_json::to_value(&response).map_err(|error| ApplicationError::new("coach.trace_invalid", error.to_string(), false))?;
         metadata["retryCount"] = json!(retry_count);
         let parsed = parse_answer(&response.content).map(|(answer, mut payload)| {
-            let rejected = keep_teaching_notes(&mut payload, host_generated, &command.content);
+            let rejected = keep_teaching_notes(&mut payload, learner_free_input, &command.content);
             if rejected > 0 {
                 metadata["teachingNotesRejected"] = json!(rejected);
             }
@@ -324,13 +332,14 @@ fn history_window_start(costs: &[u32], budget: u32) -> usize {
 
 /// Replaces the model's `teachingNotes` with the host-validated ones, dropping the
 /// key when none survive. Returns how many were rejected. Never fails the answer.
-/// Host-generated turns keep none: their notes have no learner words to quote.
-fn keep_teaching_notes(payload: &mut Value, host_generated: bool, learner_message: &str) -> usize {
+/// Turns that are not learner free input keep none: their notes have no learner
+/// words to quote.
+fn keep_teaching_notes(payload: &mut Value, learner_free_input: bool, learner_message: &str) -> usize {
     let raw = payload.get("teachingNotes");
-    let review = if host_generated {
-        reject_all_teaching_notes(raw)
-    } else {
+    let review = if learner_free_input {
         review_teaching_notes(raw, learner_message)
+    } else {
+        reject_all_teaching_notes(raw)
     };
     if let Some(object) = payload.as_object_mut() {
         object.remove("teachingNotes");
@@ -1066,15 +1075,22 @@ Why?"));
     }
 
     #[tokio::test]
-    async fn host_generated_turns_never_mint_teaching_notes() {
+    async fn only_freeform_learner_turns_keep_teaching_notes() {
         let store = FakeCoachStore::default();
-        let notes = json!({"answer": "Review answer.", "teachingNotes": [
+        let notes = json!({"answer": "Turn answer.", "teachingNotes": [
             {"kind": "strategy_outcome", "text": "it worked", "strategy": "paraphrase walk-through", "outcome": "helped", "evidence": "now I get it"},
             {"kind": "preference", "text": "short bullets", "evidence": "short examples"},
         ]});
-        let presets = [json!({"action": "review_set", "promptKind": "preset"}), json!({"action": "chat", "promptKind": "preset"})];
-        for metadata in presets {
-            store.state.lock().unwrap().message_metadata = Some(metadata);
+        let cases = [
+            (json!({"action": "chat", "promptKind": "reask"}), false),
+            (json!({"action": "chat", "promptKind": "followup"}), false),
+            (json!({"action": "chat", "promptKind": "preset"}), false),
+            (json!({"action": "review_set", "promptKind": "freeform"}), false),
+            (json!({"action": "chat", "promptKind": "freeform"}), true),
+            (json!({"action": "chat"}), true),
+        ];
+        for (metadata, keeps_notes) in cases {
+            store.state.lock().unwrap().message_metadata = Some(metadata.clone());
             let result = CoachService::run(&store, command("Oh, now I get it. short examples"), || Ok(FakeModel {
                 response: Ok(notes.to_string()),
                 store_state: store.state.clone(),
@@ -1082,11 +1098,13 @@ Why?"));
             }))
             .await
             .unwrap();
-            assert!(result.assistant_message.structured_payload.unwrap().get("teachingNotes").is_none());
+            let payload = result.assistant_message.structured_payload.unwrap();
+            let kept = payload.get("teachingNotes").map_or(0, |notes| notes.as_array().unwrap().len());
+            let trace = store.state.lock().unwrap().trace_responses.last().cloned().unwrap();
+            let rejected = trace.get("teachingNotesRejected").and_then(Value::as_u64).unwrap_or(0);
+            assert_eq!(kept, if keeps_notes { 2 } else { 0 }, "{metadata}");
+            assert_eq!(rejected, if keeps_notes { 0 } else { 2 }, "{metadata}");
         }
-        let responses = store.state.lock().unwrap().trace_responses.clone();
-        assert_eq!(responses.len(), 2);
-        assert!(responses.iter().all(|response| response["teachingNotesRejected"] == 2));
     }
 
     fn message(
