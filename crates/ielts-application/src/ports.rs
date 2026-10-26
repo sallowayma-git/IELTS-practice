@@ -149,6 +149,18 @@ pub trait LanguageModel: Send + Sync {
         self.complete(request).await.map(|response| (response, 0)).map_err(Into::into)
     }
 
+    /// Same result as [`complete_with_trace`], while forwarding the raw content
+    /// deltas of the reply as they arrive. A model that cannot stream ignores
+    /// `on_delta` and answers as `complete_with_trace` does.
+    async fn complete_with_trace_streaming(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<(CompletionResponse, u32), crate::AgentModelFailure> {
+        let _ = on_delta;
+        self.complete_with_trace(request).await
+    }
+
     /// M5-04: request an embedding batch through the Rust Model Gateway.
     ///
     /// The default implementation returns a non-retryable `embedding_not_supported`

@@ -270,6 +270,15 @@ impl LanguageModel for AiRuntime {
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
         self.send_completion(&body).await.and_then(CompletionReply::into_result)
     }
+
+    async fn complete_with_trace_streaming(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+        let body = completion_body(&self.config.model, &self.config.base_url, &request);
+        self.send_completion_streaming(&body, on_delta).await.and_then(CompletionReply::into_result)
+    }
 }
 
 #[async_trait]
@@ -330,6 +339,18 @@ impl AiRuntime {
             .post_chat_completion(body, "AI response envelope invalid")
             .await
             .map_err(ChatCompletionFailure::into_trace)?;
+        self.completion_reply(envelope, latency_ms, retry_count, header_request_id)
+    }
+
+    /// The caller-facing reply for one decoded chat envelope (shared with the
+    /// streamed path, which falls back to a plain JSON body).
+    fn completion_reply(
+        &self,
+        envelope: ChatResponse,
+        latency_ms: u64,
+        retry_count: u32,
+        header_request_id: Option<String>,
+    ) -> Result<CompletionReply, AgentModelFailure> {
         let model = envelope.model.clone().unwrap_or_else(|| self.config.model.clone());
         let finish_reason = envelope.finish_reason();
         let truncated = is_truncated(finish_reason.as_deref());
@@ -437,15 +458,8 @@ impl AiRuntime {
                     // text, not our request, so the bearer token is not in it —
                     // but it is still bounded and never logged.
                     let detail = provider_error_detail(response).await;
-                    let message = match detail {
-                        Some(detail) => format!(
-                            "AI provider returned HTTP {}: {detail}",
-                            status.as_u16()
-                        ),
-                        None => format!("AI provider returned HTTP {}", status.as_u16()),
-                    };
                     return Err(ChatCompletionFailure::new(
-                        model_error(message, retryable),
+                        model_error(status_failure_message(status, detail), retryable),
                         elapsed_ms(started),
                         attempt,
                         provider_request_id,
@@ -467,6 +481,15 @@ impl AiRuntime {
             }
         }
         unreachable!("retry loop always returns")
+    }
+}
+
+/// The user-facing message for a non-success HTTP status, with the provider's
+/// own explanation when it sent one.
+fn status_failure_message(status: reqwest::StatusCode, detail: Option<String>) -> String {
+    match detail {
+        Some(detail) => format!("AI provider returned HTTP {}: {detail}", status.as_u16()),
+        None => format!("AI provider returned HTTP {}", status.as_u16()),
     }
 }
 
@@ -556,8 +579,10 @@ fn finish_reason_of(choice_reason: Option<&Value>, stop_reason: Option<&Value>) 
 //     style gateways), including an unterminated leading block (output cut off
 //     mid-thought: the answer is empty) and a bare `</think>` with no opener
 //     (the template put `<think>` in the prompt: everything before it is thought).
-// Streaming is not used by this gateway (every call is one JSON response); if it
-// ever is, deltas must pass the same filter before they are forwarded.
+// Streaming (`complete_with_trace_streaming`) is the one exception: its deltas
+// are raw content, so they are forwarded only while the content opens as JSON
+// and carries no reasoning tag (`streamable`). The final answer still comes
+// from `strip_inline_reasoning`, never from the deltas.
 // Tool intents come ONLY from the structured `tool_calls` field, never from text.
 //
 // Provider docs consulted 2026-10-05 for the echo rule:
@@ -986,6 +1011,313 @@ fn token_usage(usage: ChatUsage) -> TokenUsage {
             .or(usage.cache_read_input_tokens.as_ref())
             .and_then(Value::as_u64)
             .unwrap_or(0),
+    }
+}
+
+impl AiRuntime {
+    /// One completion requested as a stream. Content deltas reach `on_delta` as
+    /// they arrive; the returned reply is what the plain request would have
+    /// returned. A provider that refuses streaming gets the plain request. A
+    /// plain JSON answer to a streamed request is read as is, so no call is
+    /// billed twice.
+    async fn send_completion_streaming(
+        &self,
+        body: &Value,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<CompletionReply, AgentModelFailure> {
+        let mut streamed = body.clone();
+        streamed["stream"] = json!(true);
+        streamed["stream_options"] = json!({"include_usage": true});
+        let started = Instant::now();
+        let (mut response, retry_count) = match self.post_streaming(&streamed).await {
+            Ok(Some(open)) => open,
+            Ok(None) => {
+                // Refused: the plain answer, delivered as one delta.
+                let reply = self.send_completion(body).await?;
+                if !reply.response.content.is_empty() && streamable(&reply.response.content) {
+                    on_delta(&reply.response.content);
+                }
+                return Ok(reply);
+            }
+            Err(failure) => return Err(failure.into_trace()),
+        };
+        let header_request_id = provider_request_id_from_headers(response.headers());
+        let fail = |error: ModelError| {
+            ChatCompletionFailure::new(error, elapsed_ms(started), retry_count, header_request_id.clone())
+                .into_trace()
+        };
+        if !is_event_stream(&response) {
+            let value = response
+                .json::<Value>()
+                .await
+                .map_err(|error| fail(model_error(format!("AI response envelope invalid: {error}"), false)))?;
+            let envelope = serde_json::from_value::<ChatResponse>(value)
+                .map_err(|_| fail(model_error("AI response envelope invalid", false)))?;
+            let reply = self.completion_reply(envelope, elapsed_ms(started), retry_count, header_request_id.clone())?;
+            if !reply.response.content.is_empty() && streamable(&reply.response.content) {
+                on_delta(&reply.response.content);
+            }
+            return Ok(reply);
+        }
+        let mut fold = StreamFold::new();
+        loop {
+            match response.chunk().await {
+                Ok(Some(bytes)) => {
+                    if let Err(message) = fold.push(&bytes, on_delta) {
+                        return Err(fail(model_error(message, false)));
+                    }
+                }
+                Ok(None) => break,
+                Err(error) => {
+                    return Err(fail(model_error(format!("AI stream failed: {error}"), error.is_timeout())));
+                }
+            }
+            if fold.done {
+                break;
+            }
+        }
+        if let Err(message) = fold.finish(on_delta) {
+            return Err(fail(model_error(message, false)));
+        }
+        fold.into_reply(&self.config.model, elapsed_ms(started), retry_count, header_request_id)
+    }
+
+    /// The streamed request under the same transport policy as
+    /// `post_chat_completion`. `Ok(None)` means the provider refused streaming
+    /// (a non-retryable HTTP error), so the caller sends the plain request.
+    async fn post_streaming(
+        &self,
+        body: &Value,
+    ) -> Result<Option<(reqwest::Response, u32)>, ChatCompletionFailure> {
+        let endpoint = format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'));
+        let started = Instant::now();
+        for attempt in 0..=self.transport_retries {
+            let response = self
+                .client
+                .post(&endpoint)
+                .bearer_auth(&self.api_key)
+                .json(body)
+                .send()
+                .await;
+            match response {
+                Ok(response) if response.status().is_success() => {
+                    return Ok(Some((response, attempt)));
+                }
+                Ok(response) => {
+                    let status = response.status();
+                    let provider_request_id = provider_request_id_from_headers(response.headers());
+                    let retryable = status.is_server_error() || status.as_u16() == 429;
+                    if !retryable {
+                        return Ok(None);
+                    }
+                    if attempt < self.transport_retries {
+                        retry_delay(attempt).await;
+                        continue;
+                    }
+                    let detail = provider_error_detail(response).await;
+                    return Err(ChatCompletionFailure::new(
+                        model_error(status_failure_message(status, detail), true),
+                        elapsed_ms(started),
+                        attempt,
+                        provider_request_id,
+                    ));
+                }
+                Err(error) => {
+                    let retryable = error.is_timeout() || error.is_connect();
+                    if retryable && attempt < self.transport_retries {
+                        retry_delay(attempt).await;
+                        continue;
+                    }
+                    return Err(ChatCompletionFailure::new(
+                        model_error(format!("AI request failed: {error}"), retryable),
+                        elapsed_ms(started),
+                        attempt,
+                        None,
+                    ));
+                }
+            }
+        }
+        unreachable!("retry loop always returns")
+    }
+}
+
+fn is_event_stream(response: &reqwest::Response) -> bool {
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.trim().to_ascii_lowercase().starts_with("text/event-stream"))
+}
+
+/// Whether content seen so far may be forwarded as it streams. The coach reply
+/// is one JSON object, so content that does not open with `{` (an inline
+/// reasoning block, say) or that carries a reasoning tag is never forwarded:
+/// the call still completes, the answer just arrives in one piece.
+fn streamable(content_so_far: &str) -> bool {
+    let opens_as_json = content_so_far
+        .trim_start()
+        .chars()
+        .next()
+        .map_or(true, |first| first == '{');
+    opens_as_json && next_reasoning_tag(content_so_far).is_none()
+}
+
+/// Folds the server-sent events of one streamed chat completion into the parts
+/// a plain reply carries. Only `delta.content` is answer text; reasoning fields
+/// are never read.
+#[derive(Default)]
+struct StreamFold {
+    /// Bytes of the line being read (lines split on `\n`, so UTF-8 stays whole).
+    line: Vec<u8>,
+    /// `data:` payloads of the event being read.
+    data: Vec<String>,
+    /// Answer text so far; `None` while no content delta has arrived.
+    content: Option<String>,
+    /// Whether deltas are still forwarded (see [`streamable`]).
+    streaming: bool,
+    finish_reason: Option<String>,
+    usage: Option<ChatUsage>,
+    model: Option<String>,
+    id: Option<String>,
+    done: bool,
+}
+
+impl StreamFold {
+    fn new() -> Self {
+        Self { streaming: true, ..Self::default() }
+    }
+
+    /// The reply a plain request would have returned for the same stream.
+    fn into_reply(
+        mut self,
+        fallback_model: &str,
+        latency_ms: u64,
+        retry_count: u32,
+        header_request_id: Option<String>,
+    ) -> Result<CompletionReply, AgentModelFailure> {
+        let usage = self.usage.take().map(token_usage);
+        if !self.done && self.finish_reason.is_none() {
+            return Err(AgentModelFailure::with_trace(
+                model_error("AI stream ended before the reply completed", true),
+                None,
+                latency_ms,
+                usage,
+                prefer_provider_request_id(header_request_id, self.id),
+                retry_count,
+            ));
+        }
+        let finish_reason = self.finish_reason.clone();
+        let truncated = is_truncated(finish_reason.as_deref());
+        let model = self.model.clone().unwrap_or_else(|| fallback_model.to_string());
+        let provider_request_id = prefer_provider_request_id(header_request_id, self.id.clone());
+        let content = match self.content.take() {
+            Some(text) => strip_inline_reasoning(&text),
+            // Same rule as the plain path: no text at all is a truncation when
+            // the ceiling was hit, and otherwise an envelope without choices.
+            None if truncated => String::new(),
+            None => {
+                return Err(AgentModelFailure::with_trace(
+                    model_error("AI response contained no choices", false),
+                    Some(model),
+                    latency_ms,
+                    usage,
+                    provider_request_id,
+                    retry_count,
+                ));
+            }
+        };
+        Ok(CompletionReply {
+            response: CompletionResponse {
+                content,
+                model,
+                latency_ms,
+                usage,
+                provider_request_id,
+            },
+            retry_count,
+            finish_reason,
+        })
+    }
+
+    fn push(&mut self, bytes: &[u8], on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        for &byte in bytes {
+            if self.done {
+                break;
+            }
+            if byte == b'\n' {
+                let line = std::mem::take(&mut self.line);
+                self.line_read(&line, on_delta)?;
+            } else {
+                self.line.push(byte);
+            }
+        }
+        Ok(())
+    }
+
+    /// Flushes a last line that had no newline, then the open event.
+    fn finish(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        if !self.line.is_empty() {
+            let line = std::mem::take(&mut self.line);
+            self.line_read(&line, on_delta)?;
+        }
+        self.dispatch(on_delta)
+    }
+
+    fn line_read(&mut self, line: &[u8], on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        let line = String::from_utf8_lossy(line);
+        let line = line.strip_suffix('\r').unwrap_or(&line);
+        if line.is_empty() {
+            return self.dispatch(on_delta);
+        }
+        if let Some(value) = line.strip_prefix("data:") {
+            self.data.push(value.strip_prefix(' ').unwrap_or(value).to_string());
+        }
+        Ok(())
+    }
+
+    /// Applies the event that just ended, if it carried data.
+    fn dispatch(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        if self.data.is_empty() {
+            return Ok(());
+        }
+        let data = std::mem::take(&mut self.data).join("\n");
+        if data.trim() == "[DONE]" {
+            self.done = true;
+            return Ok(());
+        }
+        let value: Value = serde_json::from_str(&data)
+            .map_err(|_| "AI stream chunk invalid".to_string())?;
+        if value.get("error").is_some_and(|error| !error.is_null()) {
+            return Err(match extract_provider_error_detail(&data) {
+                Some(detail) => format!("AI provider stream failed: {detail}"),
+                None => "AI provider stream failed".to_string(),
+            });
+        }
+        if self.id.is_none() {
+            self.id = value.get("id").and_then(Value::as_str).map(str::to_string);
+        }
+        if self.model.is_none() {
+            self.model = value.get("model").and_then(Value::as_str).map(str::to_string);
+        }
+        // With include_usage the counts arrive in a final chunk with no choices.
+        if let Some(usage) = value.get("usage").filter(|usage| !usage.is_null()) {
+            self.usage = serde_json::from_value::<ChatUsage>(usage.clone()).ok();
+        }
+        let Some(choice) = value.get("choices").and_then(Value::as_array).and_then(|choices| choices.first()) else {
+            return Ok(());
+        };
+        if let Some(text) = choice.pointer("/delta/content").and_then(Value::as_str).filter(|text| !text.is_empty()) {
+            let content = self.content.get_or_insert_with(String::new);
+            content.push_str(text);
+            self.streaming = self.streaming && streamable(content);
+            if self.streaming {
+                on_delta(text);
+            }
+        }
+        if let Some(reason) = finish_reason_of(choice.get("finish_reason"), value.get("stop_reason")) {
+            self.finish_reason = Some(reason);
+        }
+        Ok(())
     }
 }
 
@@ -1801,5 +2133,327 @@ mod tests {
         );
         let plain = AgentModelRequest { cache_key: None, ..request("sys", "one") };
         assert!(agent_request_body("m", "https://api.openai.com/v1", &plain).get("prompt_cache_key").is_none());
+    }
+
+
+    /// One `data:` event per payload, the way a streaming provider writes them.
+    fn sse(events: &[&str]) -> String {
+        events.iter().map(|event| format!("data: {event}\n\n")).collect()
+    }
+
+    /// Runs the fold over `chunks`, returning the forwarded deltas and the reply.
+    fn fold_stream(chunks: &[&[u8]]) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
+        let mut fold = StreamFold::new();
+        let mut deltas = Vec::new();
+        let reply = {
+            let mut sink = |delta: &str| deltas.push(delta.to_owned());
+            for chunk in chunks {
+                fold.push(chunk, &mut sink).unwrap();
+            }
+            fold.finish(&mut sink).unwrap();
+            fold.into_reply("configured-model", 7, 0, None)
+        };
+        (deltas, reply)
+    }
+
+    const CONTENT_EVENTS: [&str; 6] = [
+        r#"{"id":"chatcmpl-1","model":"served-model","choices":[{"index":0,"delta":{"role":"assistant","content":"{\"ans"},"finish_reason":null}]}"#,
+        r#"{"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":"wer\":\"Hi 你"},"finish_reason":null}]}"#,
+        r#"{"choices":[{"index":0,"delta":{"content":"好\"}"},"finish_reason":null}]}"#,
+        r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
+        r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"prompt_tokens_details":{"cached_tokens":2}}}"#,
+        "[DONE]",
+    ];
+
+    #[test]
+    fn sse_content_deltas_arrive_in_order_and_fold_to_the_plain_reply() {
+        let body = sse(&CONTENT_EVENTS);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        let reply = reply.unwrap();
+        assert_eq!(deltas, [r#"{"ans"#, "wer\":\"Hi 你", "好\"}"]);
+        assert_eq!(reply.response.content, deltas.concat());
+        assert_eq!(reply.response.model, "served-model");
+        assert_eq!(reply.response.provider_request_id.as_deref(), Some("chatcmpl-1"));
+        assert_eq!(reply.finish_reason.as_deref(), Some("stop"));
+        let usage = reply.response.usage.unwrap();
+        assert_eq!((usage.input_tokens, usage.output_tokens, usage.cached_input_tokens), (10, 4, 2));
+    }
+
+    #[test]
+    fn sse_folds_the_same_however_the_bytes_are_split() {
+        let body = sse(&CONTENT_EVENTS);
+        let bytes = body.as_bytes();
+        let (whole_deltas, whole) = fold_stream(&[bytes]);
+        let byte_chunks: Vec<&[u8]> = bytes.chunks(1).collect();
+        let (split_deltas, split) = fold_stream(&byte_chunks);
+        assert_eq!(split_deltas.concat(), whole_deltas.concat());
+        assert_eq!(split.unwrap().response.content, whole.unwrap().response.content);
+    }
+
+    #[test]
+    fn sse_comments_crlf_line_endings_and_data_after_done_are_handled() {
+        let body = format!(
+            ": keep-alive\r\n\r\ndata: {}\r\n\r\ndata: [DONE]\r\n\r\ndata: {}\r\n\r\ndata: {}\r\n\r\n",
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"ok\"}"},"finish_reason":"stop"}]}"#,
+            r#"{"choices":[{"delta":{"content":" late"}}]}"#,
+            r#"{"choices":[{"delta":{"content":" later"}}]}"#,
+        );
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"ok"}"#]);
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"ok"}"#);
+    }
+
+    #[test]
+    fn reasoning_fields_are_never_forwarded_or_kept() {
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"reasoning_content":"private plan"}}]}"#,
+            r#"{"choices":[{"delta":{"reasoning":"more plan"}}]}"#,
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"A\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"A"}"#]);
+        let content = reply.unwrap().response.content;
+        assert_eq!(content, r#"{"answer":"A"}"#);
+        assert!(!content.contains("private plan"));
+    }
+
+    #[test]
+    fn inline_reasoning_is_stripped_from_the_answer_and_never_streamed() {
+        // Reasoning before the JSON: nothing is forwarded, the final answer is clean.
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"<think>plan {\"answer\":\"no\"}"}}]}"#,
+            r#"{"choices":[{"delta":{"content":"</think>{\"answer\":\"yes\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert!(deltas.is_empty(), "reasoning must not stream: {deltas:?}");
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"yes"}"#);
+    }
+
+    #[test]
+    fn truncation_is_the_typed_error_after_the_partial_text_was_sent() {
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"Half"},"finish_reason":null}]}"#,
+            r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Half"#]);
+        let failure = reply.and_then(CompletionReply::into_result).unwrap_err();
+        assert!(failure.error.truncated, "a cut-off reply is the typed truncation error");
+        assert_eq!(failure.model.as_deref(), Some("configured-model"));
+    }
+
+    #[test]
+    fn a_stream_with_no_choices_is_an_error_unless_truncated() {
+        let body = sse(&[r#"{"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":0}}"#, "[DONE]"]);
+        let (_, reply) = fold_stream(&[body.as_bytes()]);
+        let failure = reply.err().unwrap();
+        assert_eq!(failure.error.message, "AI response contained no choices");
+        assert_eq!(failure.usage.unwrap().input_tokens, 3);
+
+        let body = sse(&[r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#, "[DONE]"]);
+        let (_, reply) = fold_stream(&[body.as_bytes()]);
+        assert!(reply.and_then(CompletionReply::into_result).unwrap_err().error.truncated);
+    }
+
+    #[test]
+    fn a_stream_that_ends_without_done_or_a_finish_reason_is_retryable() {
+        let body = sse(&[r#"{"choices":[{"delta":{"content":"{\"answer\":\"cut"}}]}"#]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"cut"#]);
+        let failure = reply.err().unwrap();
+        assert!(failure.error.retryable);
+        assert!(failure.error.message.contains("ended before"));
+    }
+
+    #[test]
+    fn stream_errors_and_bad_chunks_are_reported_without_echoing_content() {
+        let mut fold = StreamFold::new();
+        let error = fold
+            .push(sse(&[r#"{"error":{"message":"quota exhausted"}}"#]).as_bytes(), &mut |_| {})
+            .unwrap_err();
+        assert!(error.contains("quota exhausted"), "{error}");
+
+        let mut fold = StreamFold::new();
+        let error = fold.push(b"data: secret-text-not-json\n\n", &mut |_| {}).unwrap_err();
+        assert_eq!(error, "AI stream chunk invalid");
+    }
+
+    #[test]
+    fn streamed_request_asks_for_usage_and_plain_request_does_not() {
+        let body = fixture_completion_request();
+        let plain = completion_body("m", "https://api.example.com/v1", &body);
+        assert!(plain.get("stream").is_none());
+        assert!(plain.get("stream_options").is_none());
+    }
+
+    /// Scripted provider: one response per request, each with its own content
+    /// type. Returns the request bodies it received, in order.
+    fn scripted_fixture(
+        responses: Vec<(u16, &'static str, &'static str)>,
+    ) -> (AiRuntime, thread::JoinHandle<Vec<Value>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let mut bodies = Vec::new();
+            for (status, content_type, body) in responses {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            assert!(Instant::now() < deadline, "fixture request timed out");
+                            thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(error) => panic!("fixture accept failed: {error}"),
+                    }
+                };
+                stream.set_nonblocking(false).unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                let mut request = Vec::new();
+                let mut chunk = [0; 1024];
+                let headers_end = loop {
+                    let read = stream.read(&mut chunk).unwrap();
+                    assert!(read > 0, "request ended before headers");
+                    request.extend_from_slice(&chunk[..read]);
+                    if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                        break end;
+                    }
+                };
+                let headers = std::str::from_utf8(&request[..headers_end]).unwrap().to_owned();
+                assert!(headers.starts_with("POST /chat/completions HTTP/1.1"));
+                let length: usize = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length").then(|| value.trim().parse().unwrap())
+                    })
+                    .unwrap();
+                let body_start = headers_end + 4;
+                while request.len() < body_start + length {
+                    let read = stream.read(&mut chunk).unwrap();
+                    assert!(read > 0, "request ended before body");
+                    request.extend_from_slice(&chunk[..read]);
+                }
+                bodies.push(serde_json::from_slice(&request[body_start..body_start + length]).unwrap());
+                write!(
+                    stream,
+                    "HTTP/1.1 {status} Fixture\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len(),
+                )
+                .unwrap();
+            }
+            bodies
+        });
+        let runtime = AiRuntime::new(
+            AiProviderConfig {
+                provider: "loopback".into(),
+                base_url: format!("http://{address}"),
+                model: "configured-model".into(),
+                secret_name: "fixture".into(),
+                timeout: Duration::from_secs(5),
+            },
+            "fixture-key".into(),
+        )
+        .unwrap();
+        (runtime, server)
+    }
+
+    fn sse_body() -> String {
+        sse(&CONTENT_EVENTS)
+    }
+
+    #[tokio::test]
+    async fn loopback_stream_emits_deltas_in_order_and_matches_the_plain_result() {
+        let body: &'static str = Box::leak(sse_body().into_boxed_str());
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let rows = Arc::new(std::sync::Mutex::new(Vec::<ielts_db::LlmInvocationRecord>::new()));
+        let sink_rows = Arc::clone(&rows);
+        let runtime = runtime.with_ledger(Arc::new(move |row| sink_rows.lock().unwrap().push(row)));
+
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+
+        assert_eq!(deltas, [r#"{"ans"#, "wer\":\"Hi 你", "好\"}"]);
+        assert_eq!(response.content, deltas.concat());
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
+        // One provider call, streamed, with usage requested in the stream.
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(bodies[0]["stream"], json!(true));
+        assert_eq!(bodies[0]["stream_options"], json!({"include_usage": true}));
+        // Traced calls keep their own trace: the gateway ledgers nothing here.
+        assert!(rows.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn loopback_truncated_stream_is_the_typed_error() {
+        let body: &'static str = Box::leak(
+            sse(&[
+                r#"{"choices":[{"delta":{"content":"{\"answer\":\"Cut"}}]}"#,
+                r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#,
+                "[DONE]",
+            ])
+            .into_boxed_str(),
+        );
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let mut deltas = Vec::new();
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+        assert!(failure.error.truncated);
+        assert_eq!(deltas, [r#"{"answer":"Cut"#]);
+    }
+
+    #[tokio::test]
+    async fn a_provider_refusing_streaming_gets_the_plain_request_instead() {
+        let plain = r#"{"model":"m","choices":[{"message":{"content":"{\"answer\":\"plain\"}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (400, "application/json", r#"{"error":{"message":"stream_options is not supported"}}"#),
+            (200, "application/json", plain),
+        ]);
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(response.content, r#"{"answer":"plain"}"#);
+        assert_eq!(deltas, [r#"{"answer":"plain"}"#]);
+        assert_eq!(bodies.len(), 2);
+        assert_eq!(bodies[0]["stream"], json!(true));
+        assert!(bodies[1].get("stream").is_none());
+        assert!(bodies[1].get("stream_options").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_plain_json_answer_to_a_streamed_request_is_read_without_a_second_call() {
+        let plain = r#"{"model":"m","usage":{"prompt_tokens":4,"completion_tokens":2},"choices":[{"message":{"content":"{\"answer\":\"json\"}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", plain)]);
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 1, "a provider that answers in JSON is billed once");
+        assert_eq!(response.content, r#"{"answer":"json"}"#);
+        assert_eq!(deltas, [r#"{"answer":"json"}"#]);
     }
 }
