@@ -29,8 +29,11 @@ const MAX_AVOID_ASSETS: usize = 5;
 const MAX_LEARNER_RESPONSE_BYTES: usize = 1_048_576;
 const EMPTY_REFERENCE_AT: &str = "1970-01-01T00:00:00Z";
 const DESKTOP_USER_ID: &str = "local";
-/// A correct answer reached with coach or hint help is worth at most this much.
-const ASSISTED_SUCCESS_OUTCOME_CAP: f64 = 0.6;
+/// A skill of one user at one observed instant.
+type SkillInstant = ((String, String), String);
+
+/// Floor on an observation's weight when same-instant outcomes are averaged.
+const SAME_INSTANT_WEIGHT_FLOOR: f64 = 0.1;
 
 #[derive(Debug, Clone)]
 struct SourceObservation {
@@ -376,10 +379,6 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
         };
         let mappings = mappings_for_source(conn, source, allow_seed_mapping)?;
         let (same_asset, gap_hours) = practice_gaps[&practice_key(source)];
-        let assisted = is_assisted(
-            source.intervention_id.as_deref(),
-            source.intervention_type.as_deref(),
-        );
         let (novelty_weight, familiarity_weight) =
             familiarity_weights(same_asset, gap_hours, LearnerModelConfig::default());
         for mapping in mappings {
@@ -410,7 +409,7 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
                 user_id: source.user_id.clone(),
                 event_id: source.event_id.clone(),
                 skill_key: mapping.skill_key,
-                outcome: credited_outcome(outcome, assisted),
+                outcome: outcome.clamp(0.0, 1.0),
                 mapping_weight: mapping.weight,
                 evidence_weight: (source.confidence * source.evidence_strength).clamp(0.0, 1.0),
                 novelty_weight,
@@ -784,8 +783,10 @@ fn insert_skill_observations(conn: &Connection, observations: &[SkillObservation
 
 /// Trend measures transfer across first attempts on independent materials.
 /// Repeated practice still updates the posterior, but cannot establish transfer.
-/// Returns every independent attempt in time order; callers window the tail.
-fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> {
+/// Returns the trend outcomes in time order (one per instant, callers window the
+/// tail) and how many distinct assets the first attempts cover. The mastery
+/// ceiling counts assets: two articles finished at the same instant are still two.
+fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> (Vec<f64>, u64) {
     let mut attempts = BTreeMap::new();
     for observation in observations {
         if observation.asset_id.is_empty()
@@ -817,6 +818,7 @@ fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> 
         outcomes.sort_by(f64::total_cmp);
         first.1.push(outcomes.iter().sum::<f64>() / outcomes.len() as f64);
     }
+    let distinct_assets = first_assets.len() as u64;
     let mut temporal_outcomes: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
     for (at, mut values) in first_assets.into_values() {
         values.sort_by(f64::total_cmp);
@@ -830,7 +832,35 @@ fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> 
             values.iter().sum::<f64>() / values.len() as f64
         })
         .collect::<Vec<_>>();
-    outcomes
+    (outcomes, distinct_assets)
+}
+
+/// Each skill's same-instant observations as one stability outcome: the mean of
+/// their outcomes weighted by observation weight, with the largest weight. Sorting
+/// before the sum keeps the result independent of the order the ids arrive in.
+fn stability_groups(observations: &[SkillObservation]) -> BTreeMap<SkillInstant, (f64, f64)> {
+    let mut groups: BTreeMap<SkillInstant, Vec<(f64, f64)>> = BTreeMap::new();
+    for observation in observations {
+        let instant = (
+            (observation.user_id.clone(), observation.skill_key.clone()),
+            observation.observed_at.clone(),
+        );
+        groups.entry(instant).or_default().push((
+            observation.outcome.clamp(0.0, 1.0),
+            ielts_domain::effective_observation_weight(observation),
+        ));
+    }
+    groups
+        .into_iter()
+        .map(|(instant, mut items)| {
+            items.sort_by(|left, right| left.0.total_cmp(&right.0).then(left.1.total_cmp(&right.1)));
+            let weight_of = |weight: f64| weight.max(SAME_INSTANT_WEIGHT_FLOOR);
+            let total: f64 = items.iter().map(|&(_, weight)| weight_of(weight)).sum();
+            let outcome = items.iter().map(|&(value, weight)| value * weight_of(weight)).sum::<f64>() / total;
+            let weight = items.iter().map(|&(_, weight)| weight).fold(f64::NEG_INFINITY, f64::max);
+            (instant, (outcome, weight))
+        })
+        .collect()
 }
 
 fn build_states_and_schedules(
@@ -838,6 +868,8 @@ fn build_states_and_schedules(
     reference_at: &str,
     config: LearnerModelConfig,
 ) -> DbResult<(Vec<SkillState>, Vec<ScheduleRecord>, String)> {
+    let stability_by_instant = stability_groups(observations);
+    let mut stability_judged: BTreeSet<SkillInstant> = BTreeSet::new();
     let mut states: BTreeMap<(String, String), SkillState> = BTreeMap::new();
     let mut assets: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
     let mut recent_outcomes: BTreeMap<(String, String), Vec<f64>> = BTreeMap::new();
@@ -876,15 +908,15 @@ fn build_states_and_schedules(
             .and_then(|previous| gap_hours(previous, &observation.observed_at))
             .map(|hours| (hours / 24.0).max(0.0));
         let previous_stability = state.stability_days.unwrap_or(1.0);
-        let weight = ielts_domain::effective_observation_weight(observation);
         apply_skill_observation(state, observation, elapsed_days.unwrap_or(0.0), config);
         state.last_practiced_at = Some(observation.observed_at.clone());
-        state.stability_days = Some(update_stability(
-            previous_stability,
-            elapsed_days,
-            observation.outcome,
-            weight,
-        ));
+        // Stability moves once per skill and instant, by that instant's aggregate.
+        let instant = (key.clone(), observation.observed_at.clone());
+        if stability_judged.insert(instant.clone()) {
+            let (outcome, weight) = stability_by_instant[&instant];
+            state.stability_days =
+                Some(update_stability(previous_stability, elapsed_days, outcome, weight));
+        }
         assets
             .entry(key.clone())
             .or_default()
@@ -960,8 +992,8 @@ fn build_states_and_schedules(
         let reference =
             parse_time(reference_at).unwrap_or_else(|| parse_time(EMPTY_REFERENCE_AT).unwrap());
         let outcomes = recent_outcomes.get(&key).cloned().unwrap_or_default();
-        let mut trend_outcomes = independent_attempt_outcomes(&trend_observations[&key]);
-        let independent_attempts = trend_outcomes.len() as u64;
+        let (mut trend_outcomes, independent_attempts) =
+            independent_attempt_outcomes(&trend_observations[&key]);
         trend_outcomes.drain(..trend_outcomes.len().saturating_sub(8));
         let trend = trend_direction(&trend_outcomes);
         // Single finalization point for mastery: every consumer (review delay,
@@ -1312,19 +1344,6 @@ fn review_delay_days(state: &SkillState) -> f64 {
     }
 }
 
-fn is_assisted(intervention_id: Option<&str>, intervention_type: Option<&str>) -> bool {
-    intervention_id.is_some() || intervention_type.is_some()
-}
-
-fn credited_outcome(outcome: f64, assisted: bool) -> f64 {
-    let outcome = outcome.clamp(0.0, 1.0);
-    if assisted {
-        outcome.min(ASSISTED_SUCCESS_OUTCOME_CAP)
-    } else {
-        outcome
-    }
-}
-
 /// Mastery ceiling by independent attempt count: one first attempt on one
 /// article cannot establish mastery, two cannot exceed 0.8, and from three on
 /// the Beta posterior speaks for itself.
@@ -1515,10 +1534,48 @@ mod tests {
         assert_eq!(mastery_ceiling(3), 1.0);
     }
 
+    fn same_instant_observation(id: &str, outcome: f64) -> SkillObservation {
+        SkillObservation {
+            id: id.into(),
+            user_id: "local".into(),
+            event_id: format!("event-{id}"),
+            skill_key: "reading.tfng".into(),
+            outcome,
+            mapping_weight: 1.0,
+            evidence_weight: 1.0,
+            novelty_weight: 1.0,
+            familiarity_weight: 1.0,
+            time_weight: 1.0,
+            error_type: None,
+            context: Value::Null,
+            observed_at: "2026-08-12T00:00:00Z".into(),
+            asset_id: format!("asset-{id}"),
+            question_id: "q1".into(),
+            attempt_id: None,
+            intervention_id: None,
+            intervention_type: None,
+        }
+    }
+
     #[test]
-    fn assisted_success_is_capped_but_failure_is_not_raised() {
-        assert_eq!(credited_outcome(1.0, true), 0.6);
-        assert_eq!(credited_outcome(1.0, false), 1.0);
-        assert_eq!(credited_outcome(0.0, true), 0.0);
+    fn same_instant_stability_is_independent_of_observation_order_and_ids() {
+        let mut prior = same_instant_observation("prior", 1.0);
+        prior.observed_at = "2026-08-11T00:00:00Z".into();
+        let mut results = Vec::new();
+        for (correct_id, wrong_id) in [("a-correct", "z-wrong"), ("z-correct", "a-wrong")] {
+            let correct = same_instant_observation(correct_id, 1.0);
+            let wrong = same_instant_observation(wrong_id, 0.0);
+            for order in [[&correct, &wrong], [&wrong, &correct]] {
+                let observations = vec![prior.clone(), order[0].clone(), order[1].clone()];
+                let (states, _, _) = build_states_and_schedules(
+                    &observations,
+                    "2026-08-12T12:00:00Z",
+                    LearnerModelConfig::default(),
+                )
+                .unwrap();
+                results.push(states[0].stability_days);
+            }
+        }
+        assert!(results.windows(2).all(|pair| pair[0] == pair[1]), "{results:?}");
     }
 }

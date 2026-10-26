@@ -458,6 +458,22 @@ fn mastery_is_capped_by_independent_attempt_count() {
 }
 
 #[test]
+fn two_articles_finished_at_the_same_instant_are_two_independent_attempts() {
+    let (_dir, conn) = open_db();
+    for question in ["q1", "q2", "q3", "q4"] {
+        insert_question(&conn, &format!("event-a-{question}"), "asset-a", question, "tfng", "2026-08-12T00:00:00Z", true, None);
+        insert_question(&conn, &format!("event-b-{question}"), "asset-b", question, "tfng", "2026-08-12T00:00:00Z", true, None);
+    }
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let row = &state(&conn).states[0];
+    assert_eq!(row.distinct_asset_count, 2);
+    // Two first attempts on two articles lift the ceiling to 0.8; they are not one timestamp bucket.
+    assert!(row.mastery_mean > 0.5 + 1e-9, "not capped at one attempt: {}", row.mastery_mean);
+    assert!(row.mastery_mean >= 0.6, "not a weak skill: {}", row.mastery_mean);
+}
+
+#[test]
 fn repeat_practice_on_one_article_does_not_lift_the_cap() {
     let (dir, conn) = open_db();
     for (attempt, day) in [("same-1", 12), ("same-2", 13), ("same-3", 14)] {
@@ -467,25 +483,6 @@ fn repeat_practice_on_one_article_does_not_lift_the_cap() {
     assert_eq!(snapshot.states[0].distinct_asset_count, 1);
     assert!(snapshot.states[0].mastery_mean <= 0.5 + 1e-12);
     assert_eq!(snapshot.states[0].explanation["trendOutcomes"], json!([1.0]));
-}
-
-#[test]
-fn coach_assisted_success_is_credited_at_most_sixty_percent() {
-    let (_dir, conn) = open_db();
-    insert_question(&conn, "event-helped", "asset-h", "q1", "tfng", "2026-08-12T00:00:00Z", true,
-        Some(("coach-h", "coach_micro_drill")));
-    learning_observations_rebuild(&conn).unwrap();
-    learner_model_rebuild(&conn).unwrap();
-    let outcome: f64 = conn
-        .query_row(
-            "SELECT outcome FROM learner_skill_observations WHERE event_id = 'event-helped'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert!((outcome - 0.6).abs() < 1e-12);
-    // One article is one independent attempt, so the single-attempt cap applies.
-    assert!(state(&conn).states[0].mastery_mean <= 0.5 + 1e-12);
 }
 
 #[test]
