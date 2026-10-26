@@ -12,6 +12,8 @@ use ielts_domain::{estimate_tokens, rendered_hash};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use super::context_window::{agent_input_tokens, budget_for, context_budget};
+
 /// Transport-layer retries (5xx / 429 / timeout / connect) inside ONE gateway
 /// call. The bound is per call; a caller that owns its own semantic retry loop
 /// (the weekly dream) asks for 0 via [`AiRuntime::with_transport_retries`] so the
@@ -111,7 +113,14 @@ impl AiRuntime {
         self
     }
 
-    fn record_completion(&self, body: &Value, result: &Result<CompletionReply, AgentModelFailure>) {
+    /// `clamped` is the output ceiling the pre-send guard lowered this call to,
+    /// if it did; it lands in the row's `usage_json`.
+    fn record_completion(
+        &self,
+        body: &Value,
+        result: &Result<CompletionReply, AgentModelFailure>,
+        clamped: Option<u32>,
+    ) {
         let Some(sink) = &self.ledger else { return };
         let truncated = ModelError::output_truncated();
         let call = match result {
@@ -128,14 +137,20 @@ impl AiRuntime {
                         Ok(&response.content)
                     },
                     finish_reason: reply.finish_reason.as_deref(),
+                    clamped,
                 }
             }
-            Err(failure) => LedgerCall::failed(failure, &self.config.model),
+            Err(failure) => LedgerCall { clamped, ..LedgerCall::failed(failure, &self.config.model) },
         };
         sink(ledger_record(&self.config.provider, body, call));
     }
 
-    fn record_agent(&self, body: &Value, result: &Result<AgentReply, AgentModelFailure>) {
+    fn record_agent(
+        &self,
+        body: &Value,
+        result: &Result<AgentReply, AgentModelFailure>,
+        clamped: Option<u32>,
+    ) {
         let Some(sink) = &self.ledger else { return };
         let call = match result {
             Ok(reply) => LedgerCall {
@@ -145,8 +160,9 @@ impl AiRuntime {
                 provider_request_id: reply.response.provider_request_id.as_deref(),
                 outcome: Ok(reply.response.content.as_deref().unwrap_or("")),
                 finish_reason: reply.finish_reason.as_deref(),
+                clamped,
             },
-            Err(failure) => LedgerCall::failed(failure, &self.config.model),
+            Err(failure) => LedgerCall { clamped, ..LedgerCall::failed(failure, &self.config.model) },
         };
         sink(ledger_record(&self.config.provider, body, call));
     }
@@ -174,6 +190,8 @@ struct LedgerCall<'a> {
     outcome: Result<&'a str, &'a ModelError>,
     /// The provider's finish reason, when the reply carried one.
     finish_reason: Option<&'a str>,
+    /// The ceiling the pre-send guard clamped `max_tokens` down to, if it did.
+    clamped: Option<u32>,
 }
 
 impl<'a> LedgerCall<'a> {
@@ -185,6 +203,7 @@ impl<'a> LedgerCall<'a> {
             provider_request_id: failure.provider_request_id.as_deref(),
             outcome: Err(&failure.error),
             finish_reason: None,
+            clamped: None,
         }
     }
 }
@@ -198,6 +217,7 @@ fn ledger_record(provider: &str, request: &Value, call: LedgerCall<'_>) -> ielts
         (None, Err(_)) => None,
     };
     let usage = with_finish_reason(usage, call.finish_reason);
+    let usage = with_max_tokens_clamped(usage, call.clamped);
     ielts_db::LlmInvocationRecord {
         id: format!("llm-{}", uuid::Uuid::new_v4()),
         provider: provider.into(),
@@ -220,6 +240,15 @@ fn with_finish_reason(usage: Option<Value>, finish_reason: Option<&str>) -> Opti
     let Some(reason) = finish_reason else { return usage };
     let mut value = usage.unwrap_or_else(|| json!({}));
     value["finishReason"] = json!(reason);
+    Some(value)
+}
+
+/// Records that the pre-send guard lowered `max_tokens` to `clamped`, so a short
+/// answer caused by a small remaining window is visible in the usage ledger.
+fn with_max_tokens_clamped(usage: Option<Value>, clamped: Option<u32>) -> Option<Value> {
+    let Some(max_tokens) = clamped else { return usage };
+    let mut value = usage.unwrap_or_else(|| json!({}));
+    value["maxTokensClamped"] = json!(max_tokens);
     Some(value)
 }
 
@@ -254,10 +283,16 @@ fn estimated_usage_json(request: &Value, content: &str) -> Value {
 
 #[async_trait]
 impl LanguageModel for AiRuntime {
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+    async fn complete(&self, mut request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        // A refused request is still ledgered (with its error), as every plain
+        // failure is; it is never sent.
+        let admission = self.admit_completion(&mut request);
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
-        let reply = self.send_completion(&body).await;
-        self.record_completion(&body, &reply);
+        let (clamped, reply) = match admission {
+            Ok(clamped) => (clamped, self.send_completion(&body).await),
+            Err(error) => (None, Err(AgentModelFailure::new(error))),
+        };
+        self.record_completion(&body, &reply, clamped);
         reply
             .and_then(CompletionReply::into_result)
             .map(|(response, _)| response)
@@ -266,16 +301,20 @@ impl LanguageModel for AiRuntime {
 
     fn identity(&self) -> (&str, &str) { (&self.config.provider, &self.config.model) }
 
-    async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+    // The coach path owns its own trace row, so a refusal here is returned in
+    // the failure for that trace and is not ledgered.
+    async fn complete_with_trace(&self, mut request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+        self.admit_completion(&mut request).map_err(AgentModelFailure::new)?;
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
         self.send_completion(&body).await.and_then(CompletionReply::into_result)
     }
 
     async fn complete_with_trace_streaming(
         &self,
-        request: CompletionRequest,
+        mut request: CompletionRequest,
         on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
     ) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+        self.admit_completion(&mut request).map_err(AgentModelFailure::new)?;
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
         self.send_completion_streaming(&body, on_delta).await.and_then(CompletionReply::into_result)
     }
@@ -285,12 +324,39 @@ impl LanguageModel for AiRuntime {
 impl AgentModel for AiRuntime {
     async fn respond(
         &self,
-        request: AgentModelRequest,
+        mut request: AgentModelRequest,
     ) -> Result<AgentModelResponse, AgentModelFailure> {
+        let admission = self.admit_agent(&mut request);
         let body = agent_request_body(&self.config.model, &self.config.base_url, &request);
-        let result = self.send_agent(&body).await;
-        self.record_agent(&body, &result);
+        let (clamped, result) = match admission {
+            Ok(clamped) => (clamped, self.send_agent(&body).await),
+            Err(error) => (None, Err(AgentModelFailure::new(error))),
+        };
+        self.record_agent(&body, &result, clamped);
         result.map(|reply| reply.response)
+    }
+}
+
+impl AiRuntime {
+    /// The pre-send guard for a plain completion. Runs before any HTTP call.
+    /// Returns the ceiling it clamped to, if it clamped; `request.max_tokens` is
+    /// updated to match what will be sent.
+    fn admit_completion(&self, request: &mut CompletionRequest) -> Result<Option<u32>, ModelError> {
+        let clamped = context_budget(&self.config.model, &request.messages, request.max_tokens).admit()?;
+        if let Some(max_tokens) = clamped {
+            request.max_tokens = max_tokens;
+        }
+        Ok(clamped)
+    }
+
+    /// The pre-send guard for an agent round, counting tool definitions as input.
+    fn admit_agent(&self, request: &mut AgentModelRequest) -> Result<Option<u32>, ModelError> {
+        let estimated = agent_input_tokens(&request.messages, &request.tools);
+        let clamped = budget_for(&self.config.model, estimated, request.max_tokens).admit()?;
+        if let Some(max_tokens) = clamped {
+            request.max_tokens = max_tokens;
+        }
+        Ok(clamped)
     }
 }
 
@@ -1982,6 +2048,7 @@ mod tests {
             provider_request_id: None,
             outcome: Err(&error),
             finish_reason: None,
+            clamped: None,
         };
         let row = ledger_record("p", &request, failed);
         assert_eq!(row.usage_json, None);
@@ -2103,6 +2170,7 @@ mod tests {
             provider_request_id: None,
             outcome: Ok("text"),
             finish_reason: Some("stop"),
+            clamped: None,
         });
         let usage: Value = serde_json::from_str(row.usage_json.as_deref().unwrap()).unwrap();
         assert_eq!(usage["finishReason"], json!("stop"));
@@ -2455,5 +2523,143 @@ mod tests {
         assert_eq!(bodies.len(), 1, "a provider that answers in JSON is billed once");
         assert_eq!(response.content, r#"{"answer":"json"}"#);
         assert_eq!(deltas, [r#"{"answer":"json"}"#]);
+    }
+
+    // Pre-send context guard. A refused request must never reach the endpoint.
+
+    /// A runtime pointed at a listener that is never accepted from. A request
+    /// that reached it would connect and stay pending, so `accept` would succeed.
+    fn uncalled_endpoint(model: &str) -> (AiRuntime, TcpListener) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let runtime = AiRuntime::new(AiProviderConfig {
+            provider: "loopback".into(),
+            base_url: format!("http://{address}"),
+            model: model.into(),
+            secret_name: "fixture".into(),
+            timeout: Duration::from_secs(5),
+        }, "fixture-key".into()).unwrap();
+        (runtime, listener)
+    }
+
+    fn no_request_reached(listener: &TcpListener) -> bool {
+        listener.accept().is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock)
+    }
+
+    fn ledger_rows() -> (LedgerSink, Arc<std::sync::Mutex<Vec<ielts_db::LlmInvocationRecord>>>) {
+        let rows = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink_rows = Arc::clone(&rows);
+        (Arc::new(move |row| sink_rows.lock().unwrap().push(row)), rows)
+    }
+
+    /// ASCII text the estimator counts as exactly `tokens` (chars / 4).
+    fn ascii_tokens(tokens: u32) -> String {
+        "a".repeat(4 * tokens as usize)
+    }
+
+    fn completion_of(text: String, max_tokens: u32) -> CompletionRequest {
+        CompletionRequest {
+            messages: vec![ielts_application::ChatMessage::new("user", text)],
+            temperature: 0.2,
+            max_tokens,
+            cache_key: None,
+        }
+    }
+
+    fn agent_of(text: String, max_tokens: u32) -> AgentModelRequest {
+        AgentModelRequest {
+            messages: vec![AgentMessage::User { content: text }],
+            tools: vec![],
+            temperature: 0.2,
+            max_tokens,
+            cache_key: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn oversize_prompt_is_refused_before_any_http_request_and_ledgered() {
+        // "local-model" is unknown, so the 32,768-token default window applies.
+        let (runtime, listener) = uncalled_endpoint("local-model");
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let error = runtime.complete(completion_of("a".repeat(200_000), 2_000)).await.unwrap_err();
+        assert!(error.context_exceeded);
+        assert!(!error.retryable && !error.truncated);
+        assert_eq!(error.message, "prompt exceeds model context: ~52004 tokens of 32768");
+
+        let traced = runtime.complete_with_trace(completion_of("a".repeat(200_000), 2_000)).await.unwrap_err();
+        assert!(traced.error.context_exceeded);
+        let agent = runtime.respond(agent_of("a".repeat(200_000), 100)).await.unwrap_err();
+        assert!(agent.error.context_exceeded);
+
+        assert!(no_request_reached(&listener), "a refused request must make no HTTP call");
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2, "plain and agent calls are ledgered; the traced call is the coach's row");
+        assert_eq!(rows[0].model, "local-model");
+        assert!(rows[0].usage_json.is_none() && rows[0].response_hash.is_none());
+        let error_json: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error_json["retryable"], json!(false));
+        assert_eq!(error_json["message"], json!("prompt exceeds model context: ~52004 tokens of 32768"));
+    }
+
+    #[tokio::test]
+    async fn a_prompt_leaving_less_than_the_floor_of_room_is_refused_without_a_request() {
+        let (runtime, listener) = uncalled_endpoint("local-model");
+        // 32,700 input tokens leave 68 tokens: below the 256 floor, so no clamp.
+        let error = runtime.complete(completion_of(ascii_tokens(32_696), 2_000)).await.unwrap_err();
+        assert!(error.context_exceeded);
+        assert_eq!(error.message, "prompt exceeds model context: ~34700 tokens of 32768");
+        assert!(no_request_reached(&listener));
+    }
+
+    #[tokio::test]
+    async fn a_prompt_with_some_room_is_sent_with_the_output_clamped_and_ledgered() {
+        // 31,004 estimated input tokens leave 1,764 of 32,768: 2,000 is clamped to 1,764.
+        let plain = r#"{"id":"clamped","model":"local-model","usage":{"prompt_tokens":31004,"completion_tokens":40},"choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let agent = r#"{"model":"local-model","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}"#;
+        let small = r#"{"id":"small","model":"local-model","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (200, "application/json", plain),
+            (200, "application/json", agent),
+            (200, "application/json", small),
+        ]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        runtime.complete(completion_of(ascii_tokens(31_000), 2_000)).await.unwrap();
+        runtime.respond(agent_of(ascii_tokens(31_000), 2_000)).await.unwrap();
+        runtime.complete(completion_of("hello".into(), 2_000)).await.unwrap();
+        let bodies = server.join().unwrap();
+
+        assert_eq!(bodies[0]["max_tokens"], json!(1_764));
+        assert_eq!(bodies[1]["max_tokens"], json!(1_764));
+        assert_eq!(bodies[2]["max_tokens"], json!(2_000), "a request that fits is sent unchanged");
+
+        let rows = rows.lock().unwrap();
+        let clamped: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(clamped["maxTokensClamped"], json!(1_764));
+        assert_eq!(clamped["promptTokens"], json!(31_004));
+        assert!(rows[0].error_json.is_none());
+
+        let agent_row: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(agent_row["maxTokensClamped"], json!(1_764));
+        assert_eq!(agent_row["estimated"], json!(true));
+
+        let unclamped: Value = serde_json::from_str(rows[2].usage_json.as_deref().unwrap()).unwrap();
+        assert!(unclamped.get("maxTokensClamped").is_none());
+    }
+
+    #[tokio::test]
+    async fn cjk_prompt_is_budgeted_at_one_token_per_character_on_the_wire() {
+        // 30,000 CJK characters are 30,000 tokens, not 7,500. That leaves 2,764 of
+        // 32,768, so a 3,000 request is clamped to 2,764.
+        let cjk_reply = r#"{"model":"local-model","choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", cjk_reply)]);
+        let runtime_request = completion_of("中".repeat(30_000), 3_000);
+        runtime.complete(runtime_request).await.unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies[0]["max_tokens"], json!(2_764));
     }
 }

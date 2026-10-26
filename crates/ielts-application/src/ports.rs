@@ -91,6 +91,10 @@ pub struct ModelError {
     /// `length` / `max_tokens`). The reply is cut off, so a JSON caller cannot
     /// use it; the gateway never retries it with a larger ceiling.
     pub truncated: bool,
+    /// True when the gateway refused to send the request because the prompt
+    /// (plus the output room it needs) does not fit the model's context window.
+    /// Refused before any HTTP call, so it is never retryable.
+    pub context_exceeded: bool,
 }
 
 impl ModelError {
@@ -99,6 +103,7 @@ impl ModelError {
             message: message.into(),
             retryable,
             truncated: false,
+            context_exceeded: false,
         }
     }
 
@@ -108,6 +113,18 @@ impl ModelError {
             message: "model output truncated at max_tokens".into(),
             retryable: false,
             truncated: true,
+            context_exceeded: false,
+        }
+    }
+
+    /// The typed refusal for a prompt that cannot fit the context window.
+    /// `total_tokens` is the estimated input plus the requested output ceiling.
+    pub fn prompt_exceeds_context(total_tokens: u32, window: u32) -> Self {
+        Self {
+            message: format!("prompt exceeds model context: ~{total_tokens} tokens of {window}"),
+            retryable: false,
+            truncated: false,
+            context_exceeded: true,
         }
     }
 }
