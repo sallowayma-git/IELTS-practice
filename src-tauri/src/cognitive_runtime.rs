@@ -685,6 +685,17 @@ enum RunKind {
 }
 
 impl RunKind {
+    /// Fixed label of this run's prompt-cache key (see `sidecar_cache_key`).
+    fn cache_purpose(self) -> &'static str {
+        match self {
+            Self::MemoryCandidate => "memory-candidate",
+            #[cfg(feature = "daily-dream-v1")]
+            Self::WeeklyDream => "dream-weekly",
+            #[cfg(feature = "agent-threads-v1")]
+            Self::StudyPlanner => "study-planner",
+        }
+    }
+
     fn from_host_method(method: &str) -> Result<Self, RuntimeHostError> {
         match method {
             "memory.candidates.generate" => Ok(Self::MemoryCandidate),
@@ -1800,7 +1811,10 @@ impl RuntimeManager {
             .get("request")
             .cloned()
             .ok_or_else(|| RuntimeHostError::InvalidResponse("model request is missing".into()))?;
-        let request = parse_model_request(request, kind)?;
+        let mut request = parse_model_request(request, kind)?;
+        if request.cache_key.is_none() {
+            request.cache_key = sidecar_cache_key(kind, &request);
+        }
         let db = app.state::<AppDb>();
         let vault = app.state::<AppVault>();
         let runtime = load_runtime(&db, &vault)
@@ -1930,6 +1944,15 @@ pub(crate) fn is_host_only_method(method: &str) -> bool {
 
 /// A sidecar completion must declare `maxTokens` (serde rejects a missing
 /// field), and the declared ceiling must pass `validate_model_request`.
+/// Prompt-cache routing key for a sidecar model call: the run kind plus its
+/// system prompt. The sidecar builds that prompt from constants and persona
+/// only, so repeated calls of one run kind share a key. The user payload (the
+/// pack, the repair list) never enters it.
+fn sidecar_cache_key(kind: RunKind, request: &CompletionRequest) -> Option<String> {
+    let system = request.messages.first().filter(|message| message.role == "system")?;
+    Some(ielts_application::prompt_cache_key(kind.cache_purpose(), &system.content))
+}
+
 fn parse_model_request(request: Value, kind: RunKind) -> Result<CompletionRequest, RuntimeHostError> {
     let request: CompletionRequest = serde_json::from_value(request)
         .map_err(|error| RuntimeHostError::InvalidResponse(format!("invalid model request: {error}")))?;
@@ -2123,6 +2146,26 @@ mod capability_contract_tests;
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn sidecar_calls_share_a_cache_key_per_system_prefix_and_never_hash_the_payload() {
+        let call = |system: &str, user: &str| CompletionRequest {
+            messages: vec![ChatMessage::new("system", system), ChatMessage::new("user", user)],
+            temperature: 0.0,
+            max_tokens: 100,
+            cache_key: None,
+        };
+        let key = sidecar_cache_key(RunKind::WeeklyDream, &call("sys", "pack A")).unwrap();
+        assert!(key.starts_with("dream-weekly-"), "{key}");
+        assert_eq!(key, sidecar_cache_key(RunKind::WeeklyDream, &call("sys", "pack B")).unwrap());
+        assert_ne!(key, sidecar_cache_key(RunKind::WeeklyDream, &call("other", "pack A")).unwrap());
+        assert_ne!(key, sidecar_cache_key(RunKind::MemoryCandidate, &call("sys", "pack A")).unwrap());
+        let no_system = CompletionRequest {
+            messages: vec![ChatMessage::new("user", "pack A")],
+            ..call("", "")
+        };
+        assert!(sidecar_cache_key(RunKind::WeeklyDream, &no_system).is_none());
+    }
 
     fn framed_reverse_request(method: &str) -> Value {
         let frame = encode_frame(&json!({

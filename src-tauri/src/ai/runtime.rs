@@ -252,7 +252,7 @@ impl AgentModel for AiRuntime {
         &self,
         request: AgentModelRequest,
     ) -> Result<AgentModelResponse, AgentModelFailure> {
-        let body = agent_request_body(&self.config.model, &request);
+        let body = agent_request_body(&self.config.model, &self.config.base_url, &request);
         let result = self.send_agent(&body).await;
         self.record_agent(&body, &result);
         result
@@ -724,6 +724,13 @@ fn cache_routing_field(base_url: &str) -> Option<&'static str> {
         .map(|(_, field)| *field)
 }
 
+/// Writes the caller's stable routing key into the field this endpoint documents.
+fn apply_cache_key(body: &mut Value, base_url: &str, cache_key: Option<&str>) {
+    if let (Some(key), Some(field)) = (cache_key, cache_routing_field(base_url)) {
+        body[field] = json!(key);
+    }
+}
+
 /// Build the chat-completion body. The output ceiling is mandatory, so every
 /// provider request is bounded.
 fn completion_body(model: &str, base_url: &str, request: &CompletionRequest) -> Value {
@@ -733,13 +740,11 @@ fn completion_body(model: &str, base_url: &str, request: &CompletionRequest) -> 
         "messages": request.messages
     });
     apply_output_controls(&mut body, model, request.temperature, request.max_tokens);
-    if let (Some(key), Some(field)) = (&request.cache_key, cache_routing_field(base_url)) {
-        body[field] = json!(key);
-    }
+    apply_cache_key(&mut body, base_url, request.cache_key.as_deref());
     body
 }
 
-fn agent_request_body(model: &str, request: &AgentModelRequest) -> Value {
+fn agent_request_body(model: &str, base_url: &str, request: &AgentModelRequest) -> Value {
     let messages = request
         .messages
         .iter()
@@ -766,6 +771,7 @@ fn agent_request_body(model: &str, request: &AgentModelRequest) -> Value {
         "tool_choice": "auto",
     });
     apply_output_controls(&mut body, model, request.temperature, request.max_tokens);
+    apply_cache_key(&mut body, base_url, request.cache_key.as_deref());
     body
 }
 
@@ -989,6 +995,7 @@ mod tests {
             tools: vec![],
             temperature: 0.2,
             max_tokens: 100,
+            cache_key: None,
         }
     }
 
@@ -1197,11 +1204,12 @@ mod tests {
             }],
             temperature: 0.1,
             max_tokens: 1_500,
+            cache_key: None,
         };
-        let body = agent_request_body("fake-model", &request);
+        let body = agent_request_body("fake-model", "https://example.test/v1", &request);
         assert!(body.get("response_format").is_none());
         assert_eq!(body["max_tokens"], json!(1_500));
-        let reasoning = agent_request_body("o3-mini", &request);
+        let reasoning = agent_request_body("o3-mini", "https://example.test/v1", &request);
         assert_eq!(reasoning["max_completion_tokens"], json!(1_500));
         assert!(reasoning.get("max_tokens").is_none());
         assert_eq!(body["tool_choice"], "auto");
@@ -1417,13 +1425,14 @@ mod tests {
                 tools: vec![],
                 temperature: 0.0,
                 max_tokens: 16,
+                cache_key: None,
             };
-            let body = agent_request_body("deepseek-reasoner", &request);
+            let body = agent_request_body("deepseek-reasoner", "https://example.test/v1", &request);
             assert!(body["messages"][1][echoed].to_string().contains(COT), "{name} must echo in-turn");
             assert_eq!(body["messages"][1]["tool_calls"][0]["id"], "call-1");
             // The output ceiling rule is untouched by the echo.
             assert_eq!(body["max_tokens"], json!(16));
-            assert_eq!(agent_request_body("gpt-5", &request)["max_completion_tokens"], json!(1024));
+            assert_eq!(agent_request_body("gpt-5", "https://example.test/v1", &request)["max_completion_tokens"], json!(1024));
 
             // The same turn without an echo (a final answer, or a provider that
             // sent none) serializes no reasoning field at all.
@@ -1431,7 +1440,7 @@ mod tests {
             if let AgentMessage::Assistant { reasoning, .. } = &mut stripped.messages[1] {
                 *reasoning = None;
             }
-            let body = agent_request_body("deepseek-reasoner", &stripped);
+            let body = agent_request_body("deepseek-reasoner", "https://example.test/v1", &stripped);
             for field in ["reasoning_content", "reasoning", "reasoning_details"] {
                 assert!(body["messages"][1].get(field).is_none(), "{name}: {field}");
             }
@@ -1581,5 +1590,31 @@ mod tests {
         assert!(rows[2].usage_json.is_none() && rows[2].response_hash.is_none());
         assert!(rows[2].error_json.as_deref().unwrap().contains("bad key"));
         assert_ne!(rows[0].id, rows[1].id);
+    }
+
+    #[test]
+    fn agent_body_carries_the_cache_key_only_where_documented() {
+        let request = |system: &str, user: &str| AgentModelRequest {
+            messages: vec![
+                AgentMessage::System { content: system.into() },
+                AgentMessage::User { content: user.into() },
+            ],
+            tools: vec![],
+            temperature: 0.1,
+            max_tokens: 1_500,
+            cache_key: Some(ielts_application::prompt_cache_key("agent-workspace", system)),
+        };
+        let first = agent_request_body("m", "https://api.openai.com/v1", &request("sys", "one"));
+        let second = agent_request_body("m", "https://api.openai.com/v1", &request("sys", "two"));
+        let other = agent_request_body("m", "https://api.openai.com/v1", &request("sys 2", "one"));
+        assert!(first["prompt_cache_key"].is_string());
+        assert_eq!(first["prompt_cache_key"], second["prompt_cache_key"]);
+        assert_ne!(first["prompt_cache_key"], other["prompt_cache_key"]);
+        assert_eq!(
+            agent_request_body("m", "https://openrouter.ai/api/v1", &request("sys", "one"))["session_id"],
+            first["prompt_cache_key"],
+        );
+        let plain = AgentModelRequest { cache_key: None, ..request("sys", "one") };
+        assert!(agent_request_body("m", "https://api.openai.com/v1", &plain).get("prompt_cache_key").is_none());
     }
 }

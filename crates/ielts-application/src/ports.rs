@@ -7,6 +7,7 @@ use ielts_domain::dto::{WritingFeedbackV4, WritingScoreV4};
 use ielts_domain::{EmbeddingRequest, EmbeddingResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::ApplicationError;
 
@@ -104,6 +105,16 @@ impl std::fmt::Display for ModelError {
 }
 
 impl std::error::Error for ModelError {}
+
+/// Stable prompt-cache routing key for one call path: a fixed per-purpose label
+/// plus a digest of its byte-stable system prefix. Calls whose prefix is
+/// identical share a key; the user content never enters it. Callers opt in by
+/// setting `CompletionRequest::cache_key` (or the agent request's key) to this.
+pub fn prompt_cache_key(purpose: &str, stable_prefix: &str) -> String {
+    let digest = Sha256::digest(stable_prefix.as_bytes());
+    let hex: String = digest.iter().take(16).map(|byte| format!("{byte:02x}")).collect();
+    format!("{purpose}-{hex}")
+}
 
 impl From<ModelError> for ProviderError {
     fn from(error: ModelError) -> Self {
@@ -207,4 +218,18 @@ pub trait CoachStore: Send + Sync {
         &self,
         thread_id: &str,
     ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prompt_cache_key;
+
+    #[test]
+    fn prompt_cache_key_is_stable_for_one_prefix_and_differs_across_prefixes() {
+        let key = prompt_cache_key("dream-weekly", "system prompt");
+        assert_eq!(key, prompt_cache_key("dream-weekly", "system prompt"));
+        assert!(key.starts_with("dream-weekly-") && key.len() == "dream-weekly-".len() + 32);
+        assert_ne!(key, prompt_cache_key("dream-weekly", "system prompt 2"));
+        assert_ne!(key, prompt_cache_key("memory-candidate", "system prompt"));
+    }
 }

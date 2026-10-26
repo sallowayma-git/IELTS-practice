@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
-use crate::{ApplicationError, ModelError, TokenUsage, AGENT_ROUND_MAX_TOKENS};
+use crate::{prompt_cache_key, ApplicationError, ModelError, TokenUsage, AGENT_ROUND_MAX_TOKENS};
 
 /// Provider reasoning that must be echoed back, verbatim, within ONE tool-calling
 /// turn (DeepSeek `reasoning_content`; OpenRouter `reasoning` / `reasoning_details`).
@@ -81,6 +81,10 @@ pub struct AgentModelRequest {
     pub tools: Vec<AgentToolDefinition>,
     pub temperature: f32,
     pub max_tokens: u32,
+    /// Provider prompt-cache routing key (see `prompt_cache_key`). Absent when
+    /// the run's system prompt is not a stable prefix.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_key: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -415,6 +419,12 @@ impl AgentService {
     {
         validate_command(&command)?;
         let prompt_hash = sha256_hex(&command.system_prompt);
+        // Every round of one run sends the same system prompt first, so the run
+        // kind plus that prompt is the stable routing key for the whole loop.
+        let cache_key = prompt_cache_key(
+            &format!("agent-{}", command.run_kind.as_str()),
+            &command.system_prompt,
+        );
         store.begin_run(&BeginAgentRunCommand {
             id: command.run_id.clone(),
             provider_id: command.provider_id.clone(),
@@ -457,6 +467,7 @@ impl AgentService {
                     tools: definitions.clone(),
                     temperature: command.temperature,
                     max_tokens: AGENT_ROUND_MAX_TOKENS,
+                    cache_key: Some(cache_key.clone()),
                 }) => result,
             };
             // Retain metadata from a reply that raced with cancellation, but
@@ -946,6 +957,35 @@ mod tests {
         assert_eq!(result["providerRequestId"], "request-1");
         assert_eq!(result["promptHash"], outcome.prompt_hash);
         assert!(result.get("content").is_none());
+    }
+
+    #[tokio::test]
+    async fn every_round_carries_a_cache_key_from_its_stable_system_prompt() {
+        let store = FakeStore::default();
+        let first = model(&store, vec![Ok(response(Some("a"), vec![]))]);
+        AgentService::run(&store, &first, &FakeTools::default(), command(), &AgentCancelToken::new())
+            .await
+            .unwrap();
+        // Same system prompt, different user prompt: same key.
+        let mut other_user = command();
+        other_user.user_prompt = "Read other.txt".into();
+        let second = model(&store, vec![Ok(response(Some("b"), vec![]))]);
+        AgentService::run(&store, &second, &FakeTools::default(), other_user, &AgentCancelToken::new())
+            .await
+            .unwrap();
+        // Different system prompt: different key.
+        let mut other_system = command();
+        other_system.system_prompt = "Use tools differently.".into();
+        let third = model(&store, vec![Ok(response(Some("c"), vec![]))]);
+        AgentService::run(&store, &third, &FakeTools::default(), other_system, &AgentCancelToken::new())
+            .await
+            .unwrap();
+
+        let key = |m: &ScriptedModel| m.requests.lock().unwrap()[0].cache_key.clone();
+        let (a, b, c) = (key(&first), key(&second), key(&third));
+        assert!(a.as_deref().is_some_and(|k| k.starts_with("agent-workspace-")), "{a:?}");
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 
     #[tokio::test]
