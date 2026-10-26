@@ -350,6 +350,23 @@ impl AgentModel for AiRuntime {
 }
 
 impl AiRuntime {
+    /// A plain completion for the sidecar. Unlike `complete`, a reply cut off at
+    /// its ceiling is returned with whatever text arrived and `truncated` set, so
+    /// the sidecar's own malformed-output handling decides what it means. Ledgered
+    /// exactly like `complete`.
+    pub(crate) async fn complete_partial(&self, mut request: CompletionRequest) -> Result<PartialCompletion, ModelError> {
+        let admission = self.admit_completion(&mut request);
+        let body = completion_body(&self.config.model, &self.config.base_url, &request);
+        let (admission, reply) = match admission {
+            Ok(admission) => (admission, self.send_completion(&body).await),
+            Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
+        };
+        self.record_completion(&body, &reply, admission);
+        let reply = reply.map_err(|failure| failure.error)?;
+        let truncated = is_truncated(reply.finish_reason.as_deref());
+        Ok(PartialCompletion { response: reply.response, truncated })
+    }
+
     /// The pre-send guard for a plain completion. Runs before any HTTP call.
     /// `request.max_tokens` is updated to the clamped ceiling, if any.
     fn admit_completion(&self, request: &mut CompletionRequest) -> Result<Admission, ModelError> {
@@ -369,6 +386,13 @@ impl AiRuntime {
         }
         Ok(admission)
     }
+}
+
+/// A completion that may be cut off: the text that arrived and whether the
+/// provider stopped at the output ceiling.
+pub(crate) struct PartialCompletion {
+    pub response: CompletionResponse,
+    pub truncated: bool,
 }
 
 /// One provider completion before the caller-facing check. `finish_reason` is
@@ -2194,6 +2218,19 @@ mod tests {
         assert!(usage(&rows[2]).get("finishReason").is_none());
         assert_eq!(usage(&rows[2])["promptTokens"], json!(5));
         assert_eq!(usage(&rows[3])["finishReason"], json!("max_tokens"));
+    }
+
+    #[tokio::test]
+    async fn a_truncated_sidecar_completion_returns_the_partial_text_and_truncated_true() {
+        let (runtime, server) = http_fixture(vec![(
+            200,
+            r#"{"id":"cut","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":"{\"digest\":"},"finish_reason":"length"}]}"#,
+            false,
+        )]);
+        let completion = runtime.complete_partial(fixture_completion_request()).await.unwrap();
+        server.join().unwrap();
+        assert!(completion.truncated);
+        assert_eq!(completion.response.content, r#"{"digest":"#);
     }
 
     #[test]

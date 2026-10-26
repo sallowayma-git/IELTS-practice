@@ -420,6 +420,14 @@ fn parse_answer(raw: &str) -> Result<(String, Value), ApplicationError> {
 }
 
 fn provider_failure(error: ModelError) -> ApplicationError {
+    // A cut-off answer and an over-long prompt are not provider outages: the
+    // learner can act on them (ask a narrower question, select less text).
+    if error.truncated {
+        return ApplicationError::new("coach.output_truncated", error.message, false);
+    }
+    if error.context_exceeded {
+        return ApplicationError::new("coach.context_exceeded", error.message, false);
+    }
     ApplicationError::new("coach.provider_failed", error.message, error.retryable)
 }
 
@@ -710,6 +718,28 @@ Why?"));
             assert_eq!(state.failures.len(), 1);
             assert!(state.failures[0].preserve_scores);
             assert_eq!(state.messages.len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_and_over_long_answers_get_their_own_codes() {
+        for (error, code) in [
+            (ModelError::output_truncated(), "coach.output_truncated"),
+            (ModelError::prompt_exceeds_context(40_000, 32_768), "coach.context_exceeded"),
+        ] {
+            let store = FakeCoachStore::default();
+            let model = FakeModel {
+                response: Err(error),
+                store_state: store.state.clone(),
+                request: Arc::new(Mutex::new(None)),
+            };
+            let failure = CoachService::run(&store, command("Why?"), || Ok(model))
+                .await
+                .unwrap_err();
+            assert_eq!(failure.code, code);
+            assert!(!failure.retryable);
+            let state = store.state.lock().unwrap();
+            assert_eq!(state.failures.len(), 1);
         }
     }
 

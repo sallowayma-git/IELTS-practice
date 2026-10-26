@@ -7,4 +7,4 @@ pub(crate) use config::{
     load_runtime_for_config,
     load_runtime_from_provider_config, normalize_provider,
 };
-pub(crate) use runtime::{AiProviderConfig, AiRuntime, MAX_RETRIES};
+pub(crate) use runtime::{AiProviderConfig, AiRuntime, PartialCompletion, MAX_RETRIES};

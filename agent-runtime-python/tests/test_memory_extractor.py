@@ -130,6 +130,15 @@ class MemoryExtractorTests(unittest.TestCase):
             batch.proposals[1].to_wire()["evidenceObservationIds"], ["obs-new"]
         )
 
+    def test_a_truncated_reply_is_malformed_and_takes_the_same_fallback(self) -> None:
+        # The host hands over the partial text of a reply cut off at its ceiling.
+        bounded = MemoryCandidateInput.model_validate(candidate_input())
+        for partial in ('{"schemaVersion": 1, "proposals": [{"action": "ADD"', ""):
+            with self.subTest(partial=partial):
+                batch, fallback_used = extract_memory_candidates(bounded, partial)
+                self.assertTrue(fallback_used)
+                self.assertTrue(batch.proposals)
+
     def test_model_cannot_reference_ids_outside_bounded_input(self) -> None:
         bounded = MemoryCandidateInput.model_validate(candidate_input())
         model_output = json.dumps(
