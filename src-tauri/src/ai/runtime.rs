@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -7,6 +8,7 @@ use ielts_application::{
     ReasoningEcho, TokenUsage,
 };
 use serde::de::DeserializeOwned;
+use ielts_domain::{estimate_tokens, rendered_hash};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -63,6 +65,9 @@ pub(crate) struct AiProviderConfig {
     pub timeout: Duration,
 }
 
+/// Receives one `llm_invocations` row per ledgered gateway call.
+pub(crate) type LedgerSink = Arc<dyn Fn(ielts_db::LlmInvocationRecord) + Send + Sync>;
+
 // The runtime owns the API key. Do not derive Debug/Clone: formatting or
 // copying this value would make accidental credential exposure easy.
 pub(crate) struct AiRuntime {
@@ -70,6 +75,7 @@ pub(crate) struct AiRuntime {
     api_key: String,
     client: reqwest::Client,
     transport_retries: u32,
+    ledger: Option<LedgerSink>,
 }
 
 impl AiRuntime {
@@ -88,6 +94,7 @@ impl AiRuntime {
             api_key,
             client,
             transport_retries: MAX_RETRIES,
+            ledger: None,
         })
     }
 
@@ -96,20 +103,166 @@ impl AiRuntime {
         self.transport_retries = retries;
         self
     }
+
+    /// Ledger every plain completion and agent call. `complete_with_trace`
+    /// callers (the coach) keep their own invocation row and are not ledgered.
+    pub(crate) fn with_ledger(mut self, sink: LedgerSink) -> Self {
+        self.ledger = Some(sink);
+        self
+    }
+
+    fn record_completion(&self, body: &Value, result: &Result<(CompletionResponse, u32), AgentModelFailure>) {
+        let Some(sink) = &self.ledger else { return };
+        let call = match result {
+            Ok((response, _)) => LedgerCall {
+                model: &response.model,
+                latency_ms: response.latency_ms,
+                usage: response.usage.as_ref(),
+                provider_request_id: response.provider_request_id.as_deref(),
+                outcome: Ok(&response.content),
+            },
+            Err(failure) => LedgerCall::failed(failure, &self.config.model),
+        };
+        sink(ledger_record(&self.config.provider, body, call));
+    }
+
+    fn record_agent(&self, body: &Value, result: &Result<AgentModelResponse, AgentModelFailure>) {
+        let Some(sink) = &self.ledger else { return };
+        let call = match result {
+            Ok(response) => LedgerCall {
+                model: &response.model,
+                latency_ms: response.latency_ms,
+                usage: response.usage.as_ref(),
+                provider_request_id: response.provider_request_id.as_deref(),
+                outcome: Ok(response.content.as_deref().unwrap_or("")),
+            },
+            Err(failure) => LedgerCall::failed(failure, &self.config.model),
+        };
+        sink(ledger_record(&self.config.provider, body, call));
+    }
+}
+
+/// Writes ledger rows under the host connection's lock. A failed write is logged
+/// and dropped: spend bookkeeping must never fail the user's call.
+pub(crate) fn usage_ledger(conn: Arc<std::sync::Mutex<rusqlite::Connection>>) -> LedgerSink {
+    Arc::new(move |record| match conn.lock() {
+        Ok(conn) => {
+            if let Err(error) = ielts_db::record_llm_invocation(&conn, &record) {
+                tracing::warn!(%error, "llm usage ledger write failed");
+            }
+        }
+        Err(_) => tracing::warn!("llm usage ledger skipped: db lock poisoned"),
+    })
+}
+
+/// One gateway call as the ledger sees it: the provider's facts or the failure.
+struct LedgerCall<'a> {
+    model: &'a str,
+    latency_ms: u64,
+    usage: Option<&'a TokenUsage>,
+    provider_request_id: Option<&'a str>,
+    outcome: Result<&'a str, &'a ModelError>,
+}
+
+impl<'a> LedgerCall<'a> {
+    fn failed(failure: &'a AgentModelFailure, configured_model: &'a str) -> Self {
+        Self {
+            model: failure.model.as_deref().unwrap_or(configured_model),
+            latency_ms: failure.latency_ms,
+            usage: failure.usage.as_ref(),
+            provider_request_id: failure.provider_request_id.as_deref(),
+            outcome: Err(&failure.error),
+        }
+    }
+}
+
+/// The `llm_invocations` row for one call. Usage comes from the provider when it
+/// reports any; a successful call without usage gets a chars-based estimate.
+fn ledger_record(provider: &str, request: &Value, call: LedgerCall<'_>) -> ielts_db::LlmInvocationRecord {
+    let usage = match (call.usage, call.outcome) {
+        (Some(usage), _) => Some(provider_usage_json(usage)),
+        (None, Ok(content)) => Some(estimated_usage_json(request, content)),
+        (None, Err(_)) => None,
+    };
+    ielts_db::LlmInvocationRecord {
+        id: format!("llm-{}", uuid::Uuid::new_v4()),
+        provider: provider.into(),
+        model: call.model.into(),
+        request_hash: rendered_hash(&request.to_string()),
+        response_hash: call.outcome.ok().map(rendered_hash),
+        usage_json: usage.map(|value| value.to_string()),
+        latency_ms: call.latency_ms,
+        provider_request_id: call.provider_request_id.map(str::to_string),
+        error_json: call.outcome.err().map(|error| {
+            json!({"message": error.message, "retryable": error.retryable}).to_string()
+        }),
+        created_at: chrono::Utc::now().to_rfc3339(),
+    }
+}
+
+/// Provider-reported counts. Cache and reasoning keys appear only when non-zero:
+/// the parsed `TokenUsage` cannot tell "reported as 0" from "not reported".
+fn provider_usage_json(usage: &TokenUsage) -> Value {
+    let mut value = json!({
+        "promptTokens": usage.input_tokens,
+        "completionTokens": usage.output_tokens,
+        "totalTokens": usage.input_tokens + usage.output_tokens,
+    });
+    if usage.cached_input_tokens > 0 {
+        value["cachedInputTokens"] = json!(usage.cached_input_tokens);
+    }
+    if usage.reasoning_tokens > 0 {
+        value["reasoningTokens"] = json!(usage.reasoning_tokens);
+    }
+    value
+}
+
+/// No provider usage: estimate the serialized request and the answer, flagged.
+fn estimated_usage_json(request: &Value, content: &str) -> Value {
+    let prompt = u64::from(estimate_tokens(&request.to_string()));
+    let completion = u64::from(estimate_tokens(content));
+    json!({
+        "promptTokens": prompt,
+        "completionTokens": completion,
+        "totalTokens": prompt + completion,
+        "estimated": true,
+    })
 }
 
 #[async_trait]
 impl LanguageModel for AiRuntime {
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
-        self.complete_with_trace(request).await.map(|(response, _)| response).map_err(|failure| failure.error)
+        let body = completion_body(&self.config.model, &self.config.base_url, &request);
+        let result = self.send_completion(&body).await;
+        self.record_completion(&body, &result);
+        result.map(|(response, _)| response).map_err(|failure| failure.error)
     }
 
     fn identity(&self) -> (&str, &str) { (&self.config.provider, &self.config.model) }
 
     async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
+        self.send_completion(&body).await
+    }
+}
+
+#[async_trait]
+impl AgentModel for AiRuntime {
+    async fn respond(
+        &self,
+        request: AgentModelRequest,
+    ) -> Result<AgentModelResponse, AgentModelFailure> {
+        let body = agent_request_body(&self.config.model, &request);
+        let result = self.send_agent(&body).await;
+        self.record_agent(&body, &result);
+        result
+    }
+}
+
+impl AiRuntime {
+    async fn send_completion(&self, body: &Value) -> Result<(CompletionResponse, u32), AgentModelFailure> {
         let (envelope, latency_ms, retry_count, header_request_id): (ChatResponse, _, _, _) = self
-            .post_chat_completion(&body, "AI response envelope invalid")
+            .post_chat_completion(body, "AI response envelope invalid")
             .await
             .map_err(ChatCompletionFailure::into_trace)?;
         let model = envelope.model.unwrap_or_else(|| self.config.model.clone());
@@ -130,17 +283,10 @@ impl LanguageModel for AiRuntime {
             provider_request_id,
         }, retry_count))
     }
-}
 
-#[async_trait]
-impl AgentModel for AiRuntime {
-    async fn respond(
-        &self,
-        request: AgentModelRequest,
-    ) -> Result<AgentModelResponse, AgentModelFailure> {
-        let body = agent_request_body(&self.config.model, &request);
+    async fn send_agent(&self, body: &Value) -> Result<AgentModelResponse, AgentModelFailure> {
         let (envelope, latency_ms, retry_count, header_request_id): (AgentChatResponse, _, _, _) =
-            self.post_chat_completion(&body, "AI agent response envelope invalid")
+            self.post_chat_completion(body, "AI agent response envelope invalid")
                 .await
                 .map_err(ChatCompletionFailure::into_trace)?;
         parse_agent_response(
@@ -151,9 +297,7 @@ impl AgentModel for AiRuntime {
             header_request_id,
         )
     }
-}
 
-impl AiRuntime {
     async fn post_chat_completion<T: DeserializeOwned>(
         &self,
         body: &Value,
@@ -513,6 +657,9 @@ struct ChatUsage {
     // DeepSeek reports the cached share at the top level.
     #[serde(default)]
     prompt_cache_hit_tokens: Option<Value>,
+    // Anthropic-style gateways: cache reads at the top level.
+    #[serde(default)]
+    cache_read_input_tokens: Option<Value>,
 }
 
 /// Output-limit rules by model-name prefix: (prefix, request field, floor).
@@ -727,6 +874,7 @@ fn token_usage(usage: ChatUsage) -> TokenUsage {
             .as_ref()
             .and_then(|details| details.get("cached_tokens"))
             .or(usage.prompt_cache_hit_tokens.as_ref())
+            .or(usage.cache_read_input_tokens.as_ref())
             .and_then(Value::as_u64)
             .unwrap_or(0),
     }
@@ -985,6 +1133,8 @@ mod tests {
         let none = usage(r#"{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":"odd"}"#);
         assert_eq!((none.input_tokens, none.cached_input_tokens), (100, 0));
         assert!(!serde_json::to_string(&none).unwrap().contains("cachedInputTokens"));
+        let anthropic = usage(r#"{"prompt_tokens":100,"completion_tokens":5,"cache_read_input_tokens":50}"#);
+        assert_eq!(anthropic.cached_input_tokens, 50);
     }
 
     #[test]
@@ -1348,5 +1498,88 @@ mod tests {
             .as_deref(),
             Some("provider-request")
         );
+    }
+
+    #[test]
+    fn ledger_usage_keeps_each_provider_cache_and_reasoning_shape() {
+        let ledger_usage = |raw: Value| {
+            let usage = token_usage(serde_json::from_value::<ChatUsage>(raw).unwrap());
+            provider_usage_json(&usage)
+        };
+        let openai = ledger_usage(json!({"prompt_tokens": 100, "completion_tokens": 40,
+            "prompt_tokens_details": {"cached_tokens": 64},
+            "completion_tokens_details": {"reasoning_tokens": 30}}));
+        assert_eq!(openai, json!({"promptTokens": 100, "completionTokens": 40, "totalTokens": 140,
+            "cachedInputTokens": 64, "reasoningTokens": 30}));
+        let deepseek = ledger_usage(json!({"prompt_tokens": 100, "completion_tokens": 5,
+            "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20}));
+        assert_eq!(deepseek["cachedInputTokens"], json!(80));
+        assert!(deepseek.get("reasoningTokens").is_none());
+        let anthropic = ledger_usage(json!({"prompt_tokens": 100, "completion_tokens": 5,
+            "cache_read_input_tokens": 50}));
+        assert_eq!(anthropic["cachedInputTokens"], json!(50));
+        assert!(anthropic.get("estimated").is_none());
+    }
+
+    #[test]
+    fn ledger_estimates_only_a_successful_call_without_provider_usage() {
+        let request = json!({"model": "m", "messages": [{"role": "user", "content": "x".repeat(400)}]});
+        let estimate = estimated_usage_json(&request, &"y".repeat(40));
+        assert_eq!(estimate["estimated"], json!(true));
+        assert_eq!(estimate["promptTokens"], json!(u64::from(estimate_tokens(&request.to_string()))));
+        assert_eq!(estimate["completionTokens"], json!(10));
+        assert_eq!(estimate["totalTokens"], json!(estimate["promptTokens"].as_u64().unwrap() + 10));
+
+        let error = model_error("boom", true);
+        let failed = LedgerCall {
+            model: "m",
+            latency_ms: 3,
+            usage: None,
+            provider_request_id: None,
+            outcome: Err(&error),
+        };
+        let row = ledger_record("p", &request, failed);
+        assert_eq!(row.usage_json, None);
+        assert_eq!(row.response_hash, None);
+        assert_eq!(row.request_hash, rendered_hash(&request.to_string()));
+        assert!(row.error_json.unwrap().contains("\"retryable\":true"));
+    }
+
+    #[tokio::test]
+    async fn gateway_ledgers_each_plain_call_once_and_not_the_traced_coach_call() {
+        use std::sync::Mutex;
+        let rows = Arc::new(Mutex::new(Vec::<ielts_db::LlmInvocationRecord>::new()));
+        let sink_rows = Arc::clone(&rows);
+        let sink: LedgerSink = Arc::new(move |row| sink_rows.lock().unwrap().push(row));
+        let (runtime, server) = http_fixture(vec![
+            (200, r#"{"id":"traced","model":"actual-v2","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            (200, r#"{"id":"plain-request","model":"actual-v2","usage":{"prompt_tokens":100,"completion_tokens":4,"prompt_tokens_details":{"cached_tokens":60},"completion_tokens_details":{"reasoning_tokens":2}},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            (200, r#"{"id":"agent-request","model":"actual-v2","choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            (401, r#"{"error":{"message":"bad key"}}"#, false),
+        ]);
+        let runtime = runtime.with_ledger(sink);
+
+        runtime.complete_with_trace(fixture_completion_request()).await.unwrap();
+        assert!(rows.lock().unwrap().is_empty(), "the coach trace owns its own row");
+
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        runtime.respond(fixture_agent_request()).await.unwrap();
+        runtime.complete(fixture_completion_request()).await.unwrap_err();
+        server.join().unwrap();
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 3, "one row per plain or agent call");
+        let plain: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(plain["promptTokens"], json!(100));
+        assert_eq!(plain["cachedInputTokens"], json!(60));
+        assert_eq!(plain["reasoningTokens"], json!(2));
+        assert_eq!(rows[0].provider_request_id.as_deref(), Some("plain-request"));
+        assert_eq!(rows[0].model, "actual-v2");
+        assert!(rows[0].error_json.is_none() && rows[0].response_hash.is_some());
+        let agent: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(agent["estimated"], json!(true));
+        assert!(rows[2].usage_json.is_none() && rows[2].response_hash.is_none());
+        assert!(rows[2].error_json.as_deref().unwrap().contains("bad key"));
+        assert_ne!(rows[0].id, rows[1].id);
     }
 }
