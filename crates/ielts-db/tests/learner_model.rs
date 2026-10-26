@@ -418,6 +418,28 @@ fn mapping_priority_uses_curated_question_mapping_before_deterministic_kind() {
     assert!((mapping.1 - 0.8).abs() < f64::EPSILON);
 }
 
+#[test]
+fn same_session_success_adds_no_stability_but_a_later_success_does() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "event-1", "asset-a", "q1", "tfng", "2026-08-12T00:00:00Z", false, None);
+    // Redo of the same question minutes later: a same-session success.
+    insert_question(&conn, "event-2", "asset-a", "q1", "tfng", "2026-08-12T00:05:00Z", true, None);
+    // A different article minutes later is still the same session for the skill.
+    insert_question(&conn, "event-3", "asset-b", "q1", "tfng", "2026-08-12T00:10:00Z", true, None);
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let stability = |conn: &Connection| state(conn).states[0].stability_days.unwrap();
+    // First miss halves the 1.0 default; same-session successes leave it alone.
+    assert!((stability(&conn) - 0.5).abs() < 1e-9);
+
+    // A success a full day later grows stability by the observation weight.
+    insert_question(&conn, "event-4", "asset-c", "q1", "tfng", "2026-08-13T00:10:00Z", true, None);
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    assert!((stability(&conn) - 1.5).abs() < 1e-9);
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
 fn insert_question(
     conn: &Connection,
     event_id: &str,

@@ -863,15 +863,15 @@ fn build_states_and_schedules(
             model_version: LEARNER_STATE_MODEL_VERSION.into(),
             explanation: Value::Null,
         });
+        // None on the skill's first practice: there is no previous session to repeat.
         let elapsed_days = state
             .last_practiced_at
             .as_deref()
             .and_then(|previous| gap_hours(previous, &observation.observed_at))
-            .map(|hours| (hours / 24.0).max(0.0))
-            .unwrap_or(0.0);
+            .map(|hours| (hours / 24.0).max(0.0));
         let previous_stability = state.stability_days.unwrap_or(1.0);
         let weight = ielts_domain::effective_observation_weight(observation);
-        apply_skill_observation(state, observation, elapsed_days, config);
+        apply_skill_observation(state, observation, elapsed_days.unwrap_or(0.0), config);
         state.last_practiced_at = Some(observation.observed_at.clone());
         state.stability_days = Some(update_stability(
             previous_stability,
@@ -1298,12 +1298,21 @@ fn review_delay_days(state: &SkillState) -> f64 {
     }
 }
 
-fn update_stability(previous: f64, elapsed_days: f64, outcome: f64, weight: f64) -> f64 {
-    if outcome >= 0.5 {
-        (previous + elapsed_days.max(1.0) * weight.max(0.1)).clamp(0.0, 365.0)
-    } else {
-        (previous * 0.5).clamp(0.0, 365.0)
+/// Repeats closer than this to the skill's previous practice are the same
+/// study session (DeepTutor scheduler rule): a success there adds no stability.
+const SAME_SESSION_REPEAT_DAYS: f64 = 0.25;
+
+/// `elapsed_days` is `None` on a skill's first practice, which earns the
+/// one-day floor credit as before.
+fn update_stability(previous: f64, elapsed_days: Option<f64>, outcome: f64, weight: f64) -> f64 {
+    if outcome < 0.5 {
+        return (previous * 0.5).clamp(0.0, 365.0);
     }
+    if elapsed_days.is_some_and(|days| days < SAME_SESSION_REPEAT_DAYS) {
+        return previous.clamp(0.0, 365.0);
+    }
+    let days = elapsed_days.unwrap_or(0.0);
+    (previous + days.max(1.0) * weight.max(0.1)).clamp(0.0, 365.0)
 }
 
 /// The one name of a reading question type: the skill key every layer (learner
@@ -1436,4 +1445,27 @@ fn ensure_response_size<T: Serialize>(value: &T) -> DbResult<()> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_session_success_does_not_grow_stability() {
+        assert_eq!(update_stability(2.0, Some(0.01), 1.0, 1.0), 2.0);
+        assert_eq!(update_stability(2.0, Some(0.2499), 0.6, 1.0), 2.0);
+    }
+
+    #[test]
+    fn success_after_a_day_grows_stability_as_before() {
+        assert_eq!(update_stability(2.0, Some(1.0), 1.0, 0.5), 2.5);
+        // First practice of a skill has no previous session and keeps the floor credit.
+        assert_eq!(update_stability(1.0, None, 1.0, 1.0), 2.0);
+    }
+
+    #[test]
+    fn same_session_failure_still_halves_stability() {
+        assert_eq!(update_stability(2.0, Some(0.01), 0.0, 1.0), 1.0);
+    }
 }
