@@ -1,11 +1,23 @@
 //! Unified LLM usage ledger over `llm_invocations`.
 //!
 //! One row per gateway call that its caller did not trace itself (the coach
-//! trace owns its own row). Rows hold hashes and counts, never prompt text.
+//! trace owns its own row). Rows hold counts, a finish reason and an error
+//! class, never prompt or answer text, provider error bodies or URLs. Ledger
+//! rows have no run, so history deletion cannot redact them later: their
+//! `request_hash` is the constant [`UNLINKED_REQUEST_HASH`] (the column is NOT
+//! NULL) and `response_hash` stays NULL.
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
 use crate::sqlite::DbResult;
+
+/// `request_hash` of a ledger row: no content hash, because nothing can redact
+/// a hash of an unlinked call later.
+pub const UNLINKED_REQUEST_HASH: &str = "unlinked";
+
+/// Largest count a usage value may hold. Writers clamp to it, and the summary
+/// clamps again in SQL, so one bad row cannot overflow an aggregate.
+pub const MAX_USAGE_COUNT: u64 = (i64::MAX / 4) as u64;
 
 /// One ledger row. `usage_json` and `error_json` are canonical JSON text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,28 +70,36 @@ pub struct LlmUsageSummary {
 }
 
 /// Aggregate `usage_json` for rows created at or after `since` (all rows when
-/// `None`). Coach trace rows store the legacy snake_case keys; both spellings
-/// are read so their spend is counted.
+/// `None`). Each count is read only when the stored value is a JSON integer,
+/// under the gateway's camelCase keys and the coach trace's keys (the coach
+/// records its `TokenUsage` in camelCase). A count is clamped to
+/// `[0, SQL_COUNT_CAP]` and sums are `TOTAL()`, which cannot overflow, so a bad
+/// row can never make the summary fail.
 pub fn llm_usage_summary(conn: &Connection, since: Option<&str>) -> DbResult<LlmUsageSummary> {
-    const SQL: &str = "
-        WITH usage AS (
+    let sql = format!(
+        "WITH usage AS (
           SELECT
-            COALESCE(json_extract(usage_json,'$.promptTokens'), json_extract(usage_json,'$.input_tokens'), 0) AS prompt,
-            COALESCE(json_extract(usage_json,'$.completionTokens'), json_extract(usage_json,'$.output_tokens'), 0) AS completion,
-            COALESCE(json_extract(usage_json,'$.cachedInputTokens'), json_extract(usage_json,'$.cached_input_tokens'), 0) AS cached,
-            COALESCE(json_extract(usage_json,'$.reasoningTokens'), json_extract(usage_json,'$.reasoning_tokens'), 0) AS reasoning,
-            COALESCE(json_extract(usage_json,'$.estimated'), 0) AS estimated
+            {prompt} AS prompt,
+            {completion} AS completion,
+            {cached} AS cached,
+            {reasoning} AS reasoning,
+            CASE WHEN json_type(usage_json,'$.estimated') = 'true' THEN 1 ELSE 0 END AS estimated
           FROM llm_invocations
           WHERE ?1 IS NULL OR julianday(created_at) >= julianday(?1)
         )
         SELECT COUNT(*),
-          COALESCE(SUM(prompt),0), COALESCE(SUM(completion),0),
-          COALESCE(SUM(cached),0), COALESCE(SUM(reasoning),0),
-          COALESCE(SUM(estimated),0),
-          COALESCE(SUM(CASE WHEN estimated = 0 THEN cached END),0),
-          COALESCE(SUM(CASE WHEN estimated = 0 THEN prompt END),0)
-        FROM usage";
-    let totals = conn.query_row(SQL, [since], |row| {
+          TOTAL(prompt), TOTAL(completion),
+          TOTAL(cached), TOTAL(reasoning),
+          TOTAL(estimated),
+          TOTAL(CASE WHEN estimated = 0 THEN cached ELSE 0 END),
+          TOTAL(CASE WHEN estimated = 0 THEN prompt ELSE 0 END)
+        FROM usage",
+        prompt = count_expr(&["promptTokens", "inputTokens"]),
+        completion = count_expr(&["completionTokens", "outputTokens"]),
+        cached = count_expr(&["cachedInputTokens"]),
+        reasoning = count_expr(&["reasoningTokens"]),
+    );
+    let totals = conn.query_row(&sql, [since], |row| {
         Ok(Totals {
             calls: row.get(0)?,
             prompt: row.get(1)?,
@@ -91,9 +111,9 @@ pub fn llm_usage_summary(conn: &Connection, since: Option<&str>) -> DbResult<Llm
             metered_prompt: row.get(7)?,
         })
     })?;
-    let count = |value: i64| value.max(0) as u64;
+    let count = |value: f64| value.max(0.0) as u64;
     Ok(LlmUsageSummary {
-        calls: count(totals.calls),
+        calls: totals.calls.max(0) as u64,
         prompt_tokens: count(totals.prompt),
         completion_tokens: count(totals.completion),
         cached_input_tokens: count(totals.cached),
@@ -101,18 +121,37 @@ pub fn llm_usage_summary(conn: &Connection, since: Option<&str>) -> DbResult<Llm
         estimated_calls: count(totals.estimated),
         // Clamped: a provider that reports more cached than prompt tokens must not
         // push the rate past 100%.
-        cache_hit_rate: (totals.metered_prompt > 0)
-            .then(|| (totals.metered_cached as f64 / totals.metered_prompt as f64).min(1.0)),
+        cache_hit_rate: (totals.metered_prompt > 0.0)
+            .then(|| (totals.metered_cached / totals.metered_prompt).clamp(0.0, 1.0)),
     })
+}
+
+/// Upper bound of one count in SQL: well above any real usage, far below the
+/// range where sums would lose integer precision.
+const SQL_COUNT_CAP: u64 = 4_000_000_000_000_000;
+
+/// The first integer-valued key of `keys` in `usage_json`, clamped to
+/// `[0, SQL_COUNT_CAP]`; 0 when none is an integer.
+fn count_expr(keys: &[&str]) -> String {
+    let typed = keys
+        .iter()
+        .map(|key| {
+            format!(
+                "CASE WHEN json_type(usage_json,'$.{key}') = 'integer' THEN json_extract(usage_json,'$.{key}') END"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("MIN(MAX(COALESCE({typed}, 0), 0), {SQL_COUNT_CAP})")
 }
 
 struct Totals {
     calls: i64,
-    prompt: i64,
-    completion: i64,
-    cached: i64,
-    reasoning: i64,
-    estimated: i64,
-    metered_cached: i64,
-    metered_prompt: i64,
+    prompt: f64,
+    completion: f64,
+    cached: f64,
+    reasoning: f64,
+    estimated: f64,
+    metered_cached: f64,
+    metered_prompt: f64,
 }

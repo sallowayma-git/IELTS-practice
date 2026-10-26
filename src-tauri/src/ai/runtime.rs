@@ -8,7 +8,8 @@ use ielts_application::{
     ReasoningEcho, TokenUsage,
 };
 use serde::de::DeserializeOwned;
-use ielts_domain::{estimate_tokens, rendered_hash};
+use ielts_db::{MAX_USAGE_COUNT, UNLINKED_REQUEST_HASH};
+use ielts_domain::estimate_tokens;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -223,14 +224,13 @@ fn ledger_record(provider: &str, request: &Value, call: LedgerCall<'_>) -> ielts
         id: format!("llm-{}", uuid::Uuid::new_v4()),
         provider: provider.into(),
         model: call.model.into(),
-        request_hash: rendered_hash(&request.to_string()),
-        response_hash: call.outcome.ok().map(rendered_hash),
+        // Unlinked: no content hash (see `UNLINKED_REQUEST_HASH`), no response hash.
+        request_hash: UNLINKED_REQUEST_HASH.into(),
+        response_hash: None,
         usage_json: usage.map(|value| value.to_string()),
         latency_ms: call.latency_ms,
         provider_request_id: call.provider_request_id.map(str::to_string),
-        error_json: call.outcome.err().map(|error| {
-            json!({"message": error.message, "retryable": error.retryable}).to_string()
-        }),
+        error_json: call.outcome.err().map(|error| error_record(error).to_string()),
         created_at: chrono::Utc::now().to_rfc3339(),
     }
 }
@@ -264,19 +264,33 @@ fn with_max_tokens_clamped(usage: Option<Value>, clamped: Option<u32>) -> Option
     Some(value)
 }
 
+/// What the ledger keeps of a failed call: the HTTP status when there was one,
+/// the failure class and whether it was retryable. Never the provider's error
+/// text, a URL or anything from the request.
+fn error_record(error: &ModelError) -> Value {
+    json!({"status": error.status, "class": error.class, "retryable": error.retryable})
+}
+
+/// A count as the ledger may store it: never above [`MAX_USAGE_COUNT`].
+fn bounded_count(value: u64) -> u64 {
+    value.min(MAX_USAGE_COUNT)
+}
+
 /// Provider-reported counts. Cache and reasoning keys appear only when non-zero:
 /// the parsed `TokenUsage` cannot tell "reported as 0" from "not reported".
 fn provider_usage_json(usage: &TokenUsage) -> Value {
+    let prompt = bounded_count(usage.input_tokens);
+    let completion = bounded_count(usage.output_tokens);
     let mut value = json!({
-        "promptTokens": usage.input_tokens,
-        "completionTokens": usage.output_tokens,
-        "totalTokens": usage.input_tokens + usage.output_tokens,
+        "promptTokens": prompt,
+        "completionTokens": completion,
+        "totalTokens": prompt.saturating_add(completion),
     });
     if usage.cached_input_tokens > 0 {
-        value["cachedInputTokens"] = json!(usage.cached_input_tokens);
+        value["cachedInputTokens"] = json!(bounded_count(usage.cached_input_tokens));
     }
     if usage.reasoning_tokens > 0 {
-        value["reasoningTokens"] = json!(usage.reasoning_tokens);
+        value["reasoningTokens"] = json!(bounded_count(usage.reasoning_tokens));
     }
     value
 }
@@ -288,7 +302,7 @@ fn estimated_usage_json(request: &Value, content: &str) -> Value {
     json!({
         "promptTokens": prompt,
         "completionTokens": completion,
-        "totalTokens": prompt + completion,
+        "totalTokens": prompt.saturating_add(completion),
         "estimated": true,
     })
 }
@@ -467,7 +481,7 @@ impl AiRuntime {
             // A reply cut off at the ceiling can carry no text at all: that is a
             // truncation, reported as such rather than as an empty envelope.
             None if truncated => String::new(),
-            None => return Err(AgentModelFailure::with_trace(model_error("AI response contained no choices", false), Some(model), latency_ms, usage, provider_request_id, retry_count)),
+            None => return Err(AgentModelFailure::with_trace(invalid_response("AI response contained no choices"), Some(model), latency_ms, usage, provider_request_id, retry_count)),
         };
         Ok(CompletionReply {
             response: CompletionResponse {
@@ -521,7 +535,7 @@ impl AiRuntime {
                     let provider_request_id = provider_request_id_from_headers(response.headers());
                     let value = response.json::<Value>().await.map_err(|error| {
                         ChatCompletionFailure::new(
-                            model_error(format!("{invalid_envelope}: {error}"), false),
+                            invalid_response(format!("{invalid_envelope}: {error}")),
                             elapsed_ms(started),
                             attempt,
                             provider_request_id.clone(),
@@ -536,7 +550,7 @@ impl AiRuntime {
                         // Serde errors can quote invalid string values. Keep only metadata,
                         // never response content, in the failure sent to persistence/UI.
                         ChatCompletionFailure {
-                            error: model_error(invalid_envelope, false),
+                            error: invalid_response(invalid_envelope),
                             model,
                             usage,
                             latency_ms: elapsed_ms(started),
@@ -578,7 +592,7 @@ impl AiRuntime {
                         continue;
                     }
                     return Err(ChatCompletionFailure::new(
-                        model_error(format!("AI request failed: {error}"), retryable),
+                        transport_error(&error, retryable),
                         elapsed_ms(started),
                         attempt,
                         None,
@@ -598,7 +612,7 @@ fn provider_http_error(status: reqwest::StatusCode, body: &str, retryable: bool)
     if status.as_u16() == 400 && is_context_overflow_body(body) {
         return ModelError::provider_context_exceeded(message, status.as_u16());
     }
-    model_error(message, retryable)
+    ModelError::http_status(message, retryable, status.as_u16())
 }
 
 /// Provider wording for a prompt longer than the model accepts. Checked only on
@@ -1085,7 +1099,7 @@ fn parse_agent_response(
         .map(|choice| choice.message)
         .ok_or_else(|| {
             AgentModelFailure::with_trace(
-                model_error("AI agent response contained no choices", false),
+                invalid_response("AI agent response contained no choices"),
                 Some(actual_model.clone()),
                 latency_ms,
                 usage.clone(),
@@ -1176,9 +1190,9 @@ impl AiRuntime {
             let value = response
                 .json::<Value>()
                 .await
-                .map_err(|error| fail(model_error(format!("AI response envelope invalid: {error}"), false)))?;
+                .map_err(|error| fail(invalid_response(format!("AI response envelope invalid: {error}"))))?;
             let envelope = serde_json::from_value::<ChatResponse>(value)
-                .map_err(|_| fail(model_error("AI response envelope invalid", false)))?;
+                .map_err(|_| fail(invalid_response("AI response envelope invalid")))?;
             let reply = self.completion_reply(envelope, elapsed_ms(started), retry_count, header_request_id.clone())?;
             if !reply.response.content.is_empty() && streamable(&reply.response.content) {
                 on_delta(&reply.response.content);
@@ -1190,12 +1204,12 @@ impl AiRuntime {
             match response.chunk().await {
                 Ok(Some(bytes)) => {
                     if let Err(message) = fold.push(&bytes, on_delta) {
-                        return Err(fail(model_error(message, false)));
+                        return Err(fail(stream_error(message, false)));
                     }
                 }
                 Ok(None) => break,
                 Err(error) => {
-                    return Err(fail(model_error(format!("AI stream failed: {error}"), error.is_timeout())));
+                    return Err(fail(stream_error(format!("AI stream failed: {error}"), error.is_timeout())));
                 }
             }
             if fold.done {
@@ -1203,7 +1217,7 @@ impl AiRuntime {
             }
         }
         if let Err(message) = fold.finish(on_delta) {
-            return Err(fail(model_error(message, false)));
+            return Err(fail(stream_error(message, false)));
         }
         fold.into_reply(&self.config.model, elapsed_ms(started), retry_count, header_request_id)
     }
@@ -1242,7 +1256,7 @@ impl AiRuntime {
                     }
                     let detail = provider_error_detail(response).await;
                     return Err(ChatCompletionFailure::new(
-                        model_error(status_failure_message(status, detail), true),
+                        ModelError::http_status(status_failure_message(status, detail), true, status.as_u16()),
                         elapsed_ms(started),
                         attempt,
                         provider_request_id,
@@ -1255,7 +1269,7 @@ impl AiRuntime {
                         continue;
                     }
                     return Err(ChatCompletionFailure::new(
-                        model_error(format!("AI request failed: {error}"), retryable),
+                        transport_error(&error, retryable),
                         elapsed_ms(started),
                         attempt,
                         None,
@@ -1324,7 +1338,7 @@ impl StreamFold {
         let usage = self.usage.take().map(token_usage);
         if !self.done && self.finish_reason.is_none() {
             return Err(AgentModelFailure::with_trace(
-                model_error("AI stream ended before the reply completed", true),
+                stream_error("AI stream ended before the reply completed", true),
                 None,
                 latency_ms,
                 usage,
@@ -1343,7 +1357,7 @@ impl StreamFold {
             None if truncated => String::new(),
             None => {
                 return Err(AgentModelFailure::with_trace(
-                    model_error("AI response contained no choices", false),
+                    invalid_response("AI response contained no choices"),
                     Some(model),
                     latency_ms,
                     usage,
@@ -1472,6 +1486,20 @@ fn prefer_provider_request_id(
 
 fn model_error(message: impl Into<String>, retryable: bool) -> ModelError {
     ModelError::new(message, retryable)
+}
+
+fn invalid_response(message: impl Into<String>) -> ModelError {
+    ModelError::classed(message, false, "invalid_response")
+}
+
+fn stream_error(message: impl Into<String>, retryable: bool) -> ModelError {
+    ModelError::classed(message, retryable, "stream_error")
+}
+
+/// A send that never got an answer: a timeout, or a transport failure.
+fn transport_error(error: &reqwest::Error, retryable: bool) -> ModelError {
+    let class = if error.is_timeout() { "timeout" } else { "transport" };
+    ModelError::classed(format!("AI request failed: {error}"), retryable, class)
 }
 
 #[cfg(test)]
@@ -2113,8 +2141,9 @@ mod tests {
         let row = ledger_record("p", &request, failed);
         assert_eq!(row.usage_json, None);
         assert_eq!(row.response_hash, None);
-        assert_eq!(row.request_hash, rendered_hash(&request.to_string()));
-        assert!(row.error_json.unwrap().contains("\"retryable\":true"));
+        assert_eq!(row.request_hash, UNLINKED_REQUEST_HASH, "a ledger row stores no content hash");
+        let error: Value = serde_json::from_str(&row.error_json.unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "provider_error", "retryable": true}));
     }
 
     #[tokio::test]
@@ -2147,14 +2176,38 @@ mod tests {
         assert_eq!(plain["reasoningTokens"], json!(2));
         assert_eq!(rows[0].provider_request_id.as_deref(), Some("plain-request"));
         assert_eq!(rows[0].model, "actual-v2");
-        assert!(rows[0].error_json.is_none() && rows[0].response_hash.is_some());
+        assert!(rows[0].error_json.is_none() && rows[0].response_hash.is_none());
+        assert_eq!(rows[0].request_hash, UNLINKED_REQUEST_HASH);
         let agent: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
         assert_eq!(agent["estimated"], json!(true));
         assert!(rows[2].usage_json.is_none() && rows[2].response_hash.is_none());
-        assert!(rows[2].error_json.as_deref().unwrap().contains("bad key"));
+        // The provider's own words and any URL stay out of the ledger: status and class only.
+        let error = rows[2].error_json.as_deref().unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(error).unwrap(),
+            json!({"status": 401, "class": "http_4xx", "retryable": false})
+        );
+        assert!(!error.contains("bad key") && !error.contains("https://"));
         assert_ne!(rows[0].id, rows[1].id);
     }
 
+
+    #[test]
+    fn provider_counts_are_bounded_at_write_time_and_never_overflow() {
+        let usage = TokenUsage {
+            input_tokens: u64::MAX,
+            output_tokens: u64::MAX,
+            reasoning_tokens: u64::MAX,
+            cached_input_tokens: u64::MAX,
+        };
+        let value = provider_usage_json(&usage);
+        assert_eq!(value["promptTokens"], json!(MAX_USAGE_COUNT));
+        assert_eq!(value["completionTokens"], json!(MAX_USAGE_COUNT));
+        assert_eq!(value["totalTokens"], json!(MAX_USAGE_COUNT * 2));
+        assert_eq!(value["cachedInputTokens"], json!(MAX_USAGE_COUNT));
+        assert_eq!(value["reasoningTokens"], json!(MAX_USAGE_COUNT));
+        assert!(MAX_USAGE_COUNT <= i64::MAX as u64 / 4);
+    }
 
     #[test]
     fn finish_reason_is_read_from_the_openai_or_anthropic_shape() {
@@ -2212,9 +2265,10 @@ mod tests {
         assert_eq!(usage(&rows[0])["finishReason"], json!("length"));
         assert_eq!(usage(&rows[0])["completionTokens"], json!(2000));
         assert!(rows[0].response_hash.is_none());
-        assert!(rows[0].error_json.as_deref().unwrap().contains("truncated at max_tokens"));
+        let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "truncated", "retryable": false}));
         assert_eq!(usage(&rows[1])["finishReason"], json!("stop"));
-        assert!(rows[1].response_hash.is_some() && rows[1].error_json.is_none());
+        assert!(rows[1].response_hash.is_none() && rows[1].error_json.is_none());
         assert!(usage(&rows[2]).get("finishReason").is_none());
         assert_eq!(usage(&rows[2])["promptTokens"], json!(5));
         assert_eq!(usage(&rows[3])["finishReason"], json!("max_tokens"));
@@ -2683,8 +2737,7 @@ mod tests {
         assert_eq!(rows[0].model, "gpt-4o");
         assert!(rows[0].usage_json.is_none() && rows[0].response_hash.is_none());
         let error_json: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
-        assert_eq!(error_json["retryable"], json!(false));
-        assert_eq!(error_json["message"], json!("prompt exceeds model context: ~128000 tokens of 128000"));
+        assert_eq!(error_json, json!({"status": null, "class": "context_exceeded", "retryable": false}));
     }
 
     #[tokio::test]

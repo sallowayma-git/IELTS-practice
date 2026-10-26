@@ -1,8 +1,11 @@
 use ielts_db::{
-    llm_usage_summary, migrate, open_connection, prune_operational_records, record_llm_invocation,
-    DbOpenOptions, LlmInvocationRecord, OPERATIONAL_RETENTION_DAYS,
+    append_coach_message, begin_coach_trace, complete_traced_coach, ensure_coach_thread, llm_usage_summary,
+    migrate, open_connection, prune_operational_records, record_llm_invocation,
+    AppendCoachMessageCommand, DbOpenOptions, EnsureCoachThreadCommand, LlmInvocationRecord,
+    OPERATIONAL_RETENTION_DAYS,
 };
 use rusqlite::Connection;
+use serde_json::json;
 use tempfile::tempdir;
 
 fn open_db() -> (tempfile::TempDir, Connection) {
@@ -27,6 +30,56 @@ fn record(id: &str, created_at: &str, usage_json: Option<&str>) -> LlmInvocation
     }
 }
 
+/// One coach row written through the real trace path: `begin_coach_trace` and
+/// `complete_traced_coach`, with the coach's own camelCase `TokenUsage`.
+fn write_coach_trace_row(conn: &Connection, created_at: &str) {
+    let thread = ensure_coach_thread(
+        conn,
+        &EnsureCoachThreadCommand {
+            thread_id: None,
+            attempt_id: None,
+            asset_id: None,
+            kind: "chat".into(),
+        },
+    )
+    .unwrap();
+    let user = append_coach_message(
+        conn,
+        &AppendCoachMessageCommand {
+            thread_id: thread.id.clone(),
+            role: "user".into(),
+            content: "why".into(),
+            structured_payload: None,
+            status: "completed".into(),
+        },
+    )
+    .unwrap();
+    let run = begin_coach_trace(
+        conn,
+        &thread.id,
+        &user.id,
+        &json!({"messages":[{"role":"user","content":"why"}]}),
+        "fake-provider",
+        "requested-model",
+        30_000,
+    )
+    .unwrap();
+    let response = json!({
+        "content": "{\"answer\":\"because\"}",
+        "model": "actual-model",
+        "latencyMs": 42,
+        "retryCount": 0,
+        "usage": {"inputTokens": 40, "outputTokens": 2, "cachedInputTokens": 20},
+        "providerRequestId": "request-42"
+    });
+    complete_traced_coach(conn, &run, &thread.id, "because", json!({}), &response).unwrap();
+    conn.execute(
+        "UPDATE llm_invocations SET created_at = ?1 WHERE run_id IS NOT NULL",
+        [created_at],
+    )
+    .unwrap();
+}
+
 #[test]
 fn ledger_rows_aggregate_usage_cache_hits_and_estimates() {
     let (_dir, conn) = open_db();
@@ -34,22 +87,16 @@ fn ledger_rows_aggregate_usage_cache_hits_and_estimates() {
     let old = "2025-01-01T00:00:00+00:00";
     let provider = r#"{"promptTokens":100,"completionTokens":10,"totalTokens":110,"cachedInputTokens":60,"reasoningTokens":4}"#;
     let estimated = r#"{"promptTokens":50,"completionTokens":5,"totalTokens":55,"estimated":true}"#;
-    // Coach trace rows keep the legacy snake_case TokenUsage keys.
-    let legacy_coach = r#"{"input_tokens":40,"output_tokens":2,"cached_input_tokens":20}"#;
     let ancient = r#"{"promptTokens":1000,"completionTokens":0,"totalTokens":1000,"cachedInputTokens":1000}"#;
-    for row in [
-        record("a", fresh, Some(provider)),
-        record("b", fresh, Some(estimated)),
-        record("c", fresh, Some(legacy_coach)),
-        record("d", fresh, None),
-        record("e", old, Some(ancient)),
-    ] {
-        record_llm_invocation(&conn, &row).unwrap();
-    }
+    record_llm_invocation(&conn, &record("a", fresh, Some(provider))).unwrap();
+    record_llm_invocation(&conn, &record("b", fresh, Some(estimated))).unwrap();
+    record_llm_invocation(&conn, &record("d", fresh, None)).unwrap();
+    record_llm_invocation(&conn, &record("e", old, Some(ancient))).unwrap();
+    write_coach_trace_row(&conn, fresh);
     let run_scoped: i64 = conn
         .query_row("SELECT COUNT(*) FROM llm_invocations WHERE run_id IS NOT NULL", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(run_scoped, 0, "gateway rows carry no run id");
+    assert_eq!(run_scoped, 1, "the coach row is the traced one");
 
     let all = llm_usage_summary(&conn, None).unwrap();
     assert_eq!(all.calls, 5);
@@ -71,6 +118,52 @@ fn ledger_rows_aggregate_usage_cache_hits_and_estimates() {
     let json = serde_json::to_value(&window).unwrap();
     assert_eq!(json["cacheHitRate"], serde_json::json!(80.0 / 140.0));
     assert_eq!(json["estimatedCalls"], serde_json::json!(1));
+}
+
+#[test]
+fn hostile_usage_values_are_skipped_or_clamped_and_never_fail_the_summary() {
+    let (_dir, conn) = open_db();
+    let at = "2026-10-01T00:00:00+00:00";
+    let rows = [
+        // A string count is not a count.
+        r#"{"promptTokens":"12","completionTokens":1}"#,
+        // A negative count contributes nothing.
+        r#"{"promptTokens":-5,"completionTokens":-1}"#,
+        // u64::MAX reads as an integer in SQLite and is clamped to the cap.
+        r#"{"promptTokens":18446744073709551615,"completionTokens":1}"#,
+        // i64::MAX is an integer and is clamped to the SQL cap.
+        r#"{"promptTokens":9223372036854775807,"completionTokens":9223372036854775807}"#,
+        // A non-boolean "estimated" is not an estimate.
+        r#"{"promptTokens":7,"estimated":"yes"}"#,
+    ];
+    for (index, usage) in rows.iter().enumerate() {
+        record_llm_invocation(&conn, &record(&format!("hostile-{index}"), at, Some(usage))).unwrap();
+    }
+    let summary = llm_usage_summary(&conn, None).unwrap();
+    // Exact: two capped prompts (4e15 each) and the small counts. The string
+    // and the negative contribute nothing.
+    let cap = 4_000_000_000_000_000u64;
+    assert_eq!(summary.calls, 5);
+    assert_eq!(summary.prompt_tokens, 2 * cap + 7);
+    assert_eq!(summary.completion_tokens, cap + 2);
+    assert_eq!(summary.estimated_calls, 0, "a string flag is not an estimate");
+}
+
+#[test]
+fn many_capped_rows_never_overflow_the_summary() {
+    let (_dir, conn) = open_db();
+    let at = "2026-10-01T00:00:00+00:00";
+    let usage = r#"{"promptTokens":9223372036854775807,"completionTokens":9223372036854775807}"#;
+    for index in 0..2_000 {
+        record_llm_invocation(&conn, &record(&format!("cap-{index}"), at, Some(usage))).unwrap();
+    }
+    // Each row is clamped to the cap, so the total (8e18) would overflow an i64
+    // SUM. The summary still answers: the sum is a float, so it is approximate
+    // past 2^53 tokens, which no real ledger reaches.
+    let summary = llm_usage_summary(&conn, None).expect("capped rows must not fail the summary");
+    assert_eq!(summary.calls, 2_000);
+    let cap = 4_000_000_000_000_000f64;
+    assert!((summary.prompt_tokens as f64 - cap * 2_000.0).abs() / (cap * 2_000.0) < 1e-9);
 }
 
 #[test]
