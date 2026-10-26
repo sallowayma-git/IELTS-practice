@@ -81,8 +81,9 @@ pub struct AgentModelRequest {
     pub tools: Vec<AgentToolDefinition>,
     pub temperature: f32,
     pub max_tokens: u32,
-    /// Provider prompt-cache routing key (see `prompt_cache_key`). Absent when
-    /// the run's system prompt is not a stable prefix.
+    /// Provider prompt-cache routing key (see `prompt_cache_key`): the run kind
+    /// plus a digest of the run's system prompt, set on every round. The gateway
+    /// forwards it only where the endpoint documents a routing field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_key: Option<String>,
 }

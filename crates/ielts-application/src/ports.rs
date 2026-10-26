@@ -35,9 +35,9 @@ pub struct CompletionRequest {
     /// Provider-side output ceiling. Required: every completion declares its
     /// own ceiling, so no call site can ship an unbounded request by omission.
     pub max_tokens: u32,
-    /// Stable routing key for provider-side prompt caching (one per coach
-    /// thread). The gateway sends it only to providers that document a routing
-    /// parameter for it; everywhere else it is ignored.
+    /// Stable routing key for provider-side prompt caching, set by the caller
+    /// (see `prompt_cache_key`). The gateway sends it only to endpoints that
+    /// document a routing parameter for it; everywhere else it is ignored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_key: Option<String>,
 }
@@ -91,40 +91,68 @@ pub struct ModelError {
     /// `length` / `max_tokens`). The reply is cut off, so a JSON caller cannot
     /// use it; the gateway never retries it with a larger ceiling.
     pub truncated: bool,
-    /// True when the gateway refused to send the request because the prompt
-    /// (plus the output room it needs) does not fit the model's context window.
-    /// Refused before any HTTP call, so it is never retryable.
+    /// True when the prompt does not fit the model's context window: refused by
+    /// the gateway before any HTTP call, or rejected by the provider with a
+    /// context-length 400. Never retryable.
     pub context_exceeded: bool,
+    /// HTTP status of a provider error response, when there was one.
+    pub status: Option<u16>,
+    /// Coarse failure class for the usage ledger (`http_4xx`, `http_5xx`,
+    /// `timeout`, `transport`, `stream_error`, `invalid_response`, `truncated`,
+    /// `context_exceeded`, `provider_error`). Never carries provider text.
+    pub class: &'static str,
 }
 
 impl ModelError {
     pub fn new(message: impl Into<String>, retryable: bool) -> Self {
+        Self::classed(message, retryable, "provider_error")
+    }
+
+    /// A failure with a ledger class and no HTTP status.
+    pub fn classed(message: impl Into<String>, retryable: bool, class: &'static str) -> Self {
         Self {
             message: message.into(),
             retryable,
             truncated: false,
             context_exceeded: false,
+            status: None,
+            class,
         }
+    }
+
+    /// A non-success HTTP status from the provider.
+    pub fn http_status(message: impl Into<String>, retryable: bool, status: u16) -> Self {
+        let class = if status >= 500 { "http_5xx" } else { "http_4xx" };
+        Self { status: Some(status), ..Self::classed(message, retryable, class) }
     }
 
     /// The typed error for a reply cut off at its output ceiling.
     pub fn output_truncated() -> Self {
         Self {
-            message: "model output truncated at max_tokens".into(),
-            retryable: false,
             truncated: true,
-            context_exceeded: false,
+            ..Self::classed("model output truncated at max_tokens", false, "truncated")
         }
     }
 
     /// The typed refusal for a prompt that cannot fit the context window.
-    /// `total_tokens` is the estimated input plus the requested output ceiling.
-    pub fn prompt_exceeds_context(total_tokens: u32, window: u32) -> Self {
+    /// `input_tokens` is the estimated input alone.
+    pub fn prompt_exceeds_context(input_tokens: u32, window: u32) -> Self {
         Self {
-            message: format!("prompt exceeds model context: ~{total_tokens} tokens of {window}"),
-            retryable: false,
-            truncated: false,
             context_exceeded: true,
+            ..Self::classed(
+                format!("prompt exceeds model context: ~{input_tokens} tokens of {window}"),
+                false,
+                "context_exceeded",
+            )
+        }
+    }
+
+    /// A provider's own context-length rejection (HTTP 400 with its message).
+    pub fn provider_context_exceeded(message: impl Into<String>, status: u16) -> Self {
+        Self {
+            context_exceeded: true,
+            status: Some(status),
+            ..Self::classed(message, false, "context_exceeded")
         }
     }
 }

@@ -2,85 +2,105 @@
 //! gateway checks before any HTTP call.
 //!
 //! The window table is advisory knowledge about public model cards, not a
-//! provider query. Where the published figure varies by release or was not
-//! checked, the smaller value is used and the row is marked `UNSURE`. A wrong
-//! small value refuses a prompt the provider would have accepted; a wrong
-//! large value lets an oversized prompt through to fail at the provider. The
-//! first is the safer error, so the table leans small.
+//! provider query. Each row says whether its figure is confident. Only a
+//! confident row can refuse a request or clamp its output ceiling. A
+//! non-confident row, and any unmatched id, is advisory: the request is sent
+//! unchanged and an oversized estimate only produces a warning. A table that
+//! is wrong must never block or shorten a request that works today.
 use ielts_application::{AgentMessage, AgentToolDefinition, ChatMessage, ModelError};
 use ielts_domain::estimate_tokens;
-
-/// Smallest output room worth sending. Below this the request is refused
-/// instead of clamped to a ceiling too small to hold an answer.
-pub(crate) const MIN_CLAMPED_OUTPUT: u32 = 256;
 
 /// Framing cost per message (role and separators). Small on purpose: the
 /// estimator is a chars/4 approximation and already covers the text itself.
 const PER_MESSAGE_OVERHEAD: u32 = 4;
 
 /// Used for model ids the table does not recognise. Smaller than most current
-/// models on purpose, so an unknown model is never over-trusted.
+/// models on purpose, so an unknown model is never over-trusted. Advisory only.
 const DEFAULT_WINDOW: u32 = 32_768;
 const DEFAULT_MAX_OUTPUT: u32 = 4_096;
 
-/// `(name pattern, context window, max output)`, in tokens.
-///
+/// One table row: a name pattern and its published figures, in tokens.
+#[derive(Debug, Clone, Copy)]
+struct Rule {
+    pattern: &'static str,
+    window: u32,
+    max_output: u32,
+    /// False when the figure varies by release, tier or was not checked. Such a
+    /// row never refuses or clamps; it only warns.
+    confident: bool,
+}
+
+const fn sure(pattern: &'static str, window: u32, max_output: u32) -> Rule {
+    Rule { pattern, window, max_output, confident: true }
+}
+
+const fn unsure(pattern: &'static str, window: u32, max_output: u32) -> Rule {
+    Rule { pattern, window, max_output, confident: false }
+}
+
 /// Matching is on the model name after `model_name` (last `/` segment, no
 /// `:variant` suffix, lowercase). A pattern matches the whole name or a prefix
 /// that ends at a non-alphanumeric boundary, so `o1` matches `o1-mini` but not
 /// `o1x`. The longest matching pattern wins, so specific rows sit under broad
 /// fallbacks such as `qwen` or `gemini`.
-const WINDOW_RULES: &[(&str, u32, u32)] = &[
-    // OpenAI. gpt-4o and gpt-4o-mini: 128k context, 16,384 output. High confidence.
-    ("gpt-4o", 128_000, 16_384),
-    // gpt-4.1 family: 1,047,576 context, rounded down; 32,768 output. Medium-high.
-    ("gpt-4.1", 1_000_000, 32_768),
+const WINDOW_RULES: &[Rule] = &[
+    // OpenAI. gpt-4o and gpt-4o-mini: 128k context, 16,384 output.
+    sure("gpt-4o", 128_000, 16_384),
+    // chatgpt-4o-latest tracks the gpt-4o chat model: 128k context.
+    sure("chatgpt-4o", 128_000, 16_384),
+    // gpt-4-turbo: 128k context, 4,096 output.
+    sure("gpt-4-turbo", 128_000, 4_096),
+    // gpt-4.1 family: 1,047,576 context, rounded down; 32,768 output.
+    sure("gpt-4.1", 1_000_000, 32_768),
     // gpt-5: published 400k total, of which 272k is input. The input figure is
     // used as the whole window. UNSURE, verify against the current model card.
-    ("gpt-5", 272_000, 128_000),
+    unsure("gpt-5", 272_000, 128_000),
     // o1 is 200k, but o1-mini and o1-preview are 128k. UNSURE: the smaller
     // figure is used for the family, so o1 full is under-claimed.
-    ("o1", 128_000, 32_768),
-    // o3 and o4 (including o3-mini, o4-mini): 200k context, 100k output. High.
-    ("o3", 200_000, 100_000),
-    ("o4", 200_000, 100_000),
+    unsure("o1", 128_000, 32_768),
+    // o3 and o4 (including o3-mini, o4-mini): 200k context, 100k output.
+    sure("o3", 200_000, 100_000),
+    sure("o4", 200_000, 100_000),
     // DeepSeek. The API documents 128k context. chat: 8k output here (default
-    // 4k). reasoner: up to 64k output, reasoning included. Medium.
-    ("deepseek-chat", 128_000, 8_192),
-    ("deepseek-reasoner", 128_000, 65_536),
+    // 4k). reasoner: up to 64k output, reasoning included.
+    sure("deepseek-chat", 128_000, 8_192),
+    sure("deepseek-reasoner", 128_000, 65_536),
     // Other DeepSeek ids (v3 and similar): the smaller historical window. UNSURE.
-    ("deepseek", 64_000, 8_192),
+    unsure("deepseek", 64_000, 8_192),
     // Qwen. Windows differ by release and by DashScope tier. UNSURE throughout.
-    ("qwen-max", 32_768, 8_192),
-    ("qwen-plus", 131_072, 8_192),
-    ("qwen-turbo", 131_072, 8_192),
-    // Qwen3 is 32k native (131k with YaRN extension). Native figure used. UNSURE.
-    ("qwen3", 32_768, 8_192),
-    ("qwen", 32_768, 8_192),
-    // Moonshot / Kimi. The moonshot-v1 sizes are in their names. Kimi K2 is 128k
-    // (some later variants 256k). UNSURE for the generic Moonshot fallback.
-    ("moonshot-v1-8k", 8_192, 4_096),
-    ("moonshot-v1-32k", 32_768, 4_096),
-    ("moonshot-v1-128k", 131_072, 4_096),
-    ("moonshot", 8_192, 4_096),
-    ("kimi-k2", 131_072, 8_192),
-    ("kimi", 131_072, 8_192),
+    unsure("qwen-max", 32_768, 8_192),
+    unsure("qwen-plus", 131_072, 8_192),
+    unsure("qwen-turbo", 131_072, 8_192),
+    // Qwen3 is 32k native (131k with YaRN extension). Native figure used.
+    unsure("qwen3", 32_768, 8_192),
+    unsure("qwen", 32_768, 8_192),
+    // Moonshot / Kimi. The moonshot-v1 sizes are in their names; the 8k id is
+    // the one true 8k model. moonshot-v1-auto routes up to 128k, so it takes
+    // the 128k figure. The generic fallback takes the same figure. UNSURE.
+    sure("moonshot-v1-8k", 8_192, 4_096),
+    sure("moonshot-v1-32k", 32_768, 4_096),
+    sure("moonshot-v1-128k", 131_072, 4_096),
+    unsure("moonshot-v1-auto", 131_072, 4_096),
+    unsure("moonshot", 131_072, 4_096),
+    // Kimi K2 is 128k (some later variants 256k). UNSURE.
+    unsure("kimi-k2", 131_072, 8_192),
+    unsure("kimi", 131_072, 8_192),
     // GLM (Zhipu). The GLM-4 line is 128k. Later GLM-4.6 is larger, so 128k is
     // the conservative figure. UNSURE.
-    ("glm", 128_000, 8_192),
+    unsure("glm", 128_000, 8_192),
     // Claude through OpenRouter. Claude 2 and Instant are 100k. Claude 3 and 4
     // are 200k; the 1M beta is not assumed. Output 8k is the conservative
-    // ceiling for the family. Medium.
-    ("claude-2", 100_000, 4_096),
-    ("claude-instant", 100_000, 4_096),
-    ("claude", 200_000, 8_192),
+    // ceiling for the family.
+    sure("claude-2", 100_000, 4_096),
+    sure("claude-instant", 100_000, 4_096),
+    sure("claude", 200_000, 8_192),
     // Gemini through OpenRouter. Gemini 1.0 Pro is 32k. Gemini 1.5 Pro is 2M,
     // so the 1.5-named Pro id gets the smaller 1M figure. Gemini 2.x is about
     // 1,048,576, so 1M is used for the family. UNSURE on the exact numbers.
-    ("gemini-1.0", 32_768, 8_192),
-    ("gemini-pro-1.5", 1_000_000, 8_192),
-    ("gemini-pro", 32_768, 8_192),
-    ("gemini", 1_000_000, 8_192),
+    unsure("gemini-1.0", 32_768, 8_192),
+    unsure("gemini-pro-1.5", 1_000_000, 8_192),
+    unsure("gemini-pro", 32_768, 8_192),
+    unsure("gemini", 1_000_000, 8_192),
 ];
 
 /// What the table knows about one model id.
@@ -90,6 +110,8 @@ pub(crate) struct ModelWindow {
     pub max_output: u32,
     /// False when the id matched no row and the default was used.
     pub matched: bool,
+    /// True only for a matched row marked confident.
+    pub confident: bool,
 }
 
 /// Lowercased model name with routing prefixes and `:variant` suffixes removed:
@@ -112,18 +134,39 @@ fn rule_matches(name: &str, pattern: &str) -> bool {
     rest.is_empty() || !ends_on_word || !rest.starts_with(|c: char| c.is_ascii_alphanumeric())
 }
 
-/// Window and output ceiling for a model id. Unknown ids get the conservative
+/// Window and output ceiling for a model id. Unknown ids get the advisory
 /// default with `matched: false`.
 pub(crate) fn model_window(model_id: &str) -> ModelWindow {
     let name = model_name(model_id);
     WINDOW_RULES
         .iter()
-        .filter(|(pattern, _, _)| rule_matches(&name, pattern))
-        .max_by_key(|(pattern, _, _)| pattern.len())
+        .filter(|rule| rule_matches(&name, rule.pattern))
+        .max_by_key(|rule| rule.pattern.len())
         .map_or(
-            ModelWindow { window: DEFAULT_WINDOW, max_output: DEFAULT_MAX_OUTPUT, matched: false },
-            |&(_, window, max_output)| ModelWindow { window, max_output, matched: true },
+            ModelWindow {
+                window: DEFAULT_WINDOW,
+                max_output: DEFAULT_MAX_OUTPUT,
+                matched: false,
+                confident: false,
+            },
+            |rule| ModelWindow {
+                window: rule.window,
+                max_output: rule.max_output,
+                matched: true,
+                confident: rule.confident,
+            },
         )
+}
+
+/// What the pre-send guard decided for one call.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Admission {
+    /// The output ceiling the guard lowered the request to, if it did. Only a
+    /// confident row ever clamps.
+    pub clamped: Option<u32>,
+    /// The estimate says the request may not fit. Advisory: the request was
+    /// still sent unchanged or clamped as above. Recorded in the ledger.
+    pub context_warning: bool,
 }
 
 /// The pre-send budget for one call: what the input is estimated to take and
@@ -131,32 +174,41 @@ pub(crate) fn model_window(model_id: &str) -> ModelWindow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Budget {
     pub window: u32,
-    /// The table's published output ceiling. Advisory only: the gateway does not
-    /// clamp to it, so a wrong table row cannot cut a working answer short.
+    /// The table's published output ceiling. Advisory only.
     pub max_output: u32,
     pub estimated_input: u32,
     /// `window - estimated_input`, floored at zero.
     pub output_room: u32,
     /// The output ceiling the caller asked for.
     pub requested: u32,
+    /// Whether the window came from a confident row. Only then may the guard
+    /// refuse or clamp.
+    pub confident: bool,
 }
 
 impl Budget {
-    /// The decision for the request. `Ok(None)` sends the requested ceiling as
-    /// it is. `Ok(Some(room))` clamps the ceiling to the room left after the
-    /// input. `Err` is the typed, non-retryable refusal: the input does not
-    /// leave the floor of output room, so nothing is sent.
-    pub(crate) fn admit(&self) -> Result<Option<u32>, ModelError> {
-        if self.requested <= self.output_room {
-            return Ok(None);
+    /// The decision for the request. Refuses (typed, non-retryable, nothing
+    /// sent) only when a confident row's window is already full of input. A
+    /// confident row clamps the ceiling to the room left. Any other case is
+    /// sent as asked, with a warning when the estimate says it may overflow.
+    pub(crate) fn admit(&self) -> Result<Admission, ModelError> {
+        if !self.confident {
+            let may_overflow = self.estimated_input.saturating_add(self.requested) > self.window;
+            if may_overflow {
+                tracing::warn!(
+                    window = self.window,
+                    estimated_input = self.estimated_input,
+                    requested = self.requested,
+                    "estimated prompt may exceed the model context window (advisory, sent unchanged)"
+                );
+            }
+            return Ok(Admission { clamped: None, context_warning: may_overflow });
         }
-        if self.output_room >= MIN_CLAMPED_OUTPUT {
-            return Ok(Some(self.output_room));
+        if self.estimated_input >= self.window {
+            return Err(ModelError::prompt_exceeds_context(self.estimated_input, self.window));
         }
-        Err(ModelError::prompt_exceeds_context(
-            self.estimated_input.saturating_add(self.requested),
-            self.window,
-        ))
+        let clamped = (self.requested > self.output_room).then_some(self.output_room);
+        Ok(Admission { clamped, context_warning: false })
     }
 }
 
@@ -169,6 +221,7 @@ pub(crate) fn budget_for(model: &str, estimated_input: u32, max_tokens: u32) -> 
         estimated_input,
         output_room: known.window.saturating_sub(estimated_input),
         requested: max_tokens,
+        confident: known.confident,
     }
 }
 
@@ -233,11 +286,16 @@ mod tests {
         model_window(model).window
     }
 
+    fn admit(model: &str, input: u32, requested: u32) -> Result<Admission, ModelError> {
+        budget_for(model, input, requested).admit()
+    }
+
     #[test]
     fn exact_model_ids_match_their_row() {
         assert_eq!(window_of("gpt-4o"), 128_000);
         assert_eq!(model_window("gpt-4o").max_output, 16_384);
         assert!(model_window("gpt-4o").matched);
+        assert!(model_window("gpt-4o").confident);
         assert_eq!(window_of("deepseek-reasoner"), 128_000);
         assert_eq!(model_window("deepseek-reasoner").max_output, 65_536);
     }
@@ -267,6 +325,15 @@ mod tests {
     }
 
     #[test]
+    fn newly_added_rows_have_their_published_windows() {
+        assert_eq!(window_of("chatgpt-4o-latest"), 128_000);
+        assert_eq!(window_of("gpt-4-turbo-2024-04-09"), 128_000);
+        assert_eq!(model_window("gpt-4-turbo").max_output, 4_096);
+        assert_eq!(window_of("moonshot-v1-auto"), 131_072);
+        assert!(!model_window("moonshot-v1-auto").confident);
+    }
+
+    #[test]
     fn provider_prefixed_ids_reduce_to_the_bare_model_name() {
         assert_eq!(window_of("openrouter/anthropic/claude-sonnet-4.5"), 200_000);
         assert_eq!(window_of("anthropic/claude-3.5-haiku"), 200_000);
@@ -279,13 +346,24 @@ mod tests {
     }
 
     #[test]
-    fn unknown_models_get_the_conservative_default() {
+    fn unknown_models_get_the_advisory_default() {
         let unknown = model_window("some-local-model:7b");
         assert_eq!(unknown.window, DEFAULT_WINDOW);
         assert_eq!(unknown.window, 32_768);
         assert_eq!(unknown.max_output, DEFAULT_MAX_OUTPUT);
         assert!(!unknown.matched);
+        assert!(!unknown.confident);
         assert_eq!(model_window("").window, DEFAULT_WINDOW);
+    }
+
+    #[test]
+    fn uncertain_rows_are_marked_and_confident_rows_are_not() {
+        for model in ["qwen3-235b", "moonshot", "kimi-k2", "glm-4.6", "o1", "gpt-5", "deepseek-v3"] {
+            assert!(!model_window(model).confident, "{model} must be advisory");
+        }
+        for model in ["gpt-4o", "o3-mini", "deepseek-chat", "claude-3-5-sonnet", "moonshot-v1-8k"] {
+            assert!(model_window(model).confident, "{model} must be confident");
+        }
     }
 
     #[test]
@@ -300,13 +378,11 @@ mod tests {
 
     #[test]
     fn cjk_prompt_is_budgeted_at_its_real_size_not_at_chars_over_four() {
-        // 30k CJK characters would be 7.5k tokens under chars/4 and nearly fill a
-        // 32k window at one token per character, so the output room is small.
         let cjk = "中".repeat(30_000);
         let budget = context_budget("unknown-model", &[ChatMessage::new("user", cjk)], 2_000);
         assert_eq!(budget.estimated_input, 30_004);
         assert_eq!(budget.output_room, 2_764);
-        assert_eq!(budget.admit(), Ok(None));
+        assert_eq!(budget.admit(), Ok(Admission::default()));
 
         let ascii = "a".repeat(120_000);
         let budget = context_budget("unknown-model", &[ChatMessage::new("user", ascii)], 2_000);
@@ -314,47 +390,66 @@ mod tests {
     }
 
     #[test]
-    fn budget_passes_a_request_that_fits_unchanged() {
-        let budget = budget_for("gpt-4o", 1_000, 2_000);
-        assert_eq!(budget.output_room, 127_000);
-        assert_eq!(budget.admit(), Ok(None));
+    fn a_request_that_fits_is_sent_unchanged() {
+        assert_eq!(admit("gpt-4o", 1_000, 2_000), Ok(Admission::default()));
     }
 
     #[test]
-    fn budget_clamps_output_to_the_room_when_the_input_fits() {
-        // Room 1,764 against a 2,000 request, above the 256 floor.
-        let budget = budget_for("unknown-model", 31_004, 2_000);
-        assert_eq!(budget.output_room, 1_764);
-        assert_eq!(budget.admit(), Ok(Some(1_764)));
+    fn a_confident_row_clamps_output_to_the_room_left_after_the_input() {
+        // gpt-4o: 128,000 window, 127,000 input, 2,000 requested: room 1,000.
+        assert_eq!(
+            admit("gpt-4o", 127_000, 2_000),
+            Ok(Admission { clamped: Some(1_000), context_warning: false })
+        );
     }
 
     #[test]
-    fn budget_refuses_when_the_room_is_below_the_floor() {
-        let budget = budget_for("unknown-model", 32_600, 2_000);
-        assert_eq!(budget.output_room, 168);
-        let error = budget.admit().unwrap_err();
+    fn a_confident_row_refuses_only_when_the_input_alone_fills_the_window() {
+        let error = admit("gpt-4o", 128_000, 2_000).unwrap_err();
         assert!(error.context_exceeded);
         assert!(!error.retryable);
         assert!(!error.truncated);
-        assert_eq!(error.message, "prompt exceeds model context: ~34600 tokens of 32768");
+        assert_eq!(error.class, "context_exceeded");
+        assert_eq!(error.message, "prompt exceeds model context: ~128000 tokens of 128000");
+        // One token of room is still a send, clamped to that one token.
+        assert_eq!(admit("gpt-4o", 127_999, 2_000), Ok(Admission { clamped: Some(1), context_warning: false }));
     }
 
     #[test]
-    fn budget_refuses_an_input_that_is_itself_larger_than_the_window() {
-        let budget = budget_for("unknown-model", 40_000, 2_000);
-        assert_eq!(budget.output_room, 0);
-        let error = budget.admit().unwrap_err();
-        assert!(error.context_exceeded);
-        assert_eq!(error.message, "prompt exceeds model context: ~42000 tokens of 32768");
+    fn an_unknown_model_with_a_60k_prompt_is_admitted_with_a_warning_only() {
+        let admitted = admit("some-unknown-model", 60_000, 2_000).unwrap();
+        assert_eq!(admitted, Admission { clamped: None, context_warning: true });
     }
 
     #[test]
-    fn exactly_the_floor_of_room_is_still_clamped_not_refused() {
-        let budget = budget_for("unknown-model", 32_768 - 256 - 1_000, 2_000);
-        assert_eq!(budget.output_room, 1_256);
-        assert_eq!(budget.admit(), Ok(Some(1_256)));
-        let budget = budget_for("unknown-model", 32_768 - 255, 2_000);
-        assert!(budget.admit().is_err());
+    fn an_uncertain_row_is_never_refused_or_clamped() {
+        // qwen3-235b: 32,768 advisory window, 40k input.
+        let admitted = admit("qwen3-235b", 40_000, 2_000).unwrap();
+        assert_eq!(admitted, Admission { clamped: None, context_warning: true });
+        // Input above the window still goes out, unchanged.
+        assert!(admit("kimi-k2", 200_000, 8_000).is_ok());
+    }
+
+    #[test]
+    fn a_worst_case_weekly_dream_request_is_admitted_for_every_row_but_true_8k_models() {
+        // About 10k input (with the repair list) and the 2,500-token weekly output.
+        for rule in WINDOW_RULES {
+            let result = admit(rule.pattern, 10_000, 2_500);
+            if rule.window == 8_192 && rule.confident {
+                assert!(result.is_err(), "{} is a true 8k model and must refuse", rule.pattern);
+            } else {
+                assert!(result.is_ok(), "{} must admit a weekly dream request", rule.pattern);
+            }
+        }
+    }
+
+    #[test]
+    fn moonshot_auto_kimi_glm_and_qwen_cases_never_refuse_a_working_prompt() {
+        assert_eq!(window_of("moonshot-v1-auto"), 131_072);
+        assert!(admit("moonshot-v1-auto", 60_000, 4_000).is_ok());
+        assert!(admit("kimi-k2", 60_000, 8_000).is_ok());
+        assert!(admit("glm-4.6", 60_000, 8_000).is_ok());
+        assert!(admit("qwen3-235b", 60_000, 8_000).is_ok());
     }
 
     #[test]
