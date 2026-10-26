@@ -25,10 +25,6 @@
   color-scheme: light;
 }
 html, body { background: var(--page); color: var(--ink); }
-/* Dark mode only re-tints the page around the film; the film and the cards stay on paper. */
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #171512; } :root:not([data-theme="light"]) body { color: #F4EEE3; } :root:not([data-theme="light"]) .masthead p, :root:not([data-theme="light"]) .time { color: #A69F93; } }
-:root[data-theme="dark"] { --page: #171512; }
-:root[data-theme="dark"] body { color: #F4EEE3; }
 body {
   margin: 0;
   font-family: var(--f-sans);
@@ -202,8 +198,6 @@ code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-si
 .wk .num { font: 700 64px/1 var(--f-serif); position: absolute; right: 22px; top: 16px; }
 
 /* S10 montage */
-#mont .doodle { left: 690px; top: 120px; width: 540px; height: 540px; }
-#mont-word { left: 0; right: 0; top: 690px; text-align: center; font-size: 230px; }
 
 /* S11 local */
 #lap { left: 650px; top: 40px; width: 620px; height: 620px; }
@@ -238,6 +232,25 @@ code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-si
 #end-m { left: 1452px; top: 250px; width: 120px; height: 120px; }
 #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 60; }
 
+/* App windows: real screens (film-ui/, captured from the dev app at 2x) framed like a notebook card. */
+.win { position: absolute; left: 0; top: 0; border: 4px solid var(--ink); border-radius: 22px; background: #EEEAE1; box-shadow: 16px 16px 0 var(--ink); overflow: hidden; transform-origin: 50% 50%; will-change: transform; }
+.win-bar { display: flex; align-items: center; background: #FFFDF8; border-bottom: 3px solid var(--ink); font-family: var(--f-ui); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+.win-bar .lt { flex: none; overflow: visible; }
+.win-view { position: relative; overflow: hidden; }
+.win-view img { position: absolute; left: 0; top: 0; width: 1440px; max-width: none; transform-origin: 0 0; will-change: transform; }
+.ov { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.ov svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.cursor { position: absolute; left: 0; top: 0; width: 46px; height: 46px; display: none; z-index: 6; transform-origin: 4px 3px; }
+.cursor svg { width: 46px; height: 46px; overflow: visible; filter: drop-shadow(3px 3px 0 rgba(30, 26, 22, 0.3)); }
+.cursor::before { content: ""; position: absolute; left: -26px; top: -26px; width: 60px; height: 60px; border-radius: 50%; border: 5px solid var(--tomato); transform: scale(var(--ring, 0)); opacity: var(--ra, 0); }
+.tag { position: absolute; left: 0; top: 0; z-index: 20; display: inline-flex; align-items: baseline; gap: 14px; padding: 12px 28px; border: 4px solid var(--ink); border-radius: 999px; background: var(--cream); box-shadow: 6px 6px 0 var(--ink); font: 900 44px var(--f-sans); white-space: nowrap; transform-origin: 20% 50%; }
+.tag small { font: 800 18px var(--f-ui); letter-spacing: 0.18em; color: var(--mute); }
+.cam { position: absolute; inset: 0; transform-origin: 0 0; }
+.cap-big { position: absolute; left: 0; right: 0; text-align: center; font-size: 112px; z-index: 30; }
+.chip-fly { white-space: nowrap; padding: 6px 12px; border: 1.5px solid #CFC8BA; border-radius: 6px; background: #FFFDF8; font: 500 13px/1.45 Inter, sans-serif; color: #22201C; box-shadow: 0 8px 22px rgba(30, 26, 22, 0.22); }
+#mont .doodle { left: 200px; top: 120px; width: 440px; height: 440px; }
+#mont-word { left: 0; width: 840px; right: auto; top: 640px; text-align: center; font-size: 200px; }
+
 /* Export: the stage alone, unscaled, for frame capture. */
 body.export { padding: 0; overflow: hidden; }
 body.export .page > :not(.viewport) { display: none; }
@@ -249,7 +262,7 @@ body.export .gate { display: none; }
 <div class="page">
   <div class="masthead">
     <h1>IELTS Atlas <span>·</span> 越练，越懂你。</h1>
-    <p>88 秒配乐短片 · 配乐 ODESZA《A Moment Apart》· 1920×1080</p>
+    <p>88 秒配乐短片 · 配乐 ODESZA《A Moment Apart》· 真实界面截图 · 1920×1080</p>
   </div>
 
   <div class="viewport" id="viewport" role="img" aria-label="IELTS Atlas 配乐介绍短片：情绪小怪兽、阅读 Coach、写作评分、自进化记忆、技能画像、札记与本地优先存储">
@@ -270,16 +283,15 @@ body.export .gate { display: none; }
       </svg>
       <div id="cam">
 
-      <!-- S0 · 三颗蜡笔点 -->
-      <div class="layer paper grain" id="s0"><div id="dots"></div></div>
-
-      <!-- S1 / S2 · 你在练习，它在学习 -->
-      <div class="layer paper grain" id="s1">
-        <div class="abs intro-line"><div class="doodle-slot" id="s1-d"></div><div class="intro-word"><h2 class="h" id="s1-h">你在练习，</h2></div></div>
-      </div>
-      <div class="layer paper grain" id="s2">
-        <div class="abs intro-line"><div class="intro-word"><h2 class="h" id="s2-h">它在学习。</h2></div><div class="doodle-slot" id="s2-d"></div></div>
-      </div>
+      <!-- I0–I7 · 开场：真实界面 + 运镜，每 0.5–1 秒一个动作 -->
+      <div class="layer paper grain" id="i0"><div class="cam" id="i0-cam"></div></div>
+      <div class="layer grain" id="i1" style="background:var(--sky)"><div class="cam" id="i1-cam"></div><div class="tag" id="i1-tag">题库<small>LIBRARY</small></div></div>
+      <div class="layer paper grain" id="i2"><div class="cam" id="i2-cam"></div><div class="tag" id="i2-tag">阅读<small>READING</small></div></div>
+      <div class="layer grain" id="i3" style="background:var(--mustard)"><div class="cam" id="i3-cam"></div><div class="tag" id="i3-tag">写作<small>WRITING</small></div></div>
+      <div class="layer grain" id="i4" style="background:var(--tomato)"><div class="cam" id="i4-cam"></div><div class="tag" id="i4-tag">评分<small>SCORE</small></div></div>
+      <div class="layer grain" id="i5" style="background:var(--mint)"><div class="cam" id="i5-cam"></div><div class="tag" id="i5-tag">札记<small>NOTEBOOK</small></div></div>
+      <div class="layer grain" id="i6" style="background:var(--pink)"><div class="cam" id="i6-cam"></div><div class="tag" id="i6-tag">技能<small>SKILLS</small></div></div>
+      <div class="layer paper grain" id="i7"><div class="cam" id="i7-cam"></div><h2 class="h cap-big" id="i7-h" style="top:64px">你在练习，它在学习。</h2></div>
 
       <!-- S3 · 认识一下 -->
       <div class="layer paper grain" id="s3">
@@ -322,6 +334,7 @@ body.export .gate { display: none; }
         <div class="abs" id="moon"></div>
         <div class="abs" id="night-cap"><h2 class="h" id="nc-h">夜里，它把今天<br>整理成记忆。</h2></div>
         <div class="abs" id="night-head"><div class="kicker" style="color:var(--mustard)">Self-evolving Agent</div><h2 class="h" id="nh-h">它会自己进化。</h2></div>
+        <div id="s6-win"></div>
         <div class="abs mascot" id="sleepy"></div>
         <div id="zz"></div>
         <div id="mems"></div>
@@ -334,11 +347,17 @@ body.export .gate { display: none; }
         <h2 class="abs h" id="drop-h">越练，越懂你。</h2>
       </div>
 
+      <!-- D1 · 高潮里的界面快切 -->
+      <div class="layer grain" id="d1"><div class="cam" id="d1-cam"></div></div>
+
       <!-- S8 · 技能画像 -->
       <div class="layer paper grain" id="s8">
         <svg id="radar" class="abs" viewBox="0 0 1920 1080"></svg>
         <div class="abs" id="rad-text"><div class="kicker" style="color:var(--tomato)">Learner Model</div><h2 class="h" id="rad-h">六项技能，<br>每周看得见。</h2><div id="week"><span class="pill" id="week-n">第 1 周</span><span class="note" id="week-note">起点</span></div></div>
       </div>
+
+      <!-- LW · 技能复习地图 -->
+      <div class="layer paper grain" id="lw"><div class="cam" id="lw-cam"></div><div class="tag" id="lw-tag">技能复习地图<small>LEARNER MODEL</small></div></div>
 
       <!-- S9 · 札记 -->
       <div class="layer grain" id="s9" style="background:var(--mint)">
@@ -346,8 +365,11 @@ body.export .gate { display: none; }
         <div id="shelf"></div>
       </div>
 
+      <!-- NW · 每日札记 -->
+      <div class="layer grain" id="nw" style="background:var(--mint)"><div class="cam" id="nw-cam"></div><div class="tag" id="nw-tag">每日札记<small>DAILY</small></div></div>
+
       <!-- S10 · 快切 -->
-      <div class="layer grain" id="s10"><div id="mont"></div><h2 class="abs h" id="mont-word"></h2></div>
+      <div class="layer grain" id="s10"><div id="mont"></div><h2 class="abs h" id="mont-word"></h2><div id="mont-win"></div></div>
 
       <!-- S11 · 本地优先 -->
       <div class="layer paper grain" id="s11">
@@ -448,10 +470,10 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   // Section hits, all on the grid.
   const T = {
     d1: 0.565, d2: 1.065, d3: 1.565,
-    i1: 4.565, i2: 8.565, meet: 12.565,
+    i1: 4.565, i2: 5.565, i3: 7.565, i4: 8.565, i5: 10.565, i6: 11.565, i7: 12.565, meet: 14.565,
     read: 17.565, readQ: 21.565, write: 25.565, stamp: 29.565,
-    night: 33.565, mem1: 37.565, mem2: 41.565, mem3: 45.565, flash: 47.565,
-    drop: 49.565, radar: 53.065, shelf: 57.065, mont: 61.065, local: 65.565,
+    night: 33.565, mem1: 37.565, mem2: 39.565, mem3: 41.565, nwin: 43.565, flash: 47.565,
+    drop: 49.565, dui: 51.565, radar: 53.065, lw: 55.065, shelf: 57.065, nw: 59.065, mont: 61.065, local: 65.565,
     parade: 69.065, stats: 73.065, logo: 77.065, end: 81.85,
   };
 
@@ -465,6 +487,8 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
     inOutCubic: (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2),
     outExpo: (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p)),
     inExpo: (p) => (p <= 0 ? 0 : Math.pow(2, 10 * p - 10)),
+    inOutQuint: (p) => (p < 0.5 ? 16 * p ** 5 : 1 - Math.pow(-2 * p + 2, 5) / 2),
+    outQuint: (p) => 1 - Math.pow(1 - p, 5),
     outBack: (p) => { const c = 1.9; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); },
   };
   // Analytic damped spring, x seconds after release.
@@ -681,22 +705,91 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   const place = (el, x, y, s = 1, r = 0) => { el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) rotate(${r.toFixed(2)}deg) scale(${s.toFixed(4)})`; };
   const show = (el, on) => { el.style.display = on ? 'block' : 'none'; };
 
+  /* ── app windows ── */
+  const UI_H = { home: 1402, browse: 1500, reading: 900, writing: 900, result: 2076, notebook: 1824, learner: 1929, topics: 1500, history: 900 };
+  const CURSOR = '<svg viewBox="0 0 24 24"><path d="M3 2 L3 19 L7.5 14.8 L10.6 21.4 L13.6 20 L10.6 13.6 L16.6 13.4 Z" fill="#1E1A16" stroke="#FFF8EA" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  const LIGHT_SVG = [C.tomato, C.mustard, C.mint].map((c, i) => `<svg class="lt" viewBox="0 0 64 64" filter="url(#cws)">${crayonize(`<circle cx="32" cy="32" r="27" fill="${c}"/>`, { seed: 'lt' + i, intensity: 'soft' })}</svg>`);
+  const IMGS = [];
+  // A window W px wide showing a 1440×900 app viewport; the bar's traffic lights are crayon dots.
+  function makeWin(parent, ui, W, title) {
+    const H = Math.round(W * 0.625), bar = Math.round(clamp(W * 0.034, 26, 52)), dot = Math.round(bar * 0.43);
+    const lights = LIGHT_SVG.map((svg) => svg.replace('class="lt"', `class="lt" style="width:${dot}px;height:${dot}px"`)).join('');
+    parent.insertAdjacentHTML('beforeend', `<div class="win" style="width:${W}px"><div class="win-bar" style="height:${bar}px;padding:0 ${dot}px;gap:${Math.round(dot * 0.55)}px;font-size:${Math.round(bar * 0.33)}px">${lights}<span style="margin-left:${dot * 0.5}px">${title}</span></div><div class="win-view" style="height:${H}px"><img src="film-ui/${ui}.webp" alt="" decoding="sync"><div class="cursor">${CURSOR}</div></div></div>`);
+    const el = parent.lastElementChild;
+    const w = { el, W, H, all: H + bar + 8, img: $('img', el), view: $('.win-view', el), cur: $('.cursor', el), lights: $$('.lt', el), ih: UI_H[ui], s: W / 1440, tx: 0, ty: 0 };
+    IMGS.push(w.img);
+    viewAt(w, 720, 450, 1);
+    return w;
+  }
+  // Place the window: (x, y) is its centre on the stage.
+  function winAt(w, { x = 960, y = 540, s = 1, rx = 0, ry = 0, rz = 0, op = 1, blur = 0, z } = {}) {
+    w.el.style.transform = `translate(${(x - w.W / 2).toFixed(1)}px,${(y - w.all / 2).toFixed(1)}px) perspective(2600px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) rotate(${rz.toFixed(2)}deg) scale(${s.toFixed(4)})`;
+    w.el.style.opacity = op;
+    w.el.style.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : 'none';
+    if (z != null) w.el.style.zIndex = z;
+  }
+  // Camera inside the window: app point (cx, cy) in 1440-wide page px at the view centre, zoom z.
+  function viewAt(w, cx, cy, z = 1) {
+    const s = (w.W / 1440) * z;
+    const tx = clamp(w.W / 2 - cx * s, w.W - 1440 * s, 0), ty = clamp(w.H / 2 - cy * s, w.H - w.ih * s, 0);
+    w.s = s; w.tx = tx; w.ty = ty;
+    w.img.style.transform = `translate(${tx.toFixed(1)}px,${ty.toFixed(1)}px) scale(${s.toFixed(5)})`;
+  }
+  // Overlay drawn in page px, riding the window camera.
+  function addOv(w, html, wpx, hpx) {
+    w.view.insertAdjacentHTML('beforeend', `<div class="ov" style="width:${wpx}px;height:${hpx}px">${html}</div>`);
+    const el = w.view.lastElementChild; el.svg = $('svg', el); return el;
+  }
+  function ovAt(el, w, px, py, k = 1) {
+    el.style.transform = `translate(${(w.tx + px * w.s).toFixed(1)}px,${(w.ty + py * w.s).toFixed(1)}px) scale(${(w.s * k).toFixed(5)})`;
+  }
+  // Pointer at an app point; presses (and rings) at each click time.
+  function cursorAt(w, t, px, py, clicks = [], on = true) {
+    let k = 1, ring = 0, ra = 0;
+    for (const c of clicks) { const d = t - c; if (d >= 0 && d < 0.45) { k = 1 - 0.2 * Math.exp(-d * 12); ring = 0.3 + d / 0.45 * 1.5; ra = 1 - d / 0.45; } }
+    w.cur.style.display = on ? 'block' : 'none';
+    w.cur.style.transform = `translate(${(w.tx + px * w.s).toFixed(1)}px,${(w.ty + py * w.s).toFixed(1)}px) scale(${k.toFixed(3)})`;
+    w.cur.style.setProperty('--ring', ring.toFixed(3)); w.cur.style.setProperty('--ra', ra.toFixed(3));
+  }
+  // Layer camera: stage point (fx, fy) at the screen centre, zoom z.
+  const camAt = (el, fx, fy, z = 1) => { el.style.transform = `translate(${(960 - fx * z).toFixed(1)}px,${(540 - fy * z).toFixed(1)}px) scale(${z.toFixed(4)})`; };
+  // Whips: offset and motion blur entering from / leaving to one side.
+  const whipIn = (t, a, dur = 0.35) => { const p = E.outExpo(prog(t, a, a + dur)); return [1 - p, (1 - p) * 36]; };
+  const whipOut = (t, b, dur = 0.2) => { const p = E.inExpo(prog(t, b - dur, b)); return [p, p * 36]; };
+  function tagAt(el, t, a, x, y) {
+    const p = spring(t - a, 14, 0.5);
+    el.style.opacity = t >= a ? 1 : 0;
+    el.style.transform = `translate(${x}px,${y}px) rotate(${lerp(-16, -3, p).toFixed(2)}deg) scale(${Math.max(0.0001, p).toFixed(4)})`;
+  }
+  const svgOv = (art, vb, seed, scale = 1, extra = '') => `<svg viewBox="${vb}" preserveAspectRatio="none" fill="none" filter="url(#cw)"${extra}>${crayonize(art, { seed, viewBox: vb, scale })}</svg>`;
+
   /* ── build ── */
   const L = {}; $$('.layer').forEach((l) => { L[l.id] = l; });
 
-  // S0 dots
-  const DOTS = [C.tomato, C.mustard, C.sky];
-  $('#dots').innerHTML = DOTS.map((c, i) => `<div class="abs dot"><svg viewBox="0 0 64 64" filter="url(#cws)" style="width:100%;height:100%;overflow:visible">${crayonize(`<circle cx="32" cy="32" r="26" fill="${c}"/>`, { seed: 'dot' + i, intensity: 'soft' })}</svg></div>`).join('');
-  const dotEls = $$('#dots .dot');
-
-  // S1/S2 intro
-  $('#s1-d').innerHTML = doodleSvg('pencil');
-  $('#s2-d').innerHTML = doodleSvg('lightbulb-smile');
-  const uline = (color, seed) => `<svg class="uline" viewBox="0 0 600 40" preserveAspectRatio="none" filter="url(#cw)">${crayonize(`<path stroke="${color}" stroke-width="9" d="M6 22 C120 12 260 30 380 18 C460 12 540 20 594 16"/>`, { seed, viewBox: '0 0 600 40', scale: 2.4 })}</svg>`;
-  $('#s1-h').parentElement.insertAdjacentHTML('beforeend', uline(C.tomato, 'u1'));
-  $('#s2-h').parentElement.insertAdjacentHTML('beforeend', uline(C.sky, 'u2'));
-  const c1 = split($('#s1-h')), c2 = split($('#s2-h'));
-  const d1 = $('#s1-d svg'), d2 = $('#s2-d svg'), u1 = $('#s1 .uline'), u2 = $('#s2 .uline');
+  // I0–I7 intro windows
+  const W0 = makeWin($('#i0-cam'), 'home', 1560, 'IELTS Atlas');
+  const L0 = { x: 251, y: 71 };   // middle traffic light, stage px, while W0 sits at (960, 560)
+  const W1 = makeWin($('#i1-cam'), 'browse', 1400, '题库 · Library');
+  const W2 = makeWin($('#i2-cam'), 'reading', 1560, 'Reading · Passage 1');
+  const W3 = makeWin($('#i3-cam'), 'writing', 1560, 'Writing · Task 2');
+  const W4 = makeWin($('#i4-cam'), 'result', 1500, '评测结果');
+  const W5 = makeWin($('#i5-cam'), 'notebook', 1400, '札记 · Notebook');
+  const W6 = makeWin($('#i6-cam'), 'learner', 1400, '技能复习地图');
+  const CAROUSEL = ['home', 'browse', 'reading', 'writing', 'result', 'notebook', 'learner'];
+  const W7 = CAROUSEL.map((ui) => makeWin($('#i7-cam'), ui, 900, 'IELTS Atlas'));
+  const c7i = split($('#i7-h'));
+  // reading: marker on the first line, a heading chip dragged into paragraph A, then a tick
+  const HL = addOv(W2, svgOv(`<path stroke="${C.mustard}" stroke-width="7" d="M4 13 C160 10 380 15 656 11"/>`, '0 0 660 24', 'hl', 2.6), 660, 24);
+  HL.style.mixBlendMode = 'multiply'; HL.style.opacity = '0.75';
+  const CHIP_GAP = addOv(W2, '<div style="width:100%;height:100%;background:#FFFFFF;border-radius:6px"></div>', 257, 37);
+  const CHIP = addOv(W2, '<div class="chip-fly">i. Not enough tea to meet demand</div>', 253, 33);
+  const TICK = addOv(W2, svgOv(`<path stroke="#1E8F4E" stroke-width="7" d="M6 24 L18 36 L42 8"/>`, '0 0 48 44', 'tick', 1.4), 48, 44);
+  // writing: lines appear as if typed, then 提交评分 is pressed
+  const LINES_Y = [383, 410, 437, 491, 518, 545, 599, 626, 653];
+  const covers = LINES_Y.map(() => addOv(W3, '<div style="width:100%;height:100%;background:#FFFDF8"></div>', 724, 28));
+  const CARET = addOv(W3, '<div style="width:100%;height:100%;background:#1E1A16"></div>', 2.5, 24);
+  // result: crayon ring round the band score
+  const BAND_RING = addOv(W4, svgOv(`<ellipse cx="60" cy="38" rx="54" ry="32" stroke="${C.tomato}" stroke-width="5"/>`, '0 0 120 76', 'ring', 1.2), 120, 76);
 
   // S3 meet
   const MEET = ['excited', 'focused', 'joyful', 'calm', 'energized'];
@@ -747,6 +840,7 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   $('#mems').innerHTML = MEMS.map(([col, tag, art, text, ev], i) => `<div class="abs card mem" style="left:${180 + i * 540}px"><div class="card-head" style="background:${col}"><span>${tag}</span>${doodleSvg(art)}</div><div class="body"><p>${text}</p><small>${ev}</small></div></div>`).join('');
   const memEls = $$('#mems .mem');
   const c6a = split($('#nc-h')), c6b = split($('#nh-h'));
+  const W6n = makeWin($('#s6-win'), 'notebook', 1300, '札记 · 关于你');
 
   // S7 flash + drop
   const FLASH = [['越', C.tomato], ['练', C.mustard], ['越', C.sky], ['懂', C.mint]];
@@ -755,6 +849,11 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   $('#drop-mascots').innerHTML = DROP_M.map(() => '<div class="abs mascot"></div>').join('');
   const dropM = $$('#drop-mascots .mascot').map((el, i) => mountMascot(el, DROP_M[i]));
   const c7 = split($('#drop-h'));
+
+  // D1 quick UI cuts in the drop
+  const WD = [['home', '总览'], ['result', '评测结果'], ['notebook', '札记']].map(([ui, n]) => makeWin($('#d1-cam'), ui, 1500, n));
+  const WL = makeWin($('#lw-cam'), 'learner', 1400, '技能复习地图');
+  const WN = makeWin($('#nw-cam'), 'notebook', 1400, '札记 · Daily');
 
   // S8 radar
   const RAD = { cx: 1340, cy: 560, R: 330 };
@@ -785,6 +884,8 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   $('#mont').innerHTML = MONT.map(([, , art]) => doodleSvg(art, 'doodle abs')).join('');
   const montD = $$('#mont .doodle');
   const montWord = $('#mont-word');
+  const MONT_UI = [['reading', 330, 420, 1.8], ['writing', 1010, 500, 1.6], ['result', 1150, 1150, 1.6], ['learner', 520, 600, 1.4], ['notebook', 420, 1480, 1.6]];
+  const WM = MONT_UI.map(([ui]) => makeWin($('#mont-win'), ui, 1000, 'IELTS Atlas'));
 
   // S11 local
   $('#lap').innerHTML = doodleSvg('laptop-smile');
@@ -805,10 +906,9 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   const statEls = $$('#stats .stat');
 
   // S14 logo
-  const MINI = [C.tomato, C.sky, C.mustard, C.mint, C.pink];
-  const MINI_POS = [[180, 120, -8], [1440, 110, 6], [120, 760, 5], [1500, 770, -6], [820, 830, 3]];
-  $('#minis').innerHTML = MINI.map((c) => `<div class="abs mini" style="background:${c}"></div>`).join('');
-  const miniEls = $$('#minis .mini');
+  const MINI_UI = ['home', 'reading', 'writing', 'notebook', 'learner'];
+  const MINI_POS = [[250, 190, -8], [1670, 180, 6], [250, 880, 5], [1670, 890, -6], [960, 150, 3]];
+  const WG = MINI_UI.map((ui) => makeWin($('#minis'), ui, 360, 'IELTS Atlas'));
   const LOGO_M = ['excited', 'focused', 'joyful', 'energized', 'calm', 'proud', 'grateful'];
   $('#logo-mascots').innerHTML = LOGO_M.map(() => '<div class="abs mascot"></div>').join('');
   const logoM = $$('#logo-mascots .mascot').map((el, i) => mountMascot(el, LOGO_M[i]));
@@ -820,40 +920,149 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   const cam = $('#cam'), fade = $('#fade');
 
   /* ── scenes ── */
+  // Overlapping starts let a whip or zoom-through carry across the cut.
   const RANGES = {
-    s0: [0, T.i1], s1: [T.i1, T.i2], s2: [T.i2, T.meet], s3: [T.meet, T.read],
+    i0: [0, T.i1], i1: [T.i1 - 0.2, T.i2], i2: [T.i2 - 0.22, T.i3], i3: [T.i3, T.i4 + 0.02], i4: [T.i4 - 0.2, T.i5],
+    i5: [T.i5 - 0.12, T.i6], i6: [T.i6 - 0.16, T.i7], i7: [T.i7, T.meet], s3: [T.meet, T.read],
     s4: [T.read, T.write], s5: [T.write, T.night], s6: [T.night, T.flash], flash: [T.flash, T.drop],
-    s7: [T.drop, T.radar], s8: [T.radar, T.shelf], s9: [T.shelf, T.mont], s10: [T.mont, T.local],
+    s7: [T.drop, T.dui], d1: [T.dui, T.radar], s8: [T.radar, T.lw], lw: [T.lw, T.shelf], s9: [T.shelf, T.nw], nw: [T.nw, T.mont], s10: [T.mont, T.local],
     s11: [T.local, T.parade], s12: [T.parade, T.stats], s13: [T.stats, T.logo], s14: [T.logo, T.end], s15: [T.end, DUR + 1],
   };
 
-  function S0(t) {
-    dotEls.forEach((el, i) => {
-      const at = [T.d1, T.d2, T.d3][i];
-      const p = spring(t - at, 14, 0.42);
-      const out = E.inCubic(prog(t, 4.15 + i * 0.06, 4.45 + i * 0.06));
-      const bob = Math.sin((t - at) * 2.4 + i) * 10 * clamp(t - at - 0.6);
-      const x = 960 - 32 + (i - 1) * 120, y = 540 - 32 + bob - out * 40;
-      el.style.opacity = t >= at ? 1 - out : 0;
-      place(el, x, y, Math.max(0.0001, p * (1 - out)));
+  function I0(t) {
+    const w = W0;
+    // three crayon lights pop on the three intro notes, then the camera pulls back to reveal the window
+    w.lights.forEach((el, i) => { el.style.transform = `scale(${Math.max(0.0001, spring(t - [T.d1, T.d2, T.d3][i], 16, 0.42)).toFixed(4)})`; });
+    const p = E.outQuint(prog(t, T.d3, T.d3 + 1.0));
+    const z = Math.exp(lerp(Math.log(5.4 - 0.3 * prog(t, 0, T.d3)), 0, p));
+    // the camera steps to each light as it pops, then pulls back
+    const fx0 = L0.x - 34 + 34 * (spring(t - T.d2, 14, 0.8) + spring(t - T.d3, 14, 0.8));
+    camAt($('#i0-cam'), lerp(fx0, 960, p), lerp(L0.y, 540, p), z);
+    w.el.style.opacity = clamp((t - 0.2) / 0.35);
+    // scroll the overview, then push into 开始练习 and press 随机练习
+    const sc = E.inOutQuint(prog(t, 2.565, 3.45)), dz = E.inOutQuint(prog(t, 3.565, 4.1));
+    viewAt(w, lerp(720, 1150, dz), lerp(lerp(450, 760, sc), 520, dz), lerp(1, 1.85, dz));
+    const tilt = E.inOutQuint(prog(t, 2.2, 3.2));
+    const [o, bl] = whipOut(t, T.i1, 0.2);
+    winAt(w, { x: 960 - o * 2400, y: 560, rx: tilt * 9 - dz * 9, ry: -tilt * 12 + dz * 12, blur: bl });
+    const cp = E.outQuint(prog(t, 3.75, 4.2));
+    cursorAt(w, t, lerp(1250, 1335, cp), lerp(800, 506, cp), [4.315], t >= 3.75);
+  }
+
+  function I1(t) {
+    const w = W1, a = T.i1;
+    const [o, bl] = whipIn(t, a - 0.18, 0.4);
+    const sp = spring(t - a - 0.1, 6.5, 0.9);
+    viewAt(w, 720, lerp(450, 1050, sp), 1);
+    const zt = E.inExpo(prog(t, T.i2 - 0.22, T.i2));
+    winAt(w, { x: 1010 + o * 2400, y: 556, s: 1 + zt * 0.7, rx: 6, ry: lerp(-20, -6, E.outQuint(prog(t, a, T.i2))), blur: bl + zt * 24 });
+    tagAt($('#i1-tag'), t, a + 0.08, 70, 60);
+  }
+
+  function I2(t) {
+    const w = W2, a = T.i2;
+    const inP = E.outQuint(prog(t, a - 0.22, a + 0.15));
+    L.i2.style.opacity = inP;
+    winAt(w, { x: 960, y: 552, s: lerp(0.72, 1, inP), ry: Math.sin((t - a) * 1.4) * 2 });
+    // close-up on the passage → whip-pan to the headings → pull out as the chip is dropped
+    const z1 = E.outQuint(prog(t, a - 0.1, a + 0.35));
+    const pan = E.inOutQuint(prog(t, 6.565, 6.84));
+    const out = E.inOutQuint(prog(t, 7.0, 7.45));
+    let cx = lerp(lerp(720, 330, z1), 1100, pan);
+    let cy = lerp(lerp(450, 360, z1) + 70 * E.inOutCubic(prog(t, a, 6.565)), 405, pan);
+    let z = lerp(lerp(1, 2.15, z1), 1.85, pan);
+    viewAt(w, lerp(cx, 720, out), lerp(cy, 450, out), lerp(z, 1.02, out));
+    w.img.style.filter = pan > 0.02 && pan < 0.98 ? `blur(${(Math.sin(Math.PI * pan) * 7).toFixed(1)}px)` : 'none';
+    ovAt(HL, w, 36, 340); drawOn(HL.svg, E.outCubic(prog(t, 6.065, 6.4)), 0.3);
+    const dp = E.inOutQuint(prog(t, 7.0, 7.45));
+    const px = lerp(933, 400, dp), py = lerp(366, 286, dp) - Math.sin(Math.PI * dp) * 70;
+    CHIP.style.display = CHIP_GAP.style.display = t >= 6.9 ? 'block' : 'none';
+    ovAt(CHIP_GAP, w, 931, 364);
+    ovAt(CHIP, w, px, py, 1 + 0.1 * Math.sin(Math.PI * dp));
+    const cp = E.outQuint(prog(t, 6.72, 6.9));
+    cursorAt(w, t, lerp(1180, px + 110, cp), lerp(560, py + 20, cp), [6.9], t >= 6.72 && t < 7.5);
+    TICK.style.display = t >= 7.45 ? 'block' : 'none';
+    ovAt(TICK, w, 650, 280); drawOn(TICK.svg, E.outCubic(prog(t, 7.45, 7.56)), 0.2);
+    tagAt($('#i2-tag'), t, a + 0.05, 70, 60);
+  }
+
+  function I3(t) {
+    const w = W3, a = T.i3;
+    const pin = spring(t - a, 10, 0.8);
+    const drop = E.inExpo(prog(t, T.i4 - 0.24, T.i4));
+    winAt(w, { x: 960, y: 552 + drop * 1300, s: lerp(1.12, 1, pin), rz: drop * 5 });
+    // type the essay line by line with the camera riding the caret, then pull out and submit
+    const P = prog(t, a, 8.05), n = LINES_Y.length;
+    const cur = clamp(Math.floor(P * n), 0, n - 1), q = clamp(P * n - cur);
+    covers.forEach((cv, i) => {
+      const qi = clamp(P * n - i);
+      cv.style.display = qi < 1 ? 'block' : 'none';
+      cv.style.width = `${(724 * (1 - qi)).toFixed(1)}px`;
+      ovAt(cv, w, 660 + 724 * qi, LINES_Y[i] - 15);
     });
+    CARET.style.display = P < 1 && Math.floor(t * 6) % 2 === 0 ? 'block' : 'none';
+    ovAt(CARET, w, 662 + 724 * q, LINES_Y[cur] - 12);
+    const out = E.inOutQuint(prog(t, 7.98, 8.28));
+    viewAt(w, lerp(1017, 720, out), lerp(LINES_Y[0] + (LINES_Y[n - 1] - LINES_Y[0]) * E.inOutCubic(P), 450, out), lerp(1.9, 1, out));
+    const cp = E.outQuint(prog(t, 8.05, 8.3));
+    cursorAt(w, t, lerp(1120, 1321, cp), lerp(700, 866, cp), [8.315], t >= 8.05);
+    tagAt($('#i3-tag'), t, a + 0.05, 70, 60);
   }
-  function introLine(t, start, end, chars, doodle, ul, slot) {
-    drawOn(doodle, E.outCubic(prog(t, start, start + 1.4)));
-    slot.style.transform = `rotate(${(Math.sin((t - start) * 2.5) * 4).toFixed(2)}deg)`;
-    rise(chars, t, start + 0.15, { stagger: 0.07 });
-    drawOn(ul, E.inOutCubic(prog(t, start + 0.9, start + 1.9)), 0.3);
-    const out = exitUp(slot.parentElement, t, end - 0.3, 0.3);
-    slot.parentElement.style.transform = `translateY(${(-60 * out).toFixed(1)}px) scale(${(1 + (t - start) * 0.012).toFixed(4)})`;
+
+  function I4(t) {
+    const w = W4, a = T.i4;
+    const up = spring(t - (a - 0.3), 11, 0.78);
+    const [o, bl] = whipOut(t, T.i5, 0.18);
+    winAt(w, { x: 960 + o * 2400, y: 556 + (1 - up) * 1250, rx: lerp(16, 3, E.outQuint(prog(t, a, 10.4))), blur: bl });
+    // dolly to the band score and ring it, pull back to the score table, scroll the advice
+    const d1 = E.inOutQuint(prog(t, a + 0.05, 9.065));
+    const d2 = E.inOutQuint(prog(t, 9.565, 9.9));
+    const sc = E.inOutQuint(prog(t, 9.9, 10.5));
+    let cx = lerp(720, 1360, d1), cy = lerp(450, 165, d1), z = lerp(1, 3.1, d1);
+    viewAt(w, lerp(cx, 1150, d2), lerp(cy, 520, d2) + sc * 640, lerp(z, 1.5, d2));
+    ovAt(BAND_RING, w, 1374 - 60, 158 - 38); drawOn(BAND_RING.svg, E.outCubic(prog(t, 9.065, 9.42)), 0.2);
+    tagAt($('#i4-tag'), t, a + 0.05, 70, 60);
   }
-  function S1(t) { introLine(t, T.i1, T.i2, c1, d1, u1, $('#s1-d')); }
-  function S2(t) { introLine(t, T.i2, T.meet, c2, d2, u2, $('#s2-d')); }
+
+  function I5(t) {
+    const w = W5, a = T.i5;
+    const [o, bl] = whipIn(t, a - 0.12, 0.35);
+    const ex = E.inExpo(prog(t, T.i6 - 0.16, T.i6));
+    const pan = E.inOutQuint(prog(t, a, T.i6 - 0.1));
+    viewAt(w, lerp(300, 1120, pan), 480, 1.75);
+    winAt(w, { x: 960 - o * 2400, y: 556 - ex * 1300, ry: lerp(14, 4, pan), rz: -1, blur: bl + ex * 30 });
+    tagAt($('#i5-tag'), t, a + 0.05, 70, 60);
+  }
+
+  function I6(t) {
+    const w = W6, a = T.i6;
+    const [o, bl] = whipIn(t, a - 0.15, 0.35);
+    const sc = E.inOutQuint(prog(t, a, T.i7 - 0.05));
+    viewAt(w, 720, lerp(450, 1450, sc), 1.15);
+    winAt(w, { x: 960, y: 556 + o * 1300, rx: lerp(20, 4, sc), blur: bl });
+    tagAt($('#i6-tag'), t, a + 0.05, 70, 60);
+  }
+
+  function I7(t) {
+    const a = T.i7;
+    // cover-flow of every screen, one step per half beat
+    let c = 0;
+    for (let k = 0; k < 6; k++) c += spring(t - (a + 0.25 * k), 16, 0.7);
+    const fall = E.inExpo(prog(t, T.meet - 0.2, T.meet));
+    W7.forEach((w, k) => {
+      const d = k - c, ad = Math.abs(d);
+      viewAt(w, 720, 450 + 120 * Math.sin((t - a) * 1.2 + k), 1);
+      winAt(w, { x: 960 + Math.sign(d) * Math.min(ad, 1) * 560 + Math.sign(d) * Math.max(0, ad - 1) * 230, y: 630 + fall * (900 + k * 40), s: 1 - Math.min(ad, 3) * 0.13, ry: clamp(-d * 42, -62, 62), op: clamp(3.6 - ad), z: 20 - Math.round(ad * 2) });
+    });
+    rise(c7i, t, a + 0.1, { stagger: 0.04 });
+    $('#i7-h').style.opacity = 1 - fall;
+  }
 
   function S3(t) {
-    rise(c3, t, g(29), { stagger: 0.05 });
+    rise(c3, t, T.meet + 0.05, { stagger: 0.04 });
     const xs = [330, 650, 960, 1270, 1590];
     meet.forEach((m, i) => {
-      const at = T.meet + i * BEAT;
+      const at = T.meet + i * 0.25;
       const up = spring(t - at, 13, 0.5);
       const crouch = E.inCubic(prog(t, 16.9, 17.45));
       const leap = E.inExpo(prog(t, 17.3, 17.565));
@@ -862,7 +1071,7 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
       const sx = 1 + crouch * 0.12 - leap * 0.1, sy = 1 - crouch * 0.18 + leap * 0.25;
       m.el.style.transform = `translate(${xs[i] - 115}px,${y.toFixed(1)}px) scale(${sx.toFixed(3)},${sy.toFixed(3)})`;
       m.el.style.transformOrigin = '50% 100%';
-      blink(m, t, [14.9 + i * 0.13, 16.2 + (i % 2) * 0.2]);
+      blink(m, t, [15.9 + i * 0.13, 16.5 + (i % 2) * 0.15]);
     });
     $('#s3-h').style.opacity = 1 - E.inCubic(prog(t, 17.2, 17.5));
   }
@@ -961,9 +1170,9 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
     rise(c6b, t, T.mem1, { stagger: 0.06 });
     $('#night-head .kicker').style.opacity = clamp((t - T.mem1) / 0.3);
     // sleepy mascot: centre stage while the caption reads, then tucked in by the moon
-    const mv = spring(t - T.mem1, 8, 0.75);
+    const mv = spring(t - T.mem1, 8, 0.75), mv2 = spring(t - T.nwin - 0.25, 9, 0.6);
     const breathe = 1 + Math.sin((t - s) * 2.2) * 0.035;
-    const x = lerp(820, 1460, mv), y = lerp(600, 230, mv), sc = lerp(1, 0.55, mv);
+    const x = lerp(lerp(820, 1460, mv), 150, mv2), y = lerp(lerp(600, 230, mv), 700, mv2), sc = lerp(lerp(1, 0.55, mv), 0.75, mv2);
     sleepy.el.style.transformOrigin = '0 0';
     sleepy.el.style.transform = `translate(${(x - 820).toFixed(1)}px,${(y - 600).toFixed(1)}px) scale(${(sc * breathe).toFixed(4)},${(sc / breathe).toFixed(4)})`;
     sleepy.el.style.opacity = clamp((t - s - 0.4) / 0.6);
@@ -979,14 +1188,22 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
       z.style.opacity = (t < T.mem3 && t > s + 0.8 ? Math.sin(Math.PI * ph) : 0).toFixed(3);
       z.style.fontSize = `${(42 + i * 16) * lerp(1, 0.7, mv)}px`;
     });
+    const gone = E.inExpo(prog(t, T.nwin - 0.3, T.nwin));
     memEls.forEach((el, i) => {
       const a = [T.mem1, T.mem2, T.mem3][i];
       const p = spring(t - a, 12, 0.5);
       el.style.opacity = t >= a ? 1 : 0;
-      el.style.transform = `translateY(${((1 - p) * -760).toFixed(1)}px) rotate(${(lerp(-14, [-3, 2, -2][i], p) + Math.sin((t - a) * 1.4 + i) * 0.8).toFixed(2)}deg)`;
+      el.style.transform = `translateY(${((1 - p) * -760 - gone * (1100 + i * 120)).toFixed(1)}px) rotate(${(lerp(-14, [-3, 2, -2][i], p) + Math.sin((t - a) * 1.4 + i) * 0.8 + gone * 20).toFixed(2)}deg)`;
     });
+    // the real notebook page: "关于你，我们记住了" and what the system observed
+    const wn = W6n, up = spring(t - T.nwin, 8, 0.8);
+    wn.el.style.display = t >= T.nwin - 0.05 ? 'block' : 'none';
+    const dz = E.inOutQuint(prog(t, T.nwin + 0.2, 46.3)), dp = E.inOutQuint(prog(t, 46.3, 47.3));
+    viewAt(wn, lerp(lerp(720, 380, dz), 720, dp), lerp(lerp(1380, 1460, dz), 1700, dp), lerp(lerp(1, 1.9, dz), 1.35, dp));
+    winAt(wn, { x: 1000, y: 590 + (1 - up) * 1200, rx: lerp(12, 3, dz), ry: -4 });
+    $('#night-head').style.translate = `0 ${(-gone * 420).toFixed(1)}px`;
     // riser into the flashes: cards and headline drift toward the camera
-    const r = E.inCubic(prog(t, T.mem3 + 0.8, T.flash));
+    const r = E.inCubic(prog(t, 46.6, T.flash));
     $('#cam').style.transform = `scale(${(1 + r * 0.18).toFixed(4)})`;
   }
 
@@ -1019,9 +1236,9 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   function S8(t) {
     const s = T.radar;
     drawOn(rGrid, E.outCubic(prog(t, s, s + 0.6)), 0.5);
-    const step = clamp(Math.floor((t - s) / 1.0), 0, 3);
+    const step = clamp(Math.floor((t - s) / 0.5), 0, 3);
     rShapes.forEach((el, i) => {
-      const a = s + i * 1.0;
+      const a = s + i * 0.5;
       const on = i === step && t >= a;
       el.style.display = on ? 'inline' : 'none';
       if (on) el.style.transform = `scale(${(i === 0 ? spring(t - a - 0.1, 14, 0.55) : lerp(0.94, 1, spring(t - a, 18, 0.45))).toFixed(4)})`;
@@ -1033,17 +1250,17 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
     wk.style.opacity = clamp((t - s - 0.3) / 0.2);
     $('#week-n').textContent = `第 ${step + 1} 周`;
     $('#week-note').textContent = WEEK_NOTE[step];
-    $('#week-n').style.transform = `scale(${(1 + 0.12 * Math.exp(-(t - s - step) * 9)).toFixed(3)})`;
+    $('#week-n').style.transform = `scale(${(1 + 0.12 * Math.exp(-(t - s - step * 0.5) * 9)).toFixed(3)})`;
   }
 
   function S9(t) {
     const s = T.shelf;
     rise(c9, t, s, { stagger: 0.035 });
     $('#shelf-text .kicker').style.opacity = clamp((t - s) / 0.3);
-    const pan = E.inOutCubic(prog(t, s, T.mont)) * -60;
+    const pan = E.inOutCubic(prog(t, s, T.nw)) * -60;
     wkEls.forEach((el, i) => {
-      const a = s + 0.5 + i * BEAT;
-      const p = spring(t - a, 12, 0.58);
+      const a = s + 0.25 + i * 0.25;
+      const p = spring(t - a, 13, 0.58);
       el.style.opacity = t >= a ? 1 : 0;
       const bob = squash(t + i * 0.1) * 6 * clamp((t - a - 0.4) * 3);
       el.style.transform = `translate(${((1 - p) * 1500 + pan).toFixed(1)}px,${bob.toFixed(1)}px) rotate(${lerp(18, WK_ROT[i], p).toFixed(2)}deg)`;
@@ -1063,6 +1280,14 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
     });
     if (montWord.dataset.k !== String(k)) { montWord.textContent = word; montWord.dataset.k = k; }
     montWord.style.transform = `scale(${lerp(1.3, 1, E.outExpo(clamp((t - a) / 0.25))).toFixed(4)})`;
+    WM.forEach((w, i) => {
+      w.el.style.display = i === k ? 'block' : 'none';
+      if (i !== k) return;
+      const [, cx, cy, z] = MONT_UI[i];
+      const [o, bl] = whipIn(t, a, 0.3), dir = i % 2 ? -1 : 1;
+      viewAt(w, cx + (t - a) * 40, cy + (t - a) * 30, z * (1 + (t - a) * 0.05));
+      winAt(w, { x: 1330, y: 540 + o * 1100 * dir, ry: -10, rz: dir * 1.5, blur: bl, s: 1 + 0.012 * squash(t) });
+    });
   }
 
   function S11(t) {
@@ -1110,12 +1335,10 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
 
   function S14(t) {
     const s = T.logo;
-    miniEls.forEach((el, i) => {
+    WG.forEach((w, i) => {
       const [x, y, r] = MINI_POS[i];
       const p = spring(t - s - 0.5 - i * 0.04, 11, 0.6);
-      const sx = 960 - 150, sy = 540 - 100;
-      el.style.transform = `translate(${lerp(sx, x, p).toFixed(1)}px,${lerp(sy, y, p).toFixed(1)}px) rotate(${lerp(i * 8 - 16, r, p).toFixed(2)}deg) scale(${(1 + 0.04 * squash(t)).toFixed(4)})`;
-      el.style.opacity = 1;
+      winAt(w, { x: lerp(960, x, p), y: lerp(540, y, p), rz: lerp(i * 8 - 16, r, p), s: lerp(1.6, 1, p) * (1 + 0.03 * squash(t)) });
     });
     slam(c14w, t, g(156), { stagger: 0.03, from: 1.6 });
     rise(c14t, t, g(158), { stagger: 0.06 });
@@ -1144,7 +1367,39 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
     blink(endM, t, [84.2, 86.1]);
   }
 
-  const FN = { s0: S0, s1: S1, s2: S2, s3: S3, s4: S4, s5: S5, s6: S6, flash: Flash, s7: S7, s8: S8, s9: S9, s10: S10, s11: S11, s12: S12, s13: S13, s14: S14, s15: S15 };
+  function D1(t) {
+    const k = clamp(Math.floor((t - T.dui) / BEAT), 0, 2), a = T.dui + k * BEAT;
+    L.d1.style.background = [C.sky, C.mustard, C.mint][k];
+    const VIEWS = [[330, 320, 1.7, 0.1], [1150, 460, 1.75, 0.1], [450, 480, 1.6, 0.25]];
+    WD.forEach((w, i) => {
+      w.el.style.display = i === k ? 'block' : 'none';
+      if (i !== k) return;
+      const [cx, cy, z, dz] = VIEWS[i];
+      const p = E.outExpo(prog(t, a, a + 0.3));
+      viewAt(w, cx + (t - a) * 120, cy, z + (t - a) * dz);
+      winAt(w, { x: 960, y: 548, s: lerp(1.14, 1, p), rz: [-2.5, 2, -1.5][i], ry: [8, -8, 6][i] });
+    });
+  }
+
+  function LW(t) {
+    const w = WL, a = T.lw;
+    const p = E.outQuint(prog(t, a, a + 0.5));
+    const sc = E.inOutQuint(prog(t, a + 0.2, T.shelf - 0.1));
+    viewAt(w, 720, lerp(450, 1500, sc), 1.15);
+    winAt(w, { x: 990, y: 552, s: lerp(1.3, 1, p) * (1 + 0.01 * squash(t)), ry: lerp(-16, -5, sc), rx: 4 });
+    tagAt($('#lw-tag'), t, a + 0.1, 70, 60);
+  }
+
+  function NW(t) {
+    const w = WN, a = T.nw;
+    const [o, bl] = whipIn(t, a, 0.32);
+    const sc = E.inOutQuint(prog(t, a + 0.1, T.mont - 0.05));
+    viewAt(w, 720, lerp(860, 1260, sc), 1.3);
+    winAt(w, { x: 960 + o * 2400, y: 556, rx: lerp(14, 5, sc), rz: 1, blur: bl, s: 1 + 0.01 * squash(t) });
+    tagAt($('#nw-tag'), t, a + 0.1, 70, 60);
+  }
+
+  const FN = { i0: I0, i1: I1, i2: I2, i3: I3, i4: I4, i5: I5, i6: I6, i7: I7, s3: S3, s4: S4, s5: S5, s6: S6, flash: Flash, s7: S7, d1: D1, s8: S8, lw: LW, s9: S9, nw: NW, s10: S10, s11: S11, s12: S12, s13: S13, s14: S14, s15: S15 };
 
   function render(t) {
     t = clamp(t, 0, DUR);
@@ -1165,23 +1420,32 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
   /* ── player (audio is the clock when it can play) ── */
   const fmt = (s) => { const m = Math.floor(s / 60), r = s - m * 60; return `${String(m).padStart(2, '0')}:${r.toFixed(1).padStart(4, '0')}`; };
   const SCENES = [
-    [0, '三颗蜡笔点', '前奏三个音各弹出一颗番茄、芥末、天蓝色的蜡笔圆点。', '0.57 / 1.07 / 1.57'],
-    [T.i1, '你在练习，', '铅笔涂鸦一笔笔画出来，番茄色蜡笔下划线。', '4.57'],
-    [T.i2, '它在学习。', '灯泡笑脸涂鸦，天蓝下划线。', '8.57'],
-    [T.meet, '认识一下', '五只情绪小怪兽每拍冒出一只，眨眼，蹲下蓄力，跳出画面。', '12.57 起每拍'],
-    [T.read, '阅读 Coach', '鼓点进入。天蓝底，卷面卡片弹上来，证据句被芥末色马克笔划出；选 NOT GIVEN 被蜡笔叉掉，FALSE 被圈出，Coach 小怪兽讲解。', '17.57 / 21.57'],
-    [T.write, '写作评分', '芥末底甩上来。作文的语法错误画上红色蜡笔波浪线，四项评分条每拍填满一条，7.0 印章砸下画面一震。', '25.57 / 29.57'],
-    [T.night, '夜里，自进化', '人声进来，墨色夜幕从印章处展开。月亮升起，疲惫小怪兽打着 z 睡觉；每 4 秒落下一张记忆卡：弱项、偏好、进步，最后一张时小怪兽醒来。', '33.57 / 37.57 / 41.57 / 45.57'],
-    [T.flash, '越 · 练 · 越 · 懂', '高潮前四拍，每拍一个满屏大字换一种卡片色。', '47.57 起每拍'],
-    [T.drop, '越练，越懂你。', '高潮。番茄底大字砸下，八只小怪兽从中心炸开围成一圈，踩着拍子跳。', '49.57'],
-    [T.radar, '技能画像', '手绘六边形雷达，每拍一周向外扩：第 1 周到第 4 周。', '53.07 起每秒'],
-    [T.shelf, '札记', '薄荷底，五张周卡片每拍飞进来一张，各带一个手绘物件。', '57.07 起每拍'],
-    [T.mont, '快切', '每秒一切：阅读、写作、复盘、成长、进化，配对应的涂鸦。', '61.07 起每秒'],
-    [T.local, '本地优先', '笑脸电脑涂鸦画出，番茄色锁头砸在屏幕上。', '65.57 / 66.07'],
-    [T.parade, '十六种心情', '粉底，十六只情绪小怪兽每半拍冒出两只，标上名字一起跳。', '69.07 起'],
-    [T.stats, '四个数字', '四块色块每秒从四个方向撞进来：4 项标准、6 项技能、16 只小怪兽、100% 本机存储。', '73.07 起每秒'],
-    [T.logo, '品牌', '色卡散开，IELTS Atlas 字标砸下，主张升起，小怪兽排队跳。', '77.07 / 78.07 / 79.07'],
-    [T.end, '尾板', '音乐收住的一刻切到安静的尾板，元气小怪兽眨眼，最后一秒淡出。', '81.85'],
+    [0, '三颗灯', '前奏三个音各弹出一颗蜡笔圆点，镜头拉远才发现是应用窗口的红绿灯，总览页落定。', '0.57 / 1.07 / 1.57'],
+    [2.565, '总览 → 随机练习', '窗口 3D 倾斜，页面滚到成绩走势，推近「开始练习」，光标按下随机练习。', '2.57 / 3.57 / 4.32'],
+    [T.i1, '题库', '甩镜进天蓝底，题库卡片整页上滑，随后穿镜头推进。', '4.57'],
+    [T.i2, '阅读', '特写原文，芥末马克笔划出第一句；甩到右侧题目，拖动标题放进段落 A，打勾。', '5.57 / 6.07 / 6.57 / 7.07'],
+    [T.i3, '写作', '镜头跟着光标逐行打出作文，拉远后按下「提交评分」。', '7.57 / 8.32'],
+    [T.i4, '评分', '番茄底，评测结果从下方升起，推到 7.5 分画圈，再拉回评分表往下滚。', '8.57 / 9.07 / 9.57'],
+    [T.i5, '札记 / 技能', '每秒一甩：札记周卡片横摇，技能复习地图上滚。', '10.57 / 11.57'],
+    [T.i7, '你在练习，它在学习。', '七个界面排成封面流，每半拍翻一张。', '12.57 起每半拍'],
+    [T.meet, '认识一下', '界面落下，五只情绪小怪兽每半拍冒出一只，蹲下蓄力，跳出画面。', '14.57'],
+    [T.read, '阅读 Coach', '鼓点进入。证据句被划出，NOT GIVEN 被叉掉，FALSE 被圈出，Coach 小怪兽讲解。', '17.57 / 21.57'],
+    [T.write, '写作评分', '红色蜡笔波浪线标出语法错误，四项评分条每拍填满一条，7.0 印章砸下。', '25.57 / 29.57'],
+    [T.night, '夜里，自进化', '人声进来，夜幕展开，小怪兽睡觉；三张记忆卡每两秒落下一张。', '33.57 / 37.57 / 39.57 / 41.57'],
+    [T.nwin, '关于你，我们记住了', '记忆卡飞走，真实札记页升起，推近「关于你」和系统观察，小怪兽醒来跳到窗边。', '43.57'],
+    [T.flash, '越 · 练 · 越 · 懂', '高潮前四拍，每拍一个满屏大字。', '47.57 起每拍'],
+    [T.drop, '越练，越懂你。', '高潮。大字砸下，八只小怪兽炸开成一圈。', '49.57'],
+    [T.dui, '界面快切', '每拍一个界面特写：成绩走势、评分表、札记周卡。', '51.57 起每拍'],
+    [T.radar, '技能画像', '手绘雷达每半拍外扩一周。', '53.07 起每半拍'],
+    [T.lw, '技能复习地图', '真实页面 3D 倾斜整页上滚。', '55.07'],
+    [T.shelf, '札记周卡', '五张周卡片每半拍飞进一张。', '57.07 起每半拍'],
+    [T.nw, '每日札记', '甩镜进入每日札记，向下滚动。', '59.07'],
+    [T.mont, '快切', '左边涂鸦和大字，右边对应界面特写，每秒一切。', '61.07 起每秒'],
+    [T.local, '本地优先', '笑脸电脑涂鸦画出，锁头砸在屏幕上。', '65.57 / 66.07'],
+    [T.parade, '十六种心情', '十六只小怪兽每半拍冒两只，一起踩拍跳。', '69.07 起'],
+    [T.stats, '四个数字', '四块色块每秒撞进一块。', '73.07 起每秒'],
+    [T.logo, '品牌', '五个界面窗口从中心散开，字标砸下，主张升起。', '77.07 / 78.07 / 79.07'],
+    [T.end, '尾板', '音乐收住时切到安静尾板，最后一秒淡出。', '81.85'],
   ];
   $('#board').innerHTML = SCENES.map(([s, n, d, hit]) => `<li><span class="tc">${fmt(s).slice(0, 5)}</span><div><strong>${n}</strong><span>${d} <em>${hit}</em></span></div></li>`).join('');
   $('#chips').innerHTML = SCENES.map(([s, n], i) => `<button class="chip" type="button" data-i="${i}">${fmt(s).slice(0, 5)}<b>${n}</b></button>`).join('');
@@ -1250,7 +1514,8 @@ var rough=function(){"use strict";function t(t,e,s){if(t&&t.length){const[n,o]=e
 
   if (exportMode) {
     document.body.classList.add('export');
-    window.__atlasFilm = { duration: DUR, ready: fontsReady.then(fit), render };
+    const imgsReady = Promise.all(IMGS.map((im) => (im.complete ? Promise.resolve() : new Promise((r) => { im.onload = im.onerror = r; })).then(() => im.decode && im.decode().catch(() => {}))));
+    window.__atlasFilm = { duration: DUR, ready: Promise.all([fontsReady, imgsReady]).then(fit), render };
     render(0);
     return;
   }
