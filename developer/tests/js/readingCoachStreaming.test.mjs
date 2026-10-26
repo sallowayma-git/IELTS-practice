@@ -63,3 +63,58 @@ test('a failed stream drops the provisional text and keeps the error path', asyn
   assert.equal(transcript.some((entry) => entry.content === 'Half'), false)
   assert.equal(transcript.filter((entry) => entry.isError).length, 1)
 })
+
+test('a delta that arrives after the reply settled cannot re-add a bubble', async () => {
+  let streamed
+  const coach = coachWith(async (_payload, _sessionId, options) => {
+    streamed = options.onDelta
+    options.onDelta('Check ')
+    return { threadId: 'thread-1', answer: 'Check the qualifier.', messages: [userRow, answerRow] }
+  })
+  coach.coachQuery.value = 'Why?'
+  await coach.askCoach()
+  const before = coach.coachTranscript.value.map((entry) => [entry.id, entry.content])
+  streamed('late text')
+  assert.deepEqual(coach.coachTranscript.value.map((entry) => [entry.id, entry.content]), before)
+  assert.equal(coach.coachTranscript.value.some((entry) => entry.status === 'streaming'), false)
+})
+
+test('a reset mid-stream closes the stream: later deltas do not show, and the reply does not reopen the bubble', async () => {
+  let streamed
+  let finish
+  const coach = coachWith(async (_payload, _sessionId, options) => {
+    streamed = options.onDelta
+    options.onDelta('Half ')
+    await new Promise((resolve) => { finish = resolve })
+    return { threadId: 'thread-1', answer: 'Check the qualifier.', messages: [userRow, answerRow] }
+  })
+  coach.coachQuery.value = 'Why?'
+  const pending = coach.askCoach()
+  assert.equal(coach.coachTranscript.value.some((entry) => entry.content === 'Half '), true)
+
+  coach.resetReadingCoachState()
+  assert.deepEqual(coach.coachTranscript.value, [])
+  streamed('after reset')
+  assert.deepEqual(coach.coachTranscript.value, [], 'a delta after reset must not re-add a bubble')
+
+  finish()
+  await pending
+  assert.equal(coach.coachTranscript.value.some((entry) => entry.content === 'after reset'), false)
+  assert.equal(coach.coachTranscript.value.some((entry) => entry.status === 'streaming'), false)
+})
+
+test('a truncated or over-long coach answer shows its own learner-facing message', async () => {
+  const coach = coachWith(async () => {
+    throw Object.assign(new Error('model output truncated at max_tokens'), { code: 'coach.output_truncated' })
+  })
+  coach.coachQuery.value = 'Why?'
+  await coach.askCoach()
+  assert.equal(coach.coachError.value, '阅读教练请求失败：回答过长，已被截断，请换个更具体的问题再试')
+
+  const tooLong = coachWith(async () => {
+    throw Object.assign(new Error('prompt exceeds model context'), { code: 'coach.context_exceeded' })
+  })
+  tooLong.coachQuery.value = 'Why?'
+  await tooLong.askCoach()
+  assert.match(tooLong.coachError.value, /上下文长度/)
+})
