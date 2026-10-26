@@ -266,8 +266,8 @@ fn score_from_bands(bands: &CriterionBands) -> Result<WritingScoreV4, ProviderEr
         criteria.map(|value| (value * 2.0).round() / 2.0);
     let mean = (task_response + coherence + lexical + grammar) / 4.0;
     Ok(WritingScoreV4 {
-        // A task band is the criterion mean rounded down to the half band.
-        overall: (mean * 2.0 + 1e-9).floor() / 2.0,
+        // IELTS rounds a mean ending in .25 or .75 up to the next half band.
+        overall: (mean * 2.0 + 0.5 + 1e-9).floor() / 2.0,
         task_response,
         coherence,
         lexical,
@@ -623,8 +623,8 @@ mod tests {
     #[test]
     fn parses_fenced_json() {
         let output = parse_output("```json\n{\"score\":{\"overall\":7.0,\"taskResponse\":7.0,\"coherence\":6.5,\"lexical\":7.0,\"grammar\":6.5},\"feedback\":{\"overall\":\"Clear\",\"plan\":[],\"paragraphs\":[],\"sentences\":[],\"rewrites\":[]}}\n```").unwrap();
-        // mean 6.75 rounds down to 6.5
-        assert_eq!(output.score.overall, 6.5);
+        // mean 6.75 rounds up to 7.0
+        assert_eq!(output.score.overall, 7.0);
         assert!(output.feedback.is_ok());
     }
 
@@ -637,7 +637,7 @@ mod tests {
     #[test]
     fn keeps_valid_score_when_review_payload_is_invalid() {
         let output = parse_output("{\"score\":{\"overall\":7.0,\"taskResponse\":7.0,\"coherence\":6.5,\"lexical\":7.0,\"grammar\":6.5},\"feedback\":false}").unwrap();
-        assert_eq!(output.score.overall, 6.5);
+        assert_eq!(output.score.overall, 7.0);
         assert!(output.feedback.is_err());
     }
 
@@ -649,11 +649,14 @@ mod tests {
 
         let snapped = parse_output("{\"score\":{\"taskResponse\":6.3,\"coherence\":6.0,\"lexical\":6.0,\"grammar\":6.0},\"feedback\":{}}").unwrap();
         assert_eq!(snapped.score.task_response, 6.5);
-        // mean 6.125 rounds down to 6.0
+        // mean 6.125 rounds to the nearest half band, 6.0
         assert_eq!(snapped.score.overall, 6.0);
 
         let quarter = parse_output("{\"score\":{\"taskResponse\":7.0,\"coherence\":7.0,\"lexical\":7.0,\"grammar\":6.0},\"feedback\":{}}").unwrap();
-        assert_eq!(quarter.score.overall, 6.5);
+        assert_eq!(quarter.score.overall, 7.0);
+
+        let low_quarter = parse_output("{\"score\":{\"taskResponse\":6.0,\"coherence\":6.0,\"lexical\":6.0,\"grammar\":7.0},\"feedback\":{}}").unwrap();
+        assert_eq!(low_quarter.score.overall, 6.5);
     }
 
     #[test]
