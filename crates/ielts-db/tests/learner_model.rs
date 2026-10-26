@@ -440,6 +440,69 @@ fn same_session_success_adds_no_stability_but_a_later_success_does() {
     assert!(learner_model_verify(&conn).unwrap().consistent);
 }
 
+#[test]
+fn mastery_is_capped_by_independent_attempt_count() {
+    let (dir, conn) = open_db();
+    submit_trend_attempt(dir.path(), &conn, "cap-a", "cap-a-1", 12, &[true; 8], false);
+    let one = state(&conn).states[0].mastery_mean;
+    assert!(one <= 0.5 + 1e-12, "one independent attempt: {one}");
+
+    submit_trend_attempt(dir.path(), &conn, "cap-b", "cap-b-1", 13, &[true; 8], false);
+    let two = state(&conn).states[0].mastery_mean;
+    assert!(two <= 0.8 + 1e-12 && two > 0.5, "two independent attempts: {two}");
+
+    submit_trend_attempt(dir.path(), &conn, "cap-c", "cap-c-1", 14, &[true; 8], false);
+    let three = state(&conn);
+    assert!(three.states[0].mastery_mean > 0.9, "three attempts stay uncapped");
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+#[test]
+fn repeat_practice_on_one_article_does_not_lift_the_cap() {
+    let (dir, conn) = open_db();
+    for (attempt, day) in [("same-1", 12), ("same-2", 13), ("same-3", 14)] {
+        submit_trend_attempt(dir.path(), &conn, "cap-same", attempt, day, &[true; 8], false);
+    }
+    let snapshot = state(&conn);
+    assert_eq!(snapshot.states[0].distinct_asset_count, 1);
+    assert!(snapshot.states[0].mastery_mean <= 0.5 + 1e-12);
+    assert_eq!(snapshot.states[0].explanation["trendOutcomes"], json!([1.0]));
+}
+
+#[test]
+fn coach_assisted_success_is_credited_at_most_sixty_percent() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "event-helped", "asset-h", "q1", "tfng", "2026-08-12T00:00:00Z", true,
+        Some(("coach-h", "coach_micro_drill")));
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let outcome: f64 = conn
+        .query_row(
+            "SELECT outcome FROM learner_skill_observations WHERE event_id = 'event-helped'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!((outcome - 0.6).abs() < 1e-12);
+    // One article is one independent attempt, so the single-attempt cap applies.
+    assert!(state(&conn).states[0].mastery_mean <= 0.5 + 1e-12);
+}
+
+#[test]
+fn coach_assisted_second_article_does_not_make_a_strong_skill_look_weak() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "event-solo", "asset-s", "q1", "tfng", "2026-08-12T00:00:00Z", true, None);
+    insert_question(&conn, "event-helped2", "asset-t", "q1", "tfng", "2026-08-13T00:00:00Z", true,
+        Some(("coach-t", "coach_micro_drill")));
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let row = &state(&conn).states[0];
+    assert_eq!(row.distinct_asset_count, 2);
+    // Two articles of evidence: the two-attempt ceiling applies, not the one-attempt cap,
+    // so the skill stays above the weak-skill mastery line.
+    assert!(row.mastery_mean >= 0.6, "mastery {}", row.mastery_mean);
+}
+
 fn insert_question(
     conn: &Connection,
     event_id: &str,

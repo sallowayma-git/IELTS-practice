@@ -29,6 +29,8 @@ const MAX_AVOID_ASSETS: usize = 5;
 const MAX_LEARNER_RESPONSE_BYTES: usize = 1_048_576;
 const EMPTY_REFERENCE_AT: &str = "1970-01-01T00:00:00Z";
 const DESKTOP_USER_ID: &str = "local";
+/// A correct answer reached with coach or hint help is worth at most this much.
+const ASSISTED_SUCCESS_OUTCOME_CAP: f64 = 0.6;
 
 #[derive(Debug, Clone)]
 struct SourceObservation {
@@ -374,6 +376,10 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
         };
         let mappings = mappings_for_source(conn, source, allow_seed_mapping)?;
         let (same_asset, gap_hours) = practice_gaps[&practice_key(source)];
+        let assisted = is_assisted(
+            source.intervention_id.as_deref(),
+            source.intervention_type.as_deref(),
+        );
         let (novelty_weight, familiarity_weight) =
             familiarity_weights(same_asset, gap_hours, LearnerModelConfig::default());
         for mapping in mappings {
@@ -404,7 +410,7 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
                 user_id: source.user_id.clone(),
                 event_id: source.event_id.clone(),
                 skill_key: mapping.skill_key,
-                outcome: outcome.clamp(0.0, 1.0),
+                outcome: credited_outcome(outcome, assisted),
                 mapping_weight: mapping.weight,
                 evidence_weight: (source.confidence * source.evidence_strength).clamp(0.0, 1.0),
                 novelty_weight,
@@ -778,6 +784,7 @@ fn insert_skill_observations(conn: &Connection, observations: &[SkillObservation
 
 /// Trend measures transfer across first attempts on independent materials.
 /// Repeated practice still updates the posterior, but cannot establish transfer.
+/// Returns every independent attempt in time order; callers window the tail.
 fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> {
     let mut attempts = BTreeMap::new();
     for observation in observations {
@@ -816,14 +823,13 @@ fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> 
         temporal_outcomes.entry(at).or_default()
             .push(values.iter().sum::<f64>() / values.len() as f64);
     }
-    let mut outcomes = temporal_outcomes
+    let outcomes = temporal_outcomes
         .into_values()
         .map(|mut values| {
             values.sort_by(f64::total_cmp);
             values.iter().sum::<f64>() / values.len() as f64
         })
         .collect::<Vec<_>>();
-    outcomes.drain(..outcomes.len().saturating_sub(8));
     outcomes
 }
 
@@ -954,8 +960,16 @@ fn build_states_and_schedules(
         let reference =
             parse_time(reference_at).unwrap_or_else(|| parse_time(EMPTY_REFERENCE_AT).unwrap());
         let outcomes = recent_outcomes.get(&key).cloned().unwrap_or_default();
-        let trend_outcomes = independent_attempt_outcomes(&trend_observations[&key]);
+        let mut trend_outcomes = independent_attempt_outcomes(&trend_observations[&key]);
+        let independent_attempts = trend_outcomes.len() as u64;
+        trend_outcomes.drain(..trend_outcomes.len().saturating_sub(8));
         let trend = trend_direction(&trend_outcomes);
+        // Single finalization point for mastery: every consumer (review delay,
+        // priority, reason codes, weak-skill profile) reads this capped value.
+        // alpha/beta stay the raw evidence; uncertainty is unchanged.
+        state.mastery_mean = state
+            .mastery_mean
+            .min(mastery_ceiling(independent_attempts));
         let delay_days = review_delay_days(&state);
         let next_review_at = state
             .last_practiced_at
@@ -1298,6 +1312,30 @@ fn review_delay_days(state: &SkillState) -> f64 {
     }
 }
 
+fn is_assisted(intervention_id: Option<&str>, intervention_type: Option<&str>) -> bool {
+    intervention_id.is_some() || intervention_type.is_some()
+}
+
+fn credited_outcome(outcome: f64, assisted: bool) -> f64 {
+    let outcome = outcome.clamp(0.0, 1.0);
+    if assisted {
+        outcome.min(ASSISTED_SUCCESS_OUTCOME_CAP)
+    } else {
+        outcome
+    }
+}
+
+/// Mastery ceiling by independent attempt count: one first attempt on one
+/// article cannot establish mastery, two cannot exceed 0.8, and from three on
+/// the Beta posterior speaks for itself.
+fn mastery_ceiling(independent_attempts: u64) -> f64 {
+    match independent_attempts {
+        0 | 1 => 0.5,
+        2 => 0.8,
+        _ => 1.0,
+    }
+}
+
 /// Repeats closer than this to the skill's previous practice are the same
 /// study session (DeepTutor scheduler rule): a success there adds no stability.
 const SAME_SESSION_REPEAT_DAYS: f64 = 0.25;
@@ -1467,5 +1505,20 @@ mod tests {
     #[test]
     fn same_session_failure_still_halves_stability() {
         assert_eq!(update_stability(2.0, Some(0.01), 0.0, 1.0), 1.0);
+    }
+
+    #[test]
+    fn mastery_ceiling_follows_independent_attempt_count() {
+        assert_eq!(mastery_ceiling(0), 0.5);
+        assert_eq!(mastery_ceiling(1), 0.5);
+        assert_eq!(mastery_ceiling(2), 0.8);
+        assert_eq!(mastery_ceiling(3), 1.0);
+    }
+
+    #[test]
+    fn assisted_success_is_capped_but_failure_is_not_raised() {
+        assert_eq!(credited_outcome(1.0, true), 0.6);
+        assert_eq!(credited_outcome(1.0, false), 1.0);
+        assert_eq!(credited_outcome(0.0, true), 0.0);
     }
 }
