@@ -1,0 +1,794 @@
+<title>IELTS Atlas TVC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@700;900&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400;1,6..72,500&display=swap">
+<style>
+/* Layout: a 1920×1080 TVC stage scaled to the column, transport + soundtrack loader under it,
+   then the shot list. The film is a single dark look on purpose. */
+:root {
+  --void: #050505;
+  --ink: #F4F1EA;
+  --mute: #8F897E;
+  --ember: #E8743F;
+  --panel: #12110F;
+  --rule: rgba(244, 241, 234, 0.14);
+  --f-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --f-serif: "Noto Serif SC", "Songti SC", serif;
+  --f-en: "Newsreader", "Iowan Old Style", Georgia, serif;
+  color-scheme: dark;
+}
+html, body { background: var(--void); color: var(--ink); }
+body { font-family: var(--f-sans); font-size: 15px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.page { max-width: 1280px; margin: 0 auto; display: grid; gap: 20px; }
+.masthead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+.masthead h1 { margin: 0; font-size: 22px; font-weight: 700; }
+.masthead h1 span { color: var(--ember); }
+.masthead p { margin: 0; color: var(--mute); font-size: 14px; }
+.viewport { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; background: #000; box-shadow: 0 0 0 1px var(--rule); cursor: pointer; }
+.viewport:fullscreen { border-radius: 0; box-shadow: none; }
+.transport { display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 12px; }
+.btn { appearance: none; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); height: 40px; min-width: 40px; padding: 0 14px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: 500 14px var(--f-sans); cursor: pointer; }
+.btn:hover { border-color: rgba(244, 241, 234, 0.32); }
+.btn:focus-visible, input:focus-visible, .chip:focus-visible, label.btn:focus-within { outline: 2px solid var(--ember); outline-offset: 2px; }
+.btn svg { width: 16px; height: 16px; fill: currentColor; }
+.time { font-variant-numeric: tabular-nums; color: var(--mute); font-size: 13px; white-space: nowrap; }
+input[type=range] { width: 100%; min-width: 0; accent-color: var(--ember); }
+.sound { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 14px; background: var(--panel); }
+.sound input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.sound p { margin: 0; color: var(--mute); font-size: 13.5px; line-height: 1.6; flex: 1 1 280px; min-width: 0; }
+.sound p b { color: var(--ink); font-weight: 500; }
+.notes { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; padding: 22px 24px; }
+.notes h2 { margin: 0 0 4px; font-size: 17px; }
+.notes .lede { margin: 0 0 14px; color: var(--mute); font-size: 14px; line-height: 1.6; }
+.shots { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0 24px; }
+.shots li { min-width: 0; display: grid; grid-template-columns: 52px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--rule); cursor: pointer; }
+.shots li[aria-current="true"] .tc { color: var(--ink); }
+.shots li[aria-current="true"] strong { color: var(--ember); }
+.shots .tc { font-variant-numeric: tabular-nums; color: var(--ember); font-size: 12.5px; padding-top: 2px; }
+.shots strong { display: block; font-size: 14px; font-weight: 700; }
+.shots span { color: var(--mute); font-size: 13px; line-height: 1.55; }
+.shots em { font-family: var(--f-en); font-style: italic; color: #F6A47E; }
+@media (max-width: 820px) {
+  .transport { grid-template-columns: auto auto 1fr; }
+  .transport .time { grid-column: 1 / -1; }
+  .transport .fs { display: none; }
+}
+
+/* ───────── stage ───────── */
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; background: var(--void); color: var(--ink); font-family: var(--f-sans); -webkit-font-smoothing: antialiased; }
+#stage * { box-sizing: border-box; }
+.shot { position: absolute; inset: 0; overflow: hidden; display: none; }
+.abs { position: absolute; }
+.fill { position: absolute; inset: 0; }
+.ch { display: inline-block; will-change: transform, opacity; }
+.chi { will-change: opacity; }
+.lyric { font: italic 500 120px/1.05 var(--f-en); letter-spacing: -0.02em; }
+.super { font-size: 64px; font-weight: 900; letter-spacing: -0.01em; }
+.eyebrow { font: 500 24px var(--f-sans); letter-spacing: 0.24em; text-transform: uppercase; }
+.center-x { left: 0; right: 0; text-align: center; }
+.mascot svg, .msc { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* laptop (CSS 3D) */
+.lap { position: absolute; inset: 0; perspective: 2600px; perspective-origin: 50% 42%; }
+.lap-rig { position: absolute; left: 50%; top: 58%; width: 0; height: 0; transform-style: preserve-3d; }
+.lap-lid { position: absolute; left: -600px; top: -780px; width: 1200px; height: 780px; transform-origin: 50% 100%; transform-style: preserve-3d; }
+.lid-front, .lid-back { position: absolute; inset: 0; border-radius: 36px; backface-visibility: hidden; }
+.lid-front { background: #0A0A0B; padding: 22px 22px 34px; box-shadow: inset 0 0 0 2px #2C2C2F, inset 0 0 0 4px #0A0A0B, inset 0 0 0 5px #3A3A3E; }
+.bezel { position: relative; width: 100%; height: 100%; border-radius: 16px 16px 6px 6px; overflow: hidden; background: #000; }
+.screen { position: absolute; left: 0; top: 0; width: 1156px; height: 724px; }
+.glare { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, rgba(255,255,255,0) 35%, rgba(255,255,255,0.10) 48%, rgba(255,255,255,0) 60%); mix-blend-mode: screen; }
+.dim { position: absolute; inset: 0; background: #000; pointer-events: none; }
+.lid-back { transform: rotateY(180deg); background: linear-gradient(160deg, #47474B, #26262A 55%, #38383C); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08); }
+.lid-back i { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 40px rgba(232,116,63,0.6); }
+.lap-deck { position: absolute; left: -630px; top: 0; width: 1260px; height: 860px; transform-origin: 50% 0; transform: rotateX(90deg); border-radius: 0 0 46px 46px; background: linear-gradient(#3A3A3E, #2A2A2E 30%, #333337); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.07); }
+.kbd { position: absolute; left: 150px; top: 70px; width: 960px; height: 390px; border-radius: 12px; background-color: #151517;
+  background-image: repeating-linear-gradient(90deg, transparent 0 62px, #2E2E32 62px 68px), repeating-linear-gradient(0deg, transparent 0 59px, #2E2E32 59px 65px); }
+.pad { position: absolute; left: 380px; top: 500px; width: 500px; height: 300px; border-radius: 22px; background: #38383C; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08); }
+.lap-shadow { position: absolute; left: 50%; width: 1500px; height: 180px; margin-left: -750px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,0.55), transparent); }
+
+/* app UI inside the screen (Warm Paper) */
+.app { position: absolute; inset: 0; background: #F4F1EA; color: #22201C; font-family: var(--f-sans); }
+.app-nav { height: 58px; display: flex; align-items: center; gap: 26px; padding: 0 30px; border-bottom: 1px solid rgba(34,32,28,0.12); font-size: 16px; color: #4B4741; background: #F7F5EF; }
+.app-nav b { font: 600 22px var(--f-en); color: #161512; margin-right: 18px; }
+.app-nav .on { color: #161512; font-weight: 700; position: relative; }
+.app-nav .on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -19px; height: 3px; border-radius: 3px; background: #C15F3C; }
+.app-body { position: absolute; left: 0; right: 0; top: 58px; bottom: 0; padding: 28px 34px; }
+.serif { font-family: var(--f-en); }
+.r-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 30px; height: 100%; }
+.r-pass { background: #FFFDF8; border-radius: 14px; padding: 24px 28px; box-shadow: 0 1px 2px rgba(34,32,28,.08), 0 8px 24px rgba(34,32,28,.06); }
+.r-pass .k { font-size: 12px; letter-spacing: .18em; color: #8A8276; }
+.r-pass h4 { margin: 8px 0 12px; font: 600 28px var(--f-en); }
+.r-pass p { margin: 0 0 10px; font: 400 17.5px/1.62 var(--f-en); color: #2A2722; }
+.hl { background: linear-gradient(rgba(232,116,63,.34), rgba(232,116,63,.34)) no-repeat 0 75% / 0% 60%; }
+.r-q { display: grid; gap: 14px; align-content: start; }
+.q { background: #FFFDF8; border-radius: 12px; padding: 14px 18px; box-shadow: 0 1px 2px rgba(34,32,28,.08); }
+.q .n { font-size: 12px; font-weight: 700; color: #8A8276; letter-spacing: .1em; }
+.q .s { margin: 4px 0 10px; font: 400 16.5px/1.45 var(--f-en); }
+.q .o { display: flex; gap: 8px; }
+.q .o span { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; border: 1.5px solid rgba(34,32,28,.22); }
+.q .o .bad { background: #D2452F; border-color: #D2452F; color: #fff; }
+.q .o .good { background: #22A660; border-color: #22A660; color: #fff; }
+.coachp { background: #22201C; color: #F4F1EA; border-radius: 14px; padding: 16px 18px; font-size: 15px; line-height: 1.6; }
+.coachp b { color: #F6A47E; }
+.w-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 30px; height: 100%; }
+.w-essay { background: #FFFDF8; border-radius: 14px; padding: 24px 30px; box-shadow: 0 1px 2px rgba(34,32,28,.08), 0 8px 24px rgba(34,32,28,.06); font: 400 19px/2 var(--f-en); color: #2A2722; }
+.w-essay .k { font: 500 12px var(--f-sans); letter-spacing: .18em; color: #8A8276; }
+.uw { text-decoration: underline wavy #D2452F; text-decoration-thickness: 1.5px; text-underline-offset: 5px; }
+.w-score { background: #FFFDF8; border-radius: 14px; padding: 24px; box-shadow: 0 1px 2px rgba(34,32,28,.08); display: grid; gap: 14px; align-content: start; }
+.w-score .big { font: 900 92px/1 var(--f-sans); letter-spacing: -.03em; }
+.bar { display: grid; grid-template-columns: 92px 1fr 36px; gap: 10px; align-items: center; font-size: 14px; }
+.bar i { display: block; height: 10px; border-radius: 6px; background: rgba(34,32,28,.08); overflow: hidden; }
+.bar i::after { content: ""; display: block; height: 100%; width: var(--w); background: var(--c); border-radius: 6px; }
+.nb-h { font: 900 34px var(--f-serif); margin: 0 0 14px; }
+.nb-row { display: flex; gap: 22px; margin-bottom: 26px; }
+.nb-card { flex: 1; min-width: 0; border: 2.5px solid #1E1A16; box-shadow: 4px 4px 0 #1E1A16; border-radius: 14px; padding: 14px 16px; background: #FFF8EA; color: #1E1A16; transform: rotate(var(--r, 0deg)); }
+.nb-card small { font-size: 12px; font-weight: 700; letter-spacing: .1em; opacity: .7; }
+.nb-card p { margin: 6px 0 0; font-weight: 700; font-size: 16px; line-height: 1.45; }
+.nb-card .msc { width: 40px; height: 40px; float: right; margin: -4px -4px 0 6px; }
+.ov-hi { font: 900 44px var(--f-serif); margin: 6px 0 4px; }
+.ov-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 22px 0; }
+.ov-tiles div { background: #FFFDF8; border-radius: 14px; padding: 18px; box-shadow: 0 1px 2px rgba(34,32,28,.08); }
+.ov-tiles small { color: #8A8276; font-size: 13px; }
+.ov-tiles b { display: block; font: 900 38px var(--f-sans); margin-top: 4px; letter-spacing: -.02em; }
+.ov-cta { display: flex; justify-content: space-between; align-items: center; background: #22201C; color: #F4F1EA; border-radius: 16px; padding: 22px 26px; font-size: 18px; }
+.ov-cta span { background: #C15F3C; padding: 10px 20px; border-radius: 999px; font-weight: 700; font-size: 15px; }
+
+/* misc shot pieces */
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.memcard { position: absolute; width: 760px; height: 420px; transform-style: preserve-3d; }
+.memcard > div { position: absolute; inset: 0; border-radius: 36px; backface-visibility: hidden; padding: 48px 54px; display: flex; flex-direction: column; justify-content: space-between; border: 4px solid #1E1A16; box-shadow: 10px 10px 0 #1E1A16; color: #1E1A16; }
+.memcard .tag { align-self: flex-start; font: 900 30px var(--f-sans); padding: 8px 22px; border-radius: 999px; background: #1E1A16; color: #FFF8EA; }
+.memcard p { margin: 0; font: 900 54px/1.3 var(--f-sans); letter-spacing: -.01em; }
+.memcard .ev { font: 700 26px var(--f-sans); opacity: .7; }
+.lock-body { position: absolute; background: var(--ink); }
+.keyhole { position: absolute; left: 50%; top: 50%; width: 30px; height: 64px; margin: -30px 0 0 -15px; }
+.keyhole::before { content: ""; position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--void); }
+.keyhole::after { content: ""; position: absolute; left: 10px; top: 22px; width: 10px; height: 38px; border-radius: 5px; background: var(--void); }
+.odo { display: flex; font-variant-numeric: tabular-nums; }
+.odo .col { height: 1em; overflow: hidden; }
+.odo .col span { display: block; height: 1em; }
+.cloud { position: absolute; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,.95), rgba(255,255,255,.55) 55%, rgba(255,255,255,0)); filter: blur(6px); }
+
+body.export { padding: 0; overflow: hidden; }
+body.export .page > :not(.viewport) { display: none; }
+body.export .page { max-width: none; }
+body.export .viewport { position: fixed; inset: 0; width: 1920px; height: 1080px; border-radius: 0; box-shadow: none; aspect-ratio: auto; }
+</style>
+
+<div class="page">
+  <div class="masthead">
+    <h1>IELTS Atlas <span>·</span> TVC</h1>
+    <p>68 秒 · 1920×1080 · 配乐 Welcome to The Future（0:49 起）</p>
+  </div>
+  <div class="viewport" id="viewport" role="img" aria-label="IELTS Atlas 广告片：笔记本样机展示阅读 Coach、写作评分、札记，色场剪影与特写镜头，结尾落版 IELTS Atlas。">
+    <div id="stage"></div>
+  </div>
+  <div class="transport">
+    <button class="btn" id="play" type="button" aria-label="播放"><svg viewBox="0 0 16 16" id="play-ico"><path d="M4 2l10 6-10 6z"/></svg></button>
+    <button class="btn" id="replay" type="button" aria-label="从头播放"><svg viewBox="0 0 16 16"><path d="M8 2a6 6 0 1 1-5.6 3.9l1.9.7A4 4 0 1 0 8 4v2.5L4.5 3 8 0z"/></svg></button>
+    <input type="range" id="scrub" min="0" max="68.07" step="0.01" value="0" aria-label="播放进度">
+    <span class="time" id="time">00:00.0 / 01:08.1</span>
+    <button class="btn fs" id="fs" type="button">全屏</button>
+  </div>
+  <div class="sound">
+    <label class="btn" for="song"><svg viewBox="0 0 16 16"><path d="M6 2v8.3A2.5 2.5 0 1 0 7.5 12.5V5h5V2z"/></svg>载入配乐</label>
+    <input type="file" id="song" accept="audio/*">
+    <p id="sound-note">选择你本机的 <b>Welcome to The Future.mp3</b>，画面会从歌曲 0:49 起同步播放。音乐只在你的浏览器里读取，不会上传。</p>
+  </div>
+  <section class="notes">
+    <h2>镜头表</h2>
+    <p class="lede">每个镜头的切点都落在节拍上（约 123 BPM）。点任意一行跳到该镜头。</p>
+    <ol class="shots" id="shots"></ol>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  // The song is cut in at 0:49 ("Welcome to yeah"); the main act starts on 0:58.57 ("Take a look at the light").
+  // Main-act shots are timed in seconds after 0:58.57, so they sit O seconds into the film.
+  const AUDIO_START = 49.0, O = 58.57 - AUDIO_START, MAIN = 58.5, DUR = MAIN + O;
+  const C = { void: '#050505', ink: '#F4F1EA', ember: '#E8743F', paper: '#F4F1EA', nbInk: '#1E1A16',
+    orange: '#FF6A1A', blue: '#1F6FE5', sky: '#2AA8F2', green: '#16A35A', purple: '#8E5BE0', yellow: '#FFC21A', pink: '#FF5FA2', red: '#F0412A', navy: '#0B1640' };
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const exportMode = /[?&]export\b/.test(location.search);
+
+  /* ── math ── */
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, p) => a + (b - a) * p;
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const E = {
+    inCubic: (p) => p * p * p,
+    outCubic: (p) => 1 - Math.pow(1 - p, 3),
+    inOutCubic: (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2),
+    inOutQuart: (p) => (p < 0.5 ? 8 * p ** 4 : 1 - Math.pow(-2 * p + 2, 4) / 2),
+    outExpo: (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * p)),
+    inExpo: (p) => (p <= 0 ? 0 : Math.pow(2, 10 * p - 10)),
+    inOutSine: (p) => -(Math.cos(Math.PI * p) - 1) / 2,
+  };
+  function spring(x, w = 12, z = 0.6) {
+    if (x <= 0) return 0;
+    if (z < 1) { const wd = w * Math.sqrt(1 - z * z); return 1 - Math.exp(-z * w * x) * (Math.cos(wd * x) + (z * w / wd) * Math.sin(wd * x)); }
+    return 1 - (1 + w * x) * Math.exp(-w * x);
+  }
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, p) => { const A = hex(a), B = hex(b); return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], clamp(p)))).join(',')})`; };
+  function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let r = Math.imul(seed ^ (seed >>> 15), 1 | seed); r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r; return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; }
+  // Beat grid measured from the track (seconds after the 0:58.57 cut-in).
+  const BEATS = [0.01, 0.5, 1.01, 1.49, 1.98, 2.47, 2.96, 3.47, 3.95, 4.47, 4.93, 5.42, 5.93, 6.44, 6.93, 7.41, 7.93, 8.41, 8.9, 9.41, 9.9, 10.41, 10.9, 11.39, 11.87, 12.38, 12.87, 13.36, 13.87, 14.38, 14.87, 15.36, 15.84, 16.35, 16.84, 17.33, 17.84, 18.35, 18.84, 19.33, 19.81, 20.3, 20.79, 21.3, 21.81, 22.3, 23.43, 23.78, 24.25, 24.76, 25.27, 25.76, 26.25, 26.76, 27.24, 27.73, 28.24, 28.73, 29.24, 29.73, 30.22, 30.73, 31.22, 31.73, 32.21, 32.7, 33.19, 33.7, 34.19, 34.67, 35.19, 35.67, 36.18, 36.67, 37.16, 37.67, 38.16, 38.67, 39.16, 39.64, 40.13, 40.64, 41.15, 41.64, 42.13, 42.62, 43.13, 43.61, 44.08, 44.61, 45.1, 45.61, 46.1, 46.59, 47.1, 47.59, 48.03, 48.44, 48.93, 49.42, 49.91, 50.42, 50.91, 51.42, 51.9, 52.39, 52.88, 53.37, 53.88, 54.39, 54.92, 55.5, 56.01, 56.52, 57.01, 57.5, 58.01];
+  // 1 right on a beat, decaying to 0 before the next one.
+  const BEATS_INTRO = [0.16, 0.65, 1.16, 1.64, 2.15, 2.64, 3.13, 3.62, 4.11, 4.59, 5.1, 5.59, 6.1, 6.59, 7.1, 7.59, 8.08, 8.54, 9.07];
+  function kickIntro(t, k = 7) { let b = -9; for (const x of BEATS_INTRO) { if (x <= t) b = x; else break; } return Math.exp(-(t - b) * k); }
+  function kick(t, k = 7) { let b = -9; for (const x of BEATS) { if (x <= t) b = x; else break; } return Math.exp(-(t - b) * k); }
+
+  /* ── text helpers ── */
+  function split(el, mode = 'block') {
+    const out = [];
+    const walk = (node) => {
+      [...node.childNodes].forEach((n) => {
+        if (n.nodeType === 3) {
+          const frag = document.createDocumentFragment();
+          for (const c of n.textContent) {
+            if (mode === 'block' && c === ' ') { frag.appendChild(document.createTextNode(' ')); continue; }
+            const s = document.createElement('span'); s.className = mode === 'block' ? 'ch' : 'chi'; s.textContent = c; frag.appendChild(s); out.push(s);
+          }
+          n.replaceWith(frag);
+        } else if (n.nodeType === 1 && !n.classList.contains('nosplit') && n.tagName !== 'BR' && n.tagName.toLowerCase() !== 'svg') walk(n);
+      });
+    };
+    walk(el); return out;
+  }
+  function rise(chars, t, start, o = {}) {
+    const { stagger = 0.04, w = 14, z = 0.6, dy = 0.8, blur = 12, fade = 0.22 } = o;
+    chars.forEach((c, i) => {
+      const x = t - start - i * stagger, p = spring(x, w, z), a = clamp(x / fade);
+      c.style.transform = `translate3d(0,${((1 - p) * dy * 100).toFixed(2)}%,0)`;
+      c.style.opacity = a;
+      c.style.filter = a < 1 ? `blur(${((1 - a) * blur).toFixed(1)}px)` : 'none';
+    });
+  }
+  function words(el, t, times) { // one word per beat
+    const ws = el._w || (el._w = (() => { const parts = el.textContent.split(' '); el.innerHTML = parts.map((w) => `<span class="ch">${w}</span>`).join(' '); return $$('.ch', el); })());
+    ws.forEach((w, i) => { const x = t - times[i]; const p = spring(x, 18, 0.5); w.style.opacity = x >= 0 ? 1 : 0; w.style.transform = `translateY(${(1 - p) * 40}%) scale(${lerp(1.25, 1, p)})`; });
+  }
+  const st = (el, o) => { for (const k in o) el.style[k] = o[k]; };
+
+  /* ── assets ── */
+  const M = {
+    excited: ['#FFC21A', 'M32 7a25 25 0 1 1 0 50a25 25 0 1 1 0-50Z', '<circle cx="25" cy="30" r="4.6" fill="#fff"/><circle cx="23.2" cy="28.6" r="2.3" fill="#1E1A16"/><circle cx="39" cy="30" r="4.6" fill="#fff"/><circle cx="37.2" cy="28.6" r="2.3" fill="#1E1A16"/><path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M26 40q6 6 12 0"/>'],
+    joyful: ['#FF7AB6', 'M32 56C12 44 6 32 8 24C10 15 22 11 32 22C42 11 54 15 56 24C58 32 52 44 32 56Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 31q3 3.5 6 0M36 31q3 3.5 6 0M26 41q6 5 12 0"/>'],
+    energized: ['#FF7A1A', 'M10 56V24a7 7 0 0 1 14 0a8 8 0 0 1 16 0a7 7 0 0 1 14 0V56a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 36q3 3.5 6 0M36 36q3 3.5 6 0M27 44q5 4 10 0"/>'],
+    focused: ['#2AA8F2', 'M22 7H42L57 22V42L42 57H22L7 42V22Z', '<circle cx="25" cy="31" r="3.6" fill="#fff"/><circle cx="25" cy="31" r="2" fill="#1E1A16"/><circle cx="39" cy="31" r="3.6" fill="#fff"/><circle cx="39" cy="31" r="2" fill="#1E1A16"/><path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M20 25h9M35 25h9M27 43h10"/>'],
+    calm: ['#22A660', 'M8 40C8 30 18 26 32 26C46 26 56 30 56 40C56 52 46 56 32 56C18 56 8 52 8 40Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 38q3 3.5 6 0M36 38q3 3.5 6 0M28 46q4 2 8 0"/>'],
+    grateful: ['#9C6ADE', 'M8 34a24 20 0 1 0 48 0a24 20 0 1 0-48 0Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 32q3 3.5 6 0M36 32q3 3.5 6 0M25 42q7 4 14 0"/>'],
+    proud: ['#1F6FE5', 'M10 12H54V34Q54 50 32 60Q10 50 10 34Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 30q3 3.5 6 0M36 30q3 3.5 6 0M24 40q8 7 16 0"/>'],
+    confused: ['#1F6FE5', 'M32 8C48 8 58 20 56 36C54 52 44 58 30 56C14 54 6 44 8 30C10 16 20 8 32 8Z', '<circle cx="25" cy="31" r="4.2" fill="#fff"/><circle cx="23" cy="30" r="2.1" fill="#1E1A16"/><circle cx="39" cy="31" r="4.2" fill="#fff"/><circle cx="41" cy="33" r="2.1" fill="#1E1A16"/><path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M26 44q3-3 6 0t6 0"/>'],
+  };
+  const msc = (k, fill) => { const [f, d, face] = M[k]; return `<svg class="msc" viewBox="0 0 64 64" aria-hidden="true"><path fill="${fill || f}" d="${d}"/>${face}</svg>`; };
+  // Head-and-shoulders profile, facing right, in a 1000×1000 box.
+  const HEAD = 'M180 1000 C190 900 230 840 300 800 C330 784 352 760 356 720 C360 690 352 660 338 632 C300 600 268 560 254 500 C236 420 246 330 296 262 C352 186 444 150 540 156 C640 162 716 214 750 300 C766 342 768 382 764 416 C780 446 800 478 812 506 C818 520 812 530 796 534 L780 538 C786 556 784 572 774 582 C784 592 784 606 772 616 C768 640 760 664 738 676 C712 690 676 690 650 692 C640 720 642 748 656 780 C720 820 820 860 870 1000 Z';
+  const silhouette = (fill) => `<svg viewBox="0 0 1000 1000" style="width:100%;height:100%;display:block;overflow:visible"><path d="${HEAD}" fill="${fill}"/></svg>`;
+
+  /* app screens */
+  const NAV = (on) => `<div class="app-nav"><b>IELTS Atlas</b>${['总览', '题库', '写作', '技能', '札记', '历史', '更多', '设置'].map((n) => `<span${n === on ? ' class="on"' : ''}>${n}</span>`).join('')}</div>`;
+  const SCR = {
+    overview: `<div class="app">${NAV('总览')}<div class="app-body"><div style="color:#8A8276;font-size:15px">10 月 26 日 · 星期一</div><div class="ov-hi">晚上好，今天练一篇 P2？</div><div style="color:#69645B;font-size:16px">昨天的判断题错了 3 道，Coach 已经整理好讲解。</div>
+      <div class="ov-tiles"><div><small>本周练习</small><b>14 篇</b></div><div><small>阅读正确率</small><b>78%</b></div><div><small>写作 Band</small><b>7.0</b></div><div><small>连续学习</small><b>23 天</b></div></div>
+      <div class="ov-cta"><div><div style="font-size:13px;opacity:.6;letter-spacing:.14em">继续练习</div><div style="margin-top:6px;font-weight:700">The Glassmakers of Venice · Passage 2</div></div><span>开始</span></div></div></div>`,
+    reading: `<div class="app">${NAV('题库')}<div class="app-body"><div class="r-grid"><div class="r-pass"><div class="k">READING PASSAGE 2 · PARAGRAPH C</div><h4>The Glassmakers of Venice</h4><p>By the thirteenth century, Venetian glass was prized across Europe, and the city guarded its secrets closely. Craftsmen were moved to the island of Murano, partly to contain the risk of fire. <span class="hl">Even so, some glassmakers were allowed to travel abroad, provided they returned.</span> Those who left without permission faced severe penalties.</p><p>The guild kept careful records of every furnace, and an apprentice could wait ten years before he was trusted with a formula.</p></div>
+      <div class="r-q"><div class="q"><div class="n">QUESTION 13</div><div class="s">Murano was chosen partly because of the danger of fire.</div><div class="o"><span class="good">TRUE</span><span>FALSE</span><span>NOT GIVEN</span></div></div><div class="q"><div class="n">QUESTION 14</div><div class="s">Venetian glassmakers were never permitted to leave the city.</div><div class="o"><span>TRUE</span><span class="good">FALSE</span><span class="bad">NOT GIVEN</span></div></div><div class="coachp"><b>Coach</b>　原文说 some glassmakers <b>were allowed</b> to travel，和 never 直接矛盾，所以是 FALSE。</div></div></div></div></div>`,
+    writing: `<div class="app">${NAV('写作')}<div class="app-body"><div class="w-grid"><div class="w-essay"><div class="k">TASK 2 · 278 WORDS</div>Some people believe that university education should be free for everyone. Admittedly, <span class="uw">a lot of people thinks</span> that free tuition mainly helps the rich, but this view ignores the long-term benefit to society. When talented students from poor families can study without debt, the whole economy <span class="uw">become stronger</span>, and the cost is repaid many times over.</div>
+      <div class="w-score"><div style="font-size:13px;letter-spacing:.18em;color:#8A8276">OVERALL BAND</div><div class="big">7.0</div>${[['任务回应', 7, '#FF7A1A'], ['连贯与衔接', 6.5, '#2AA8F2'], ['词汇资源', 7, '#22A660'], ['语法', 6.5, '#9C6ADE']].map(([n, v, c]) => `<div class="bar"><span>${n}</span><i style="--w:${(v / 9 * 100).toFixed(0)}%;--c:${c}"></i><b>${v.toFixed(1)}</b></div>`).join('')}<div style="font-size:14px;color:#69645B;line-height:1.6;margin-top:6px">2 处语法问题已标出，点击查看改法。</div></div></div></div></div>`,
+    notebook: `<div class="app">${NAV('札记')}<div class="app-body"><div class="nb-h">每周整理</div><div class="nb-row">
+      <div class="nb-card" style="--r:-1.5deg"><small>第 43 周</small><p>判断题开始分清 FALSE 和 NOT GIVEN 了</p></div>
+      <div class="nb-card" style="--r:1deg;background:#E0643A"><small>第 42 周</small><p>同义替换正确率 54% → 71%</p></div>
+      <div class="nb-card" style="--r:-.5deg;background:#A8D5BA"><small>第 41 周</small><p>写作连贯性稳定在 6.5</p></div></div>
+      <div class="nb-h">每日札记</div><div class="nb-row">
+      <div class="nb-card" style="--r:1deg">${msc('calm')}<small>10/26</small><p>做了 2 篇 P2，Coach 讲了 3 题。</p></div>
+      <div class="nb-card" style="--r:-1deg;background:#E8B33A">${msc('excited')}<small>10/25</small><p>写作第一次拿到 7.0。</p></div>
+      <div class="nb-card" style="--r:.5deg;background:#9CC3DE">${msc('focused')}<small>10/24</small><p>连续 3 天练段落匹配。</p></div>
+      <div class="nb-card" style="--r:-1.5deg;background:#E9B9C4">${msc('joyful')}<small>10/23</small><p>词汇复习 40 个。</p></div></div></div></div>`,
+  };
+  const laptopHTML = (screen) => `<div class="lap"><div class="lap-rig"><div class="lap-deck"><div class="kbd"></div><div class="pad"></div></div><div class="lap-lid"><div class="lid-front"><div class="bezel"><div class="screen">${screen}</div><div class="dim"></div><div class="glare"></div></div></div><div class="lid-back"><i></i></div></div></div></div>`;
+  // Camera: dolly z, orbit ry, tilt rx, plus lid angle (0 = upright, -90 = closed).
+  function cam(root, o) {
+    const { x = 0, y = 0, z = 0, rx = -8, ry = 0, rz = 0, lid = 12, dim = 0, px = 50, py = 42 } = o;
+    const lap = $('.lap', root);
+    lap.style.perspectiveOrigin = `${px}% ${py}%`;
+    $('.lap-rig', root).style.transform = `translate3d(${x}px,${y}px,${z}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)`;
+    $('.lap-lid', root).style.transform = `rotateX(${lid}deg)`;
+    $('.dim', root).style.opacity = dim;
+  }
+
+  /* ── stage + shot registry ── */
+  const stage = $('#stage');
+  const SHOTS = [];
+  // Intro shots use film time; main-act shots use main-act time and sit O seconds later.
+  function intro(name, a, b, html, setup, draw, note) {
+    const el = document.createElement('div'); el.className = 'shot'; el.innerHTML = html; stage.appendChild(el);
+    const ctx = setup ? setup(el) || {} : {};
+    SHOTS.push({ name, a, b, el, draw: (t) => draw(t - a, t, el, ctx), note });
+  }
+  function shot(name, a, b, html, setup, draw, note) {
+    const el = document.createElement('div'); el.className = 'shot'; el.innerHTML = html; stage.appendChild(el);
+    const ctx = setup ? setup(el) || {} : {};
+    SHOTS.push({ name, a: a + O, b: b + O, el, draw: (t) => draw(t - O - a, t - O, el, ctx), note });
+  }
+
+  /* ── intro (film time; song 0:49 → 0:58.57) ── */
+  /* i1 · Welcome to yeah: a line of light folds into the dot */
+  intro('光线', 0, 1.16, `<div class="fill" style="background:${C.void}"></div><div class="abs ln" style="left:0;top:538px;width:1920px;height:4px;background:linear-gradient(90deg,transparent,${C.ember} 30%,#FFD2B8 50%,${C.ember} 70%,transparent);box-shadow:0 0 40px ${C.ember}"></div><div class="abs dt" style="left:940px;top:520px;width:40px;height:40px;border-radius:50%;background:${C.ember};box-shadow:0 0 60px ${C.ember}"></div>`,
+    (el) => ({ ln: $('.ln', el), dt: $('.dt', el) }),
+    (lt, t, el, c) => {
+      const open = E.outExpo(prog(lt, 0.15, 0.55)), fold = E.inOutCubic(prog(lt, 0.6, 0.95));
+      c.ln.style.transform = `scaleX(${open * (1 - fold)})`;
+      c.ln.style.opacity = 1 - prog(lt, 0.85, 0.95);
+      const p = spring(lt - 0.9, 16, 0.4);
+      c.dt.style.transform = `scale(${clamp(p, 0, 1.4)})`;
+    }, '黑场里一道橙色光线横向拉开，再折成一颗橙点。<em>Welcome to, yeah</em>');
+
+  /* i2 · rim-lit silhouette, slow push */
+  intro('剪影 · 轮廓光', 1.16, 4.11, `<div class="fill bg" style="background:radial-gradient(circle at 62% 46%,#5A2410,#160805 38%,#050505 70%)"></div><div class="abs head" style="left:520px;top:80px;width:1100px;height:1100px;filter:drop-shadow(-3px 0 1px #FFB48A) drop-shadow(-10px 0 26px ${C.ember})">${silhouette('#050505')}</div><div class="abs" style="left:130px;top:400px;width:620px"><div class="super s" style="font-size:96px;line-height:1.25">备考这条路，<br>有人陪你走。</div></div>`,
+    (el) => ({ head: $('.head', el), bg: $('.bg', el), s: split($('.s', el)) }),
+    (lt, t, el, c) => {
+      c.head.style.transform = `translateX(${lerp(120, 40, E.outCubic(prog(lt, 0, 2.95)))}px) scale(${lerp(1, 1.08, lt / 2.95)})`;
+      c.bg.style.opacity = E.outCubic(prog(lt, 0, 0.8));
+      rise(c.s, lt, 0.95, { stagger: 0.05 });
+    }, '轮廓光剪影：暗场里只亮出侧脸的一道橙色边。<em>Welcome to the future</em>');
+
+  /* i3 · Taking off now / way way up: the dot climbs past band scores */
+  intro('起飞', 4.11, 6.1, `<div class="fill bg"></div><div class="abs tr" style="left:956px;width:8px;border-radius:4px;background:linear-gradient(transparent,${C.ember})"></div><div class="abs dt" style="left:940px;width:40px;height:40px;border-radius:50%;background:${C.ember};box-shadow:0 0 60px ${C.ember}"></div><div class="abs alt" style="left:1060px;top:0">${['5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0'].map((v) => `<div style="height:300px;font:900 110px/300px var(--f-sans);letter-spacing:-.03em;opacity:.9">${v}</div>`).join('')}</div><div class="abs" style="left:150px;top:470px"><div class="super s" style="font-size:96px">起飞。</div></div>`,
+    (el) => ({ bg: $('.bg', el), tr: $('.tr', el), dt: $('.dt', el), alt: $('.alt', el), s: split($('.s', el)) }),
+    (lt, t, el, c) => {
+      const speed = lerp(1, 2.4, E.inOutCubic(prog(t, 5.1, 5.6)));
+      const climb = lt * 380 + Math.max(0, t - 5.1) * 900;
+      c.bg.style.background = `linear-gradient(${mix('#050505', '#0B1640', prog(lt, 0, 2))}, ${mix('#050505', '#1F3FA8', prog(lt, 0.4, 2))})`;
+      const y = lerp(560, 380, E.outCubic(prog(lt, 0, 0.6)));
+      c.dt.style.top = `${y - 20}px`;
+      const len = lerp(40, 520, clamp(lt / 0.8)) * speed * 0.7;
+      c.tr.style.top = `${y}px`; c.tr.style.height = `${len}px`;
+      c.alt.style.transform = `translateY(${-1500 + climb}px)`;
+      c.dt.style.transform = `scale(${1 + 0.25 * kickIntro(t)})`;
+      rise(c.s, lt, 0.1, { stagger: 0.06 });
+    }, '橙点向上飞，分数刻度 5.0 到 8.0 从身边掠过。<em>Taking off now, way way up</em>');
+
+  /* i4 · Boosted: mascot silhouettes, one per beat */
+  [['energized', C.orange], ['focused', C.sky], ['joyful', C.yellow], ['proud', C.green]].forEach(([k, bg], i) => {
+    const starts = [6.1, 6.59, 7.1, 7.59, 8.08];
+    intro(`剪影 · ${k}`, starts[i], starts[i + 1], `<div class="fill" style="background:${bg}"></div><div class="abs m" style="left:460px;top:40px;width:1000px;height:1000px"><svg viewBox="0 0 64 64" style="width:100%;height:100%;overflow:visible"><path d="${M[k][1]}" fill="#0A0A0A"/></svg></div><div class="abs center-x lyric" style="top:820px;font-size:90px;color:#0A0A0A;opacity:${i === 0 ? 1 : 0}">Boosted.</div>`,
+      (el) => ({ m: $('.m', el) }),
+      (lt, t, el, c) => {
+        const p = spring(lt, 15, 0.5);
+        c.m.style.transform = `scale(${lerp(0.55, 0.9, clamp(p, 0, 1.2)) + lt * 0.1}) rotate(${(1 - p) * (i % 2 ? 30 : -30)}deg)`;
+      }, i === 0 ? '四拍快切：小怪兽的黑色剪影压在高饱和色场上。<em>Boosted</em>' : null);
+  });
+
+  /* i5 · Coming to life: closed laptop from above, the logo dot wakes up */
+  intro('样机 · 苏醒', 8.08, O, `<div class="fill" style="background:radial-gradient(ellipse at 50% 50%,#1A1512,#050505 65%)"></div>${laptopHTML(SCR.overview)}`,
+    (el) => ({ logo: $('.lid-back i', el) }),
+    (lt, t, el, c) => {
+      const p = E.inOutSine(prog(lt, 0, O - 8.08));
+      cam(el, { z: lerp(-200, -480, p), y: lerp(-120, 60, p), rx: lerp(-64, -36, p), ry: 0, rz: lerp(-24, -6, p), lid: -90, dim: 1, py: 30 });
+      const g = Math.max(prog(t, 8.3, 8.5) * (0.6 + 0.4 * kickIntro(t, 5)), 0.15);
+      c.logo.style.opacity = g; c.logo.style.boxShadow = `0 0 ${lerp(10, 120, g)}px rgba(232,116,63,${g})`;
+    }, '合上的笔记本俯拍，盖子上的橙点随节拍亮起来。<em>Coming to life</em>');
+
+
+  /* 01 · Take a look at the light — laptop opens in the dark */
+  shot('开盖', 0, 4.47, `<div class="fill" style="background:radial-gradient(ellipse at 50% 70%,#1B1410,#050505 60%)"></div><div class="lap-shadow" style="top:640px"></div>${laptopHTML(SCR.overview)}<div class="fill glow" style="background:radial-gradient(ellipse at 50% 46%,rgba(255,236,214,.55),transparent 55%);mix-blend-mode:screen"></div><div class="abs center-x lyric" style="top:880px;font-size:64px;color:#D9CFC2">Take a look at the light</div>`,
+    (el) => ({ ly: $('.lyric', el), glow: $('.glow', el) }),
+    (lt, t, el, c) => {
+      const open = E.inOutCubic(prog(lt, 0.9, 3.9));
+      cam(el, { z: lerp(-900, -300, E.inOutSine(prog(lt, 0, 4.47))), y: lerp(160, 120, lt / 4.47), rx: lerp(-26, -12, E.inOutSine(prog(lt, 0, 4.47))), ry: lerp(-8, 4, lt / 4.47), lid: lerp(-90, 14, open), dim: lerp(1, 0, E.inOutCubic(prog(lt, 1.4, 4.0))) });
+      c.glow.style.opacity = clamp(open * 1.2) * (1 - prog(lt, 3.9, 4.47) * 0.5) * (0.6 + 0.4 * prog(lt, 1.64, 4.2));
+      c.ly.style.opacity = prog(lt, 0.15, 0.6) * (1 - prog(lt, 1.5, 1.9));
+      c.ly.style.letterSpacing = `${lerp(0.02, 0.06, lt / 2)}em`;
+    }, '漆黑中笔记本缓缓开盖，屏幕的光一点点漫出来。<em>Take a look at the light</em>');
+
+  /* 02 · Welcome to the future — orange field, silhouette, one word per beat */
+  shot('剪影 · 橙', 4.47, 6.44, `<div class="fill" style="background:${C.orange}"></div><div class="abs head" style="left:880px;top:90px;width:1100px;height:1100px">${silhouette(C.void)}</div><div class="abs lyric wl" style="left:110px;top:330px;width:900px;color:#fff;font-size:170px;line-height:.98">Welcome to the future.</div>`,
+    (el) => ({ head: $('.head', el), wl: $('.wl', el) }),
+    (lt, t, el, c) => {
+      const p = spring(lt, 9, 0.75);
+      c.head.style.transform = `translateX(${(1 - p) * 500}px) scale(${1 + lt * 0.025})`;
+      words(c.wl, lt, [0, 0.46, 0.95, 1.46]);
+      el.firstElementChild.style.transform = `scale(${1 + 0.015 * kick(t)})`;
+    }, '高饱和橙色场，学生侧脸剪影推入，歌词逐拍落字。<em>Welcome to the future</em>');
+
+  /* 03 · mascots pop out of the silhouette, one per beat */
+  shot('IP 出场', 6.44, 8.41, `<div class="fill" style="background:${C.yellow}"></div><div class="abs head" style="left:-160px;top:120px;width:1080px;height:1080px">${silhouette(C.void)}</div>${['focused', 'joyful', 'energized', 'calm'].map((k) => `<div class="abs m" style="width:300px;height:300px">${msc(k)}</div>`).join('')}`,
+    (el) => ({ ms: $$('.m', el), head: $('.head', el) }),
+    (lt, t, el, c) => {
+      const spots = [[880, 140], [1380, 260], [1000, 600], [1500, 640]];
+      c.head.style.transform = `translateX(${-lt * 30}px)`;
+      c.ms.forEach((m, i) => {
+        const x = lt - i * 0.49, p = spring(x, 13, 0.45);
+        const [tx, ty] = spots[i];
+        m.style.opacity = x >= 0 ? 1 : 0;
+        m.style.transform = `translate(${lerp(420, tx, p)}px,${lerp(520, ty, p)}px) rotate(${(1 - p) * (i % 2 ? 60 : -60)}deg) scale(${clamp(p, 0, 1.4)})`;
+      });
+    }, '黄色场，剪影里一拍弹出一只情绪小怪兽。');
+
+  /* 04 · product hero orbit — reading */
+  shot('样机 · 阅读', 8.41, 10.41, `<div class="fill" style="background:radial-gradient(ellipse at 50% 40%,#2A2A30,#050505 70%)"></div><div class="lap-shadow" style="top:700px"></div>${laptopHTML(SCR.reading)}<div class="abs center-x super" style="top:900px">每一道题，</div>`,
+    (el) => ({ s: $('.super', el), hl: $('.hl', el) }),
+    (lt, t, el, c) => {
+      const p = E.inOutSine(prog(lt, 0, 2));
+      cam(el, { z: lerp(-520, -160, p), y: 130, rx: lerp(-14, -6, p), ry: lerp(-34, -12, p), lid: 12 });
+      c.hl.style.backgroundSize = `${E.inOutCubic(prog(lt, 0.6, 1.6)) * 100}% 60%`;
+      rise(split.cache(c.s), lt, 0.3, { stagger: 0.05 });
+    }, '暗场中笔记本 3/4 侧面环绕推近，屏幕上是阅读练习。');
+
+  /* 05 · macro: the evidence sentence gets highlighted */
+  shot('特写 · 证据', 10.41, 12.38, `<div class="fill" style="background:#FFFDF8"></div><div class="abs mac" style="left:0;top:0;width:3200px;font:400 112px/1.55 var(--f-en);color:#2A2722">Murano, partly to contain the risk of fire. <span class="hl2" style="background:linear-gradient(rgba(232,116,63,.42),rgba(232,116,63,.42)) no-repeat 0 78%/0% 58%">Even so, some glassmakers were allowed to travel abroad,</span> provided they returned.</div><div class="fill" style="background:linear-gradient(#FFFDF8 0%,rgba(255,253,248,0) 30%,rgba(255,253,248,0) 70%,#FFFDF8 100%)"></div><div class="abs center-x super" style="top:880px;color:#1E1A16">它看得见你为什么错。</div>`,
+    (el) => ({ mac: $('.mac', el), hl: $('.hl2', el), s: $('.super', el) }),
+    (lt, t, el, c) => {
+      c.mac.style.transform = `translate(${lerp(-1500, -2000, lt / 2)}px, 380px)`;
+      c.mac.style.filter = `blur(${Math.max(0, 6 - lt * 12).toFixed(1)}px)`;
+      c.hl.style.backgroundSize = `${E.inOutCubic(prog(lt, 0.2, 1.1)) * 100}% 58%`;
+      rise(split.cache(c.s), lt, 0.5, { stagger: 0.04 });
+    }, '巨型衬线字特写横移，证据句被荧光笔扫过。');
+
+  /* 06 · blue field: wrong answer, Coach explains */
+  shot('Coach · 蓝', 12.38, 14.38, `<div class="fill" style="background:${C.blue}"></div><div class="abs" style="left:150px;top:150px"><div class="eyebrow" style="color:#BFE3FF">Reading Coach</div><div class="super" style="font-size:120px;line-height:1.1;margin-top:16px">讲到<br>你懂。</div></div>
+      <div class="abs opts" style="left:860px;top:180px;display:flex;gap:18px">${['TRUE', 'FALSE', 'NOT GIVEN'].map((o) => `<span style="font:900 36px var(--f-sans);padding:20px 34px;border-radius:999px;border:3px solid rgba(255,255,255,.6)">${o}</span>`).join('')}</div>
+      <div class="abs bub" style="left:860px;top:340px;width:900px;overflow:hidden;background:#fff;color:#1E1A16;border-radius:40px;box-shadow:0 40px 90px rgba(0,0,40,.35)"><div style="width:900px;padding:44px 50px"><div style="display:flex;align-items:center;gap:18px;font:900 34px var(--f-sans)"><div style="width:70px;height:70px">${msc('focused')}</div>Coach</div><p style="margin:18px 0 0;font:700 42px/1.55 var(--f-sans)">原文写的是 <i style="font:italic 500 46px var(--f-en);color:${C.blue}">were allowed to travel</i>，和题干的 <i style="font:italic 500 46px var(--f-en);color:${C.blue}">never</i> 矛盾。答案是 FALSE。</p></div></div>`,
+    (el) => ({ o: $$('.opts span', el), bub: $('.bub', el), txt: split($('.bub p', el), 'inline') }),
+    (lt, t, el, c) => {
+      const [tr, f, ng] = c.o; tr.style.cssText += '';
+      const wrong = lt >= 0.49, ok = lt >= 0.98;
+      const sh = wrong ? Math.sin((lt - 0.49) * 52) * 18 * Math.exp(-(lt - 0.49) * 5) : 0;
+      st(ng, { background: wrong ? C.red : lt > 0.1 ? '#fff' : 'transparent', color: lt > 0.1 && !wrong ? C.blue : '#fff', borderColor: wrong ? C.red : lt > 0.1 ? '#fff' : 'rgba(255,255,255,.6)', transform: `translateX(${sh}px)` });
+      st(f, { background: ok ? '#16C26A' : 'transparent', borderColor: ok ? '#16C26A' : 'rgba(255,255,255,.6)', transform: `scale(${ok ? lerp(0.6, 1, spring(lt - 0.98, 15, 0.4)) : 1})` });
+      const b = spring(lt - 0.98, 10, 0.62);
+      st(c.bub, { opacity: lt >= 0.98 ? 1 : 0, height: `${lerp(70, 330, b)}px`, transform: `scale(${lerp(0.6, 1, clamp(b, 0, 1.2))})`, transformOrigin: '0 0' });
+      c.txt.forEach((s, i) => { s.style.opacity = clamp((lt - 1.15 - i * 0.012) / 0.12); });
+    }, '蓝色场：选错 NOT GIVEN 抖动变红，FALSE 弹出变绿，Coach 气泡展开讲解。');
+
+  /* 07 · laptop top-down glide — writing */
+  shot('样机 · 写作', 14.38, 16.35, `<div class="fill" style="background:radial-gradient(ellipse at 50% 50%,#30261F,#050505 72%)"></div>${laptopHTML(SCR.writing)}<div class="abs center-x super" style="top:70px">写作，四项标准逐句批注。</div>`,
+    (el) => ({ s: $('.super', el) }),
+    (lt, t, el, c) => {
+      const p = E.inOutSine(prog(lt, 0, 1.97));
+      cam(el, { z: lerp(-60, 120, p), x: lerp(260, -160, p), y: 300, rx: lerp(-48, -30, p), ry: lerp(16, 6, p), rz: lerp(-6, 0, p), lid: lerp(4, 10, p), py: 30 });
+      rise(split.cache(c.s), lt, 0.4, { stagger: 0.035 });
+    }, '俯拍掠过键盘与屏幕上的作文和评分栏。');
+
+  /* 08 · four rings, one per beat, each on its own colour */
+  const RINGS = [['任务回应', 'TR', 7.0, C.orange], ['连贯与衔接', 'CC', 6.5, C.sky], ['词汇资源', 'LR', 7.0, C.green], ['语法范围与准确性', 'GRA', 6.5, C.purple]];
+  const RC = 2 * Math.PI * 300;
+  RINGS.forEach(([name, key, v, col], i) => {
+    const a = 16.35 + i * 0.49, b = i < 3 ? a + 0.49 : 18.35;
+    shot(`评分环 ${key}`, a, b, `<div class="fill" style="background:${col}"></div><div class="abs ring" style="left:660px;top:140px;width:600px;height:600px"><svg viewBox="0 0 680 680"><circle cx="340" cy="340" r="300" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="64"/><circle class="arc" cx="340" cy="340" r="300" fill="none" stroke="#fff" stroke-width="64" stroke-linecap="round" stroke-dasharray="${RC.toFixed(1)}"/></svg></div><div class="abs center-x val" style="top:340px;font:900 200px/1 var(--f-sans);letter-spacing:-.03em">${v.toFixed(1)}</div><div class="abs center-x" style="top:840px;font:900 64px var(--f-sans)">${name}<span style="font:500 34px var(--f-sans);opacity:.7;margin-left:18px;letter-spacing:.1em">${key}</span></div>`,
+      (el) => ({ arc: $('.arc', el), ring: $('.ring', el), val: $('.val', el) }),
+      (lt, t, el, c) => {
+        const p = spring(lt, 9, 0.62);
+        c.arc.setAttribute('stroke-dashoffset', (RC * (1 - (v / 9) * p)).toFixed(1));
+        c.ring.style.transform = `scale(${lerp(1.25, 1, spring(lt, 12, 0.7))}) rotate(${lerp(-40, 0, spring(lt, 9, 0.8))}deg)`;
+        c.val.style.transform = `scale(${lerp(0.7, 1, spring(lt, 16, 0.5))})`;
+      }, i === 0 ? '四拍四个色场，每拍一个评分环充满：任务回应、连贯、词汇、语法。' : null);
+  });
+
+  /* 09 · band odometer close-up on yellow */
+  shot('特写 · 7.0', 18.35, 20.64, `<div class="fill" style="background:${C.yellow}"></div><div class="abs center-x eyebrow" style="top:150px;color:#1E1A16">Overall Band</div><div class="abs odo" style="left:50%;top:230px;font:900 560px/1 var(--f-sans);letter-spacing:-.05em;color:#1E1A16;transform:translateX(-50%)"><div class="col"><div class="oi">${[4, 5, 6, 7, 8].map((d) => `<span>${d}</span>`).join('')}</div></div><div class="col"><span>.</span></div><div class="col"><div class="od">${[0, 5, 0, 5, 0, 5, 0, 5, 0].map((d) => `<span>${d}</span>`).join('')}</div></div></div><div class="abs center-x" style="top:860px;font:700 40px var(--f-sans);color:#1E1A16">四项平均 6.75，按 IELTS 规则进位为 7.0</div>`,
+    (el) => ({ oi: $('.oi', el), od: $('.od', el), odo: $('.odo', el), note: el.lastElementChild }),
+    (lt, t, el, c) => {
+      const bv = 4 + 3 * spring(lt - 0.1, 5.2, 0.62);
+      c.oi.style.transform = `translateY(${-(bv - 4)}em)`;
+      c.od.style.transform = `translateY(${-(bv - 4) * 2}em)`;
+      c.odo.style.transform = `translateX(-50%) scale(${lerp(1.12, 1, E.outCubic(prog(lt, 0, 2.3)))})`;
+      c.note.style.opacity = prog(lt, 1.2, 1.6);
+    }, '黄色场大特写：总分滚轮从 4.0 滚到 7.0。');
+
+  /* 10 · Welcome to the future (2) typed in serif, collapses to the dot; the silence holds a breathing dot */
+  shot('字幕 · 静音', 20.64, 23.43, `<div class="fill" style="background:${C.void}"></div><div class="abs center-x lyric tw" style="top:440px;font-size:150px;color:#fff">Welcome to the future<span class="nosplit car" style="display:inline-block;width:14px;height:.8em;margin-left:10px;background:${C.ember};vertical-align:-.05em"></span></div><div class="abs dot0" style="left:940px;top:520px;width:40px;height:40px;border-radius:50%;background:${C.ember}"></div><div class="abs ripple" style="left:860px;top:440px;width:200px;height:200px;border-radius:50%;border:2px solid ${C.ember}"></div>`,
+    (el) => ({ tw: $('.tw', el), ch: split($('.tw', el), 'inline'), car: $('.car', el), dot: $('.dot0', el), rip: $('.ripple', el) }),
+    (lt, t, el, c) => {
+      const n = Math.floor(c.ch.length * prog(lt, 0, 1.0));
+      c.ch.forEach((s, i) => { s.style.display = i < n ? '' : 'none'; });
+      c.car.style.opacity = lt < 1.0 ? 1 : (Math.floor(lt * 4) % 2 ? 0.2 : 1);
+      const col = E.inExpo(prog(lt, 1.45, 1.7));
+      c.tw.style.transform = `scale(${1 - col * 0.98})`;
+      c.tw.style.opacity = 1 - prog(lt, 1.6, 1.7);
+      const on = lt >= 1.65;
+      const breath = 1 + 0.18 * Math.sin((lt - 1.69) * Math.PI / 1.1);
+      c.dot.style.opacity = on ? 1 : 0;
+      c.dot.style.transform = `scale(${on ? breath * lerp(1.4, 0.8, prog(lt, 1.69, 2.79)) : 0})`;
+      const rp = prog(lt, 1.75, 2.79);
+      c.rip.style.opacity = on ? (1 - rp) * 0.7 : 0;
+      c.rip.style.transform = `scale(${lerp(0.2, 1.6, E.outCubic(rp))})`;
+    }, '歌词逐字打出，收成一颗橙点；歌里的一秒静音，橙点在呼吸。<em>Welcome to the future</em>');
+
+  /* 11 · drop: the dot bursts into practice records */
+  const burst = (() => { const r = rng(11), cols = [C.ink, C.ink, C.ember, C.yellow, C.sky, C.pink, C.green]; return Array.from({ length: 420 }, () => ({ a: r() * 6.283, d: 300 + r() * 1300, k: 2 + r() * 4, s: 1.5 + r() * 4, c: cols[Math.floor(r() * cols.length)] })); })();
+  shot('炸开', 23.43, 24.53, `<div class="fill" style="background:${C.void}"></div><canvas class="fill cv" width="1920" height="1080"></canvas><div class="abs center-x super" style="top:470px;font-size:96px">它记得你的每一次作答。</div>`,
+    (el) => ({ g: $('.cv', el).getContext('2d'), s: $('.super', el) }),
+    (lt, t, el, c) => {
+      const g = c.g; g.clearRect(0, 0, 1920, 1080); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+      for (const q of burst) {
+        const pos = (tt) => q.d * (1 - Math.exp(-q.k * Math.max(0, tt)));
+        const d1 = pos(lt), d0 = pos(lt - 0.05);
+        g.strokeStyle = q.c; g.globalAlpha = 0.85 * (1 - prog(lt, 0.7, 1.1) * 0.6); g.lineWidth = q.s;
+        g.beginPath(); g.moveTo(960 + Math.cos(q.a) * d0, 540 + Math.sin(q.a) * d0 * 0.7); g.lineTo(960 + Math.cos(q.a) * d1, 540 + Math.sin(q.a) * d1 * 0.7); g.stroke();
+      }
+      g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+      rise(split.cache(c.s), lt, 0.25, { stagger: 0.03, dy: 0.5 });
+    }, '鼓点回来，橙点炸成几百道作答轨迹。');
+
+  /* 12 · green silhouette, records stream into the head */
+  const stream = (() => { const r = rng(12); return Array.from({ length: 220 }, () => ({ y0: r() * 1080, ph: r(), sp: 0.6 + r() * 0.9, s: 2 + r() * 5, c: r() < 0.7 ? '#FFFFFF' : C.yellow, bend: (r() - 0.5) * 300 })); })();
+  shot('剪影 · 绿', 24.53, 26.33, `<div class="fill" style="background:${C.green}"></div><canvas class="fill cv" width="1920" height="1080"></canvas><div class="abs head" style="left:820px;top:60px;width:1100px;height:1100px;transform:scaleX(-1)">${silhouette('#0B2E1B')}</div><div class="abs" style="left:130px;top:700px;width:760px"><div class="super" style="font-size:84px;line-height:1.2">记住你哪里会，<br>哪里还不会。</div></div>`,
+    (el) => ({ g: $('.cv', el).getContext('2d'), s: $('.super', el) }),
+    (lt, t, el, c) => {
+      const g = c.g; g.clearRect(0, 0, 1920, 1080);
+      for (const q of stream) {
+        const p = (q.ph + lt * q.sp) % 1;
+        const x = lerp(-60, 1360, p), y = lerp(q.y0, 520, E.inCubic(p)) + Math.sin(p * Math.PI) * q.bend;
+        g.globalAlpha = Math.sin(p * Math.PI) * 0.9; g.fillStyle = q.c;
+        g.beginPath(); g.arc(x, y, q.s * (1 - p * 0.6), 0, 6.283); g.fill();
+      }
+      g.globalAlpha = 1;
+      rise(split.cache(c.s), lt, 0.2, { stagger: 0.035, dy: 0.5 });
+    }, '绿色场剪影，作答粒子流进脑袋。');
+
+  /* 13 · Got no Achilles: weakness card flips to progress */
+  shot('弱项翻面', 26.33, 27.36, `<div class="fill" style="background:#FFF8EA"></div><div class="fill" style="perspective:2000px"><div class="memcard" style="left:580px;top:330px"><div style="background:#E0643A"><span class="tag">弱项</span><p>判断题里，常把 FALSE 当成 NOT GIVEN</p><span class="ev">证据 14 条 · 第 41 周</span></div><div style="background:#A8D5BA;transform:rotateY(180deg)"><span class="tag">进步</span><p>判断题正确率<br>48% → 76%</p><span class="ev">第 43 周 · 记忆已更新</span></div></div></div>`,
+    (el) => ({ card: $('.memcard', el) }),
+    (lt, t, el, c) => {
+      const inn = spring(lt, 12, 0.6), f = spring(lt - 0.43, 10, 0.55);
+      c.card.style.transform = `translateY(${(1 - inn) * 500}px) rotateZ(${lerp(-8, -2, inn)}deg) rotateY(${f * 180}deg) scale(${1 + 0.05 * Math.sin(Math.PI * clamp(f))})`;
+    }, '札记卡片风格的「弱项」卡，一拍翻面成「进步」。');
+
+  /* 14 · Push all the limits: radar pushes out on every beat */
+  const SK = ['定位信息', '同义替换', '判断题', '段落匹配', '词汇', '长难句'];
+  const W1 = [0.42, 0.28, 0.34, 0.48, 0.52, 0.38], W4 = [0.86, 0.78, 0.82, 0.74, 0.9, 0.76];
+  const RAD = { cx: 1250, cy: 540, R: 360 };
+  const rpt = (k, r) => { const a = -Math.PI / 2 + k * Math.PI / 3; return [RAD.cx + Math.cos(a) * r, RAD.cy + Math.sin(a) * r]; };
+  const hexP = (r) => SK.map((_, k) => rpt(k, r).map((v) => v.toFixed(1)).join(',')).join(' ');
+  shot('学习画像', 27.36, 30.22, `<div class="fill" style="background:${C.purple}"></div><svg class="fill" viewBox="0 0 1920 1080">${[0.34, 0.67, 1].map((f) => `<polygon points="${hexP(RAD.R * f)}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="3"/>`).join('')}${SK.map((s, k) => { const [x, y] = rpt(k, RAD.R + 70); return `<text x="${x.toFixed(0)}" y="${(y + 12).toFixed(0)}" text-anchor="middle" style="font:700 34px var(--f-sans);fill:#fff">${s}</text>`; }).join('')}<polygon class="shape" fill="rgba(255,255,255,.9)" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg><div class="abs" style="left:150px;top:330px"><div class="eyebrow" style="color:#E6D8FF">Learner Model</div><div class="super" style="font-size:130px;line-height:1.1;margin-top:18px">越练，<br>越准。</div><div class="wk" style="margin-top:30px;font:900 44px var(--f-sans);color:#FFE27A">第 1 周</div></div>`,
+    (el) => ({ shape: $('.shape', el), wk: $('.wk', el), s: $('.super', el) }),
+    (lt, t, el, c) => {
+      const steps = [27.73, 28.24, 28.73, 29.24, 29.73];
+      let p = 0; steps.forEach((b) => { p += spring(t - b, 16, 0.42) / steps.length; });
+      const intro = spring(lt, 10, 0.6);
+      c.shape.setAttribute('points', SK.map((_, k) => rpt(k, RAD.R * (0.05 + (W1[k] - 0.05) * intro + (W4[k] - W1[k]) * p)).map((v) => v.toFixed(1)).join(',')).join(' '));
+      c.wk.textContent = `第 ${1 + Math.min(3, steps.filter((b) => t >= b).length)} 周`;
+      rise(split.cache(c.s), lt, 0.1, { stagger: 0.06 });
+    }, '紫色场技能雷达，每一拍往外推一圈，第 1 周到第 4 周。<em>Push all the limits</em>');
+
+  /* 15 · Just to rewrite the pages */
+  shot('改写', 30.22, 31.22, `<div class="fill" style="background:#FFFDF8"></div><div class="abs center-x" style="top:300px;font:400 150px/1 var(--f-en);color:#2A2722">people <span class="old" style="position:relative;display:inline-block">thinks<i style="position:absolute;left:-4%;top:52%;height:12px;width:108%;background:${C.red};transform-origin:0 50%"></i></span> <span class="new" style="display:inline-block;color:${C.green};font-style:italic">think</span></div><div class="abs center-x lyric" style="top:640px;font-size:96px;color:${C.nbInk}">Just to rewrite the pages</div>`,
+    (el) => ({ bar: $('.old i', el), old: $('.old', el), nw: $('.new', el), ly: split($('.lyric', el)) }),
+    (lt, t, el, c) => {
+      c.bar.style.transform = `scaleX(${E.outExpo(prog(lt, 0.0, 0.25))})`;
+      c.old.style.opacity = 1 - 0.65 * prog(lt, 0.2, 0.4);
+      const p = spring(lt - 0.5, 16, 0.45);
+      c.nw.style.opacity = lt >= 0.5 ? 1 : 0;
+      c.nw.style.transform = `translateY(${(1 - p) * -120}px) scale(${lerp(1.6, 1, clamp(p, 0, 1.2))})`;
+      rise(c.ly, lt, 0.05, { stagger: 0.02, dy: 0.4 });
+    }, '大特写：thinks 被划掉，think 落进来。<em>Just to rewrite the pages</em>');
+
+  /* 16 · night: daily journal, weekly consolidation */
+  const stars = (() => { const r = rng(16); return Array.from({ length: 90 }, () => [r() * 1920, r() * 700, 1 + r() * 2.4, r() * 6]); })();
+  shot('夜 · 札记', 31.22, 33.19, `<div class="fill" style="background:linear-gradient(${C.navy},#1B2E86)"></div>${stars.map(([x, y, s]) => `<i class="abs star" style="left:${x.toFixed(0)}px;top:${y.toFixed(0)}px;width:${s.toFixed(1)}px;height:${s.toFixed(1)}px;border-radius:50%;background:#fff"></i>`).join('')}<div class="abs moon" style="left:1420px;top:140px;width:220px;height:220px;border-radius:50%;background:#FFF3C4;overflow:hidden;box-shadow:0 0 120px rgba(255,243,196,.45)"><i class="abs" style="top:-10px;width:230px;height:230px;border-radius:50%;background:#14257A"></i></div><div class="abs" style="left:150px;top:380px"><div class="super l1" style="font-size:110px">每天写学习日记。</div><div class="super l2" style="font-size:110px;margin-top:24px;color:#FFE27A">每周整理长期记忆。</div></div>`,
+    (el) => ({ stars: $$('.star', el), sh: $('.moon i', el), l1: split($('.l1', el)), l2: split($('.l2', el)) }),
+    (lt, t, el, c) => {
+      c.stars.forEach((s, i) => { s.style.opacity = 0.3 + 0.7 * Math.abs(Math.sin(lt * 2 + stars[i][3])); });
+      c.sh.style.left = `${lerp(240, 70, E.inOutCubic(prog(lt, 0, 1.4)))}px`;
+      rise(c.l1, lt, 0.05, { stagger: 0.04 });
+      rise(c.l2, lt, 1.0, { stagger: 0.04 });
+    }, '深蓝夜空，月亮由圆变弯：每天写学习日记，每周整理长期记忆。');
+
+  /* 17 · laptop dolly — the notebook page */
+  shot('样机 · 札记', 33.19, 35.19, `<div class="fill" style="background:${C.pink}"></div><div class="lap-shadow" style="top:720px;opacity:.5"></div>${laptopHTML(SCR.notebook)}<div class="abs center-x super" style="top:920px;color:#1E1A16">你的进步，都记在札记里。</div>`,
+    (el) => ({ s: $('.super', el), cards: $$('.nb-card', el) }),
+    (lt, t, el, c) => {
+      const p = E.inOutSine(prog(lt, 0, 2));
+      cam(el, { z: lerp(-420, -120, p), x: lerp(-200, 200, p), y: 140, rx: -10, ry: lerp(26, 8, p), lid: 12 });
+      c.cards.forEach((cd, i) => { const s = spring(lt - 0.2 - i * 0.08, 14, 0.5); cd.style.transform = `rotate(${[-1.5, 1, -0.5, 1, -1, 0.5, -1.5][i]}deg) translateY(${(1 - s) * 40}px)`; cd.style.opacity = clamp((lt - 0.2 - i * 0.08) / 0.15); });
+      rise(split.cache(c.s), lt, 0.6, { stagger: 0.035 });
+    }, '粉色场，样机横移推近，屏幕上的札记卡片一张张落下。');
+
+  /* 18 · Failure is optional: ✕ morphs to ✓ */
+  shot('错到对', 35.19, 37.16, `<div class="fill bg"></div><svg class="abs mk" viewBox="0 0 200 200" style="left:660px;top:100px;width:600px;height:600px;overflow:visible"><path class="p1" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/><path class="p2" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round"/></svg><div class="abs center-x lyric" style="top:780px;font-size:110px;color:#fff">Failure is optional.</div>`,
+    (el) => ({ bg: $('.bg', el), p1: $('.p1', el), p2: $('.p2', el), mk: $('.mk', el), ly: $('.lyric', el) }),
+    (lt, t, el, c) => {
+      const m = spring(lt - 0.98, 12, 0.6);
+      c.bg.style.background = mix(C.red, C.green, E.outCubic(prog(lt, 0.98, 1.2)));
+      // ✕ two strokes  →  ✓ one polyline + second stroke shrinks away
+      const a = [[40, 40], [100, 100], [160, 160]], b = [[40, 105], [82, 148], [165, 52]];
+      const P = a.map((q, i) => [lerp(q[0], b[i][0], m), lerp(q[1], b[i][1], m)]);
+      c.p1.setAttribute('d', `M${P[0]}L${P[1]}L${P[2]}`);
+      const k = 1 - clamp(m);
+      c.p2.setAttribute('d', `M${100 + 60 * k} ${100 - 60 * k}L${100 - 60 * k} ${100 + 60 * k}`);
+      c.p2.style.opacity = k > 0.02 ? 1 : 0;
+      c.mk.style.transform = `scale(${lerp(0.4, 1, spring(lt, 14, 0.5)) * (1 + 0.08 * Math.sin(Math.PI * clamp(m)))}) rotate(${lerp(-20, 0, spring(lt, 10, 0.7))}deg)`;
+      c.ly.style.opacity = prog(lt, 0.25, 0.4);
+      c.ly.style.transform = `translateY(${(1 - E.outCubic(prog(lt, 0.25, 0.7))) * 40}px)`;
+    }, '红色场里的 ✕ 一拍形变成 ✓，底色变绿。<em>Failure is optional</em>');
+
+  /* 19 · four features, one beat each */
+  [['阅读 Coach', C.blue, 'focused'], ['写作评分', C.orange, 'energized'], ['学习画像', C.green, 'calm'], ['自进化记忆', C.purple, 'grateful']].forEach(([w, col, k], i) => {
+    const a = 37.16 + i * 0.5, b = i < 3 ? 37.16 + (i + 1) * 0.5 : 39.16;
+    shot(`功能 ${i + 1}`, a, b, `<div class="fill" style="background:${col}"></div><div class="abs m" style="left:270px;top:310px;width:440px;height:440px">${msc(k)}</div><div class="abs w" style="left:780px;top:430px;font:900 170px/1 var(--f-sans);letter-spacing:-.03em;white-space:nowrap">${w}</div>`,
+      (el) => ({ m: $('.m', el), w: $('.w', el) }),
+      (lt, t, el, c) => {
+        const p = spring(lt, 15, 0.45);
+        c.m.style.transform = `scale(${clamp(p, 0, 1.3)}) rotate(${(1 - p) * 90}deg)`;
+        c.w.style.transform = `translateX(${(1 - spring(lt, 13, 0.7)) * 200}px)`;
+        c.w.style.opacity = clamp(lt / 0.08);
+      }, i === 0 ? '四拍快切：阅读 Coach、写作评分、学习画像、自进化记忆，各配一只小怪兽。' : null);
+  });
+
+  /* 20 · Walking on air: laptop levitates in the sky, mascots orbit */
+  const clouds = (() => { const r = rng(20); return Array.from({ length: 9 }, () => [r() * 2200 - 140, 760 + r() * 260, 380 + r() * 420, 0.5 + r() * 0.6]); })();
+  shot('悬浮', 39.16, 43.37, `<div class="fill" style="background:linear-gradient(#0E5BD8,#3FB5FF 70%,#BDE6FF)"></div>${clouds.map(([x, y, w]) => `<div class="cloud cl" style="left:${x.toFixed(0)}px;top:${y.toFixed(0)}px;width:${w.toFixed(0)}px;height:${(w * 0.42).toFixed(0)}px"></div>`).join('')}<div class="abs lapwrap fill">${laptopHTML(SCR.overview)}</div>${['excited', 'joyful', 'energized', 'focused', 'calm', 'grateful'].map((k) => `<div class="abs orb" style="left:0;top:0;width:150px;height:150px">${msc(k)}</div>`).join('')}<div class="abs center-x super s1" style="top:110px;font-size:76px">原生桌面应用，轻得像在飞。</div><div class="abs center-x s2" style="top:205px;font:500 30px var(--f-sans);letter-spacing:.16em;opacity:.85">WINDOWS · MACOS · LINUX</div>`,
+    (el) => ({ cl: $$('.cl', el), orb: $$('.orb', el), wrap: $('.lapwrap', el), s1: split($('.s1', el)), s2: $('.s2', el) }),
+    (lt, t, el, c) => {
+      const lift = E.inOutCubic(prog(lt, 2.0, 3.2));
+      const bob = Math.sin(lt * 2.2) * 14;
+      cam(el, { z: lerp(-700, -560, lt / 4.2), y: 200 + bob - lift * 90, rx: -12 + Math.sin(lt * 1.3) * 2, ry: lerp(-24, 24, E.inOutSine(prog(lt, 0, 4.21))), rz: Math.sin(lt * 1.7) * 1.5, lid: 12 });
+      c.cl.forEach((d, i) => { d.style.transform = `translateX(${-lt * 60 * clouds[i][3]}px) translateY(${lift * 60}px)`; });
+      c.orb.forEach((o, i) => {
+        const a = lt * 1.15 + (i * Math.PI * 2) / 6;
+        const x = 960 + Math.cos(a) * 760, y = 470 + Math.sin(a) * 170 - lift * 60 + Math.sin(lt * 3 + i) * 12;
+        const depth = Math.sin(a);
+        o.style.zIndex = depth > 0 ? 3 : 0;
+        o.style.transform = `translate(${x - 75}px,${y - 75}px) scale(${lerp(0.7, 1.25, (depth + 1) / 2) * clamp(spring(lt - i * 0.08, 10, 0.55), 0, 1.3)}) rotate(${Math.sin(lt * 2 + i) * 12}deg)`;
+      });
+      c.wrap.style.zIndex = 1;
+      rise(c.s1, lt, 2.2, { stagger: 0.035 });
+      c.s2.style.opacity = prog(lt, 2.8, 3.2);
+    }, '蓝天云层上，笔记本悬浮环绕旋转，小怪兽绕着它飞。<em>Walking on air, we levitate</em>');
+
+  /* 21 · Up in the clouds — but your data stays home: a lock snaps shut */
+  shot('本地上锁', 43.37, 44.96, `<div class="fill" style="background:${C.void}"></div><svg class="abs shk" viewBox="0 0 170 170" style="left:875px;top:170px;width:170px;height:170px;overflow:visible"><path d="M28 170V85a57 57 0 0 1 114 0v85" fill="none" stroke="${C.ink}" stroke-width="28"/></svg><div class="lock-body" style="left:830px;top:300px;width:260px;height:200px;border-radius:44px"><div class="keyhole"></div></div><div class="abs center-x super" style="top:600px;font-size:92px">数据只留在你的电脑里。</div><div class="abs center-x sub" style="top:730px;font:500 36px var(--f-sans);color:var(--mute)">练习记录、记忆、学习画像，全部存在本机。</div>`,
+    (el) => ({ shk: $('.shk', el), body: $('.lock-body', el), s: split($('.super', el)), sub: $('.sub', el) }),
+    (lt, t, el, c) => {
+      const inn = spring(lt, 11, 0.6), close = spring(lt - 0.71, 18, 0.4);
+      c.body.style.transform = `scale(${clamp(inn, 0, 1.2)}) scaleY(${1 - (lt > 0.71 ? Math.sin((lt - 0.71) * 30) * 0.06 * Math.exp(-(lt - 0.71) * 8) : 0)})`;
+      c.shk.style.transform = `translateY(${lerp(-60, 0, close) - (1 - inn) * 100}px)`;
+      c.shk.style.opacity = clamp(lt / 0.15);
+      rise(c.s, lt, 0.75, { stagger: 0.03, dy: 0.5 });
+      c.sub.style.opacity = prog(lt, 1.1, 1.4);
+    }, '黑场，锁梁在拍点上扣下：数据只留在你的电脑里。');
+
+  /* 22 · Way different level now: giant 6.0 → 7.0 */
+  shot('升级', 44.96, 47.29, `<div class="fill" style="background:${C.orange}"></div><div class="abs center-x eyebrow" style="top:120px;color:#1E1A16">Writing Band</div><div class="abs odo" style="left:50%;top:200px;font:900 520px/1 var(--f-sans);letter-spacing:-.05em;color:#fff;transform:translateX(-50%)"><div class="col"><div class="oi"><span>6</span><span>7</span></div></div><div class="col"><span>.</span></div><div class="col"><span>0</span></div></div><div class="abs center-x lyric" style="top:800px;font-size:110px;color:#1E1A16">Way different level now.</div>`,
+    (el) => ({ oi: $('.oi', el), ly: $('.lyric', el), odo: $('.odo', el) }),
+    (lt, t, el, c) => {
+      c.oi.style.transform = `translateY(${-spring(lt - 0.12, 9, 0.5)}em)`;
+      c.odo.style.transform = `translateX(-50%) scale(${1 + 0.03 * kick(t, 9)})`;
+      c.ly.style.opacity = prog(lt, 0.05, 0.2);
+      c.ly.style.transform = `translateY(${(1 - E.outCubic(prog(lt, 0.05, 0.5))) * 40}px)`;
+    }, '橙色场巨型数字，6.0 一拍翻到 7.0。<em>Way different level now</em>');
+
+  /* 23 · mascot close-ups, one per beat */
+  [['excited', C.blue, 47.29], ['joyful', C.yellow, 47.8], ['proud', C.orange, 48.44], ['calm', C.pink, 48.93]].forEach(([k, bg, a], i, arr) => {
+    const b = i < 3 ? arr[i + 1][2] : 49.42;
+    shot(`特写 · ${k}`, a, b, `<div class="fill" style="background:${bg}"></div><div class="abs m" style="left:360px;top:-300px;width:1200px;height:1200px">${msc(k)}</div>`,
+      (el) => ({ m: $('.m', el) }),
+      (lt, t, el, c) => {
+        const p = spring(lt, 12, 0.5);
+        c.m.style.transform = `scale(${lerp(0.75, 1.15, clamp(p, 0, 1.2))}) rotate(${(1 - p) * (i % 2 ? 14 : -14)}deg)`;
+      }, i === 0 ? '四拍四个小怪兽大特写，撑满画面。<em>Tell \'em</em>' : null);
+  });
+
+  /* 24 · laptop front-on, mascots on the deck; five hops on "welcome to ×5" */
+  const HOP_BEATS = [51.9, 52.39, 52.88, 53.37, 53.88];
+  const SCREEN_COLS = [C.orange, C.blue, C.green, C.purple, C.yellow];
+  shot('合影', 49.42, 54.26, `<div class="fill" style="background:radial-gradient(ellipse at 50% 45%,#2A2018,#050505 70%)"></div><div class="lap-shadow" style="top:760px"></div>${laptopHTML(SCR.overview + '<div class="fill flash" style="opacity:0"></div>')}${['excited', 'joyful', 'energized', 'focused', 'calm'].map((k) => `<div class="abs hop" style="left:0;top:0;width:170px;height:170px">${msc(k)}</div>`).join('')}`,
+    (el) => ({ hops: $$('.hop', el), flash: $('.flash', el) }),
+    (lt, t, el, c) => {
+      const push = E.inOutCubic(prog(t, 51.66, 54.26));
+      cam(el, { z: lerp(-640, -60, push) + lerp(0, -100, E.inOutSine(prog(lt, 0, 2.2))), y: lerp(190, 300, push), rx: lerp(-10, -4, push), ry: lerp(-6, 0, prog(lt, 0, 2)), lid: 12 });
+      const sc = lerp(1, 1.5, push);
+      c.hops.forEach((h, i) => {
+        const s = spring(lt - 0.1 - i * 0.09, 11, 0.5);
+        const hb = HOP_BEATS[i]; const hp = prog(t, hb, hb + 0.42); const jump = Math.sin(Math.PI * hp);
+        const x = 960 + (i - 2) * 220 * sc, y = lerp(860, 940, push) - jump * 160;
+        h.style.transform = `translate(${x - 85}px,${y - 85}px) scale(${clamp(s, 0, 1.3) * sc * (1 + 0.12 * jump)},${clamp(s, 0, 1.3) * sc * (1 - 0.06 * jump)})`;
+      });
+      let fi = -1; HOP_BEATS.forEach((b, i) => { if (t >= b) fi = i; });
+      c.flash.style.background = fi >= 0 ? SCREEN_COLS[fi] : 'transparent';
+      c.flash.style.opacity = fi >= 0 ? 0.92 * Math.exp(-(t - HOP_BEATS[fi]) * 3) : 0;
+    }, '样机正面，五只小怪兽站成一排；五声 welcome to 各跳一下，屏幕随拍闪色，镜头推进屏幕。');
+
+  /* 25 · end card on the last "Welcome to the future" */
+  shot('落版', 54.26, MAIN + 0.01, `<div class="fill" style="background:${C.void}"></div><div class="abs center-x wm" style="top:330px;font:600 210px/1.1 var(--f-en);letter-spacing:-.03em;white-space:nowrap">IELTS Atlas<span class="nosplit dt" style="display:inline-block;width:.18em;height:.18em;margin-left:.04em;border-radius:50%;background:${C.ember}"></span></div><div class="abs center-x tg" style="top:640px;font-size:80px;font-weight:900">越练，越懂你。</div><div class="abs center-x ft" style="top:790px;font:500 30px var(--f-sans);color:var(--mute);letter-spacing:.06em">AI 写作评分 · 阅读 Coach · 自进化学习画像</div><div class="fill fo" style="background:#000"></div>`,
+    (el) => ({ wm: split($('.wm', el)), dt: $('.dt', el), tg: split($('.tg', el)), ft: $('.ft', el), fo: $('.fo', el) }),
+    (lt, t, el, c) => {
+      rise(c.wm, lt, 0.05, { stagger: 0.045, dy: 0.5 });
+      const d = spring(lt - 0.6, 16, 0.4);
+      c.dt.style.transform = `translateY(${(1 - d) * -260}px) scale(${clamp(d, 0, 1.3)})`;
+      rise(c.tg, lt, 0.95, { stagger: 0.06, dy: 0.5 });
+      c.ft.style.opacity = prog(lt, 1.6, 2.0);
+      c.fo.style.opacity = prog(t, MAIN - 0.8, MAIN);
+    }, '黑场落版：IELTS Atlas，橙点落成句号，越练，越懂你。<em>Welcome to the future</em>');
+
+  // split() with a per-element cache, for text that is split lazily inside draw().
+  split.cache = (el) => el._chars || (el._chars = split(el));
+
+  function render(t) {
+    t = clamp(t, 0, DUR);
+    for (const s of SHOTS) {
+      const on = t >= s.a && t < s.b;
+      s.el.style.display = on ? 'block' : 'none';
+      if (on) s.draw(t);
+    }
+  }
+
+  /* ── player ── */
+  const fmt = (s) => { const m = Math.floor(s / 60), r = s - m * 60; return `${String(m).padStart(2, '0')}:${r.toFixed(1).padStart(4, '0')}`; };
+  const listed = SHOTS.filter((s) => s.note);
+  $('#shots').innerHTML = listed.map((s, i) => `<li data-i="${i}" tabindex="0"><span class="tc">${fmt(s.a).slice(0, 5)}</span><div><strong>${s.name.replace(/ .*$/, '') === s.name ? s.name : s.name}</strong><span>${s.note}</span></div></li>`).join('');
+  const rows = $$('#shots li');
+
+  let T = 0, playing = false, last = null;
+  const audio = new Audio(); let audioReady = false;
+  const scrub = $('#scrub'), timeEl = $('#time'), playBtn = $('#play');
+  function setPlaying(p) {
+    playing = p; last = null;
+    $('#play-ico').innerHTML = p ? '<path d="M4 2h3v12H4zM9 2h3v12H9z"/>' : '<path d="M4 2l10 6-10 6z"/>';
+    playBtn.setAttribute('aria-label', p ? '暂停' : '播放');
+    if (audioReady) {
+      if (p) { try { audio.currentTime = AUDIO_START + T; } catch (_) {} audio.play().catch(() => {}); } else audio.pause();
+    }
+  }
+  function seek(t) { T = clamp(t, 0, DUR); if (audioReady) { try { audio.currentTime = AUDIO_START + T; } catch (_) {} } last = null; }
+  function syncUI() {
+    scrub.value = T.toFixed(2); timeEl.textContent = `${fmt(T)} / ${fmt(DUR)}`;
+    let cur = 0; listed.forEach((s, i) => { if (T >= s.a) cur = i; });
+    rows.forEach((r, i) => r.setAttribute('aria-current', i === cur ? 'true' : 'false'));
+  }
+  function tick(now) {
+    if (playing) {
+      if (audioReady && !audio.paused) T = audio.currentTime - AUDIO_START;
+      else { if (last != null) T += Math.min(0.1, (now - last) / 1000); last = now; }
+      if (T >= DUR) { T = DUR; setPlaying(false); }
+    }
+    render(T); syncUI(); requestAnimationFrame(tick);
+  }
+  playBtn.addEventListener('click', () => { if (!playing && T >= DUR) seek(0); setPlaying(!playing); });
+  $('#viewport').addEventListener('click', () => playBtn.click());
+  $('#replay').addEventListener('click', () => { seek(0); setPlaying(true); });
+  scrub.addEventListener('input', () => seek(parseFloat(scrub.value)));
+  const jump = (li) => { seek(listed[+li.dataset.i].a + 0.001); setPlaying(true); };
+  $('#shots').addEventListener('click', (e) => { const li = e.target.closest('li'); if (li) jump(li); });
+  $('#shots').addEventListener('keydown', (e) => { const li = e.target.closest('li'); if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); jump(li); } });
+  $('#fs').addEventListener('click', () => { const v = $('#viewport'); try { (v.requestFullscreen ? v.requestFullscreen() : Promise.reject()).catch(() => {}); } catch (_) {} });
+  $('#song').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    audio.src = URL.createObjectURL(f); audio.preload = 'auto';
+    audio.addEventListener('loadedmetadata', () => {
+      audioReady = true;
+      $('#sound-note').innerHTML = `已载入 <b>${f.name.replace(/[<>&]/g, '')}</b>。按播放，画面与歌曲从 0:49 起同步。`;
+      seek(0); setPlaying(true);
+    }, { once: true });
+  });
+  document.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playBtn.click(); } });
+
+  const vp = $('#viewport');
+  const fit = () => { stage.style.transform = `scale(${exportMode ? 1 : vp.clientWidth / 1920})`; };
+  new ResizeObserver(fit).observe(vp); fit();
+
+  const allText = stage.textContent + '0123456789.→%';
+  const fontsReady = Promise.all([
+    ['900 100px "Noto Sans SC"', allText], ['700 100px "Noto Sans SC"', allText], ['500 100px "Noto Sans SC"', allText],
+    ['900 100px "Noto Serif SC"', allText], ['600 100px "Newsreader"', allText], ['400 100px "Newsreader"', allText],
+    ['italic 500 100px "Newsreader"', allText], ['italic 400 100px "Newsreader"', allText],
+  ].map(([f, s]) => document.fonts.load(f, s))).catch(() => {}).then(() => document.fonts.ready);
+
+  if (exportMode) {
+    document.body.classList.add('export');
+    window.__atlasFilm = { duration: DUR, audioStart: AUDIO_START, ready: fontsReady.then(fit), render };
+    render(0); return;
+  }
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Open on a representative frame; playback waits for the viewer (and, ideally, the soundtrack).
+  T = reduce ? DUR - 3 : 18.5; render(T); syncUI();
+  fontsReady.then(() => requestAnimationFrame(tick));
+})();
+</script>
