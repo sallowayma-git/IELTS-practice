@@ -225,6 +225,28 @@ fn teaching_note_text_reaches_the_pack_only_as_sanitized_learner_quotes() {
 }
 
 #[test]
+fn a_notes_only_message_whose_notes_are_all_skipped_adds_no_coach_line() {
+    let (_dir, conn) = fixture();
+    submit(&conn, "a1", "P1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+    coach_feedback(&conn, "a1", "P1", "2026-10-05T10:00:00Z", &[], 0);
+    // Both notes survive the host gate's shape but reduce to nothing in the pack: their
+    // only words are citable ids, which the sanitizer drops.
+    let payload = json!({"answer": "x", "teachingNotes": [
+        {"kind": "preference", "text": "model says hi", "evidence": "obs-14"},
+        {"kind": "strategy_outcome", "text": "model text", "strategy": "mem-2", "outcome": "helped", "evidence": "now I get it"},
+    ]});
+    conn.execute(
+        "INSERT INTO coach_messages (id, thread_id, role, content, structured_payload, status, created_at, sequence)
+         VALUES ('note-msg', 'thread-a1-2026-10-05T10:00:00Z', 'assistant', 'x', ?1, 'completed', '2026-10-05T10:05:00Z', 3)",
+        params![payload.to_string()],
+    )
+    .unwrap();
+    let pack = pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+    assert!(texts(&pack, "coach").is_empty(), "no empty `coach on ...: ` line");
+    assert!(pack.lines.iter().all(|line| !line.text.ends_with(": ")));
+}
+
+#[test]
 fn a_corrupted_notes_row_cannot_abort_the_pack() {
     let (_dir, conn) = fixture();
     submit(&conn, "a1", "P1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");

@@ -21,6 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::{DateTime, SecondsFormat, Utc};
 use ielts_domain::{
     contains_security_marker, estimate_tokens, is_safe_for_prompt, REDACTED_UNTRUSTED_TEXT,
+    TEACHING_NOTE_EVIDENCE_CHARS, TEACHING_NOTE_STRATEGY_CHARS,
 };
 use rusqlite::{params, Connection};
 use serde::Serialize;
@@ -50,10 +51,6 @@ const MAX_COACH_LINES: usize = 20;
 /// with them. A note that would overflow is skipped whole, never cut.
 const MAX_COACH_NOTES: usize = 2;
 const COACH_LINE_CHARS: usize = 320;
-/// Longest strategy label and learner quote a note may put in the prompt; over
-/// either, the whole note is skipped.
-const NOTE_STRATEGY_CHARS: usize = 80;
-const NOTE_EVIDENCE_CHARS: usize = 120;
 const MEMORY_CHARS: usize = 160;
 const PREFERENCE_CHARS: usize = 200;
 const ANSWER_CHARS: usize = 40;
@@ -578,7 +575,11 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
     })?;
     for row in rows {
         let (attempt, asset, payload, at) = row?;
+        // A message whose notes all fail the prompt-safety check adds no day at all.
         let phrases = teaching_note_phrases(&serde_json::from_str(&payload).unwrap_or(Value::Null));
+        if phrases.is_empty() {
+            continue;
+        }
         let entry = days.entry((attempt, day(&at))).or_default();
         entry.seen(asset, at);
         for phrase in phrases {
@@ -593,7 +594,10 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         moment(&right.at).cmp(&moment(&left.at)).then_with(|| left_key.cmp(right_key))
     });
     let mut lines = Vec::new();
-    for ((attempt, _), entry) in days.into_iter().take(MAX_COACH_LINES) {
+    for ((attempt, _), entry) in days {
+        if lines.len() == MAX_COACH_LINES {
+            break;
+        }
         let kinds: Vec<String> = entry
             .kinds
             .iter()
@@ -608,6 +612,9 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         }
         let title = if entry.asset.is_empty() { "an attempt".to_owned() } else { format!("{} \"{}\"", entry.asset, assets.title(&entry.asset)) };
         let parts = with_notes(parts, &title, &entry.notes);
+        if parts.is_empty() {
+            continue;
+        }
         let ids = attempt_score_id(conn, user_id, &attempt).into_iter().collect();
         let facet = Facet::Coach { kinds: entry.kinds, reasks: entry.reasks };
         lines.push(line(ids, &entry.at, "coach", format!("coach on {title}: {}", parts.join("; ")), facet));
@@ -643,11 +650,11 @@ fn teaching_note_phrases(payload: &Value) -> Vec<String> {
 /// coach's strategy label reach the prompt: the model's own `text` never does, so
 /// it cannot pass as the learner's words or steer the weekly pass.
 fn teaching_note_phrase(note: &Value) -> Option<String> {
-    let evidence = note_field(field(note, "evidence"), NOTE_EVIDENCE_CHARS)?;
+    let evidence = note_field(field(note, "evidence"), TEACHING_NOTE_EVIDENCE_CHARS)?;
     match field(note, "kind") {
         "preference" => Some(format!("learner asked: \"{evidence}\"")),
         "strategy_outcome" => {
-            let strategy = note_field(field(note, "strategy"), NOTE_STRATEGY_CHARS)?;
+            let strategy = note_field(field(note, "strategy"), TEACHING_NOTE_STRATEGY_CHARS)?;
             let verdict = match field(note, "outcome") {
                 "helped" => "helped",
                 "not_helped" => "did not help",
@@ -659,13 +666,19 @@ fn teaching_note_phrase(note: &Value) -> Option<String> {
     }
 }
 
-/// A stored field on its way into the prompt. Quotes, semicolons and colons are
-/// removed (they could pose as a field or a separator), whitespace is flattened,
-/// and id-shaped tokens are dropped. A value still over `max` characters is
-/// skipped whole, never cut mid-word.
+/// A stored field on its way into the prompt. Typographic quotes, colons,
+/// semicolons and hyphens are first mapped to ASCII, so no look-alike can slip
+/// past the checks below. Quotes, colons and semicolons then become a space (never
+/// deleted: `cite:obs-14` must not fuse into a citable-looking token), whitespace
+/// is flattened, and any token containing an `obs-`/`mem-` id is dropped. A value
+/// still over `max` characters is skipped whole, never cut mid-word.
 fn note_field(raw: &str, max: usize) -> Option<String> {
-    let stripped: String = raw.chars().filter(|c| !matches!(c, '"' | ';' | ':')).collect();
-    let text = stripped
+    let separated: String = raw
+        .chars()
+        .map(ascii_punctuation)
+        .map(|c| if matches!(c, '"' | ';' | ':') { ' ' } else { c })
+        .collect();
+    let text = separated
         .split_whitespace()
         .filter(|token| !is_id_token(token))
         .collect::<Vec<_>>()
@@ -673,10 +686,22 @@ fn note_field(raw: &str, max: usize) -> Option<String> {
     (!text.is_empty() && text.chars().count() <= max && is_safe_for_prompt(&text)).then_some(text)
 }
 
-/// A token shaped like a citable `obs-`/`mem-` id, whatever punctuation leads it.
+/// The ASCII form of the typographic look-alikes this sanitizer cares about.
+fn ascii_punctuation(c: char) -> char {
+    match c {
+        '\u{201C}' | '\u{201D}' | '\u{FF02}' => '"',
+        '\u{2018}' | '\u{2019}' | '\u{FF07}' => '\'',
+        '\u{FF1A}' => ':',
+        '\u{FF1B}' => ';',
+        '\u{2010}'..='\u{2015}' | '\u{2212}' | '\u{FF0D}' => '-',
+        other => other,
+    }
+}
+
+/// A token that carries a citable `obs-`/`mem-` id anywhere in it, in any case.
 fn is_id_token(token: &str) -> bool {
-    let lower = token.trim_start_matches(|c: char| !c.is_alphanumeric()).to_ascii_lowercase();
-    lower.starts_with("obs-") || lower.starts_with("mem-")
+    let lower = token.to_ascii_lowercase();
+    lower.contains("obs-") || lower.contains("mem-")
 }
 
 /// A coach thread opened in the window on an attempt finished before it: the
@@ -1049,5 +1074,35 @@ mod tests {
         assert_eq!(show_answer(&json!(["A", "C"])), "A/C");
         assert_eq!(show_answer(&Value::Null), "(blank)");
         assert!(show_answer(&json!("x".repeat(100))).chars().count() <= ANSWER_CHARS + 1);
+    }
+
+    #[test]
+    fn note_field_maps_typographic_quotes_colons_and_semicolons_to_ascii_separators() {
+        assert_eq!(note_field("say \u{201C}yes\u{201D}", 80).as_deref(), Some("say yes"));
+        assert_eq!(note_field("say \u{FF02}yes\u{FF02}", 80).as_deref(), Some("say yes"));
+        assert_eq!(note_field("\u{2018}a\u{2019} \u{FF07}b\u{FF07}", 80).as_deref(), Some("'a' 'b'"));
+        assert_eq!(note_field("step \u{FF1A} one\u{FF1B} two", 80).as_deref(), Some("step one two"));
+        assert_eq!(note_field("step\u{FF1A}one\u{FF1B}two", 80).as_deref(), Some("step one two"));
+    }
+
+    #[test]
+    fn stripped_separators_become_spaces_so_neighbours_never_fuse() {
+        assert_eq!(note_field("alpha:beta", 80).as_deref(), Some("alpha beta"));
+        assert_eq!(note_field("cite:obs-14", 80).as_deref(), Some("cite"));
+        assert_eq!(note_field("cite:mem-2 and rate:high", 80).as_deref(), Some("cite and rate high"));
+        assert_eq!(note_field("ids\u{FF1A}mem-2\u{FF1B}obs-9", 80).as_deref(), Some("ids"));
+        assert_eq!(note_field("a;b", 80).as_deref(), Some("a b"));
+    }
+
+    #[test]
+    fn id_tokens_are_dropped_wherever_the_id_sits_and_whatever_hyphen_it_uses() {
+        for raw in ["obs-14", "OBS-14", "Mem-2.", "(mem-2)", "xx-obs-14yy", "obs\u{FF0D}14", "obs\u{2212}14"] {
+            assert_eq!(note_field(&format!("keep {raw} this"), 80).as_deref(), Some("keep this"), "{raw:?}");
+        }
+        for hyphen in '\u{2010}'..='\u{2015}' {
+            let raw = format!("obs{hyphen}14 mem{hyphen}2");
+            assert_eq!(note_field(&format!("keep {raw} this"), 80).as_deref(), Some("keep this"), "{hyphen:?}");
+        }
+        assert_eq!(note_field("observed memory", 80).as_deref(), Some("observed memory"));
     }
 }

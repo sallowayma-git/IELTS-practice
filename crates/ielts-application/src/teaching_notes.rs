@@ -10,7 +10,9 @@
 //! misread, and the quote still passes. Downstream code treats notes as
 //! learner-reported facts only in the learner's own words, never as verified.
 
-use ielts_domain::is_safe_for_prompt;
+use std::collections::BTreeSet;
+
+use ielts_domain::{is_safe_for_prompt, TEACHING_NOTE_EVIDENCE_CHARS, TEACHING_NOTE_STRATEGY_CHARS};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -18,9 +20,7 @@ use serde_json::Value;
 pub const MAX_TEACHING_NOTES: usize = 3;
 
 const TEXT_CHARS: usize = 300;
-const STRATEGY_CHARS: usize = 200;
 const SKILL_KEY_CHARS: usize = 80;
-const EVIDENCE_CHARS: usize = 300;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -119,9 +119,9 @@ fn candidate(item: &Value, learner_message: &str) -> Option<TeachingNote> {
         return None;
     }
     let within_limits = within(&note.text, TEXT_CHARS)
-        && note.strategy.as_deref().map_or(true, |text| within(text, STRATEGY_CHARS))
+        && note.strategy.as_deref().map_or(true, |text| within(text, TEACHING_NOTE_STRATEGY_CHARS))
         && note.skill_key.as_deref().map_or(true, |text| within(text, SKILL_KEY_CHARS))
-        && within(&note.evidence, EVIDENCE_CHARS)
+        && within(&note.evidence, TEACHING_NOTE_EVIDENCE_CHARS)
         && meaningful(&note.evidence);
     let quoted = learner_message.trim().contains(note.evidence.as_str());
     let safe = [Some(&note.text), note.strategy.as_ref(), note.skill_key.as_ref()]
@@ -136,16 +136,37 @@ fn within(text: &str, max: usize) -> bool {
     !text.is_empty() && text.chars().count() <= max
 }
 
-/// Evidence must carry real words, not a stray "I", "a" or "?": at least four
-/// CJK characters, or at least eight non-whitespace characters over two words.
+/// Evidence must carry real words, not a stray "I", "a", "?" or digit run. Only
+/// alphanumeric characters count. Either at least three CJK, kana or Hangul
+/// characters with two distinct ones, or at least eight alphanumeric characters
+/// spread over two distinct words that each contain a letter.
 fn meaningful(evidence: &str) -> bool {
-    let cjk = evidence.chars().filter(|c| is_cjk(*c)).count();
-    let visible = evidence.chars().filter(|c| !c.is_whitespace()).count();
-    cjk >= 4 || (visible >= 8 && evidence.split_whitespace().count() >= 2)
+    let script: Vec<char> = evidence.chars().filter(|c| c.is_alphanumeric() && is_script(*c)).collect();
+    let distinct: BTreeSet<char> = script.iter().copied().collect();
+    if script.len() >= 3 && distinct.len() >= 2 {
+        return true;
+    }
+    let alphanumeric = evidence.chars().filter(|c| c.is_alphanumeric()).count();
+    let words: BTreeSet<String> = evidence
+        .split_whitespace()
+        .filter(|word| word.chars().any(char::is_alphabetic))
+        .map(|word| word.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect())
+        .collect();
+    alphanumeric >= 8 && words.len() >= 2
 }
 
-fn is_cjk(c: char) -> bool {
-    matches!(c, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}')
+/// CJK ideographs, Hiragana, Katakana, Hangul syllables and Hangul Jamo.
+fn is_script(c: char) -> bool {
+    matches!(
+        c,
+        '\u{3400}'..='\u{4DBF}'
+            | '\u{4E00}'..='\u{9FFF}'
+            | '\u{F900}'..='\u{FAFF}'
+            | '\u{3040}'..='\u{309F}'
+            | '\u{30A0}'..='\u{30FF}'
+            | '\u{AC00}'..='\u{D7AF}'
+            | '\u{1100}'..='\u{11FF}'
+    )
 }
 
 fn optional(value: Option<String>) -> Option<String> {
@@ -306,5 +327,45 @@ mod tests {
         assert_eq!(review_teaching_notes(Some(&Value::Null), MESSAGE), TeachingNoteReview::default());
         let not_array = json!("now I get it");
         assert_eq!(review_teaching_notes(Some(&not_array), MESSAGE).rejected, 1);
+    }
+
+    #[test]
+    fn evidence_gate_rejects_filler_and_digit_runs() {
+        for filler in ["????  ????", "1 2 3 4 5 6 7 8", "I I I I I I I I", "懂懂懂懂", "I", "understood", "obs 14 15"] {
+            assert!(!meaningful(filler), "{filler:?} must not be evidence");
+        }
+    }
+
+    #[test]
+    fn evidence_gate_accepts_real_cjk_kana_hangul_and_two_word_quotes() {
+        for real in ["不太懂", "听不懂", "现在懂了", "now I get it", "ありがとうございます", "한국어 설명 부탁"] {
+            assert!(meaningful(real), "{real:?} must be evidence");
+        }
+    }
+
+    #[test]
+    fn two_distinct_words_are_required_for_the_latin_rule() {
+        // Eight alphanumeric characters in one word would pass without the two-word rule.
+        assert!(!meaningful("understood"));
+        // Punctuation does not make a second word: "I," and "I." are the same word.
+        assert!(!meaningful("I, I. I; I!"));
+        assert!(meaningful("now I get it"));
+    }
+
+    #[test]
+    fn host_gate_rejects_evidence_and_strategy_over_the_shared_limits() {
+        let long_evidence = "x".repeat(TEACHING_NOTE_EVIDENCE_CHARS + 1);
+        let at_limit_evidence = format!("ok {}", "y".repeat(TEACHING_NOTE_EVIDENCE_CHARS - 3));
+        let message = format!("{long_evidence} {at_limit_evidence}");
+        let over_strategy = json!({"kind": "strategy_outcome", "text": "t", "strategy": "s".repeat(TEACHING_NOTE_STRATEGY_CHARS + 1), "outcome": "helped", "evidence": at_limit_evidence});
+        let at_strategy = json!({"kind": "strategy_outcome", "text": "t", "strategy": "s".repeat(TEACHING_NOTE_STRATEGY_CHARS), "outcome": "helped", "evidence": at_limit_evidence});
+        let over_evidence = json!({"kind": "preference", "text": "t", "evidence": long_evidence});
+        let items = json!([over_evidence, over_strategy, at_strategy]);
+        let review = review_teaching_notes(Some(&items), &message);
+        assert_eq!(review.rejected, 2);
+        assert_eq!(review.notes.len(), 1);
+        assert_eq!(review.notes[0].evidence, at_limit_evidence);
+        assert_eq!(TEACHING_NOTE_EVIDENCE_CHARS, 120);
+        assert_eq!(TEACHING_NOTE_STRATEGY_CHARS, 80);
     }
 }
