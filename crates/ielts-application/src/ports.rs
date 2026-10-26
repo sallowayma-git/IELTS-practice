@@ -87,6 +87,10 @@ pub struct CompletionResponse {
 pub struct ModelError {
     pub message: String,
     pub retryable: bool,
+    /// True when the provider stopped at the output ceiling (`finish_reason`
+    /// `length` / `max_tokens`). The reply is cut off, so a JSON caller cannot
+    /// use it; the gateway never retries it with a larger ceiling.
+    pub truncated: bool,
 }
 
 impl ModelError {
@@ -94,17 +98,19 @@ impl ModelError {
         Self {
             message: message.into(),
             retryable,
+            truncated: false,
+        }
+    }
+
+    /// The typed error for a reply cut off at its output ceiling.
+    pub fn output_truncated() -> Self {
+        Self {
+            message: "model output truncated at max_tokens".into(),
+            retryable: false,
+            truncated: true,
         }
     }
 }
-
-impl std::fmt::Display for ModelError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for ModelError {}
 
 /// Stable prompt-cache routing key for one call path: a fixed per-purpose label
 /// plus a digest of its byte-stable system prefix. Calls whose prefix is
@@ -115,6 +121,14 @@ pub fn prompt_cache_key(purpose: &str, stable_prefix: &str) -> String {
     let hex: String = digest.iter().take(16).map(|byte| format!("{byte:02x}")).collect();
     format!("{purpose}-{hex}")
 }
+
+impl std::fmt::Display for ModelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for ModelError {}
 
 impl From<ModelError> for ProviderError {
     fn from(error: ModelError) -> Self {

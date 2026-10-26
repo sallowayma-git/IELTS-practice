@@ -99,8 +99,10 @@ pub fn llm_usage_summary(conn: &Connection, since: Option<&str>) -> DbResult<Llm
         cached_input_tokens: count(totals.cached),
         reasoning_tokens: count(totals.reasoning),
         estimated_calls: count(totals.estimated),
+        // Clamped: a provider that reports more cached than prompt tokens must not
+        // push the rate past 100%.
         cache_hit_rate: (totals.metered_prompt > 0)
-            .then(|| totals.metered_cached as f64 / totals.metered_prompt as f64),
+            .then(|| (totals.metered_cached as f64 / totals.metered_prompt as f64).min(1.0)),
     })
 }
 

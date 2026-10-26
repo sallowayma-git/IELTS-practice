@@ -111,30 +111,40 @@ impl AiRuntime {
         self
     }
 
-    fn record_completion(&self, body: &Value, result: &Result<(CompletionResponse, u32), AgentModelFailure>) {
+    fn record_completion(&self, body: &Value, result: &Result<CompletionReply, AgentModelFailure>) {
         let Some(sink) = &self.ledger else { return };
+        let truncated = ModelError::output_truncated();
         let call = match result {
-            Ok((response, _)) => LedgerCall {
-                model: &response.model,
-                latency_ms: response.latency_ms,
-                usage: response.usage.as_ref(),
-                provider_request_id: response.provider_request_id.as_deref(),
-                outcome: Ok(&response.content),
-            },
+            Ok(reply) => {
+                let response = &reply.response;
+                LedgerCall {
+                    model: &response.model,
+                    latency_ms: response.latency_ms,
+                    usage: response.usage.as_ref(),
+                    provider_request_id: response.provider_request_id.as_deref(),
+                    outcome: if is_truncated(reply.finish_reason.as_deref()) {
+                        Err(&truncated)
+                    } else {
+                        Ok(&response.content)
+                    },
+                    finish_reason: reply.finish_reason.as_deref(),
+                }
+            }
             Err(failure) => LedgerCall::failed(failure, &self.config.model),
         };
         sink(ledger_record(&self.config.provider, body, call));
     }
 
-    fn record_agent(&self, body: &Value, result: &Result<AgentModelResponse, AgentModelFailure>) {
+    fn record_agent(&self, body: &Value, result: &Result<AgentReply, AgentModelFailure>) {
         let Some(sink) = &self.ledger else { return };
         let call = match result {
-            Ok(response) => LedgerCall {
-                model: &response.model,
-                latency_ms: response.latency_ms,
-                usage: response.usage.as_ref(),
-                provider_request_id: response.provider_request_id.as_deref(),
-                outcome: Ok(response.content.as_deref().unwrap_or("")),
+            Ok(reply) => LedgerCall {
+                model: &reply.response.model,
+                latency_ms: reply.response.latency_ms,
+                usage: reply.response.usage.as_ref(),
+                provider_request_id: reply.response.provider_request_id.as_deref(),
+                outcome: Ok(reply.response.content.as_deref().unwrap_or("")),
+                finish_reason: reply.finish_reason.as_deref(),
             },
             Err(failure) => LedgerCall::failed(failure, &self.config.model),
         };
@@ -162,6 +172,8 @@ struct LedgerCall<'a> {
     usage: Option<&'a TokenUsage>,
     provider_request_id: Option<&'a str>,
     outcome: Result<&'a str, &'a ModelError>,
+    /// The provider's finish reason, when the reply carried one.
+    finish_reason: Option<&'a str>,
 }
 
 impl<'a> LedgerCall<'a> {
@@ -172,6 +184,7 @@ impl<'a> LedgerCall<'a> {
             usage: failure.usage.as_ref(),
             provider_request_id: failure.provider_request_id.as_deref(),
             outcome: Err(&failure.error),
+            finish_reason: None,
         }
     }
 }
@@ -184,6 +197,7 @@ fn ledger_record(provider: &str, request: &Value, call: LedgerCall<'_>) -> ielts
         (None, Ok(content)) => Some(estimated_usage_json(request, content)),
         (None, Err(_)) => None,
     };
+    let usage = with_finish_reason(usage, call.finish_reason);
     ielts_db::LlmInvocationRecord {
         id: format!("llm-{}", uuid::Uuid::new_v4()),
         provider: provider.into(),
@@ -198,6 +212,15 @@ fn ledger_record(provider: &str, request: &Value, call: LedgerCall<'_>) -> ielts
         }),
         created_at: chrono::Utc::now().to_rfc3339(),
     }
+}
+
+/// Records why the provider stopped next to the counts (`finishReason`), so a
+/// truncated call is visible in the usage ledger.
+fn with_finish_reason(usage: Option<Value>, finish_reason: Option<&str>) -> Option<Value> {
+    let Some(reason) = finish_reason else { return usage };
+    let mut value = usage.unwrap_or_else(|| json!({}));
+    value["finishReason"] = json!(reason);
+    Some(value)
 }
 
 /// Provider-reported counts. Cache and reasoning keys appear only when non-zero:
@@ -233,16 +256,19 @@ fn estimated_usage_json(request: &Value, content: &str) -> Value {
 impl LanguageModel for AiRuntime {
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
-        let result = self.send_completion(&body).await;
-        self.record_completion(&body, &result);
-        result.map(|(response, _)| response).map_err(|failure| failure.error)
+        let reply = self.send_completion(&body).await;
+        self.record_completion(&body, &reply);
+        reply
+            .and_then(CompletionReply::into_result)
+            .map(|(response, _)| response)
+            .map_err(|failure| failure.error)
     }
 
     fn identity(&self) -> (&str, &str) { (&self.config.provider, &self.config.model) }
 
     async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
-        self.send_completion(&body).await
+        self.send_completion(&body).await.and_then(CompletionReply::into_result)
     }
 }
 
@@ -255,47 +281,94 @@ impl AgentModel for AiRuntime {
         let body = agent_request_body(&self.config.model, &self.config.base_url, &request);
         let result = self.send_agent(&body).await;
         self.record_agent(&body, &result);
-        result
+        result.map(|reply| reply.response)
     }
 }
 
+/// One provider completion before the caller-facing check. `finish_reason` is
+/// what the provider said about why it stopped; only truncation acts on it.
+struct CompletionReply {
+    response: CompletionResponse,
+    retry_count: u32,
+    finish_reason: Option<String>,
+}
+
+impl CompletionReply {
+    /// A reply cut off at the output ceiling is a typed error for every caller:
+    /// a JSON caller would otherwise fail with a confusing parse error. Never
+    /// retried here with a larger ceiling.
+    fn into_result(self) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+        if !is_truncated(self.finish_reason.as_deref()) {
+            return Ok((self.response, self.retry_count));
+        }
+        Err(AgentModelFailure::with_trace(
+            ModelError::output_truncated(),
+            Some(self.response.model),
+            self.response.latency_ms,
+            self.response.usage,
+            self.response.provider_request_id,
+            self.retry_count,
+        ))
+    }
+}
+
+/// A tool-calling or plain agent reply plus its finish reason (ledger only).
+struct AgentReply {
+    response: AgentModelResponse,
+    finish_reason: Option<String>,
+}
+
+/// Whether a provider finish reason means the output hit the ceiling.
+/// `length` is OpenAI-style; `max_tokens` is Anthropic-style `stop_reason`.
+fn is_truncated(finish_reason: Option<&str>) -> bool {
+    matches!(finish_reason, Some("length" | "max_tokens"))
+}
+
 impl AiRuntime {
-    async fn send_completion(&self, body: &Value) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+    async fn send_completion(&self, body: &Value) -> Result<CompletionReply, AgentModelFailure> {
         let (envelope, latency_ms, retry_count, header_request_id): (ChatResponse, _, _, _) = self
             .post_chat_completion(body, "AI response envelope invalid")
             .await
             .map_err(ChatCompletionFailure::into_trace)?;
-        let model = envelope.model.unwrap_or_else(|| self.config.model.clone());
+        let model = envelope.model.clone().unwrap_or_else(|| self.config.model.clone());
+        let finish_reason = envelope.finish_reason();
+        let truncated = is_truncated(finish_reason.as_deref());
         let usage = envelope.usage.map(token_usage);
         let provider_request_id = prefer_provider_request_id(header_request_id, envelope.id);
-        let content = envelope
-            .choices
-            .into_iter()
-            .next()
-            .and_then(|choice| choice.message.content)
-            .map(WireContent::into_final_answer)
-            .ok_or_else(|| AgentModelFailure::with_trace(model_error("AI response contained no choices", false), Some(model.clone()), latency_ms, usage.clone(), provider_request_id.clone(), retry_count))?;
-        Ok((CompletionResponse {
-            content,
-            model,
-            latency_ms,
-            usage,
-            provider_request_id,
-        }, retry_count))
+        let content = match envelope.choices.into_iter().next().and_then(|choice| choice.message.content) {
+            Some(content) => content.into_final_answer(),
+            // A reply cut off at the ceiling can carry no text at all: that is a
+            // truncation, reported as such rather than as an empty envelope.
+            None if truncated => String::new(),
+            None => return Err(AgentModelFailure::with_trace(model_error("AI response contained no choices", false), Some(model), latency_ms, usage, provider_request_id, retry_count)),
+        };
+        Ok(CompletionReply {
+            response: CompletionResponse {
+                content,
+                model,
+                latency_ms,
+                usage,
+                provider_request_id,
+            },
+            retry_count,
+            finish_reason,
+        })
     }
 
-    async fn send_agent(&self, body: &Value) -> Result<AgentModelResponse, AgentModelFailure> {
+    async fn send_agent(&self, body: &Value) -> Result<AgentReply, AgentModelFailure> {
         let (envelope, latency_ms, retry_count, header_request_id): (AgentChatResponse, _, _, _) =
             self.post_chat_completion(body, "AI agent response envelope invalid")
                 .await
                 .map_err(ChatCompletionFailure::into_trace)?;
-        parse_agent_response(
+        let finish_reason = envelope.finish_reason();
+        let response = parse_agent_response(
             envelope,
             &self.config.model,
             latency_ms,
             retry_count,
             header_request_id,
-        )
+        )?;
+        Ok(AgentReply { response, finish_reason })
     }
 
     async fn post_chat_completion<T: DeserializeOwned>(
@@ -449,6 +522,24 @@ struct ChatResponse {
     choices: Vec<Choice>,
     #[serde(default)]
     usage: Option<ChatUsage>,
+    // Anthropic-style top-level stop reason.
+    #[serde(default)]
+    stop_reason: Option<Value>,
+}
+
+impl ChatResponse {
+    fn finish_reason(&self) -> Option<String> {
+        finish_reason_of(self.choices.first().and_then(|c| c.finish_reason.as_ref()), self.stop_reason.as_ref())
+    }
+}
+
+/// OpenAI-style `choices[0].finish_reason`, else Anthropic-style `stop_reason`.
+/// A non-string value counts as absent.
+fn finish_reason_of(choice_reason: Option<&Value>, stop_reason: Option<&Value>) -> Option<String> {
+    choice_reason
+        .and_then(Value::as_str)
+        .or_else(|| stop_reason.and_then(Value::as_str))
+        .map(str::to_string)
 }
 
 // Reasoning separation (one gateway, every caller).
@@ -569,6 +660,8 @@ fn strip_inline_reasoning(content: &str) -> String {
 #[derive(Deserialize)]
 struct Choice {
     message: Message,
+    #[serde(default)]
+    finish_reason: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -586,11 +679,21 @@ struct AgentChatResponse {
     choices: Vec<AgentChoice>,
     #[serde(default)]
     usage: Option<ChatUsage>,
+    #[serde(default)]
+    stop_reason: Option<Value>,
+}
+
+impl AgentChatResponse {
+    fn finish_reason(&self) -> Option<String> {
+        finish_reason_of(self.choices.first().and_then(|c| c.finish_reason.as_ref()), self.stop_reason.as_ref())
+    }
 }
 
 #[derive(Deserialize)]
 struct AgentChoice {
     message: AgentResponseMessage,
+    #[serde(default)]
+    finish_reason: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -1546,6 +1649,7 @@ mod tests {
             usage: None,
             provider_request_id: None,
             outcome: Err(&error),
+            finish_reason: None,
         };
         let row = ledger_record("p", &request, failed);
         assert_eq!(row.usage_json, None);
@@ -1590,6 +1694,87 @@ mod tests {
         assert!(rows[2].usage_json.is_none() && rows[2].response_hash.is_none());
         assert!(rows[2].error_json.as_deref().unwrap().contains("bad key"));
         assert_ne!(rows[0].id, rows[1].id);
+    }
+
+
+    #[test]
+    fn finish_reason_is_read_from_the_openai_or_anthropic_shape() {
+        let reason = |raw: Value| serde_json::from_value::<ChatResponse>(raw).unwrap().finish_reason();
+        let choice = |finish: Value| json!({"choices":[{"message":{"content":"x"}, "finish_reason": finish}]});
+        assert_eq!(reason(choice(json!("length"))).as_deref(), Some("length"));
+        assert_eq!(reason(choice(json!("stop"))).as_deref(), Some("stop"));
+        assert_eq!(reason(json!({"choices":[{"message":{"content":"x"}}]})), None);
+        // A non-string value is treated as absent, never as an envelope error.
+        assert_eq!(reason(choice(json!(5))), None);
+        assert_eq!(
+            reason(json!({"stop_reason":"max_tokens","choices":[{"message":{"content":"x"}}]})).as_deref(),
+            Some("max_tokens"),
+        );
+        assert!(is_truncated(Some("length")) && is_truncated(Some("max_tokens")));
+        assert!(!is_truncated(Some("stop")) && !is_truncated(Some("tool_calls")) && !is_truncated(None));
+    }
+
+    #[tokio::test]
+    async fn truncated_replies_are_typed_errors_and_ledgered_with_their_finish_reason() {
+        use std::sync::Mutex;
+        let rows = Arc::new(Mutex::new(Vec::<ielts_db::LlmInvocationRecord>::new()));
+        let sink_rows = Arc::clone(&rows);
+        let sink: LedgerSink = Arc::new(move |row| sink_rows.lock().unwrap().push(row));
+        let (runtime, server) = http_fixture(vec![
+            // 1. plain call cut off at the ceiling: typed error, not content.
+            (200, r#"{"id":"cut","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":"{\"ok\":"},"finish_reason":"length"}]}"#, false),
+            // 2. ordinary stop: content, finishReason stop.
+            (200, r#"{"id":"stop","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#, false),
+            // 3. no finish reason at all: content, and the ledger says nothing about it.
+            (200, r#"{"id":"missing","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            // 4. agent reply with an Anthropic-style top-level stop_reason: content kept, reason ledgered.
+            (200, r#"{"id":"agent","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"stop_reason":"max_tokens","choices":[{"message":{"content":"partial answer"}}]}"#, false),
+            // 5. traced coach call cut off: typed error, no ledger row of its own.
+            (200, r#"{"id":"traced","model":"m","choices":[{"message":{"content":null},"finish_reason":"length"}]}"#, false),
+        ]);
+        let runtime = runtime.with_ledger(sink);
+
+        let error = runtime.complete(fixture_completion_request()).await.unwrap_err();
+        assert_eq!(error.message, "model output truncated at max_tokens");
+        assert!(error.truncated && !error.retryable);
+        assert_eq!(runtime.complete(fixture_completion_request()).await.unwrap().content, r#"{"ok":true}"#);
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        let agent = runtime.respond(fixture_agent_request()).await.unwrap();
+        assert_eq!(agent.content.as_deref(), Some("partial answer"));
+        let traced = runtime.complete_with_trace(fixture_completion_request()).await.unwrap_err();
+        assert!(traced.error.truncated);
+        server.join().unwrap();
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 4, "the traced coach call is not ledgered here");
+        let usage = |row: &ielts_db::LlmInvocationRecord| -> Value {
+            serde_json::from_str(row.usage_json.as_deref().unwrap()).unwrap()
+        };
+        assert_eq!(usage(&rows[0])["finishReason"], json!("length"));
+        assert_eq!(usage(&rows[0])["completionTokens"], json!(2000));
+        assert!(rows[0].response_hash.is_none());
+        assert!(rows[0].error_json.as_deref().unwrap().contains("truncated at max_tokens"));
+        assert_eq!(usage(&rows[1])["finishReason"], json!("stop"));
+        assert!(rows[1].response_hash.is_some() && rows[1].error_json.is_none());
+        assert!(usage(&rows[2]).get("finishReason").is_none());
+        assert_eq!(usage(&rows[2])["promptTokens"], json!(5));
+        assert_eq!(usage(&rows[3])["finishReason"], json!("max_tokens"));
+    }
+
+    #[test]
+    fn finish_reason_lands_in_ledger_usage_even_without_provider_counts() {
+        let request = json!({"model": "m", "messages": []});
+        let row = ledger_record("p", &request, LedgerCall {
+            model: "m",
+            latency_ms: 1,
+            usage: None,
+            provider_request_id: None,
+            outcome: Ok("text"),
+            finish_reason: Some("stop"),
+        });
+        let usage: Value = serde_json::from_str(row.usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("stop"));
+        assert_eq!(usage["estimated"], json!(true));
     }
 
     #[test]

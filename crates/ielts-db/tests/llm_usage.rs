@@ -85,3 +85,14 @@ fn ledger_rows_follow_operational_retention() {
     assert_eq!(report.llm_invocations, 1);
     assert_eq!(llm_usage_summary(&conn, None).unwrap().calls, 1);
 }
+
+#[test]
+fn cache_hit_rate_is_clamped_to_one() {
+    let (_dir, conn) = open_db();
+    // A provider reporting more cached than prompt tokens must not push the rate past 100%.
+    let overreported = r#"{"promptTokens":100,"completionTokens":1,"totalTokens":101,"cachedInputTokens":150}"#;
+    record_llm_invocation(&conn, &record("over", "2026-10-01T00:00:00+00:00", Some(overreported))).unwrap();
+    let summary = llm_usage_summary(&conn, None).unwrap();
+    assert_eq!(summary.cache_hit_rate, Some(1.0));
+    assert_eq!(summary.cached_input_tokens, 150);
+}
