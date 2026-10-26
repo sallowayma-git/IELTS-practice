@@ -26,7 +26,7 @@ pub struct ResolvedWritingEvalPolicy {
 pub const BUILTIN_PROMPT_VERSION: &str = "builtin-rubric-v2";
 
 /// Built-in examiner policy for Task 1. A user prompt replaces this part only.
-const TASK1_EXAMINER: &str = "You are a senior IELTS Academic Writing Task 1 examiner. Score strictly against the public IELTS band descriptors; do not reward length, memorised phrases or topic sympathy.
+const TASK1_EXAMINER: &str = "You are a senior IELTS Academic Writing Task 1 examiner. Score strictly against the public IELTS band descriptors; do not reward length, memorised phrases or topic sympathy. Award each criterion the highest band whose positive features the response fully fits; a band's negative features hold it below that band. Bands 8 and 9 are reachable: do not withhold a band the descriptors support, and do not lift a weak response for effort.
 
 Criteria and band anchors:
 - Task Achievement (reported as taskResponse): band 8+ covers all requirements, presents a clear overview and highlights key features with accurate data; band 7 has a clear overview and covers key features but could be more fully extended; band 6 has an overview and adequately highlights key features, but some details are irrelevant, inaccurate or missing; band 5 recounts detail mechanically, has no clear overview, or reports data inaccurately; band 4 or below attempts the task but misses key features or misreads the visual. Under 150 words, Task Achievement is limited.
@@ -37,7 +37,7 @@ Criteria and band anchors:
 Before scoring, work through: the task requirements and the visual's main trends; whether an overview exists and covers the key features; whether comparisons and figures are accurate; evidence for each criterion. Do not reveal this reasoning beyond the diagnosis fields.";
 
 /// Built-in examiner policy for Task 2. A user prompt replaces this part only.
-const TASK2_EXAMINER: &str = "You are a senior IELTS Writing Task 2 examiner. Score strictly against the public IELTS band descriptors; do not reward length, memorised phrases or agreement with your own opinion.
+const TASK2_EXAMINER: &str = "You are a senior IELTS Writing Task 2 examiner. Score strictly against the public IELTS band descriptors; do not reward length, memorised phrases or agreement with your own opinion. Award each criterion the highest band whose positive features the response fully fits; a band's negative features hold it below that band. Bands 8 and 9 are reachable: do not withhold a band the descriptors support, and do not lift a weak response for effort.
 
 Criteria and band anchors:
 - Task Response: band 8+ fully addresses all parts of the prompt with a well-developed, extended and supported position; band 7 addresses all parts, presents a clear position throughout, and extends main ideas though some may over-generalise or lack focus; band 6 addresses all parts but some more fully than others, the position is relevant but conclusions may be unclear or repetitive, and some ideas are under-developed; band 5 addresses the task only partially, the position is unclear, and ideas are limited or not sufficiently developed; band 4 or below responds minimally or tangentially. Under 250 words, Task Response is limited.
@@ -47,34 +47,14 @@ Criteria and band anchors:
 
 Before scoring, work through: the question type and every part of the prompt; whether the position is clear and consistent; how well each body paragraph develops and supports its idea; whether the conclusion answers the question; evidence for each criterion. Do not reveal this reasoning beyond the diagnosis fields.";
 
-/// Output contract appended to every evaluation system prompt, built-in or custom.
-const OUTPUT_CONTRACT: &str = r#"Output contract (overrides any format instructions above):
-Return one JSON object only, no markdown fence, with keys in this order so evidence comes before bands:
-{"diagnosis":{"task":{"task_fulfillment":""},"rationale":{"task_achievement":"","coherence_cohesion":"","lexical_resource":"","grammatical_range":""}},
- "score":{"taskResponse":0,"coherence":0,"lexical":0,"grammar":0},
- "feedback":{"overall":"","plan":[],"paragraphs":[{"paragraphIndex":0,"summary":"","issues":[]}],"sentences":[{"sentence":"","correction":"","kind":"grammar"}],"rewrites":[]}}
-Rules:
-- diagnosis.task keys for Task 1: task_fulfillment, overview_quality, key_features_coverage, data_support_quality. For Task 2: task_fulfillment, prompt_response_quality, position_clarity, argument_development, conclusion_effectiveness.
-- Each rationale cites concrete evidence from the essay and names the band it supports.
-- Each criterion band is a number from 0 to 9 in steps of 0.5. The overall band is computed by the application; do not return it.
-- Trust the measured facts in the user message (word count, paragraph count) instead of counting yourself.
-- sentences quote the original sentence exactly; kind is one of grammar, spelling, word_choice, sentence_structure, coherence.
-- Write diagnosis, feedback.overall, plan, summaries and issues in Simplified Chinese; keep quoted sentences, corrections and rewrites in English."#;
-
-/// Built-in system prompt for a task type (Task 2 rubric when unknown).
+/// Built-in examiner policy for a task type (Task 2 rubric when unknown).
+/// The application appends its own output contract to whatever this returns.
 pub fn default_system_prompt(task_type: Option<WritingTaskType>) -> String {
-    compose_system_prompt(builtin_examiner(task_type))
-}
-
-fn builtin_examiner(task_type: Option<WritingTaskType>) -> &'static str {
     match task_type {
         Some(WritingTaskType::Task1) => TASK1_EXAMINER,
         Some(WritingTaskType::Task2) | None => TASK2_EXAMINER,
     }
-}
-
-fn compose_system_prompt(examiner: &str) -> String {
-    format!("{}\n\n{OUTPUT_CONTRACT}", examiner.trim())
+    .to_string()
 }
 
 pub fn resolve_writing_eval_policy(
@@ -84,7 +64,7 @@ pub fn resolve_writing_eval_policy(
     let prompt = resolve_active_prompt(conn, task_type)?;
     let temperature = resolve_temperature(conn, task_type)?;
     let (system_prompt, prompt_id, prompt_version) = match prompt {
-        Some(p) => (compose_system_prompt(&p.body), Some(p.id), p.version),
+        Some(p) => (p.body, Some(p.id), p.version),
         None => (
             default_system_prompt(task_type),
             None,
@@ -280,10 +260,9 @@ mod tests {
         let task2 = resolve_writing_eval_policy(&conn, Some(WritingTaskType::Task2)).unwrap();
 
         assert_eq!(task1.prompt_id.as_deref(), Some("task1-active"));
-        assert!(task1.system_prompt.starts_with("TASK 1 POLICY"));
-        assert!(task1.system_prompt.contains("Output contract"));
+        assert_eq!(task1.system_prompt, "TASK 1 POLICY");
         assert_eq!(task2.prompt_id.as_deref(), Some("task2-active"));
-        assert!(task2.system_prompt.starts_with("TASK 2 POLICY"));
+        assert_eq!(task2.system_prompt, "TASK 2 POLICY");
     }
 
     #[test]

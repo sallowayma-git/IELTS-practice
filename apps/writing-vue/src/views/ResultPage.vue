@@ -100,6 +100,13 @@
               </tr>
             </tbody>
           </table>
+          <p v-if="confidenceNote" class="section-meta score-confidence" :data-confidence-agreed="scoreConfidence.agreed">{{ confidenceNote }}</p>
+          <div v-if="ceilings.length > 0" class="inline-message inline-message-warning ceiling-note">
+            <h4>已按官方规则封顶</h4>
+            <ul>
+              <li v-for="(item, idx) in ceilings" :key="idx">{{ item }}</li>
+            </ul>
+          </div>
           <dl v-if="rationaleRows.length > 0" class="rationale-list">
             <div v-for="row in rationaleRows" :key="row.key" class="rationale-item">
               <dt>{{ row.label }}</dt>
@@ -188,6 +195,8 @@ const taskAnalysis = ref({})
 const bandRationale = ref({})
 const improvementPlan = ref([])
 const reviewBlocks = ref([])
+const scoreConfidence = ref(null)
+const ceilings = ref([])
 const reviewDegraded = ref(false)
 const loadError = ref('')
 
@@ -198,6 +207,18 @@ const ERROR_TYPE_LABELS = {
   sentence_structure: '句式问题',
   coherence: '逻辑连贯'
 }
+
+const confidenceNote = computed(() => {
+  const confidence = scoreConfidence.value
+  if (!confidence) return ''
+  const range = confidence.low === confidence.high
+    ? `总分 ${confidence.low.toFixed(1)}`
+    : `总分区间 ${confidence.low.toFixed(1)}–${confidence.high.toFixed(1)}`
+  if (!confidence.agreed) {
+    return `独立评分出现分歧，已取 ${confidence.samples} 次评分的中位数（${range}），这个分数仅供参考。`
+  }
+  return `${confidence.samples} 次独立评分基本一致（${range}）。`
+})
 
 const taskAnalysisEntries = computed(() => (
   formatLabeledEntries(taskAnalysis.value, TASK_ANALYSIS_LABELS)
@@ -289,6 +310,8 @@ function applyEvaluationView(view) {
   bandRationale.value = view.bandRationale
   improvementPlan.value = view.improvementPlan
   reviewBlocks.value = view.reviewBlocks
+  scoreConfidence.value = view.scoreConfidence || null
+  ceilings.value = Array.isArray(view.ceilings) ? view.ceilings : []
   reviewDegraded.value = view.reviewDegraded === true
 
   if (!topicText.value && view.topicText) {
@@ -523,6 +546,19 @@ function writeNew() {
   color: var(--anth-ink);
   font-family: var(--anth-font-serif);
   font-size: var(--anth-text-h2-size);
+}
+
+.score-confidence {
+  margin-top: var(--anth-space-3);
+}
+
+.ceiling-note {
+  margin-top: var(--anth-space-3);
+}
+
+.ceiling-note ul {
+  margin: 0;
+  padding-left: 1.2em;
 }
 
 .criteria-table + .rationale-list {

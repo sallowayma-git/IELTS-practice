@@ -411,6 +411,8 @@ export function resolveEvaluationConsumption(payload, overrides = {}) {
       analysis.band_rationale,
       review.band_rationale
     ),
+    score_confidence: normalizeConfidence(diagnosis.confidence),
+    ceilings: pickList(diagnosis.ceilings),
     improvement_plan: pickList(
       overrides.improvement_plan,
       parsed.improvement_plan,
@@ -541,6 +543,16 @@ export function adaptWritingHistoryDetail(detail) {
   }
 }
 
+// Agreement of independent scoring samples; null for single-pass or legacy results.
+function normalizeConfidence(value) {
+  const confidence = normalizeMap(value)
+  const low = Number(normalizeMap(confidence.low).overall)
+  const high = Number(normalizeMap(confidence.high).overall)
+  const samples = Number(confidence.samples)
+  if (!Number.isFinite(low) || !Number.isFinite(high) || !Number.isFinite(samples)) return null
+  return { samples, agreed: confidence.agreed === true, low, high }
+}
+
 export function buildEvaluationView(payload, overrides = {}) {
   const resolved = resolveEvaluationConsumption(payload, overrides)
 
@@ -552,6 +564,8 @@ export function buildEvaluationView(payload, overrides = {}) {
     taskAnalysis: resolved.task_analysis,
     bandRationale: resolved.band_rationale,
     improvementPlan: resolved.improvement_plan,
+    scoreConfidence: resolved.score_confidence,
+    ceilings: resolved.ceilings,
     reviewBlocks: resolved.review_blocks,
     sentences: resolved.sentences,
     rewriteSuggestions: resolved.rewrite_suggestions,
