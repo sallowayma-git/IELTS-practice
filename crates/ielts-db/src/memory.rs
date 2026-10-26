@@ -451,9 +451,10 @@ pub fn promote_memory_candidate(
     })
 }
 
-/// A validated candidate that could not be promoted (its target moved, the scope
-/// is full) must not stay `pending`: pending candidates are shown to the coach as
-/// unverified context. No-op unless the candidate is still pending.
+/// A validated candidate that could not be promoted (its target moved, or the
+/// scope has nothing evictable) must not stay `pending`: pending candidates are
+/// shown to the coach as unverified context. No-op unless the candidate is still
+/// pending.
 pub fn reject_pending_candidate(conn: &Connection, candidate_id: &str) -> DbResult<()> {
     conn.execute(
         "UPDATE memory_candidates SET disposition='rejected',version=version+1,updated_at=?1
@@ -1302,14 +1303,7 @@ fn insert_active_memory(
     now: &str,
 ) -> DbResult<(String, MemoryStatus, u64, Option<String>, String)> {
     require_safe_statement(statement)?;
-    let active_count = tx.query_row(
-        "SELECT COUNT(*) FROM memory_items WHERE user_id=?1 AND scope=?2 AND status='active'",
-        params![candidate.user_id, scope.storage_key()],
-        |row| row.get::<_, i64>(0),
-    )?;
-    if active_count >= MAX_ACTIVE_MEMORY_PER_SCOPE as i64 {
-        return Err(DbError::Validation("active memory capacity reached".into()));
-    }
+    make_room_for_insert(tx, command, &candidate.user_id, scope, now)?;
     let memory_id = format!("mem-{}", Uuid::new_v4());
     let content_hash = hash_text(statement);
     let (confidence, source_trust) = source_weights(candidate.source_class);
@@ -1341,6 +1335,55 @@ fn insert_active_memory(
     )?;
     let after = memory_state_json(tx, &memory_id)?.unwrap_or_else(|| "{}".into());
     Ok((memory_id, MemoryStatus::Active, 1, None, after))
+}
+
+/// A full scope evicts instead of refusing: archives the least valuable active
+/// memory (reason `capacity`) in the caller's transaction, so the insert lands.
+/// Never evicted: `user_explicit` memories, and any memory another candidate of
+/// the same weekly batch targets or resolved into. Fails only when nothing in
+/// the scope is evictable.
+fn make_room_for_insert(
+    tx: &Transaction<'_>,
+    command: &MemoryPromotionCommand,
+    user_id: &str,
+    scope: MemoryScope,
+    now: &str,
+) -> DbResult<()> {
+    let active_count = tx.query_row(
+        "SELECT COUNT(*) FROM memory_items WHERE user_id=?1 AND scope=?2 AND status='active'",
+        params![user_id, scope.storage_key()],
+        |row| row.get::<_, i64>(0),
+    )?;
+    if active_count < MAX_ACTIVE_MEMORY_PER_SCOPE as i64 {
+        return Ok(());
+    }
+    let victim: String = tx
+        .query_row(
+            "SELECT m.id FROM memory_items m
+             WHERE m.user_id=?1 AND m.scope=?2 AND m.status='active'
+               AND m.source_class != 'user_explicit'
+               AND NOT EXISTS (
+                 SELECT 1 FROM memory_candidates c
+                 WHERE c.batch_id=(SELECT batch_id FROM memory_candidates WHERE id=?3)
+                   AND (c.target_memory_id=m.id OR c.resolved_memory_id=m.id))
+             ORDER BY m.importance ASC, COALESCE(m.last_observed_at, m.updated_at) ASC,
+                      m.recall_count ASC, m.id ASC
+             LIMIT 1",
+            params![user_id, scope.storage_key(), command.candidate_id],
+            |row| row.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| DbError::Validation("active memory capacity reached".into()))?;
+    archive_memory_record(
+        tx,
+        &victim,
+        &command.actor_type,
+        command.actor_id.as_deref(),
+        "capacity",
+        now,
+    )?;
+    crate::consolidation::propagate_support_change_in_transaction(tx, &victim, "archived", now)?;
+    Ok(())
 }
 
 /// Last line of defence at the `memory_items` write: a model-written statement

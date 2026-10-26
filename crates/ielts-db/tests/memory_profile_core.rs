@@ -629,29 +629,147 @@ fn forgetting_superseded_target_keeps_replacement_candidate_identity() {
     assert_eq!(memory_field(&conn, &new, "canonical_key"), "strategy.reading.new_check");
 }
 
+fn insert_scope_memory(
+    conn: &Connection,
+    id: &str,
+    source_class: &str,
+    importance: f64,
+    observed_at: &str,
+) {
+    let key = format!("strategy.reading.{}", id.replace('-', "_"));
+    conn.execute(
+        "INSERT INTO memory_items (
+           id,user_id,namespace,scope,memory_type,canonical_key,normalized_label,content,status,
+           source_class,confidence,importance,source_trust,sensitivity,improvement_state,
+           last_observed_at,version,created_by,content_hash,created_at,updated_at
+         ) VALUES (?1,'local','strategy','activity:reading','procedural',?2,?2,?2,'active',
+                   ?3,0.8,?4,1.0,'normal','baseline',?5,1,'test',?6,?5,?5)",
+        params![id, key, source_class, importance, observed_at, sha256(&key)],
+    )
+    .unwrap();
+}
+
+fn fill_reading_scope(conn: &Connection, source_class: &str) {
+    for index in 0..128 {
+        insert_scope_memory(
+            conn,
+            &format!("mem-capacity-{index}"),
+            source_class,
+            0.5,
+            "2026-08-13T03:00:00Z",
+        );
+    }
+}
+
+fn scope_memory_status(conn: &Connection, id: &str) -> String {
+    memory_field(conn, id, "status")
+}
+
 #[test]
-fn active_memory_capacity_fails_without_partial_promotion() {
+fn capacity_add_archives_least_valuable_non_explicit_memory() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-evict", "2026-08-13T03:00:00Z");
+    let observation_id = first_observation_id(&conn);
+    fill_reading_scope(&conn, "observed");
+    // Lowest importance but user_explicit: must survive eviction.
+    conn.execute("UPDATE memory_items SET source_class='user_explicit', importance=0.0
+                  WHERE id='mem-capacity-0'", []).unwrap();
+    // Same importance as capacity-7; older last observation makes it the victim.
+    conn.execute("UPDATE memory_items SET importance=0.1, last_observed_at='2026-08-01T00:00:00Z'
+                  WHERE id='mem-capacity-3'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.1 WHERE id='mem-capacity-7'", []).unwrap();
+    let receipt = persist_memory_candidate_batch(&conn, &pending_input(
+        &conn,
+        "request-evict",
+        MemoryMutationProposal::Add {
+            namespace: MemoryNamespace::Strategy,
+            canonical_key: "strategy.reading.evicting_add".into(),
+            scope: MemoryScope::Activity { key: Activity::Reading },
+            statement: "The new memory lands after eviction.".into(),
+            evidence_observation_ids: vec![observation_id],
+        },
+        MemorySourceClass::Inferred,
+    )).unwrap();
+    promote(&conn, &receipt.candidates[0].id, 1);
+
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-3"), "archived");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-7"), "active");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-0"), "active");
+    let (operation, reason, actor): (String, String, String) = conn.query_row(
+        "SELECT operation,reason,actor_type FROM memory_mutations
+         WHERE memory_id='mem-capacity-3' AND operation='archive'",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).unwrap();
+    assert_eq!((operation.as_str(), reason.as_str(), actor.as_str()), ("archive", "capacity", "user"));
+    let resolved: String = conn.query_row(
+        "SELECT resolved_memory_id FROM memory_candidates WHERE id=?1",
+        [&receipt.candidates[0].id],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(scope_memory_status(&conn, &resolved), "active");
+    let active: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM memory_items WHERE scope='activity:reading' AND status='active'",
+        [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(active, 128);
+}
+
+#[test]
+fn capacity_eviction_skips_memories_the_same_batch_targets() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-batch-guard", "2026-08-13T03:00:00Z");
+    let observation_id = first_observation_id(&conn);
+    fill_reading_scope(&conn, "observed");
+    conn.execute("UPDATE memory_items SET importance=0.1 WHERE id='mem-capacity-7'", []).unwrap();
+    conn.execute("UPDATE memory_items SET importance=0.2 WHERE id='mem-capacity-8'", []).unwrap();
+    let snapshot = load_memory_validation_snapshot(&conn, "local", &[observation_id.clone()]).unwrap();
+    let batch = MemoryMutationProposalBatch {
+        schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION,
+        proposals: vec![
+            MemoryMutationProposal::Add {
+                namespace: MemoryNamespace::Strategy,
+                canonical_key: "strategy.reading.batch_guard_add".into(),
+                scope: MemoryScope::Activity { key: Activity::Reading },
+                statement: "The batch-guarded add lands.".into(),
+                evidence_observation_ids: vec![observation_id.clone()],
+            },
+            MemoryMutationProposal::Reinforce {
+                target_memory_id: "mem-capacity-7".into(),
+                evidence_observation_ids: vec![observation_id],
+            },
+        ],
+    };
+    let validation = candidate_validator::MemoryProposalValidator::default().validate(
+        &batch,
+        candidate_validator::MemoryProposalOrigin::CognitiveRuntime {
+            source_class: MemorySourceClass::Inferred,
+        },
+        &snapshot,
+    );
+    assert!(validation.decisions.iter().all(|d| d.disposition == MemoryProposalDisposition::Pending));
+    let receipt = persist_memory_candidate_batch(&conn, &MemoryCandidatePersistenceInput {
+        request_id: "request-batch-guard".into(),
+        user_id: "local".into(),
+        run_id: None,
+        source_class: MemorySourceClass::Inferred,
+        batch,
+        validation,
+        snapshot,
+    }).unwrap();
+    promote(&conn, &receipt.candidates[0].id, 1);
+
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-7"), "active");
+    assert_eq!(scope_memory_status(&conn, "mem-capacity-8"), "archived");
+}
+
+#[test]
+fn active_memory_capacity_fails_only_when_every_memory_is_protected() {
     let (_dir, conn) = open_db();
     insert_reading_event(&conn, "event-capacity", "2026-08-13T03:00:00Z");
     let observation_id = first_observation_id(&conn);
-    for index in 0..128 {
-        conn.execute(
-            "INSERT INTO memory_items (
-               id,user_id,namespace,scope,memory_type,canonical_key,normalized_label,content,status,
-               source_class,confidence,importance,source_trust,sensitivity,improvement_state,
-               version,created_by,content_hash,created_at,updated_at
-             ) VALUES (?1,'local','strategy','activity:reading','procedural',?2,?3,?3,'active',
-                       'observed',0.8,0.5,1.0,'normal','baseline',1,'test',?4,?5,?5)",
-            params![
-                format!("mem-capacity-{index}"),
-                format!("strategy.reading.capacity_{index}"),
-                format!("capacity {index}"),
-                sha256(&format!("capacity {index}")),
-                "2026-08-13T03:00:00Z",
-            ],
-        )
-        .unwrap();
-    }
+    fill_reading_scope(&conn, "user_explicit");
     let input = pending_input(
         &conn,
         "request-capacity",

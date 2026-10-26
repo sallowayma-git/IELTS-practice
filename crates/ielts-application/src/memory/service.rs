@@ -144,8 +144,8 @@ impl<'a> MemoryService<'a> {
     /// The weekly dream's write path: validate the batch with the same gate as
     /// every cognitive proposal, then promote each accepted candidate as the
     /// `dream` actor. A candidate that validated but cannot be promoted (its
-    /// target moved, the scope is full) is settled as rejected and costs the
-    /// batch nothing else.
+    /// target moved, or a full scope has nothing evictable) is settled as
+    /// rejected and costs the batch nothing else.
     pub fn apply_cognitive_mutations(
         &self,
         command: &SubmitMemoryCandidatesCommand,
