@@ -516,6 +516,28 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }]
   }
 
+  // Streamed answer text shown before the reply is validated and persisted. The
+  // entry is never persisted: the final reply replaces it, and a failure drops it.
+  function appendProvisionalCoachText(id: string, text: string) {
+    const transcript = coachTranscriptState.value
+    coachTranscriptState.value = transcript.some((entry) => entry.id === id)
+      ? transcript.map((entry) => (entry.id === id ? { ...entry, content: entry.content + text } : entry))
+      : [...transcript, {
+        id,
+        role: 'assistant',
+        status: 'streaming',
+        content: text,
+        isError: false,
+        persisted: false,
+        followUps: [],
+        snapshot: null
+      }]
+  }
+
+  function dropProvisionalCoachText(id: string) {
+    coachTranscriptState.value = coachTranscriptState.value.filter((entry) => entry.id !== id)
+  }
+
   function isCurrentSubmission(expectedSessionId: unknown) {
     const normalized = String(expectedSessionId || '').trim()
     return Boolean(normalized && String(submission.value?.sessionId || '').trim() === normalized)
@@ -569,6 +591,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
     const expectedSessionId = String(submission.value.sessionId || '').trim()
     const requestId = ++coachRequestSequence
+    const provisionalId = `coach-stream-${requestId}`
+    // A delta that lands after the reply has settled must not re-add the bubble.
+    let streamOpen = true
     coachLoading.value = true
     coachError.value = ''
     coachResponse.value = null
@@ -576,7 +601,10 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     try {
       const requestPayload = buildCoachPayload(normalizedQuery, queryOptions)
       const response = await readingCoachApi.query(requestPayload, expectedSessionId, {
-        onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'coach' })
+        onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'coach' }),
+        onDelta: (text) => {
+          if (streamOpen && isCurrentSubmission(expectedSessionId)) appendProvisionalCoachText(provisionalId, text)
+        }
       })
       if (!isReadingCoachEnabled()) {
         return response
@@ -606,6 +634,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       appendLocalCoachError(coachError.value)
       return null
     } finally {
+      streamOpen = false
+      dropProvisionalCoachText(provisionalId)
       if (coachRequestSequence === requestId && isCurrentSubmission(expectedSessionId)) {
         coachLoading.value = false
         coachStreamMessage.value = ''

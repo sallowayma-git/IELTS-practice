@@ -3,7 +3,9 @@
 use ielts_application::{ApplicationError, CoachService};
 use ielts_domain::dto::CommandResponse;
 use ielts_domain::ErrorEnvelope;
-use tauri::State;
+use serde::Serialize;
+use tauri::ipc::{Channel, CommandArg, CommandItem, InvokeBody, InvokeError};
+use tauri::{Runtime, State};
 
 use crate::ai::load_runtime;
 use crate::app::application_store::ApplicationStore;
@@ -219,20 +221,69 @@ pub fn coach_list_messages(
     }
 }
 
+/// A channel argument the webview may leave out. Tauri's own `Channel` argument
+/// is required; this reads it only when the key is present and not null, so
+/// callers that pass no channel keep working.
+pub struct OptionalChannel<T>(pub Option<Channel<T>>);
+
+impl<'de, R: Runtime, T> CommandArg<'de, R> for OptionalChannel<T> {
+    fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
+        let present = match command.message.payload() {
+            InvokeBody::Json(value) => value.get(command.key).is_some_and(|value| !value.is_null()),
+            InvokeBody::Raw(_) => false,
+        };
+        if !present {
+            return Ok(Self(None));
+        }
+        Channel::from_command(command).map(|channel| Self(Some(channel)))
+    }
+}
+
+/// Progress on the optional coach channel. The command's return value stays the
+/// final, validated result.
+#[derive(Clone, Serialize)]
+#[serde(tag = "event", content = "data", rename_all = "camelCase")]
+pub enum CoachStreamEvent {
+    /// The next piece of the learner-visible answer, in order.
+    Delta { text: String },
+}
+
 #[tauri::command]
 pub async fn coach_run(
     db: State<'_, AppDb>,
     vault: State<'_, AppVault>,
     cmd: RunCoachCommand,
+    on_delta: OptionalChannel<CoachStreamEvent>,
 ) -> Result<CommandResponse<CoachRunResult>, ErrorEnvelope> {
     let store = ApplicationStore::new(&db);
-    let result = CoachService::run(&store, cmd, || {
+    let load_model = || {
         load_runtime(&db, &vault)
             .map_err(|error| ApplicationError::new("enrichment.error", error.to_string(), false))
-    })
-    .await;
+    };
+    let result = match on_delta.0 {
+        None => CoachService::run(&store, cmd, load_model).await,
+        Some(channel) => {
+            let mut on_visible = |text: &str| {
+                // A closed channel (the view went away) must not fail the run:
+                // the reply is still persisted and returned.
+                let _ = channel.send(CoachStreamEvent::Delta { text: text.to_owned() });
+            };
+            CoachService::run_streaming(&store, cmd, load_model, &mut on_visible).await
+        }
+    };
     match result {
         Ok(result) => Ok(CommandResponse::success(result)),
         Err(error) => Ok(CommandResponse::failure(map_application_error(error))),
+    }
+}
+
+#[cfg(test)]
+mod coach_stream_tests {
+    use super::CoachStreamEvent;
+
+    #[test]
+    fn delta_events_keep_the_frontend_wire_shape() {
+        let event = serde_json::to_value(CoachStreamEvent::Delta { text: "你好".into() }).unwrap();
+        assert_eq!(event, serde_json::json!({"event": "delta", "data": {"text": "你好"}}));
     }
 }

@@ -23,6 +23,7 @@ import {
   ensureCoachThread,
   listCoachMessages
 } from '@/api/enrichment-repository.js'
+import { Channel } from '@tauri-apps/api/core'
 import { invokeCommand, unwrapCommandResponse } from '@/api/tauri-bridge.js'
 
 function newKey(prefix = 'p') {
@@ -265,7 +266,7 @@ export const practiceCoach = {
     notify('start', { threadId })
     try {
       notify('generation_start', { threadId })
-      const response = await invokeCommand('coach_run', {
+      const invokeArgs = {
         cmd: {
           threadId,
           content: String(userText).trim(),
@@ -284,7 +285,15 @@ export const practiceCoach = {
             attemptContext: payload?.attemptContext || null
           }
         }
-      })
+      }
+      if (typeof options.onDelta === 'function') {
+        const onDelta = new Channel()
+        onDelta.onmessage = (event) => {
+          if (event?.event === 'delta') options.onDelta(String(event.data?.text ?? ''))
+        }
+        invokeArgs.onDelta = onDelta
+      }
+      const response = await invokeCommand('coach_run', invokeArgs)
       const result = unwrapCommandResponse(response, 'coach_run') || {}
       const answer = String(result.assistantMessage?.content || '').trim()
       if (!answer) {
