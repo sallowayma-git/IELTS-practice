@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use ielts_domain::{
     apply_skill_observation, familiarity_weights, has_priority_evidence, preferred_probe,
     priority_band, review_priority, trend_direction, uncertainty_band, LearnerModelConfig,
@@ -841,7 +841,7 @@ fn stability_groups(observations: &[SkillObservation]) -> BTreeMap<SkillInstant,
     for observation in observations {
         let instant = (
             (observation.user_id.clone(), observation.skill_key.clone()),
-            observation.observed_at.clone(),
+            instant_key(&observation.observed_at),
         );
         groups.entry(instant).or_default().push((
             observation.outcome.clamp(0.0, 1.0),
@@ -909,7 +909,7 @@ fn build_states_and_schedules(
         apply_skill_observation(state, observation, elapsed_days.unwrap_or(0.0), config);
         state.last_practiced_at = Some(observation.observed_at.clone());
         // Stability moves once per skill and instant, by that instant's aggregate.
-        let instant = (key.clone(), observation.observed_at.clone());
+        let instant = (key.clone(), instant_key(&observation.observed_at));
         if stability_judged.insert(instant.clone()) {
             let (outcome, weight) = stability_by_instant[&instant];
             state.stability_days =
@@ -1429,6 +1429,15 @@ fn parse_time(value: &str) -> Option<DateTime<Utc>> {
         .map(|value| value.with_timezone(&Utc))
 }
 
+/// Grouping key for one instant: equivalent RFC 3339 spellings (`Z` vs an offset)
+/// collapse to the same key. Unparseable input keeps its raw text.
+fn instant_key(value: &str) -> String {
+    parse_time(value).map_or_else(
+        || value.to_string(),
+        |time| time.to_rfc3339_opts(SecondsFormat::Nanos, true),
+    )
+}
+
 fn value_string(value: &Value, key: &str) -> Option<String> {
     value
         .get(key)
@@ -1623,6 +1632,26 @@ mod tests {
             asset_observation("zero-2", "asset-zero", 1.0, 0.0),
         ];
         assert_eq!(built_state(&observations).distinct_asset_count, 0);
+    }
+
+    #[test]
+    fn same_instant_stability_merges_equivalent_rfc3339_spellings() {
+        let mut prior = same_instant_observation("prior", 1.0);
+        prior.observed_at = "2026-08-11T00:00:00Z".into();
+        let same_string = [
+            same_instant_observation("correct", 1.0),
+            same_instant_observation("wrong", 0.0),
+        ];
+        let mut offset_wrong = same_instant_observation("wrong", 0.0);
+        offset_wrong.observed_at = "2026-08-12T08:00:00+08:00".into();
+        let mixed = [same_instant_observation("correct", 1.0), offset_wrong];
+
+        let expected = built_state(&[prior.clone(), same_string[0].clone(), same_string[1].clone()]);
+        let mixed_forward = built_state(&[prior.clone(), mixed[0].clone(), mixed[1].clone()]);
+        let mixed_reversed = built_state(&[prior.clone(), mixed[1].clone(), mixed[0].clone()]);
+        assert!(expected.stability_days.is_some());
+        assert_eq!(mixed_forward.stability_days, expected.stability_days);
+        assert_eq!(mixed_reversed.stability_days, expected.stability_days);
     }
 
     #[test]
