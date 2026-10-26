@@ -2,7 +2,10 @@ use ielts_db::{
     DeterministicProvider, EvaluationHandle, EvaluationRunResult, PreparedEvaluation,
     ProviderError, StartEvaluationCommand, WritingProvider,
 };
-use ielts_domain::dto::{WritingFeedbackV4, WritingScoreV4};
+use ielts_domain::domain::WritingTaskType;
+use ielts_domain::dto::{WritingDiagnosisV4, WritingFeedbackV4, WritingScoreV4};
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 use crate::{
     ApplicationError, ChatMessage, CompletionRequest, EventSink, LanguageModel, ModelError,
@@ -21,10 +24,32 @@ pub enum EvaluationBackend<M> {
     Unavailable(ModelError),
 }
 
+/// Scoring must be repeatable, so it ignores the user's creativity setting.
+const SCORING_TEMPERATURE: f32 = 0.1;
+
 #[derive(Debug)]
 struct ProviderOutput {
     score: WritingScoreV4,
+    diagnosis: Option<WritingDiagnosisV4>,
     feedback: Result<WritingFeedbackV4, ProviderError>,
+}
+
+/// Criterion bands as the model returns them; the overall band is ours.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CriterionBands {
+    task_response: f64,
+    coherence: f64,
+    lexical: f64,
+    grammar: f64,
+}
+
+/// Facts measured locally so the model never has to count.
+#[derive(Debug, PartialEq)]
+struct EssayFacts {
+    words: usize,
+    paragraphs: usize,
+    minimum_words: usize,
 }
 
 pub struct WritingEvaluationService;
@@ -71,15 +96,15 @@ impl WritingEvaluationService {
             EvaluationBackend::Unavailable(error) => Err(error.into()),
         };
 
-        let (score, feedback, review_error) = match provider_result {
+        let (score, diagnosis, feedback, review_error) = match provider_result {
             Ok(output) => match output.feedback {
-                Ok(feedback) => (Ok(output.score), Some(feedback), None),
-                Err(error) => (Ok(output.score), None, Some(error)),
+                Ok(feedback) => (Ok(output.score), output.diagnosis, Some(feedback), None),
+                Err(error) => (Ok(output.score), output.diagnosis, None, Some(error)),
             },
-            Err(error) => (Err(error), None, None),
+            Err(error) => (Err(error), None, None, None),
         };
 
-        let result = store.finish(&prepared, score, feedback, review_error)?;
+        let result = store.finish(&prepared, score, diagnosis, feedback, review_error)?;
         emit_all(
             events,
             result
@@ -100,34 +125,83 @@ fn run_deterministic(prepared: &PreparedEvaluation) -> Result<ProviderOutput, Pr
         prepared.task_type,
     )?;
     let feedback = provider.review(&prepared.essay, &score);
-    Ok(ProviderOutput { score, feedback })
+    Ok(ProviderOutput {
+        score,
+        diagnosis: None,
+        feedback,
+    })
 }
 
 async fn evaluate_language_model<M: LanguageModel>(
     model: &M,
     prepared: &PreparedEvaluation,
 ) -> Result<ProviderOutput, ProviderError> {
-    let task_type = prepared
-        .task_type
-        .map(|value| format!("{value:?}"))
-        .unwrap_or_default();
-    let prompt = format!(
-        "Assess this IELTS writing response. Task type: {task_type}. Task prompt: {}\n\nEssay:\n{}",
-        prepared.prompt.as_deref().unwrap_or("not provided"),
-        prepared.essay
-    );
     let response = model
         .complete(CompletionRequest {
             messages: vec![
                 ChatMessage::new("system", prepared.system_prompt.clone()),
-                ChatMessage::new("user", prompt),
+                ChatMessage::new("user", user_message(prepared)),
             ],
-            temperature: prepared.temperature,
+            temperature: SCORING_TEMPERATURE,
             max_tokens: crate::WRITING_EVALUATION_MAX_TOKENS,
-            cache_key: None,
+            cache_key: Some(evaluation_cache_key(&prepared.system_prompt)),
         })
         .await?;
     parse_output(&response.content)
+}
+
+fn user_message(prepared: &PreparedEvaluation) -> String {
+    let facts = measure_essay(&prepared.essay, prepared.task_type);
+    let length = if facts.words < facts.minimum_words {
+        "below the minimum, so the task criterion is limited"
+    } else {
+        "meets the minimum"
+    };
+    format!(
+        "Task type: {}\nTask prompt: {}\nMeasured facts: {} words (minimum {}; {length}), {} paragraphs.\n\nEssay:\n{}",
+        task_label(prepared.task_type),
+        prepared.prompt.as_deref().unwrap_or("not provided"),
+        facts.words,
+        facts.minimum_words,
+        facts.paragraphs,
+        prepared.essay
+    )
+}
+
+fn task_label(task_type: Option<WritingTaskType>) -> &'static str {
+    match task_type {
+        Some(WritingTaskType::Task1) => "IELTS Academic Writing Task 1",
+        Some(WritingTaskType::Task2) => "IELTS Writing Task 2",
+        None => "IELTS Writing (task not specified; assess as Task 2)",
+    }
+}
+
+fn measure_essay(essay: &str, task_type: Option<WritingTaskType>) -> EssayFacts {
+    let blocks = essay
+        .split("\n\n")
+        .filter(|block| !block.trim().is_empty())
+        .count();
+    let lines = essay.lines().filter(|line| !line.trim().is_empty()).count();
+    EssayFacts {
+        words: essay.split_whitespace().count(),
+        // Many learners separate paragraphs with a single newline.
+        paragraphs: if blocks > 1 { blocks } else { lines },
+        minimum_words: match task_type {
+            Some(WritingTaskType::Task1) => 150,
+            _ => 250,
+        },
+    }
+}
+
+/// Same system prompt, same key: the rubric prefix is what the cache can reuse.
+fn evaluation_cache_key(system_prompt: &str) -> String {
+    let digest = Sha256::digest(system_prompt.as_bytes());
+    let hex: String = digest
+        .iter()
+        .take(16)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    format!("writing-eval-{hex}")
 }
 
 fn parse_output(content: &str) -> Result<ProviderOutput, ProviderError> {
@@ -141,14 +215,19 @@ fn parse_output(content: &str) -> Result<ProviderOutput, ProviderError> {
         .trim();
     let value: serde_json::Value = serde_json::from_str(json)
         .map_err(|error| provider_error(format!("AI evaluation JSON invalid: {error}"), false))?;
-    let score: WritingScoreV4 = serde_json::from_value(
+    let bands: CriterionBands = serde_json::from_value(
         value
             .get("score")
             .cloned()
             .ok_or_else(|| provider_error("AI evaluation score is missing", false))?,
     )
     .map_err(|error| provider_error(format!("AI evaluation score invalid: {error}"), false))?;
-    validate_score(&score)?;
+    let score = score_from_bands(&bands)?;
+    // Diagnosis explains the score; a malformed one is dropped, never fatal.
+    let diagnosis = value
+        .get("diagnosis")
+        .cloned()
+        .and_then(|diagnosis| serde_json::from_value(diagnosis).ok());
     let feedback = value
         .get("feedback")
         .cloned()
@@ -158,28 +237,42 @@ fn parse_output(content: &str) -> Result<ProviderOutput, ProviderError> {
                 provider_error(format!("AI evaluation feedback invalid: {error}"), true)
             })
         });
-    Ok(ProviderOutput { score, feedback })
+    Ok(ProviderOutput {
+        score,
+        diagnosis,
+        feedback,
+    })
 }
 
-fn validate_score(score: &WritingScoreV4) -> Result<(), ProviderError> {
-    let values = [
-        score.overall,
-        score.task_response,
-        score.coherence,
-        score.lexical,
-        score.grammar,
+/// Snap each criterion to a half band and derive the overall band from them,
+/// so the overall can never disagree with the criteria the learner sees.
+fn score_from_bands(bands: &CriterionBands) -> Result<WritingScoreV4, ProviderError> {
+    let criteria = [
+        bands.task_response,
+        bands.coherence,
+        bands.lexical,
+        bands.grammar,
     ];
-    if values
+    if !criteria
         .iter()
         .all(|value| value.is_finite() && (0.0..=9.0).contains(value))
     {
-        Ok(())
-    } else {
-        Err(provider_error(
+        return Err(provider_error(
             "AI evaluation contains an invalid band score",
             false,
-        ))
+        ));
     }
+    let [task_response, coherence, lexical, grammar] =
+        criteria.map(|value| (value * 2.0).round() / 2.0);
+    let mean = (task_response + coherence + lexical + grammar) / 4.0;
+    Ok(WritingScoreV4 {
+        // A task band is the criterion mean rounded down to the half band.
+        overall: (mean * 2.0 + 1e-9).floor() / 2.0,
+        task_response,
+        coherence,
+        lexical,
+        grammar,
+    })
 }
 
 fn provider_error(message: impl Into<String>, retryable: bool) -> ProviderError {
@@ -292,6 +385,7 @@ mod tests {
             &self,
             prepared: &PreparedEvaluation,
             score: Result<WritingScoreV4, ProviderError>,
+            _diagnosis: Option<WritingDiagnosisV4>,
             feedback: Option<WritingFeedbackV4>,
             review_error: Option<ProviderError>,
         ) -> Result<EvaluationRunResult, ApplicationError> {
@@ -529,21 +623,109 @@ mod tests {
     #[test]
     fn parses_fenced_json() {
         let output = parse_output("```json\n{\"score\":{\"overall\":7.0,\"taskResponse\":7.0,\"coherence\":6.5,\"lexical\":7.0,\"grammar\":6.5},\"feedback\":{\"overall\":\"Clear\",\"plan\":[],\"paragraphs\":[],\"sentences\":[],\"rewrites\":[]}}\n```").unwrap();
-        assert_eq!(output.score.overall, 7.0);
+        // mean 6.75 rounds down to 6.5
+        assert_eq!(output.score.overall, 6.5);
         assert!(output.feedback.is_ok());
     }
 
     #[test]
     fn rejects_invalid_scores_and_malformed_json() {
         assert!(parse_output("not-json").is_err());
-        assert!(parse_output("{\"score\":{\"overall\":10.0,\"taskResponse\":7.0,\"coherence\":7.0,\"lexical\":7.0,\"grammar\":7.0},\"feedback\":{\"plan\":[],\"paragraphs\":[],\"sentences\":[],\"rewrites\":[]}}").is_err());
+        assert!(parse_output("{\"score\":{\"overall\":7.0,\"taskResponse\":10.0,\"coherence\":7.0,\"lexical\":7.0,\"grammar\":7.0},\"feedback\":{\"plan\":[],\"paragraphs\":[],\"sentences\":[],\"rewrites\":[]}}").is_err());
     }
 
     #[test]
     fn keeps_valid_score_when_review_payload_is_invalid() {
         let output = parse_output("{\"score\":{\"overall\":7.0,\"taskResponse\":7.0,\"coherence\":6.5,\"lexical\":7.0,\"grammar\":6.5},\"feedback\":false}").unwrap();
-        assert_eq!(output.score.overall, 7.0);
+        assert_eq!(output.score.overall, 6.5);
         assert!(output.feedback.is_err());
+    }
+
+    #[test]
+    fn overall_band_is_derived_from_snapped_criteria() {
+        // Model claims 8.0 overall; the criteria say otherwise.
+        let output = parse_output("{\"score\":{\"overall\":8.0,\"taskResponse\":7.0,\"coherence\":6.5,\"lexical\":6.5,\"grammar\":6.0},\"feedback\":{}}").unwrap();
+        assert_eq!(output.score.overall, 6.5);
+
+        let snapped = parse_output("{\"score\":{\"taskResponse\":6.3,\"coherence\":6.0,\"lexical\":6.0,\"grammar\":6.0},\"feedback\":{}}").unwrap();
+        assert_eq!(snapped.score.task_response, 6.5);
+        // mean 6.125 rounds down to 6.0
+        assert_eq!(snapped.score.overall, 6.0);
+
+        let quarter = parse_output("{\"score\":{\"taskResponse\":7.0,\"coherence\":7.0,\"lexical\":7.0,\"grammar\":6.0},\"feedback\":{}}").unwrap();
+        assert_eq!(quarter.score.overall, 6.5);
+    }
+
+    #[test]
+    fn diagnosis_is_kept_and_malformed_diagnosis_is_dropped() {
+        let output = parse_output("{\"diagnosis\":{\"task\":{\"position_clarity\":\"清晰\"},\"rationale\":{\"task_achievement\":\"论点展开充分\"}},\"score\":{\"taskResponse\":7.0,\"coherence\":7.0,\"lexical\":7.0,\"grammar\":7.0},\"feedback\":{}}").unwrap();
+        let diagnosis = output.diagnosis.unwrap();
+        assert_eq!(
+            diagnosis.rationale.unwrap()["task_achievement"],
+            "论点展开充分"
+        );
+
+        let malformed = parse_output("{\"diagnosis\":\"oops\",\"score\":{\"taskResponse\":7.0,\"coherence\":7.0,\"lexical\":7.0,\"grammar\":7.0},\"feedback\":{}}").unwrap();
+        assert!(malformed.diagnosis.is_none());
+        assert_eq!(malformed.score.overall, 7.0);
+    }
+
+    #[test]
+    fn measures_words_paragraphs_and_task_minimum() {
+        let facts = measure_essay(
+            "One two three.\nFour five.\n\n",
+            Some(WritingTaskType::Task1),
+        );
+        assert_eq!(
+            facts,
+            EssayFacts {
+                words: 5,
+                paragraphs: 2,
+                minimum_words: 150
+            }
+        );
+        let blocks = measure_essay("A b.\nc d.\n\nE f.", Some(WritingTaskType::Task2));
+        assert_eq!(blocks.paragraphs, 2);
+        assert_eq!(blocks.minimum_words, 250);
+    }
+
+    #[test]
+    fn user_message_carries_measured_facts() {
+        let message = user_message(&prepared_evaluation(None));
+        assert!(message.contains("5 words (minimum 250; below the minimum"));
+        assert!(message.contains("Discuss both views."));
+    }
+
+    #[tokio::test]
+    async fn scoring_request_is_low_temperature_with_stable_cache_key() {
+        #[derive(Clone, Default)]
+        struct CapturingModel(Arc<Mutex<Vec<CompletionRequest>>>);
+
+        #[async_trait]
+        impl LanguageModel for CapturingModel {
+            async fn complete(
+                &self,
+                request: CompletionRequest,
+            ) -> Result<crate::CompletionResponse, ModelError> {
+                self.0.lock().unwrap().push(request);
+                Ok(crate::CompletionResponse {
+                    content: valid_evaluation_json(),
+                    model: "fake-model".into(),
+                    latency_ms: 1,
+                    usage: None,
+                    provider_request_id: None,
+                })
+            }
+        }
+
+        let model = CapturingModel::default();
+        let prepared = prepared_evaluation(None);
+        evaluate_language_model(&model, &prepared).await.unwrap();
+        evaluate_language_model(&model, &prepared).await.unwrap();
+        let requests = model.0.lock().unwrap();
+        assert_eq!(requests[0].temperature, SCORING_TEMPERATURE);
+        assert!(requests[0].cache_key.is_some());
+        assert_eq!(requests[0].cache_key, requests[1].cache_key);
     }
 
     fn start_command() -> StartEvaluationCommand {

@@ -792,7 +792,7 @@ fn retry_keeps_latest_result_when_an_older_provider_call_finishes_late() {
         sentences: vec![],
         rewrites: vec![],
     };
-    finish_evaluation(&conn, &first, Ok(late_score), Some(late_feedback), None).unwrap();
+    finish_evaluation(&conn, &first, Ok(late_score), None, Some(late_feedback), None).unwrap();
 
     let latest = load_evaluation_for_attempt(&conn, "a-latest-retry")
         .unwrap()

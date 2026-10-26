@@ -11,7 +11,7 @@ use ielts_db::{
     EvaluationEvent, EvaluationRunResult, FinishAgentRunCommand, FinishAgentToolCallCommand,
     PreparedEvaluation, ProviderError, RecordCoachFailureCommand, StartEvaluationCommand,
 };
-use ielts_domain::dto::{WritingFeedbackV4, WritingScoreV4};
+use ielts_domain::dto::{WritingDiagnosisV4, WritingFeedbackV4, WritingScoreV4};
 use serde_json::Value;
 use tauri::ipc::Channel;
 
@@ -53,12 +53,13 @@ impl WritingEvaluationStore for ApplicationStore<'_> {
         &self,
         prepared: &PreparedEvaluation,
         score: Result<WritingScoreV4, ProviderError>,
+        diagnosis: Option<WritingDiagnosisV4>,
         feedback: Option<WritingFeedbackV4>,
         review_error: Option<ProviderError>,
     ) -> Result<EvaluationRunResult, ApplicationError> {
         self.db
             .with_conn(|conn| {
-                ielts_db::finish_evaluation(conn, prepared, score, feedback, review_error)
+                ielts_db::finish_evaluation(conn, prepared, score, diagnosis, feedback, review_error)
             })
             .map_err(writing_error)
     }
