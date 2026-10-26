@@ -168,6 +168,34 @@ fn coach_feedback_reasks_and_reviews_become_lines_tied_to_the_attempt() {
 }
 
 #[test]
+fn validated_teaching_notes_join_the_coach_line_of_their_attempt_day() {
+    let (_dir, conn) = fixture();
+    submit(&conn, "a1", "P1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+    coach_feedback(&conn, "a1", "P1", "2026-10-05T10:00:00Z", &["too_long"], 0);
+    let payload = json!({"answer": "x", "teachingNotes": [
+        {"kind": "strategy_outcome", "text": "it worked", "strategy": "paraphrase-matching walk-through", "outcome": "helped", "evidence": "now I get it"},
+        {"kind": "preference", "text": "short examples", "evidence": "short examples"},
+        {"kind": "strategy_outcome", "text": "no", "strategy": "diagram", "outcome": "not_helped", "evidence": "still confused"},
+    ]});
+    conn.execute(
+        "INSERT INTO coach_messages (id, thread_id, role, content, structured_payload, status, created_at, sequence)
+         VALUES ('note-msg', 'thread-a1-2026-10-05T10:00:00Z', 'assistant', 'x', ?1, 'completed', '2026-10-05T10:05:00Z', 3)",
+        params![payload.to_string()],
+    )
+    .unwrap();
+    let pack = pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+
+    // Two notes per line at most: the third is left out. Feedback stays first.
+    assert_eq!(
+        texts(&pack, "coach"),
+        vec!["coach on P1 \"Passage P1\": feedback too_long; learner said \"paraphrase-matching walk-through\" helped; prefers: short examples".to_string()]
+    );
+    let coach = pack.lines.iter().find(|line| line.kind == "coach").unwrap();
+    let score = pack.lines.iter().find(|line| line.kind == "reading").unwrap();
+    assert_eq!(coach.ids, score.ids, "the citable id is still the attempt score");
+}
+
+#[test]
 fn a_writing_line_names_the_task_the_band_and_the_lowest_criteria() {
     let (_dir, conn) = fixture();
     let payload = json!({

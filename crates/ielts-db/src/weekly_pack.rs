@@ -46,6 +46,10 @@ pub const WEEKLY_MIN_OBSERVATIONS: usize = 8;
 const MAX_MEMORIES: usize = 30;
 const MAX_PREFERENCES: usize = 20;
 const MAX_COACH_LINES: usize = 20;
+/// Teaching notes shown per coach line, and the longest a coach line may grow
+/// with them. A note that would overflow is skipped whole, never cut.
+const MAX_COACH_NOTES: usize = 2;
+const COACH_LINE_CHARS: usize = 320;
 const MEMORY_CHARS: usize = 160;
 const PREFERENCE_CHARS: usize = 200;
 const ANSWER_CHARS: usize = 40;
@@ -500,6 +504,7 @@ struct CoachDay {
     at: String,
     kinds: BTreeMap<String, u32>,
     reasks: u32,
+    notes: Vec<String>,
 }
 
 impl CoachDay {
@@ -554,6 +559,30 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         entry.seen(asset, at);
         entry.reasks += 1;
     }
+    let mut notes = conn.prepare(
+        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.structured_payload, m.created_at
+           FROM coach_messages m
+           JOIN coach_threads t ON t.id = m.thread_id
+           LEFT JOIN attempts a ON a.id = t.attempt_id
+          WHERE m.role = 'assistant' AND m.status = 'completed'
+            AND json_extract(m.structured_payload, '$.teachingNotes') IS NOT NULL
+            AND julianday(m.created_at) > julianday(?1) AND julianday(m.created_at) <= julianday(?2)
+          ORDER BY julianday(m.created_at), m.id",
+    )?;
+    let rows = notes.query_map(params![from, to], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+    })?;
+    for row in rows {
+        let (attempt, asset, payload, at) = row?;
+        let phrases = teaching_note_phrases(&serde_json::from_str(&payload).unwrap_or(Value::Null));
+        let entry = days.entry((attempt, day(&at))).or_default();
+        entry.seen(asset, at);
+        for phrase in phrases {
+            if !entry.notes.contains(&phrase) {
+                entry.notes.push(phrase);
+            }
+        }
+    }
     // Keep the most recent days, by real time, with the attempt id only as a tiebreak.
     let mut days: Vec<((String, String), CoachDay)> = days.into_iter().collect();
     days.sort_by(|(left_key, left), (right_key, right)| {
@@ -574,11 +603,63 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
             parts.push(format!("re-asked {}x", entry.reasks));
         }
         let title = if entry.asset.is_empty() { "an attempt".to_owned() } else { format!("{} \"{}\"", entry.asset, assets.title(&entry.asset)) };
+        let parts = with_notes(parts, &title, &entry.notes);
         let ids = attempt_score_id(conn, user_id, &attempt).into_iter().collect();
         let facet = Facet::Coach { kinds: entry.kinds, reasks: entry.reasks };
         lines.push(line(ids, &entry.at, "coach", format!("coach on {title}: {}", parts.join("; ")), facet));
     }
     Ok(lines)
+}
+
+/// Adds the day's notes in order, up to `MAX_COACH_NOTES`, skipping any that would
+/// push the line past `COACH_LINE_CHARS`.
+fn with_notes(mut parts: Vec<String>, title: &str, notes: &[String]) -> Vec<String> {
+    let mut kept = 0;
+    for note in notes {
+        if kept == MAX_COACH_NOTES {
+            break;
+        }
+        parts.push(note.clone());
+        if format!("coach on {title}: {}", parts.join("; ")).chars().count() > COACH_LINE_CHARS {
+            parts.pop();
+        } else {
+            kept += 1;
+        }
+    }
+    parts
+}
+
+/// One phrase per stored teaching note. The host validated them at write time;
+/// they are checked again here because they are read straight into the prompt.
+fn teaching_note_phrases(payload: &Value) -> Vec<String> {
+    payload["teachingNotes"].as_array().into_iter().flatten().filter_map(teaching_note_phrase).collect()
+}
+
+fn teaching_note_phrase(note: &Value) -> Option<String> {
+    let text = flat(field(note, "text"));
+    if text.is_empty() || !is_safe_for_prompt(&text) {
+        return None;
+    }
+    match field(note, "kind") {
+        "preference" => Some(format!("prefers: {text}")),
+        "strategy_outcome" => {
+            let strategy = flat(field(note, "strategy"));
+            if strategy.is_empty() || !is_safe_for_prompt(&strategy) {
+                return None;
+            }
+            let verdict = match field(note, "outcome") {
+                "helped" => "helped",
+                "not_helped" => "did not help",
+                _ => return None,
+            };
+            Some(format!("learner said \"{strategy}\" {verdict}"))
+        }
+        _ => None,
+    }
+}
+
+fn flat(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// A coach thread opened in the window on an attempt finished before it: the
