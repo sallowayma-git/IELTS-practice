@@ -81,10 +81,11 @@ input[type=range] { width: 100%; min-width: 0; accent-color: var(--ember); }
 .dim { position: absolute; inset: 0; background: #000; pointer-events: none; }
 .lid-back { transform: rotateY(180deg); background: linear-gradient(160deg, #47474B, #26262A 55%, #38383C); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08); }
 .lid-back i { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 40px rgba(232,116,63,0.6); }
-.lap-deck { position: absolute; left: -630px; top: 0; width: 1260px; height: 860px; transform-origin: 50% 0; transform: rotateX(90deg); border-radius: 0 0 46px 46px; background: linear-gradient(#3A3A3E, #2A2A2E 30%, #333337); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.07); }
-.kbd { position: absolute; left: 150px; top: 70px; width: 960px; height: 390px; border-radius: 12px; background-color: #151517;
+.lap-deck { position: absolute; left: -600px; top: 0; width: 1200px; height: 840px; transform-origin: 50% 0; transform: rotateX(90deg); border-radius: 36px 36px 46px 46px; background: linear-gradient(#3A3A3E, #2A2A2E 30%, #333337); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.07); }
+.kbd { position: absolute; left: 120px; top: 74px; width: 960px; height: 390px; border-radius: 12px; background-color: #151517;
   background-image: repeating-linear-gradient(90deg, transparent 0 62px, #2E2E32 62px 68px), repeating-linear-gradient(0deg, transparent 0 59px, #2E2E32 59px 65px); }
-.pad { position: absolute; left: 380px; top: 500px; width: 500px; height: 300px; border-radius: 22px; background: #38383C; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08); }
+.pad { position: absolute; left: 350px; top: 500px; width: 500px; height: 300px; border-radius: 22px; background: #38383C; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.08); }
+.lap-hinge { position: absolute; left: -564px; top: -13px; width: 1128px; height: 26px; border-radius: 13px; background: linear-gradient(#1A1A1C, #4A4A4F 45%, #1E1E21); }
 .lap-shadow { position: absolute; left: 50%; width: 1500px; height: 180px; margin-left: -750px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,0.55), transparent); }
 
 /* app UI inside the screen (Warm Paper) */
@@ -266,6 +267,35 @@ body.export .viewport { position: fixed; inset: 0; width: 1920px; height: 1080px
     proud: ['#1F6FE5', 'M10 12H54V34Q54 50 32 60Q10 50 10 34Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M22 30q3 3.5 6 0M36 30q3 3.5 6 0M24 40q8 7 16 0"/>'],
     confused: ['#1F6FE5', 'M32 8C48 8 58 20 56 36C54 52 44 58 30 56C14 54 6 44 8 30C10 16 20 8 32 8Z', '<circle cx="25" cy="31" r="4.2" fill="#fff"/><circle cx="23" cy="30" r="2.1" fill="#1E1A16"/><circle cx="39" cy="31" r="4.2" fill="#fff"/><circle cx="41" cy="33" r="2.1" fill="#1E1A16"/><path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M26 44q3-3 6 0t6 0"/>'],
   };
+  M.stressed = ['#FFA41C', 'M32 8L56 50Q58 56 52 56H12Q6 56 8 50Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M21 28l6 4-6 4M43 28l-6 4 6 4"/><path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M28 46h8"/>'];
+  M.tired = ['#B48ADF', 'M22 26H42A14 14 0 0 1 56 40A14 14 0 0 1 42 54H22A14 14 0 0 1 8 40A14 14 0 0 1 22 26Z', '<path fill="none" stroke="#1E1A16" stroke-width="2.5" stroke-linecap="round" d="M21 33q4-3 8 0M35 33q4-3 8 0M28 44h8"/>'];
+
+  /* Shape morphing: sample each outline into N points with the same winding, rotate one ring to best
+     match the other, then interpolate point by point, so a heart flows into an octagon as one line. */
+  const N_PTS = 160;
+  const sampler = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.setAttribute('width', '0'); sv.setAttribute('height', '0'); sv.style.position = 'absolute'; sv.appendChild(sampler); document.body.appendChild(sv); }
+  const ringCache = {}, pairCache = {};
+  function ring(k) {
+    if (ringCache[k]) return ringCache[k];
+    sampler.setAttribute('d', M[k][1]);
+    const L = sampler.getTotalLength(), pts = [];
+    for (let i = 0; i < N_PTS; i++) { const q = sampler.getPointAtLength((i / N_PTS) * L); pts.push([q.x, q.y]); }
+    let area = 0; pts.forEach((q, i) => { const n = pts[(i + 1) % N_PTS]; area += q[0] * n[1] - n[0] * q[1]; });
+    if (area < 0) pts.reverse();
+    return (ringCache[k] = pts);
+  }
+  function pair(a, b) {
+    const key = a + '>' + b; if (pairCache[key]) return pairCache[key];
+    const A = ring(a), B = ring(b); let best = 0, bestD = Infinity;
+    for (let o = 0; o < N_PTS; o += 2) { let d = 0; for (let i = 0; i < N_PTS; i += 4) { const q = B[(i + o) % N_PTS]; d += (A[i][0] - q[0]) ** 2 + (A[i][1] - q[1]) ** 2; } if (d < bestD) { bestD = d; best = o; } }
+    return (pairCache[key] = [A, A.map((_, i) => B[(i + best) % N_PTS])]);
+  }
+  function morphD(a, b, p) {
+    if (a === b) return M[a][1];
+    const [A, B] = pair(a, b);
+    return 'M' + A.map((q, i) => `${lerp(q[0], B[i][0], p).toFixed(2)} ${lerp(q[1], B[i][1], p).toFixed(2)}`).join('L') + 'Z';
+  }
   const msc = (k, fill) => { const [f, d, face] = M[k]; return `<svg class="msc" viewBox="0 0 64 64" aria-hidden="true"><path fill="${fill || f}" d="${d}"/>${face}</svg>`; };
   // Head-and-shoulders profile, facing right, in a 1000×1000 box.
   const HEAD = 'M180 1000 C190 900 230 840 300 800 C330 784 352 760 356 720 C360 690 352 660 338 632 C300 600 268 560 254 500 C236 420 246 330 296 262 C352 186 444 150 540 156 C640 162 716 214 750 300 C766 342 768 382 764 416 C780 446 800 478 812 506 C818 520 812 530 796 534 L780 538 C786 556 784 572 774 582 C784 592 784 606 772 616 C768 640 760 664 738 676 C712 690 676 690 650 692 C640 720 642 748 656 780 C720 820 820 860 870 1000 Z';
@@ -291,7 +321,7 @@ body.export .viewport { position: fixed; inset: 0; width: 1920px; height: 1080px
       <div class="nb-card" style="--r:.5deg;background:#9CC3DE">${msc('focused')}<small>10/24</small><p>连续 3 天练段落匹配。</p></div>
       <div class="nb-card" style="--r:-1.5deg;background:#E9B9C4">${msc('joyful')}<small>10/23</small><p>词汇复习 40 个。</p></div></div></div></div>`,
   };
-  const laptopHTML = (screen) => `<div class="lap"><div class="lap-rig"><div class="lap-deck"><div class="kbd"></div><div class="pad"></div></div><div class="lap-lid"><div class="lid-front"><div class="bezel"><div class="screen">${screen}</div><div class="dim"></div><div class="glare"></div></div></div><div class="lid-back"><i></i></div></div></div></div>`;
+  const laptopHTML = (screen) => `<div class="lap"><div class="lap-rig"><div class="lap-deck"><div class="kbd"></div><div class="pad"></div></div><div class="lap-hinge"></div><div class="lap-lid"><div class="lid-front"><div class="bezel"><div class="screen">${screen}</div><div class="dim"></div><div class="glare"></div></div></div><div class="lid-back"><i></i></div></div></div></div>`;
   // Camera: dolly z, orbit ry, tilt rx, plus lid angle (0 = upright, -90 = closed).
   function cam(root, o) {
     const { x = 0, y = 0, z = 0, rx = -8, ry = 0, rz = 0, lid = 12, dim = 0, px = 50, py = 42 } = o;
@@ -317,63 +347,132 @@ body.export .viewport { position: fixed; inset: 0; width: 1920px; height: 1080px
     SHOTS.push({ name, a: a + O, b: b + O, el, draw: (t) => draw(t - O - a, t - O, el, ctx), note });
   }
 
-  /* ── intro (film time; song 0:49 → 0:58.57) ── */
-  /* i1 · Welcome to yeah: a line of light folds into the dot */
-  intro('光线', 0, 1.16, `<div class="fill" style="background:${C.void}"></div><div class="abs ln" style="left:0;top:538px;width:1920px;height:4px;background:linear-gradient(90deg,transparent,${C.ember} 30%,#FFD2B8 50%,${C.ember} 70%,transparent);box-shadow:0 0 40px ${C.ember}"></div><div class="abs dt" style="left:940px;top:520px;width:40px;height:40px;border-radius:50%;background:${C.ember};box-shadow:0 0 60px ${C.ember}"></div>`,
-    (el) => ({ ln: $('.ln', el), dt: $('.dt', el) }),
+  /* ── intro (film time; song 0:49 → 0:58.57) ──
+     One continuous chain, no hard cuts: a line of light folds into a dot; the dot becomes the mood
+     mascot, which swallows a cloud of exam worries and changes mood on every beat; the camera pulls
+     back to show it sits inside a student's head; it takes off past band scores 5.0 → 8.0, floods the
+     frame with colour as a silhouette, shrinks back to a dot and lands as the logo on a closed laptop. */
+  const WORRIES = ['NOT GIVEN 和 FALSE 分不清', '同义替换看不出来', 'P3 永远做不完', '写作卡在 6 分', '不知道错在哪', '单词背了就忘', '长难句读不懂', '没人帮我改作文', '定位总找不到', '时间不够用', '论点写不深', '连接词翻来覆去就那几个', '错题越攒越多', '刷题没进步', '语法错误看不出来', 'Task 2 不知道怎么展开', '复习没方向', '一到考场就慌'];
+  const worry = (() => { const r = rng(5); return WORRIES.map((w, i) => { const a = (i / WORRIES.length) * 6.283 + r() * 0.3; return { w, a, d: 1150 + r() * 250, t0: 1.2 + (i % 9) * 0.17 + Math.floor(i / 9) * 0.08, dur: 1.15 + r() * 0.35, size: 34 + r() * 24, ember: r() < 0.22 }; }); })();
+  const HEAD_MIND = [1075, 430];      // where the mascot sits inside the silhouette
+  const AXIS = ['8.0', '7.5', '7.0', '6.5', '6.0', '5.5', '5.0'];
+  const WIPES = [[6.1, C.orange], [6.59, C.sky], [7.1, C.yellow], [7.59, '#050505']];
+  const FACES = ['excited', 'confused', 'stressed', 'tired', 'calm', 'energized'];
+  intro('开场 · 连续变形', 0, 8.08, `
+      <div class="fill bg0" style="background:${C.void}"></div>
+      <div class="fill rimbg" style="background:radial-gradient(circle at 60% 42%,#5A2410,#160805 36%,rgba(5,5,5,0) 68%)"></div>
+      <div class="fill skybg"></div>
+      <div class="fill wbase"></div><div class="fill wtop"></div>
+      <div class="abs ln" style="left:0;top:538px;width:1920px;height:4px;background:linear-gradient(90deg,transparent,${C.ember} 30%,#FFD2B8 50%,${C.ember} 70%,transparent);box-shadow:0 0 40px ${C.ember}"></div>
+      <div class="abs headg" style="left:520px;top:80px;width:1100px;height:1100px;transform-origin:${HEAD_MIND[0] - 520}px ${HEAD_MIND[1] - 80}px;filter:drop-shadow(-3px 0 1px #FFB48A) drop-shadow(-10px 0 26px ${C.ember})">${silhouette('#050505')}</div>
+      <div class="abs axis" style="left:1180px;top:0">${AXIS.map((v) => `<div style="height:300px;font:900 120px/300px var(--f-sans);letter-spacing:-.03em">${v}</div>`).join('')}</div>
+      <div class="abs trail" style="width:10px;border-radius:5px;background:linear-gradient(rgba(255,122,26,0),${C.orange})"></div>
+      ${worry.map((q) => `<div class="abs wq" style="left:0;top:0;white-space:nowrap;font:700 ${q.size.toFixed(0)}px var(--f-sans);color:${q.ember ? C.ember : '#F4F1EA'}">${q.w}</div>`).join('')}
+      <div class="abs hero" style="left:0;top:0;width:64px;height:64px"><svg viewBox="0 0 64 64" style="width:100%;height:100%;overflow:visible"><path class="body"/>${FACES.map((k) => `<g class="face" data-k="${k}">${M[k][2]}</g>`).join('')}</svg></div>
+      <div class="abs txt" style="left:130px;top:400px;width:640px"><div class="super s" style="font-size:96px;line-height:1.25">备考这条路，<br>有人陪你走。</div></div>
+      <div class="abs center-x lyric boost" style="top:820px;font-size:96px;color:#0A0A0A">Boosted.</div>`,
+    (el) => ({
+      bg0: $('.bg0', el), rimbg: $('.rimbg', el), sky: $('.skybg', el), wbase: $('.wbase', el), wtop: $('.wtop', el), ln: $('.ln', el),
+      head: $('.headg', el), axis: $('.axis', el), trail: $('.trail', el), wq: $$('.wq', el), hero: $('.hero', el), body: $('.hero .body', el),
+      faces: Object.fromEntries($$('.face', el).map((g) => [g.dataset.k, g])), txt: $('.txt', el), s: split($('.txt .s', el)), boost: $('.boost', el),
+    }),
     (lt, t, el, c) => {
-      const open = E.outExpo(prog(lt, 0.15, 0.55)), fold = E.inOutCubic(prog(lt, 0.6, 0.95));
+      // 1 · line of light → dot
+      const open = E.outExpo(prog(t, 0.15, 0.55)), fold = E.inOutCubic(prog(t, 0.6, 0.95));
       c.ln.style.transform = `scaleX(${open * (1 - fold)})`;
-      c.ln.style.opacity = 1 - prog(lt, 0.85, 0.95);
-      const p = spring(lt - 0.9, 16, 0.4);
-      c.dt.style.transform = `scale(${clamp(p, 0, 1.4)})`;
-    }, '黑场里一道橙色光线横向拉开，再折成一颗橙点。<em>Welcome to, yeah</em>');
+      c.ln.style.opacity = 1 - prog(t, 0.85, 0.95);
 
-  /* i2 · rim-lit silhouette, slow push */
-  intro('剪影 · 轮廓光', 1.16, 4.11, `<div class="fill bg" style="background:radial-gradient(circle at 62% 46%,#5A2410,#160805 38%,#050505 70%)"></div><div class="abs head" style="left:520px;top:80px;width:1100px;height:1100px;filter:drop-shadow(-3px 0 1px #FFB48A) drop-shadow(-10px 0 26px ${C.ember})">${silhouette('#050505')}</div><div class="abs" style="left:130px;top:400px;width:620px"><div class="super s" style="font-size:96px;line-height:1.25">备考这条路，<br>有人陪你走。</div></div>`,
-    (el) => ({ head: $('.head', el), bg: $('.bg', el), s: split($('.s', el)) }),
-    (lt, t, el, c) => {
-      c.head.style.transform = `translateX(${lerp(120, 40, E.outCubic(prog(lt, 0, 2.95)))}px) scale(${lerp(1, 1.08, lt / 2.95)})`;
-      c.bg.style.opacity = E.outCubic(prog(lt, 0, 0.8));
-      rise(c.s, lt, 0.95, { stagger: 0.05 });
-    }, '轮廓光剪影：暗场里只亮出侧脸的一道橙色边。<em>Welcome to the future</em>');
+      // 2 · mascot: shape, colour, size, position, face
+      const shapeKeys = [[0, 'excited'], [1.64, 'confused'], [2.15, 'stressed'], [2.64, 'tired'], [3.13, 'calm'], [4.11, 'energized'], [6.59, 'focused'], [7.1, 'joyful'], [7.59, 'excited']];
+      const colKeys = [[0, C.ember], [1.16, '#FFC21A'], [1.64, M.confused[0]], [2.15, M.stressed[0]], [2.64, M.tired[0]], [3.13, M.calm[0]], [4.11, M.energized[0]], [6.1, '#0A0A0A'], [7.59, C.ember]];
+      const faceKeys = [[0, null], [1.25, 'excited'], [1.64, 'confused'], [2.15, 'stressed'], [2.64, 'tired'], [3.13, 'calm'], [4.11, 'energized'], [6.1, null]];
+      const at = (keys) => { let i = 0; keys.forEach((k, j) => { if (t >= k[0]) i = j; }); return i; };
+      const si = at(shapeKeys), sp = si > 0 ? spring(t - shapeKeys[si][0], 11, 0.72) : 1;
+      const from = si > 0 ? shapeKeys[si - 1][1] : shapeKeys[0][1];
+      c.body.setAttribute('d', morphD(from, shapeKeys[si][1], sp));
+      const ci = at(colKeys), cp = ci > 0 ? E.outCubic(prog(t, colKeys[ci][0], colKeys[ci][0] + 0.3)) : 1;
+      c.body.setAttribute('fill', mix(ci > 0 ? colKeys[ci - 1][1] : colKeys[0][1], colKeys[ci][1], cp));
+      const fi = at(faceKeys), fk = faceKeys[fi][1], prevK = fi > 0 ? faceKeys[fi - 1][1] : null, fp = prog(t, faceKeys[fi][0], faceKeys[fi][0] + 0.22);
+      for (const k in c.faces) c.faces[k].style.opacity = k === fk ? fp : k === prevK ? 1 - fp : 0;
 
-  /* i3 · Taking off now / way way up: the dot climbs past band scores */
-  intro('起飞', 4.11, 6.1, `<div class="fill bg"></div><div class="abs tr" style="left:956px;width:8px;border-radius:4px;background:linear-gradient(transparent,${C.ember})"></div><div class="abs dt" style="left:940px;width:40px;height:40px;border-radius:50%;background:${C.ember};box-shadow:0 0 60px ${C.ember}"></div><div class="abs alt" style="left:1060px;top:0">${['5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0'].map((v) => `<div style="height:300px;font:900 110px/300px var(--f-sans);letter-spacing:-.03em;opacity:.9">${v}</div>`).join('')}</div><div class="abs" style="left:150px;top:470px"><div class="super s" style="font-size:96px">起飞。</div></div>`,
-    (el) => ({ bg: $('.bg', el), tr: $('.tr', el), dt: $('.dt', el), alt: $('.alt', el), s: split($('.s', el)) }),
-    (lt, t, el, c) => {
-      const speed = lerp(1, 2.4, E.inOutCubic(prog(t, 5.1, 5.6)));
-      const climb = lt * 380 + Math.max(0, t - 5.1) * 900;
-      c.bg.style.background = `linear-gradient(${mix('#050505', '#0B1640', prog(lt, 0, 2))}, ${mix('#050505', '#1F3FA8', prog(lt, 0.4, 2))})`;
-      const y = lerp(560, 380, E.outCubic(prog(lt, 0, 0.6)));
-      c.dt.style.top = `${y - 20}px`;
-      const len = lerp(40, 520, clamp(lt / 0.8)) * speed * 0.7;
-      c.tr.style.top = `${y}px`; c.tr.style.height = `${len}px`;
-      c.alt.style.transform = `translateY(${-1500 + climb}px)`;
-      c.dt.style.transform = `scale(${1 + 0.25 * kickIntro(t)})`;
-      rise(c.s, lt, 0.1, { stagger: 0.06 });
-    }, '橙点向上飞，分数刻度 5.0 到 8.0 从身边掠过。<em>Taking off now, way way up</em>');
+      let x = 960, y = 540, size = 40;
+      const pop = spring(t - 0.9, 16, 0.42);
+      size = 40 * clamp(pop, 0, 1.4);
+      size = lerp(size, 300, spring(t - 1.16, 9, 0.6));
+      size *= 1 + 0.06 * kickIntro(t, 6) * prog(t, 1.2, 1.5) * (1 - prog(t, 3.0, 3.13));
+      const pull = E.inOutCubic(prog(t, 3.13, 3.75));
+      x = lerp(x, HEAD_MIND[0], pull); y = lerp(y, HEAD_MIND[1], pull); size = lerp(size, 170, pull);
+      // take off: up and to the centre, the world scrolls down
+      const lift = spring(t - 4.11, 7, 0.75);
+      x = lerp(x, 960, lift); y = lerp(y, 470, lift);
+      // boosted: grow into a giant silhouette, then shrink back to a dot
+      const big = spring(t - 6.1, 8, 0.7), small = E.inOutCubic(prog(t, 7.59, 8.08));
+      x = lerp(x, 960, big); y = lerp(y, lerp(470, 500, big), 1);
+      size = lerp(size, 860, big); size = lerp(size, 64, small); y = lerp(y, 540, small);
+      size *= 1 + 0.05 * kickIntro(t, 8) * prog(t, 6.1, 6.2) * (1 - prog(t, 7.5, 7.59));
+      c.hero.style.opacity = t >= 0.9 ? 1 : 0;
+      c.hero.style.transform = `translate(${(x - size / 2).toFixed(1)}px,${(y - size / 2).toFixed(1)}px) scale(${(size / 64).toFixed(4)})`;
+      c.hero.style.transformOrigin = '0 0';
 
-  /* i4 · Boosted: mascot silhouettes, one per beat */
-  [['energized', C.orange], ['focused', C.sky], ['joyful', C.yellow], ['proud', C.green]].forEach(([k, bg], i) => {
-    const starts = [6.1, 6.59, 7.1, 7.59, 8.08];
-    intro(`剪影 · ${k}`, starts[i], starts[i + 1], `<div class="fill" style="background:${bg}"></div><div class="abs m" style="left:460px;top:40px;width:1000px;height:1000px"><svg viewBox="0 0 64 64" style="width:100%;height:100%;overflow:visible"><path d="${M[k][1]}" fill="#0A0A0A"/></svg></div><div class="abs center-x lyric" style="top:820px;font-size:90px;color:#0A0A0A;opacity:${i === 0 ? 1 : 0}">Boosted.</div>`,
-      (el) => ({ m: $('.m', el) }),
-      (lt, t, el, c) => {
-        const p = spring(lt, 15, 0.5);
-        c.m.style.transform = `scale(${lerp(0.55, 0.9, clamp(p, 0, 1.2)) + lt * 0.1}) rotate(${(1 - p) * (i % 2 ? 30 : -30)}deg)`;
-      }, i === 0 ? '四拍快切：小怪兽的黑色剪影压在高饱和色场上。<em>Boosted</em>' : null);
-  });
+      // 3 · worry cloud flows in and is swallowed
+      c.wq.forEach((w, i) => {
+        const q = worry[i], p = prog(t, q.t0, q.t0 + q.dur), e = E.inCubic(p);
+        const d = q.d * (1 - e);
+        w.style.opacity = p > 0 && p < 1 ? Math.min(1, p * 4) * (1 - prog(p, 0.75, 1)) : 0;
+        w.style.transform = `translate(${960 + Math.cos(q.a) * d}px,${540 + Math.sin(q.a) * d * 0.62}px) translate(-50%,-50%) scale(${lerp(1, 0.15, e)})`;
+        w.style.filter = p > 0.6 ? `blur(${((p - 0.6) * 10).toFixed(1)}px)` : 'none';
+      });
 
-  /* i5 · Coming to life: closed laptop from above, the logo dot wakes up */
-  intro('样机 · 苏醒', 8.08, O, `<div class="fill" style="background:radial-gradient(ellipse at 50% 50%,#1A1512,#050505 65%)"></div>${laptopHTML(SCR.overview)}`,
-    (el) => ({ logo: $('.lid-back i', el) }),
+      // 4 · pull back: the silhouette closes in around the mascot, rim light appears
+      const hs = lerp(6, 1, E.outCubic(prog(t, 3.13, 3.9)));
+      const down = E.inCubic(prog(t, 4.11, 4.75)) * 1300;
+      c.head.style.opacity = t >= 3.13 ? 1 : 0;
+      c.head.style.transform = `translateY(${down}px) scale(${hs})`;
+      c.rimbg.style.opacity = prog(t, 3.3, 3.9) * (1 - prog(t, 4.11, 4.6));
+      rise(c.s, t, 3.35, { stagger: 0.045 });
+      c.txt.style.transform = `translateY(${down}px)`;
+
+      // 5 · take off: band axis 5.0 (bottom) → 8.0 (top) scrolls down past the climbing mascot
+      const climb = E.inOutSine(prog(t, 4.25, 5.26)) * 0.42 + E.inCubic(prog(t, 5.26, 6.1)) * 0.58;
+      const Y = lerp(-1430 + 470 - 520, 370 + 470 - 520, climb);
+      c.axis.style.transform = `translateY(${Y}px)`;
+      c.axis.style.opacity = prog(t, 4.2, 4.5) * (1 - prog(t, 6.1, 6.3));
+      $$('div', c.axis).forEach((d, i) => { const cy = Y + i * 300 + 150; d.style.opacity = 0.25 + 0.75 * clamp(1 - Math.abs(cy - 470) / 420); d.style.color = Math.abs(cy - 470) < 150 ? C.orange : '#F4F1EA'; });
+      c.sky.style.background = 'linear-gradient(#0B1640,#1F3FA8)';
+      c.sky.style.opacity = prog(t, 4.11, 4.9) * (t < 6.1 ? 1 : 1);
+      const tl = lerp(0, 560, prog(t, 4.2, 4.6)) * (1 + 0.8 * prog(t, 5.26, 5.6)) * (1 - prog(t, 6.0, 6.2));
+      st(c.trail, { left: '955px', top: `${470 + size * 0.35}px`, height: `${tl}px`, opacity: tl > 1 ? 1 : 0 });
+
+      // 6 · boosted: each beat, a new colour floods out of the mascot
+      let wi = -1; WIPES.forEach((w, j) => { if (t >= w[0]) wi = j; });
+      if (wi < 0) { c.wbase.style.opacity = 0; c.wtop.style.opacity = 0; }
+      else {
+        c.wbase.style.opacity = wi > 0 ? 1 : 0; c.wbase.style.background = wi > 0 ? WIPES[wi - 1][1] : 'transparent';
+        const r = 2300 * E.outCubic(prog(t, WIPES[wi][0], WIPES[wi][0] + 0.38));
+        st(c.wtop, { opacity: 1, background: WIPES[wi][1], clipPath: `circle(${r.toFixed(0)}px at ${x.toFixed(0)}px ${y.toFixed(0)}px)` });
+      }
+      c.boost.style.opacity = prog(t, 6.25, 6.4) * (1 - prog(t, 6.95, 7.1));
+      c.boost.style.transform = `translateY(${(1 - E.outCubic(prog(t, 6.25, 6.6))) * 40}px)`;
+    }, '一道橙色光线拉开又折成橙点，橙点长成情绪小怪兽。四面八方的备考难题涌进来，它随节拍变换心情，形状像线条一样流动变形。<em>Welcome to the future</em>');
+
+  /* i2 · Coming to life: the dot lands as the logo on a closed laptop; the camera keeps moving into the opening shot */
+  const OPEN_CAM = { z: -900, y: -40, rx: -26, ry: -8, rz: 0 };
+  intro('样机 · 苏醒', 8.08, O, `<div class="fill" style="background:radial-gradient(ellipse at 50% 70%,#1B1410,#050505 60%)"></div><div class="lap-shadow sh" style="top:640px"></div><div class="fill lw">${laptopHTML(SCR.overview)}</div><div class="abs handoff" style="left:0;top:0;width:64px;height:64px;border-radius:50%;background:${C.ember}"></div>`,
+    (el) => ({ logo: $('.lid-back i', el), lw: $('.lw', el), sh: $('.sh', el), dot: $('.handoff', el) }),
     (lt, t, el, c) => {
       const p = E.inOutSine(prog(lt, 0, O - 8.08));
-      cam(el, { z: lerp(-200, -480, p), y: lerp(-120, 60, p), rx: lerp(-64, -36, p), ry: 0, rz: lerp(-24, -6, p), lid: -90, dim: 1, py: 30 });
-      const g = Math.max(prog(t, 8.3, 8.5) * (0.6 + 0.4 * kickIntro(t, 5)), 0.15);
-      c.logo.style.opacity = g; c.logo.style.boxShadow = `0 0 ${lerp(10, 120, g)}px rgba(232,116,63,${g})`;
-    }, '合上的笔记本俯拍，盖子上的橙点随节拍亮起来。<em>Coming to life</em>');
+      cam(el, { z: lerp(-140, OPEN_CAM.z, p), y: lerp(-470, OPEN_CAM.y, p), rx: lerp(-84, OPEN_CAM.rx, p), ry: lerp(0, OPEN_CAM.ry, p), rz: lerp(-18, OPEN_CAM.rz, p), lid: -90, dim: 1 });
+      c.lw.style.opacity = E.outCubic(prog(lt, 0, 0.3));
+      c.sh.style.opacity = prog(lt, 0.4, 1.2);
+      const g = 0.75 + 0.25 * kickIntro(t, 5);
+      c.logo.style.boxShadow = `0 0 ${lerp(30, 110, g)}px rgba(232,116,63,${g})`;
+      // the dot glides from the centre onto the logo, then hands over to it
+      const r = c.logo.getBoundingClientRect(), sr = stage.getBoundingClientRect(), k = sr.width / 1920 || 1;
+      const lx = (r.left - sr.left + r.width / 2) / k, ly = (r.top - sr.top + r.height / 2) / k, lsz = Math.max(r.width, r.height) / k;
+      const h = E.inOutCubic(prog(lt, 0, 0.32));
+      const sz = lerp(64, lsz, h);
+      st(c.dot, { opacity: lt < 0.36 ? 1 : 0, transform: `translate(${lerp(960, lx, h) - sz / 2}px,${lerp(540, ly, h) - sz / 2}px) scale(${sz / 64})`, transformOrigin: '0 0' });
+    }, '橙点落到合着的笔记本盖上，变成那颗 logo，随节拍亮起来。镜头不停，直接接开盖。<em>Coming to life</em>');
 
 
   /* 01 · Take a look at the light — laptop opens in the dark */
@@ -381,7 +480,7 @@ body.export .viewport { position: fixed; inset: 0; width: 1920px; height: 1080px
     (el) => ({ ly: $('.lyric', el), glow: $('.glow', el) }),
     (lt, t, el, c) => {
       const open = E.inOutCubic(prog(lt, 0.9, 3.9));
-      cam(el, { z: lerp(-900, -300, E.inOutSine(prog(lt, 0, 4.47))), y: lerp(160, 120, lt / 4.47), rx: lerp(-26, -12, E.inOutSine(prog(lt, 0, 4.47))), ry: lerp(-8, 4, lt / 4.47), lid: lerp(-90, 14, open), dim: lerp(1, 0, E.inOutCubic(prog(lt, 1.4, 4.0))) });
+      cam(el, { z: lerp(-900, -300, E.inOutSine(prog(lt, 0, 4.47))), y: lerp(-40, 120, E.inOutSine(prog(lt, 0, 4.47))), rx: lerp(-26, -12, E.inOutSine(prog(lt, 0, 4.47))), ry: lerp(-8, 4, lt / 4.47), lid: lerp(-90, 14, open), dim: lerp(1, 0, E.inOutCubic(prog(lt, 1.4, 4.0))) });
       c.glow.style.opacity = clamp(open * 1.2) * (1 - prog(lt, 3.9, 4.47) * 0.5) * (0.6 + 0.4 * prog(lt, 1.64, 4.2));
       c.ly.style.opacity = prog(lt, 0.15, 0.6) * (1 - prog(lt, 1.5, 1.9));
       c.ly.style.letterSpacing = `${lerp(0.02, 0.06, lt / 2)}em`;
@@ -676,33 +775,83 @@ body.export .viewport { position: fixed; inset: 0; width: 1920px; height: 1080px
       }, i === 0 ? '四拍四个小怪兽大特写，撑满画面。<em>Tell \'em</em>' : null);
   });
 
-  /* 24 · laptop front-on, mascots on the deck; five hops on "welcome to ×5" */
+  /* 24 · laptop front-on, five mascots on the deck. Each hop on "welcome to ×5" slides the screen to the
+     feature that mascot presents: writing scoring (typewriter, breathing orb, progress bar) → notebook →
+     reading Coach → learner model → what Atlas remembers. Then they gather into the dot for the end card. */
   const HOP_BEATS = [51.9, 52.39, 52.88, 53.37, 53.88];
-  const SCREEN_COLS = [C.orange, C.blue, C.green, C.purple, C.yellow];
-  shot('合影', 49.42, 54.26, `<div class="fill" style="background:radial-gradient(ellipse at 50% 45%,#2A2018,#050505 70%)"></div><div class="lap-shadow" style="top:760px"></div>${laptopHTML(SCR.overview + '<div class="fill flash" style="opacity:0"></div>')}${['excited', 'joyful', 'energized', 'focused', 'calm'].map((k) => `<div class="abs hop" style="left:0;top:0;width:170px;height:170px">${msc(k)}</div>`).join('')}`,
-    (el) => ({ hops: $$('.hop', el), flash: $('.flash', el) }),
+  const FEAT = ['写作评分', '札记', '阅读 Coach', '学习画像', '长期记忆'];
+  const ESSAY = 'Some people believe that university education should be free for everyone. Admittedly, a lot of people think that free tuition mainly helps the rich, but this view ignores the long-term benefit to society.';
+  const miniRadar = `<svg viewBox="0 0 600 560" style="width:560px;height:520px">${[0.34, 0.67, 1].map((f) => `<polygon points="${SK.map((_, k) => { const a = -Math.PI / 2 + k * Math.PI / 3; return `${(300 + Math.cos(a) * 210 * f).toFixed(0)},${(280 + Math.sin(a) * 210 * f).toFixed(0)}`; }).join(' ')}" fill="none" stroke="rgba(34,32,28,.15)" stroke-width="2"/>`).join('')}${SK.map((n, k) => { const a = -Math.PI / 2 + k * Math.PI / 3; return `<text x="${(300 + Math.cos(a) * 255).toFixed(0)}" y="${(288 + Math.sin(a) * 255).toFixed(0)}" text-anchor="middle" style="font:500 18px var(--f-sans);fill:#4B4741">${n}</text>`; }).join('')}<polygon class="mr" fill="rgba(193,95,60,.22)" stroke="#C15F3C" stroke-width="4" stroke-linejoin="round"/></svg>`;
+  const VIEWS = [
+    `<div class="app">${NAV('写作')}<div class="app-body"><div class="w-grid"><div class="w-essay"><div class="k">TASK 2 · 正在评分</div><span class="tw">${ESSAY}</span><span class="caret" style="display:inline-block;width:3px;height:1.1em;background:#C15F3C;vertical-align:-.15em;margin-left:2px"></span></div>
+      <div class="w-score"><div style="font-size:13px;letter-spacing:.18em;color:#8A8276">AI 评分中</div><div style="position:relative;width:230px;height:230px;margin:6px auto"><i class="breath" style="position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,#F6A47E 0%,#E8743F 48%,rgba(232,116,63,0) 70%)"></i><b class="pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:900 54px var(--f-sans);color:#fff">0%</b></div>
+      <div style="height:12px;border-radius:6px;background:rgba(34,32,28,.08);overflow:hidden"><i class="pb" style="display:block;height:100%;width:0;background:#C15F3C;border-radius:6px"></i></div>
+      ${['任务回应', '连贯与衔接', '词汇资源', '语法'].map((n) => `<div class="crit" style="display:flex;justify-content:space-between;font-size:15px;color:#69645B"><span>${n}</span><b style="color:#22201C">…</b></div>`).join('')}</div></div></div></div>`,
+    SCR.notebook,
+    SCR.reading,
+    `<div class="app">${NAV('技能')}<div class="app-body" style="display:grid;grid-template-columns:1fr 1.2fr;align-items:center"><div><div style="font:900 40px var(--f-serif)">学习画像</div><div style="margin-top:10px;color:#69645B;font-size:17px;line-height:1.7">六项阅读技能，<br>随每次练习更新。</div><div style="margin-top:22px;font:900 30px var(--f-sans);color:#C15F3C">第 4 周</div></div>${miniRadar}</div></div>`,
+    `<div class="app">${NAV('札记')}<div class="app-body"><div style="font:900 36px var(--f-serif);margin-bottom:18px">关于你，我们记住了</div>${[['偏好', '讲解时先给原文例句，再讲规则', '来自 6 次 Coach 反馈'], ['弱项', '判断题里，常把 FALSE 当成 NOT GIVEN', '证据 14 条'], ['进步', '同义替换正确率 54% → 71%', '近 4 周 · 38 次作答'], ['习惯', '晚上 9 点后练习，专注度最高', '来自 23 天记录']].map(([k, v, e], i) => `<div class="memrow" style="display:grid;grid-template-columns:76px 1fr auto;gap:16px;align-items:center;background:#FFFDF8;border-radius:14px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 2px rgba(34,32,28,.08)"><span style="font-weight:700;font-size:14px;padding:5px 12px;border-radius:999px;background:${['#9CC3DE', '#E0643A', '#A8D5BA', '#E8B33A'][i]};color:#1E1A16;text-align:center">${k}</span><b style="font-size:19px">${v}</b><span style="color:#8A8276;font-size:14px">${e}</span></div>`).join('')}</div></div>`,
+  ];
+  shot('合影 · 功能', 49.42, 54.26, `<div class="fill" style="background:radial-gradient(ellipse at 50% 45%,#2A2018,#050505 70%)"></div><div class="lap-shadow" style="top:760px"></div>${laptopHTML(`<div class="views" style="position:absolute;inset:0">${VIEWS.map((v) => `<div class="view" style="position:absolute;inset:0">${v}</div>`).join('')}</div>`)}<div class="abs center-x feat" style="top:60px;height:90px;overflow:hidden"><div class="featroll">${FEAT.map((f) => `<div style="height:90px;font:900 64px/90px var(--f-sans)">${f}</div>`).join('')}</div></div>${['excited', 'joyful', 'energized', 'focused', 'calm'].map((k) => `<div class="abs hop" style="left:0;top:0;width:170px;height:170px">${msc(k)}</div>`).join('')}`,
+    (el) => ({ hops: $$('.hop', el), views: $$('.view', el), tw: split($('.tw', el), 'inline'), caret: $('.caret', el), breath: $('.breath', el), pct: $('.pct', el), pb: $('.pb', el), crit: $$('.crit b', el), cards: $$('.view:nth-child(2) .nb-card', el), hl: $('.view:nth-child(3) .hl', el), mr: $('.mr', el), mem: $$('.memrow', el), featroll: $('.featroll', el), feat: $('.feat', el), dim: $('.dim', el) }),
     (lt, t, el, c) => {
-      const push = E.inOutCubic(prog(t, 51.66, 54.26));
-      cam(el, { z: lerp(-640, -60, push) + lerp(0, -100, E.inOutSine(prog(lt, 0, 2.2))), y: lerp(190, 300, push), rx: lerp(-10, -4, push), ry: lerp(-6, 0, prog(lt, 0, 2)), lid: 12 });
-      const sc = lerp(1, 1.5, push);
+      const push = E.inOutCubic(prog(t, 51.66, 53.95));
+      const gather = E.inOutCubic(prog(t, 53.95, 54.26));
+      cam(el, { z: lerp(-640, -300, push) + lerp(0, -100, E.inOutSine(prog(lt, 0, 2.2))), y: lerp(190, 240, push), rx: lerp(-10, -5, push), ry: lerp(-6, 0, prog(lt, 0, 2)), lid: 12, dim: gather });
+      $('.lap', el).style.opacity = 1 - gather; $('.lap-shadow', el).style.opacity = 1 - gather;
+      // screen carousel: a continuous index that springs forward on each hop
+      let f = 0; HOP_BEATS.slice(1).forEach((b) => { f += spring(t - b, 13, 0.82); });
+      c.views.forEach((v, i) => { v.style.transform = `translateX(${((i - f) * 100).toFixed(2)}%)`; v.style.visibility = Math.abs(i - f) < 1.01 ? 'visible' : 'hidden'; });
+      // feature title rolls with the carousel
+      let ff = 0; HOP_BEATS.forEach((b) => { ff += spring(t - b, 13, 0.82); });
+      c.featroll.style.transform = `translateY(${-Math.max(0, ff - 1) * 90}px)`;
+      c.feat.style.opacity = clamp(ff * 1.5) * (1 - gather);
+      // 1 · writing: typewriter, breathing orb, progress bar, criteria fill in; result on the first hop
+      const n = Math.floor(c.tw.length * prog(t, 49.6, 51.5));
+      c.tw.forEach((s, i) => { s.style.opacity = i < n ? 1 : 0; });
+      c.caret.style.opacity = Math.floor(t * 4) % 2 ? 0.15 : 1;
+      const pr = prog(t, 49.7, 51.9);
+      c.pb.style.width = `${(pr * 100).toFixed(1)}%`;
+      const done = t >= 51.9, br = 1 + 0.08 * Math.sin(t * 6.3);
+      c.breath.style.transform = `scale(${done ? lerp(br, 1.12, spring(t - 51.9, 14, 0.4)) : br})`;
+      c.breath.style.opacity = done ? 1 : 0.75 + 0.25 * Math.sin(t * 6.3);
+      c.pct.textContent = done ? '7.0' : `${Math.floor(pr * 100)}%`;
+      c.pct.style.fontSize = done ? '76px' : '54px';
+      ['7.0', '6.5', '7.0', '6.5'].forEach((v, i) => { c.crit[i].textContent = pr >= (i + 1) / 4.2 ? v : '…'; });
+      // 2 · notebook cards drop in
+      c.cards.forEach((cd, i) => { const s = spring(t - 52.45 - i * 0.04, 15, 0.55); cd.style.transform = `rotate(${[-1.5, 1, -0.5, 1, -1, 0.5, -1.5][i]}deg) translateY(${(1 - s) * -60}px)`; cd.style.opacity = clamp((t - 52.45 - i * 0.04) / 0.1); });
+      // 3 · coach: evidence sweep
+      c.hl.style.backgroundSize = `${E.inOutCubic(prog(t, 52.95, 53.3)) * 100}% 60%`;
+      // 4 · learner radar grows
+      const rg = spring(t - 53.42, 10, 0.55);
+      c.mr.setAttribute('points', SK.map((_, k) => { const a = -Math.PI / 2 + k * Math.PI / 3, r = 210 * (0.08 + (W4[k] - 0.08) * rg); return `${(300 + Math.cos(a) * r).toFixed(1)},${(280 + Math.sin(a) * r).toFixed(1)}`; }).join(' '));
+      // 5 · memory rows slide in
+      c.mem.forEach((m, i) => { const s = spring(t - 53.92 - i * 0.05, 15, 0.7); m.style.transform = `translateX(${(1 - s) * 80}px)`; m.style.opacity = clamp((t - 53.92 - i * 0.05) / 0.1); });
+      // mascots: line up, hop on their beat, then gather into one dot
+      const sc = lerp(1, 1.25, push);
       c.hops.forEach((h, i) => {
         const s = spring(lt - 0.1 - i * 0.09, 11, 0.5);
-        const hb = HOP_BEATS[i]; const hp = prog(t, hb, hb + 0.42); const jump = Math.sin(Math.PI * hp);
-        const x = 960 + (i - 2) * 220 * sc, y = lerp(860, 940, push) - jump * 160;
-        h.style.transform = `translate(${x - 85}px,${y - 85}px) scale(${clamp(s, 0, 1.3) * sc * (1 + 0.12 * jump)},${clamp(s, 0, 1.3) * sc * (1 - 0.06 * jump)})`;
+        const hb = HOP_BEATS[i], hp = prog(t, hb, hb + 0.42), jump = Math.sin(Math.PI * hp);
+        let x = 960 + (i - 2) * 220 * sc, y = lerp(860, 900, push) - jump * 160;
+        x = lerp(x, 960, gather); y = lerp(y, 540, gather);
+        const k = clamp(s, 0, 1.3) * sc * lerp(1, 0.24, gather);
+        h.style.transform = `translate(${x - 85}px,${y - 85}px) scale(${k * (1 + 0.12 * jump)},${k * (1 - 0.06 * jump)})`;
+        h.style.opacity = gather > 0.85 ? 1 - prog(gather, 0.85, 1) : 1;
       });
-      let fi = -1; HOP_BEATS.forEach((b, i) => { if (t >= b) fi = i; });
-      c.flash.style.background = fi >= 0 ? SCREEN_COLS[fi] : 'transparent';
-      c.flash.style.opacity = fi >= 0 ? 0.92 * Math.exp(-(t - HOP_BEATS[fi]) * 3) : 0;
-    }, '样机正面，五只小怪兽站成一排；五声 welcome to 各跳一下，屏幕随拍闪色，镜头推进屏幕。');
+    }, '样机正面，五只小怪兽一字排开。每一声 welcome to 跳一只，屏幕滑到它负责的功能：写作评分（打字机、呼吸评分球、进度条）、札记、阅读 Coach、学习画像、长期记忆。最后五只合成一颗橙点。');
 
   /* 25 · end card on the last "Welcome to the future" */
   shot('落版', 54.26, MAIN + 0.01, `<div class="fill" style="background:${C.void}"></div><div class="abs center-x wm" style="top:330px;font:600 210px/1.1 var(--f-en);letter-spacing:-.03em;white-space:nowrap">IELTS Atlas<span class="nosplit dt" style="display:inline-block;width:.18em;height:.18em;margin-left:.04em;border-radius:50%;background:${C.ember}"></span></div><div class="abs center-x tg" style="top:640px;font-size:80px;font-weight:900">越练，越懂你。</div><div class="abs center-x ft" style="top:790px;font:500 30px var(--f-sans);color:var(--mute);letter-spacing:.06em">AI 写作评分 · 阅读 Coach · 自进化学习画像</div><div class="fill fo" style="background:#000"></div>`,
     (el) => ({ wm: split($('.wm', el)), dt: $('.dt', el), tg: split($('.tg', el)), ft: $('.ft', el), fo: $('.fo', el) }),
     (lt, t, el, c) => {
       rise(c.wm, lt, 0.05, { stagger: 0.045, dy: 0.5 });
-      const d = spring(lt - 0.6, 16, 0.4);
-      c.dt.style.transform = `translateY(${(1 - d) * -260}px) scale(${clamp(d, 0, 1.3)})`;
+      // the merged dot starts at the centre and lands as the full stop
+      c.dt.style.transform = 'none';
+      const r = c.dt.getBoundingClientRect(), sr = stage.getBoundingClientRect(), k = sr.width / 1920 || 1;
+      const hx = (r.left - sr.left + r.width / 2) / k, hy = (r.top - sr.top + r.height / 2) / k;
+      const d = spring(lt - 0.15, 9.5, 0.62);
+      const arc = Math.sin(Math.PI * clamp(d)) * 160;
+      c.dt.style.transform = `translate(${(1 - d) * (960 - hx)}px,${(1 - d) * (540 - hy) - arc}px) scale(${lerp(40 / r.height * k, 1, clamp(d, 0, 1.2))})`;
       rise(c.tg, lt, 0.95, { stagger: 0.06, dy: 0.5 });
       c.ft.style.opacity = prog(lt, 1.6, 2.0);
       c.fo.style.opacity = prog(t, MAIN - 0.8, MAIN);
