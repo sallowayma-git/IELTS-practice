@@ -440,8 +440,8 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
         }
     }
     observations.sort_by(|left, right| {
-        left.observed_at
-            .cmp(&right.observed_at)
+        replay_instant(&left.observed_at)
+            .cmp(&replay_instant(&right.observed_at))
             .then_with(|| left.id.cmp(&right.id))
     });
     input_parts.sort();
@@ -907,7 +907,7 @@ fn build_states_and_schedules(
             .map(|hours| (hours / 24.0).max(0.0));
         let previous_stability = state.stability_days.unwrap_or(1.0);
         apply_skill_observation(state, observation, elapsed_days.unwrap_or(0.0), config);
-        state.last_practiced_at = Some(observation.observed_at.clone());
+        advance_practice_clock(state, &observation.observed_at);
         // Stability moves once per skill and instant, by that instant's aggregate.
         let instant = (key.clone(), instant_key(&observation.observed_at));
         if stability_judged.insert(instant.clone()) {
@@ -1427,6 +1427,27 @@ fn parse_time(value: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .ok()
         .map(|value| value.with_timezone(&Utc))
+}
+
+/// Replay order: parsed instants chronologically, then unparseable text by its raw
+/// value after them. Equivalent spellings of one instant compare equal here.
+fn replay_instant(value: &str) -> (bool, Option<DateTime<Utc>>, &str) {
+    let parsed = parse_time(value);
+    (parsed.is_none(), parsed, if parsed.is_none() { value } else { "" })
+}
+
+/// The practice clock only moves forward. Compares parsed instants, so an equivalent
+/// spelling of the stored instant, or an earlier one, leaves it unchanged.
+fn advance_practice_clock(state: &mut SkillState, observed_at: &str) {
+    let previous = state.last_practiced_at.as_deref().and_then(parse_time);
+    let advances = match (parse_time(observed_at), previous) {
+        (Some(current), Some(previous)) => current > previous,
+        (Some(_), None) => true,
+        (None, _) => state.last_practiced_at.is_none(),
+    };
+    if advances {
+        state.last_practiced_at = Some(observed_at.to_string());
+    }
 }
 
 /// Grouping key for one instant: equivalent RFC 3339 spellings (`Z` vs an offset)
