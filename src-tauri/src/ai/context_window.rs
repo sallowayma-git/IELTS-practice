@@ -191,6 +191,9 @@ pub(crate) struct Budget {
     /// `MIN_OUTPUT_ROOM` and the model's own output floor. A clamp must leave at
     /// least this much room, or the provider would be sent a higher value.
     pub min_output: u32,
+    /// The model's own output floor (0 when it has none): a smaller ceiling is
+    /// raised to this on the wire.
+    pub wire_floor: u32,
     /// Whether the window came from a confident row. Only then may the guard
     /// refuse or clamp.
     pub confident: bool,
@@ -218,6 +221,10 @@ impl Budget {
         if self.estimated_input >= self.window {
             return Err(ModelError::prompt_exceeds_context(self.estimated_input, self.window));
         }
+        if self.requested.max(self.wire_floor) <= self.output_room {
+            // Sent as asked: the value that reaches the provider already fits.
+            return Ok(Admission { clamped: None, context_warning: false });
+        }
         if self.output_room < self.min_output {
             // The room cannot hold the smallest ceiling this model is sent with.
             // Clamping to it would send a value above the room and overflow.
@@ -226,8 +233,7 @@ impl Budget {
                 self.window,
             ));
         }
-        let clamped = (self.requested > self.output_room).then_some(self.output_room);
-        Ok(Admission { clamped, context_warning: false })
+        Ok(Admission { clamped: Some(self.output_room), context_warning: false })
     }
 }
 
@@ -241,6 +247,7 @@ pub(crate) fn budget_for(model: &str, estimated_input: u32, max_tokens: u32) -> 
         output_room: known.window.saturating_sub(estimated_input),
         requested: max_tokens,
         min_output: MIN_OUTPUT_ROOM.max(output_floor(model)),
+        wire_floor: output_floor(model),
         confident: known.confident,
     }
 }
@@ -308,6 +315,18 @@ mod tests {
 
     fn admit(model: &str, input: u32, requested: u32) -> Result<Admission, ModelError> {
         budget_for(model, input, requested).admit()
+    }
+
+    #[test]
+    fn a_small_ceiling_that_fits_is_sent_unchanged_below_the_floor() {
+        // 16 output tokens fit in 100 tokens of room: no refusal, no clamp.
+        let ok = admit("gpt-4o", 128_000 - 100, 16).expect("fits");
+        assert_eq!(ok.clamped, None);
+        // o3 raises 16 to its 1024 floor on the wire; 2000 room holds that.
+        let ok = admit("o3", 200_000 - 2_000, 16).expect("fits");
+        assert_eq!(ok.clamped, None);
+        // 800 room cannot hold o3's 1024 floor even for a tiny request.
+        assert!(admit("o3", 200_000 - 800, 16).unwrap_err().context_exceeded);
     }
 
     #[test]
