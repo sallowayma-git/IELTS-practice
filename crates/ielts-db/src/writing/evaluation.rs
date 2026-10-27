@@ -1036,6 +1036,13 @@ fn finalize_cancelled_with_partial_in_transaction(
     })
 }
 
+/// Whether the learner cancelled this evaluation. Callers check it before
+/// starting further paid model work for a run that is already being discarded.
+pub fn evaluation_cancel_requested(conn: &Connection, evaluation_id: &str) -> DbResult<bool> {
+    Ok(load_session_by_evaluation(conn, evaluation_id)?
+        .is_some_and(|session| session.cancel_requested))
+}
+
 pub fn request_cancel(conn: &Connection, evaluation_id: &str) -> DbResult<bool> {
     let Some(session) = load_session_by_evaluation(conn, evaluation_id)? else {
         return Ok(false);

@@ -69,6 +69,12 @@ impl WritingEvaluationStore for ApplicationStore<'_> {
             .with_conn(|conn| ielts_db::request_cancel(conn, evaluation_id))
             .map_err(writing_error)
     }
+
+    fn cancel_requested(&self, evaluation_id: &str) -> Result<bool, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::evaluation_cancel_requested(conn, evaluation_id))
+            .map_err(writing_error)
+    }
 }
 
 impl CoachStore for ApplicationStore<'_> {

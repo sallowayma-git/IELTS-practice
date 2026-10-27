@@ -166,6 +166,7 @@ import {
   BAND_RATIONALE_LABELS,
   TASK_ANALYSIS_LABELS,
   buildEvaluationView,
+  describeScoreConfidence,
   formatLabeledEntries,
   normalizeMap
 } from '@/utils/evaluation-result.js'
@@ -208,17 +209,7 @@ const ERROR_TYPE_LABELS = {
   coherence: '逻辑连贯'
 }
 
-const confidenceNote = computed(() => {
-  const confidence = scoreConfidence.value
-  if (!confidence) return ''
-  const range = confidence.low === confidence.high
-    ? `总分 ${confidence.low.toFixed(1)}`
-    : `总分区间 ${confidence.low.toFixed(1)}–${confidence.high.toFixed(1)}`
-  if (!confidence.agreed) {
-    return `独立评分出现分歧，已取 ${confidence.samples} 次评分的中位数（${range}），这个分数仅供参考。`
-  }
-  return `${confidence.samples} 次独立评分基本一致（${range}）。`
-})
+const confidenceNote = computed(() => describeScoreConfidence(scoreConfidence.value))
 
 const taskAnalysisEntries = computed(() => (
   formatLabeledEntries(taskAnalysis.value, TASK_ANALYSIS_LABELS)

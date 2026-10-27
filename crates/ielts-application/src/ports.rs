@@ -164,6 +164,9 @@ pub trait WritingEvaluationStore: Send + Sync {
     ) -> Result<EvaluationRunResult, ApplicationError>;
 
     fn request_cancel(&self, evaluation_id: &str) -> Result<bool, ApplicationError>;
+
+    /// Whether a cancel was requested; checked before each follow-up model call.
+    fn cancel_requested(&self, evaluation_id: &str) -> Result<bool, ApplicationError>;
 }
 
 pub trait CoachStore: Send + Sync {

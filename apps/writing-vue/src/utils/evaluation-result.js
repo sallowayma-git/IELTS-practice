@@ -553,6 +553,22 @@ function normalizeConfidence(value) {
   return { samples, agreed: confidence.agreed === true, low, high }
 }
 
+// One line under the band table. A single surviving sample was never
+// cross-checked, which is different from samples that disagreed.
+export function describeScoreConfidence(confidence) {
+  if (!confidence) return ''
+  const range = confidence.low === confidence.high
+    ? `总分 ${confidence.low.toFixed(1)}`
+    : `总分区间 ${confidence.low.toFixed(1)}–${confidence.high.toFixed(1)}`
+  if (confidence.samples < 2) {
+    return `只有 1 次评分成功，未能交叉核对（总分 ${confidence.low.toFixed(1)}），这个分数仅供参考。`
+  }
+  if (!confidence.agreed) {
+    return `独立评分出现分歧，已取 ${confidence.samples} 次评分的中位数（${range}），这个分数仅供参考。`
+  }
+  return `${confidence.samples} 次独立评分基本一致（${range}）。`
+}
+
 export function buildEvaluationView(payload, overrides = {}) {
   const resolved = resolveEvaluationConsumption(payload, overrides)
 

@@ -66,17 +66,75 @@ struct ProviderOutput {
     feedback: Result<WritingFeedbackV4, ProviderError>,
 }
 
-/// One independent scoring pass, after ceilings were enforced.
+/// One independent scoring pass. `score` has the ceilings applied; `raw` is
+/// what the model returned, so aggregation can tell which ceilings bit.
 #[derive(Debug, Clone)]
 struct ScoringSample {
     score: WritingScoreV4,
+    raw: WritingScoreV4,
     diagnosis: Option<WritingDiagnosisV4>,
-    ceilings: Vec<String>,
+    ceilings: Vec<Ceiling>,
 }
 
+/// A band limit from the public IELTS Writing band descriptors (May 2023).
+/// Where the descriptors give no number, the limit is the highest band whose
+/// positive features the observation rules out, and the reason says so.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Ceiling {
+    criteria: &'static [usize],
+    limit: f64,
+    reason: &'static str,
+}
+
+const TASK: usize = 0;
+const LEXICAL: usize = 2;
+
+const TOO_SHORT: Ceiling = Ceiling {
+    criteria: &[0, 1, 2, 3],
+    limit: 1.0,
+    reason: "全文不超过 20 词，官方规则四项均为 1 分",
+};
+const UNRELATED: Ceiling = Ceiling {
+    criteria: &[TASK],
+    limit: 1.0,
+    reason: "内容与题目完全无关，任务项按官方规则封顶 1 分",
+};
+const BARELY_RELATED: Ceiling = Ceiling {
+    criteria: &[TASK],
+    limit: 2.0,
+    reason: "内容与题目几乎无关，任务项按官方规则封顶 2 分",
+};
+const MEMORISED: Ceiling = Ceiling {
+    criteria: &[LEXICAL],
+    limit: 4.0,
+    reason: "大段背诵或照搬题目，词汇项封顶 4 分（依据 4 分档描述）",
+};
+const NO_OVERVIEW: Ceiling = Ceiling {
+    criteria: &[TASK],
+    limit: 5.0,
+    reason: "没有 overview，任务项封顶 5 分（6 分档要求有相关的 overview 尝试）",
+};
+const PART_UNADDRESSED: Ceiling = Ceiling {
+    criteria: &[TASK],
+    limit: 5.0,
+    reason: "题目有主要部分没有回应，任务项封顶 5 分（6 分档要求回应所有部分）",
+};
+const NOTHING_ADDRESSED: Ceiling = Ceiling {
+    criteria: &[TASK],
+    limit: 3.0,
+    reason: "题目各部分都没有充分回应，任务项封顶 3 分",
+};
+
+/// Rationale keys, in criteria order.
+const RATIONALE_KEYS: [&str; 4] = [
+    "task_achievement",
+    "coherence_cohesion",
+    "lexical_resource",
+    "grammatical_range",
+];
+
 /// Observations the model reports; the ceilings they imply are ours to apply.
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[derive(Debug, Default)]
 struct ScoringChecks {
     relevance: Relevance,
     memorised: bool,
@@ -160,7 +218,15 @@ impl WritingEvaluationService {
         let sequence = prepared.handle.sequence;
         let provider_result = match backend {
             EvaluationBackend::Deterministic => run_deterministic(&prepared),
-            EvaluationBackend::Language(model) => evaluate_language_model(&model, &prepared).await,
+            EvaluationBackend::Language(model) => {
+                // A failed lookup must not keep a cancelled run spending.
+                let cancelled = || {
+                    store
+                        .cancel_requested(&prepared.evaluation_id)
+                        .unwrap_or(true)
+                };
+                evaluate_language_model(&model, &prepared, &cancelled).await
+            }
             EvaluationBackend::Unavailable(error) => Err(error.into()),
         };
 
@@ -200,13 +266,22 @@ fn run_deterministic(prepared: &PreparedEvaluation) -> Result<ProviderOutput, Pr
     })
 }
 
+/// Polled before every follow-up model call, so a cancelled run starts no new
+/// paid request. Calls already in flight finish and are discarded by `finish`.
+type CancelCheck<'a> = dyn Fn() -> bool + Sync + 'a;
+
 async fn evaluate_language_model<M: LanguageModel>(
     model: &M,
     prepared: &PreparedEvaluation,
+    cancelled: &CancelCheck<'_>,
 ) -> Result<ProviderOutput, ProviderError> {
-    let samples = collect_samples(model, prepared).await?;
+    let samples = collect_samples(model, prepared, cancelled).await?;
     let (score, diagnosis) = aggregate_samples(&samples)?;
-    let feedback = review(model, prepared, &score, diagnosis.as_ref()).await;
+    let feedback = if cancelled() {
+        Err(provider_error("evaluation cancelled before review", false))
+    } else {
+        review(model, prepared, &score, diagnosis.as_ref()).await
+    };
     Ok(ProviderOutput {
         score,
         diagnosis,
@@ -219,6 +294,7 @@ async fn evaluate_language_model<M: LanguageModel>(
 async fn collect_samples<M: LanguageModel>(
     model: &M,
     prepared: &PreparedEvaluation,
+    cancelled: &CancelCheck<'_>,
 ) -> Result<Vec<ScoringSample>, ProviderError> {
     let (first, second) =
         tokio::join!(score_sample(model, prepared), score_sample(model, prepared));
@@ -232,7 +308,7 @@ async fn collect_samples<M: LanguageModel>(
             }
         }
     }
-    if samples.len() == 2 && max_spread(&samples) >= DISAGREEMENT_BANDS {
+    if samples.len() == 2 && max_spread(&samples) >= DISAGREEMENT_BANDS && !cancelled() {
         if let Ok(sample) = score_sample(model, prepared).await {
             samples.push(sample);
         }
@@ -298,19 +374,18 @@ async fn review<M: LanguageModel>(
 }
 
 /// Median per criterion, snapped and re-derived like any single score. The
-/// diagnosis comes from the sample closest to that median.
+/// diagnosis is rebuilt to describe those final bands: each criterion's
+/// rationale comes from the sample closest on that criterion, and a ceiling is
+/// reported only if it lowered some sample and the final band still obeys it.
 fn aggregate_samples(
     samples: &[ScoringSample],
 ) -> Result<(WritingScoreV4, Option<WritingDiagnosisV4>), ProviderError> {
-    let column = |pick: fn(&WritingScoreV4) -> f64| -> Vec<f64> {
-        samples.iter().map(|sample| pick(&sample.score)).collect()
-    };
-    let columns = [
-        column(|s| s.task_response),
-        column(|s| s.coherence),
-        column(|s| s.lexical),
-        column(|s| s.grammar),
-    ];
+    let columns = [0, 1, 2, 3].map(|index| {
+        samples
+            .iter()
+            .map(|sample| criteria(&sample.score)[index])
+            .collect::<Vec<_>>()
+    });
     let bands_by = |reduce: fn(&[f64]) -> f64| {
         let [task_response, coherence, lexical, grammar] =
             [0, 1, 2, 3].map(|index| reduce(&columns[index]));
@@ -332,7 +407,8 @@ fn aggregate_samples(
         confidence: None,
         ceilings: Vec::new(),
     });
-    diagnosis.ceilings = closest.ceilings.clone();
+    diagnosis.rationale = merged_rationale(samples, &score);
+    diagnosis.ceilings = binding_ceilings(samples, &score);
     diagnosis.confidence = Some(WritingScoreConfidenceV4 {
         samples: samples.len() as u32,
         agreed: samples.len() >= 2 && max_spread(samples) < DISAGREEMENT_BANDS,
@@ -340,6 +416,51 @@ fn aggregate_samples(
         high: bands_by(|values| values.iter().copied().fold(f64::NEG_INFINITY, f64::max))?,
     });
     Ok((score, Some(diagnosis)))
+}
+
+/// Per criterion, the rationale of the sample whose band is nearest the final one.
+fn merged_rationale(
+    samples: &[ScoringSample],
+    score: &WritingScoreV4,
+) -> Option<serde_json::Value> {
+    let finals = criteria(score);
+    let mut merged = serde_json::Map::new();
+    for (index, key) in RATIONALE_KEYS.iter().enumerate() {
+        let text = samples
+            .iter()
+            .filter_map(|sample| {
+                let text = sample.diagnosis.as_ref()?.rationale.as_ref()?.get(*key)?;
+                Some(((criteria(&sample.score)[index] - finals[index]).abs(), text))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        if let Some((_, text)) = text {
+            merged.insert((*key).to_string(), text.clone());
+        }
+    }
+    (!merged.is_empty()).then_some(serde_json::Value::Object(merged))
+}
+
+/// Ceilings that lowered at least one sample and that the final bands respect.
+fn binding_ceilings(samples: &[ScoringSample], score: &WritingScoreV4) -> Vec<String> {
+    let finals = criteria(score);
+    let mut reasons: Vec<String> = Vec::new();
+    for sample in samples {
+        let raw = criteria(&sample.raw);
+        for ceiling in &sample.ceilings {
+            let lowered = ceiling
+                .criteria
+                .iter()
+                .any(|&index| raw[index] > ceiling.limit);
+            let holds = ceiling
+                .criteria
+                .iter()
+                .all(|&index| finals[index] <= ceiling.limit);
+            if lowered && holds && !reasons.iter().any(|reason| reason == ceiling.reason) {
+                reasons.push(ceiling.reason.to_string());
+            }
+        }
+    }
+    reasons
 }
 
 fn median(values: &[f64]) -> f64 {
@@ -461,106 +582,109 @@ fn parse_scoring(
             .ok_or_else(|| provider_error("AI evaluation score is missing", false))?,
     )
     .map_err(|error| provider_error(format!("AI evaluation score invalid: {error}"), false))?;
-    // Diagnosis and checks explain the score; malformed ones are dropped.
+    // A malformed diagnosis only loses explanation, so it is dropped.
     let diagnosis = value
         .get("diagnosis")
         .cloned()
         .and_then(|diagnosis| serde_json::from_value(diagnosis).ok());
-    let checks = value
-        .get("checks")
-        .cloned()
-        .and_then(|checks| serde_json::from_value(checks).ok())
-        .unwrap_or_default();
-    let score = score_from_bands(&bands)?;
-    let (score, ceilings) = apply_ceilings(score, &checks, task_type, facts);
+    let checks = parse_checks(value.get("checks"), task_type)?;
+    let raw = score_from_bands(&bands)?;
+    let ceilings = triggered_ceilings(&checks, task_type, facts);
     Ok(ScoringSample {
-        score,
+        score: apply_ceilings(&raw, &ceilings),
+        raw,
         diagnosis,
         ceilings,
     })
 }
 
-/// Hard limits from the public IELTS Writing band descriptors (May 2023).
-/// Where the descriptors give no number, the limit is the highest band whose
-/// positive features the observation rules out, and the message says so.
-fn apply_ceilings(
-    score: WritingScoreV4,
+/// Each observation is read on its own. A malformed observation that applies
+/// to this task rejects the sample (the other sample stands in), because
+/// reading it as "no problem" would silently lift a ceiling. A malformed
+/// observation for the other task type is irrelevant and ignored.
+fn parse_checks(
+    value: Option<&serde_json::Value>,
+    task_type: Option<WritingTaskType>,
+) -> Result<ScoringChecks, ProviderError> {
+    let Some(value) = value.filter(|value| !value.is_null()) else {
+        return Ok(ScoringChecks::default());
+    };
+    let object = value
+        .as_object()
+        .ok_or_else(|| provider_error("AI evaluation checks are not an object", false))?;
+    let is_task1 = task_type == Some(WritingTaskType::Task1);
+    fn field<T: serde::de::DeserializeOwned + Default>(
+        object: &serde_json::Map<String, serde_json::Value>,
+        name: &str,
+        applies: bool,
+    ) -> Result<T, ProviderError> {
+        match object.get(name).filter(|value| !value.is_null()) {
+            None => Ok(T::default()),
+            Some(value) => match serde_json::from_value(value.clone()) {
+                Ok(parsed) => Ok(parsed),
+                Err(_) if !applies => Ok(T::default()),
+                Err(error) => Err(provider_error(
+                    format!("AI evaluation check {name} invalid: {error}"),
+                    false,
+                )),
+            },
+        }
+    }
+    Ok(ScoringChecks {
+        relevance: field(object, "relevance", true)?,
+        memorised: field(object, "memorised", true)?,
+        overview_present: field(object, "overviewPresent", is_task1)?,
+        unaddressed_parts: field(object, "unaddressedParts", !is_task1)?,
+    })
+}
+
+fn triggered_ceilings(
     checks: &ScoringChecks,
     task_type: Option<WritingTaskType>,
     facts: &EssayFacts,
-) -> (WritingScoreV4, Vec<String>) {
-    const TASK: usize = 0;
-    const LEXICAL: usize = 2;
-    let mut bands = criteria(&score);
-    let mut applied = Vec::new();
-    let mut cap = |indexes: &[usize], limit: f64, reason: &str| {
-        let mut lowered = false;
-        for &index in indexes {
-            if bands[index] > limit {
-                bands[index] = limit;
-                lowered = true;
-            }
-        }
-        if lowered {
-            applied.push(reason.to_string());
-        }
-    };
+) -> Vec<Ceiling> {
+    let mut ceilings = Vec::new();
     if facts.words <= 20 {
-        cap(
-            &[0, 1, 2, 3],
-            1.0,
-            "全文不超过 20 词，官方规则四项均为 1 分",
-        );
+        ceilings.push(TOO_SHORT);
     }
     match checks.relevance {
-        Relevance::Unrelated => cap(
-            &[TASK],
-            1.0,
-            "内容与题目完全无关，任务项按官方规则封顶 1 分",
-        ),
-        Relevance::BarelyRelated => cap(
-            &[TASK],
-            2.0,
-            "内容与题目几乎无关，任务项按官方规则封顶 2 分",
-        ),
+        Relevance::Unrelated => ceilings.push(UNRELATED),
+        Relevance::BarelyRelated => ceilings.push(BARELY_RELATED),
         Relevance::OnTopic => {}
     }
     if checks.memorised {
-        cap(
-            &[LEXICAL],
-            4.0,
-            "大段背诵或照搬题目，词汇项封顶 4 分（依据 4 分档描述）",
-        );
+        ceilings.push(MEMORISED);
     }
     match task_type {
         Some(WritingTaskType::Task1) => {
             if checks.overview_present == Some(false) {
-                cap(
-                    &[TASK],
-                    5.0,
-                    "没有 overview，任务项封顶 5 分（6 分档要求有相关的 overview 尝试）",
-                );
+                ceilings.push(NO_OVERVIEW);
             }
         }
         _ => match checks.unaddressed_parts {
-            UnaddressedParts::Some => cap(
-                &[TASK],
-                5.0,
-                "题目有主要部分没有回应，任务项封顶 5 分（6 分档要求回应所有部分）",
-            ),
-            UnaddressedParts::All => cap(&[TASK], 3.0, "题目各部分都没有充分回应，任务项封顶 3 分"),
+            UnaddressedParts::Some => ceilings.push(PART_UNADDRESSED),
+            UnaddressedParts::All => ceilings.push(NOTHING_ADDRESSED),
             UnaddressedParts::None => {}
         },
     }
+    ceilings
+}
+
+fn apply_ceilings(score: &WritingScoreV4, ceilings: &[Ceiling]) -> WritingScoreV4 {
+    let mut bands = criteria(score);
+    for ceiling in ceilings {
+        for &index in ceiling.criteria {
+            bands[index] = bands[index].min(ceiling.limit);
+        }
+    }
     let [task_response, coherence, lexical, grammar] = bands;
-    let capped = score_from_bands(&CriterionBands {
+    score_from_bands(&CriterionBands {
         task_response,
         coherence,
         lexical,
         grammar,
     })
-    .unwrap_or(score);
-    (capped, applied)
+    .unwrap_or_else(|_| score.clone())
 }
 
 fn parse_review(content: &str) -> Result<WritingFeedbackV4, ProviderError> {
@@ -752,6 +876,10 @@ mod tests {
 
         fn request_cancel(&self, evaluation_id: &str) -> Result<bool, ApplicationError> {
             Ok(evaluation_id == "evaluation-1")
+        }
+
+        fn cancel_requested(&self, _evaluation_id: &str) -> Result<bool, ApplicationError> {
+            Ok(false)
         }
     }
 
@@ -1066,24 +1194,35 @@ mod tests {
         assert!(!diagnosis.unwrap().confidence.unwrap().agreed);
     }
 
-    fn checks(json: &str) -> ScoringChecks {
-        serde_json::from_str(json).unwrap()
-    }
-
+    /// Parses one scoring reply with the given checks and returns the capped
+    /// score plus the reasons of the ceilings that actually lowered a band.
     fn capped(
         bands: [f64; 4],
-        json: &str,
+        checks: &str,
         task_type: WritingTaskType,
         words: usize,
     ) -> (WritingScoreV4, Vec<String>) {
+        let sample = parse_with(bands, checks, task_type, words).unwrap();
+        let reasons = binding_ceilings(std::slice::from_ref(&sample), &sample.score);
+        (sample.score, reasons)
+    }
+
+    fn parse_with(
+        bands: [f64; 4],
+        checks: &str,
+        task_type: WritingTaskType,
+        words: usize,
+    ) -> Result<ScoringSample, ProviderError> {
         let [tr, cc, lr, gra] = bands;
-        let score = parse(&score_json(tr, cc, lr, gra)).unwrap().score;
         let facts = EssayFacts {
             words,
             paragraphs: 4,
             minimum_words: 250,
         };
-        apply_ceilings(score, &checks(json), Some(task_type), &facts)
+        let content = format!(
+            r#"{{"checks":{checks},"score":{{"taskResponse":{tr},"coherence":{cc},"lexical":{lr},"grammar":{gra}}}}}"#
+        );
+        parse_scoring(&content, Some(task_type), &facts)
     }
 
     #[test]
@@ -1122,7 +1261,7 @@ mod tests {
     }
 
     #[test]
-    fn ceilings_never_raise_a_band_and_bad_checks_are_ignored() {
+    fn ceilings_never_raise_a_band_and_bad_checks_reject_the_sample() {
         let (score, ceilings) = capped(
             [4.0, 5.0, 5.0, 5.0],
             r#"{"unaddressedParts":"some"}"#,
@@ -1132,10 +1271,57 @@ mod tests {
         assert_eq!(score.task_response, 4.0);
         assert!(ceilings.is_empty());
 
-        // An unknown enum value drops the whole checks object, not the score.
-        let sample = parse(r#"{"checks":{"relevance":"maybe"},"score":{"taskResponse":7,"coherence":7,"lexical":7,"grammar":7}}"#).unwrap();
-        assert_eq!(sample.score.overall, 7.0);
-        assert!(sample.ceilings.is_empty());
+        // A malformed observation that applies to the task must not read as
+        // "no problem"; the sample is rejected and the other sample stands in.
+        assert!(parse_with(
+            [7.0; 4],
+            r#"{"relevance":"maybe"}"#,
+            WritingTaskType::Task2,
+            300
+        )
+        .is_err());
+        assert!(parse_with(
+            [7.0; 4],
+            r#"{"overviewPresent":false}"#,
+            WritingTaskType::Task1,
+            180
+        )
+        .is_ok());
+        assert!(parse_with([7.0; 4], r#""none""#, WritingTaskType::Task2, 300).is_err());
+    }
+
+    #[test]
+    fn a_malformed_check_for_the_other_task_keeps_valid_ceilings() {
+        let (score, ceilings) = capped(
+            [7.0; 4],
+            r#"{"relevance":"unrelated","memorised":true,"overviewPresent":"n/a","unaddressedParts":"none"}"#,
+            WritingTaskType::Task2,
+            300,
+        );
+        assert_eq!(score.task_response, 1.0);
+        assert_eq!(score.lexical, 4.0);
+        assert_eq!(ceilings.len(), 2);
+    }
+
+    #[test]
+    fn ceilings_are_reported_only_when_the_final_band_obeys_them() {
+        let task1 = |bands: [f64; 4], checks: &str| {
+            parse_with(bands, checks, WritingTaskType::Task1, 180).unwrap()
+        };
+        let samples = [
+            // Missing overview caps TA 7 -> 5.
+            task1([7.0, 7.0, 7.0, 7.0], r#"{"overviewPresent":false}"#),
+            task1([6.0, 6.0, 6.0, 6.0], "{}"),
+            task1([6.0, 8.0, 8.0, 8.0], "{}"),
+        ];
+        let (score, diagnosis) = aggregate_samples(&samples).unwrap();
+        assert_eq!(criteria(&score), [6.0, 7.0, 7.0, 7.0]);
+        // The median TA of 6 is above the TA <= 5 cap, so the cap did not decide it.
+        assert!(diagnosis.unwrap().ceilings.is_empty());
+
+        let (score, diagnosis) = aggregate_samples(&samples[..1]).unwrap();
+        assert_eq!(score.task_response, 5.0);
+        assert_eq!(diagnosis.unwrap().ceilings.len(), 1);
     }
 
     #[test]
@@ -1221,7 +1407,9 @@ mod tests {
         ]);
         let mut prepared = prepared_evaluation(None);
         prepared.temperature = 0.8;
-        let output = evaluate_language_model(&model, &prepared).await.unwrap();
+        let output = evaluate_language_model(&model, &prepared, &|| false)
+            .await
+            .unwrap();
         assert!(output.feedback.is_ok());
 
         let requests = model.requests.lock().unwrap();
@@ -1244,7 +1432,7 @@ mod tests {
             Ok(score_json(6.0, 6.0, 6.0, 6.0)),
             Ok(review_json()),
         ]);
-        let output = evaluate_language_model(&model, &long_essay())
+        let output = evaluate_language_model(&model, &long_essay(), &|| false)
             .await
             .unwrap();
         assert_eq!(output.score.task_response, 6.0);
@@ -1259,11 +1447,29 @@ mod tests {
             Ok(score_json(6.0, 6.0, 6.0, 6.0)),
             Err(ModelError::new("request timed out", true)),
         ]);
-        let output = evaluate_language_model(&model, &long_essay())
+        let output = evaluate_language_model(&model, &long_essay(), &|| false)
             .await
             .unwrap();
         assert_eq!(output.score.overall, 6.0);
         assert!(output.feedback.unwrap_err().retryable);
+    }
+
+    #[tokio::test]
+    async fn cancellation_stops_follow_up_requests() {
+        let model = ScriptedModel::new(vec![
+            Ok(score_json(5.0, 6.0, 6.0, 6.0)),
+            Ok(score_json(7.0, 6.0, 6.0, 6.0)),
+            Ok(score_json(6.0, 6.0, 6.0, 6.0)),
+            Ok(review_json()),
+        ]);
+        // Cancelled while the first two samples were in flight.
+        let requests = model.requests.clone();
+        let cancelled = move || requests.lock().unwrap().len() >= 2;
+        let output = evaluate_language_model(&model, &long_essay(), &cancelled)
+            .await
+            .unwrap();
+        assert_eq!(model.requests.lock().unwrap().len(), 2);
+        assert!(output.feedback.is_err());
     }
 
     fn start_command() -> StartEvaluationCommand {
