@@ -44,7 +44,7 @@ fn a_retry_beats_the_original_call_that_finishes_after_it() {
     let retry = start_evaluation(&conn, &command("retry", Some(original.evaluation_id.clone())), &DeterministicProvider)
         .unwrap();
     let late = WritingScoreV4 { overall: 3.0, task_response: 3.0, coherence: 3.0, lexical: 3.0, grammar: 3.0 };
-    finish_evaluation(&conn, &original, Ok(late), None, None).unwrap();
+    finish_evaluation(&conn, &original, Ok(late), None, None, None).unwrap();
 
     let canonical = load_evaluation_for_attempt(&conn, "essay").unwrap().unwrap();
     assert_eq!(canonical.id, retry.session.evaluation_id);
@@ -104,7 +104,7 @@ fn a_late_original_in_the_next_week_is_not_that_week_s_essay() {
     let original = prepare_evaluation(&conn, &command("original", None), "openai-compatible", "test-model").unwrap();
     start_evaluation(&conn, &command("retry", Some(original.evaluation_id.clone())), &DeterministicProvider).unwrap();
     let late = WritingScoreV4 { overall: 3.0, task_response: 3.0, coherence: 3.0, lexical: 3.0, grammar: 3.0 };
-    finish_evaluation(&conn, &original, Ok(late), None, None).unwrap();
+    finish_evaluation(&conn, &original, Ok(late), None, None, None).unwrap();
     let offset = FixedOffset::east_opt(0).unwrap();
     let now = Utc::now();
     let this_week = (now - Duration::days(1), now + Duration::hours(1));

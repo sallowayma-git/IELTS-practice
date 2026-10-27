@@ -3,7 +3,7 @@ use ielts_db::{
     AppendCoachMessageCommand, CoachMessage, EvaluationEvent, EvaluationRunResult,
     PreparedEvaluation, ProviderError, RecordCoachFailureCommand, StartEvaluationCommand,
 };
-use ielts_domain::dto::{WritingFeedbackV4, WritingScoreV4};
+use ielts_domain::dto::{WritingDiagnosisV4, WritingFeedbackV4, WritingScoreV4};
 use ielts_domain::{EmbeddingRequest, EmbeddingResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -158,11 +158,15 @@ pub trait WritingEvaluationStore: Send + Sync {
         &self,
         prepared: &PreparedEvaluation,
         score: Result<WritingScoreV4, ProviderError>,
+        diagnosis: Option<WritingDiagnosisV4>,
         feedback: Option<WritingFeedbackV4>,
         review_error: Option<ProviderError>,
     ) -> Result<EvaluationRunResult, ApplicationError>;
 
     fn request_cancel(&self, evaluation_id: &str) -> Result<bool, ApplicationError>;
+
+    /// Whether a cancel was requested; checked before each follow-up model call.
+    fn cancel_requested(&self, evaluation_id: &str) -> Result<bool, ApplicationError>;
 }
 
 pub trait CoachStore: Send + Sync {
