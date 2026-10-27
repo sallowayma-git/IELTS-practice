@@ -939,14 +939,29 @@ const OUTPUT_LIMIT_RULES: &[(&str, &str, u32)] = &[
     ("gpt-5", "max_completion_tokens", 1024),
 ];
 
-/// `(field, value)` for the output ceiling of `model`, matched on the name after
-/// any `vendor/` routing prefix (e.g. `openai/o3-mini`).
-fn output_limit(model: &str, requested: u32) -> (&'static str, u32) {
+/// The request field and floor of the first rule matching `model`, matched on the
+/// name after any `vendor/` routing prefix (e.g. `openai/o3-mini`).
+fn output_limit_rule(model: &str) -> Option<(&'static str, u32)> {
     let name = model.rsplit('/').next().unwrap_or(model).to_ascii_lowercase();
     OUTPUT_LIMIT_RULES
         .iter()
         .find(|(prefix, _, _)| name.starts_with(prefix))
-        .map_or(("max_tokens", requested), |(_, field, floor)| (*field, requested.max(*floor)))
+        .map(|(_, field, floor)| (*field, *floor))
+}
+
+/// `(field, value)` for the output ceiling of `model`.
+fn output_limit(model: &str, requested: u32) -> (&'static str, u32) {
+    match output_limit_rule(model) {
+        Some((field, floor)) => (field, requested.max(floor)),
+        None => ("max_tokens", requested),
+    }
+}
+
+/// The smallest output ceiling `model` is ever sent with: the floor from
+/// `OUTPUT_LIMIT_RULES`, or zero when no rule applies. The pre-send guard keeps at
+/// least this much room, so a clamp is never raised back past the room left.
+pub(crate) fn output_floor(model: &str) -> u32 {
+    output_limit_rule(model).map_or(0, |(_, floor)| floor)
 }
 
 /// Sampling + output ceiling. The models that need `max_completion_tokens`
@@ -2999,16 +3014,54 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_prompt_with_one_token_of_room_is_sent_clamped_not_refused() {
-        // gpt-4o: 127,999 input tokens (127,995 of text plus framing) leave one token.
-        let (runtime, server) = scripted_fixture_for("gpt-4o", vec![(
-            200,
-            "application/json",
-            r#"{"model":"gpt-4o","choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#,
-        )]);
-        runtime.complete(completion_of(ascii_tokens(127_995), 2_000)).await.unwrap();
+    async fn a_prompt_with_less_room_than_the_minimum_is_refused_before_any_http_request() {
+        // gpt-4o: 127,999 input tokens (127,995 of text plus framing) leave one token,
+        // below the 256-token minimum output room, so nothing is sent.
+        let (runtime, listener) = uncalled_endpoint("gpt-4o");
+        let error = runtime.complete(completion_of(ascii_tokens(127_995), 2_000)).await.unwrap_err();
+        assert!(error.context_exceeded && !error.retryable);
+        assert!(no_request_reached(&listener), "a refused request must make no HTTP call");
+    }
+
+    #[tokio::test]
+    async fn an_o3_request_with_500_tokens_of_room_is_refused_before_any_http_call() {
+        // o3: 200,000 window. 199,496 tokens of text plus framing leave 500 tokens,
+        // below the 1,024 floor the provider is always sent, so nothing goes out.
+        let (runtime, listener) = uncalled_endpoint("o3");
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let error = runtime.complete(completion_of(ascii_tokens(199_496), 4_000)).await.unwrap_err();
+        assert!(error.context_exceeded && !error.retryable && !error.truncated);
+        assert_eq!(error.message, "prompt exceeds model context: ~200524 tokens of 200000");
+        assert!(no_request_reached(&listener), "a refused o3 request must make no HTTP call");
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        let error_json: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error_json, json!({"status": null, "class": "context_exceeded", "retryable": false}));
+    }
+
+    #[tokio::test]
+    async fn an_o3_request_with_1500_tokens_of_room_is_sent_clamped_to_the_room_not_raised_to_the_floor() {
+        // o3: 198,496 tokens of text plus framing leave 1,500 tokens of room. The
+        // 4,000 request is clamped to 1,500, which is above the 1,024 floor, so the
+        // wire value is exactly the clamp and never overflows the room.
+        let reply = r#"{"model":"o3","choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture_for("o3", vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        runtime.complete(completion_of(ascii_tokens(198_496), 4_000)).await.unwrap();
         let bodies = server.join().unwrap();
-        assert_eq!(bodies[0]["max_tokens"], json!(1));
+        let sent = bodies[0]["max_completion_tokens"].as_u64().unwrap();
+        assert_eq!(sent, 1_500);
+        assert!(sent >= 1_024, "the o-series floor still holds");
+        assert!(bodies[0].get("max_tokens").is_none());
+
+        let rows = rows.lock().unwrap();
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["maxTokensClamped"], json!(1_500));
     }
 
     #[tokio::test]

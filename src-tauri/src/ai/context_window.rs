@@ -10,9 +10,15 @@
 use ielts_application::{AgentMessage, AgentToolDefinition, ChatMessage, ModelError};
 use ielts_domain::estimate_tokens;
 
+use super::runtime::output_floor;
+
 /// Framing cost per message (role and separators). Small on purpose: the
 /// estimator is a chars/4 approximation and already covers the text itself.
 const PER_MESSAGE_OVERHEAD: u32 = 4;
+
+/// The least output room a confident request is given. A clamp below this would
+/// leave an answer too short to be useful, so the request is refused instead.
+const MIN_OUTPUT_ROOM: u32 = 256;
 
 /// Used for model ids the table does not recognise. Smaller than most current
 /// models on purpose, so an unknown model is never over-trusted. Advisory only.
@@ -181,6 +187,10 @@ pub(crate) struct Budget {
     pub output_room: u32,
     /// The output ceiling the caller asked for.
     pub requested: u32,
+    /// The smallest ceiling the request is sent with: the larger of
+    /// `MIN_OUTPUT_ROOM` and the model's own output floor. A clamp must leave at
+    /// least this much room, or the provider would be sent a higher value.
+    pub min_output: u32,
     /// Whether the window came from a confident row. Only then may the guard
     /// refuse or clamp.
     pub confident: bool,
@@ -188,9 +198,10 @@ pub(crate) struct Budget {
 
 impl Budget {
     /// The decision for the request. Refuses (typed, non-retryable, nothing
-    /// sent) only when a confident row's window is already full of input. A
-    /// confident row clamps the ceiling to the room left. Any other case is
-    /// sent as asked, with a warning when the estimate says it may overflow.
+    /// sent) when a confident row's window is full of input, or leaves less room
+    /// than `min_output`. A confident row clamps the ceiling to the room left.
+    /// Any other case is sent as asked, with a warning when the estimate says it
+    /// may overflow.
     pub(crate) fn admit(&self) -> Result<Admission, ModelError> {
         if !self.confident {
             let may_overflow = self.estimated_input.saturating_add(self.requested) > self.window;
@@ -207,6 +218,14 @@ impl Budget {
         if self.estimated_input >= self.window {
             return Err(ModelError::prompt_exceeds_context(self.estimated_input, self.window));
         }
+        if self.output_room < self.min_output {
+            // The room cannot hold the smallest ceiling this model is sent with.
+            // Clamping to it would send a value above the room and overflow.
+            return Err(ModelError::prompt_exceeds_context(
+                self.estimated_input.saturating_add(self.min_output),
+                self.window,
+            ));
+        }
         let clamped = (self.requested > self.output_room).then_some(self.output_room);
         Ok(Admission { clamped, context_warning: false })
     }
@@ -221,6 +240,7 @@ pub(crate) fn budget_for(model: &str, estimated_input: u32, max_tokens: u32) -> 
         estimated_input,
         output_room: known.window.saturating_sub(estimated_input),
         requested: max_tokens,
+        min_output: MIN_OUTPUT_ROOM.max(output_floor(model)),
         confident: known.confident,
     }
 }
@@ -411,8 +431,28 @@ mod tests {
         assert!(!error.truncated);
         assert_eq!(error.class, "context_exceeded");
         assert_eq!(error.message, "prompt exceeds model context: ~128000 tokens of 128000");
-        // One token of room is still a send, clamped to that one token.
-        assert_eq!(admit("gpt-4o", 127_999, 2_000), Ok(Admission { clamped: Some(1), context_warning: false }));
+        // Room below the 256-token minimum is refused too, not clamped to a stub.
+        assert!(admit("gpt-4o", 127_999, 2_000).unwrap_err().context_exceeded);
+        // Exactly the minimum is still a send, clamped to it.
+        assert_eq!(admit("gpt-4o", 127_744, 2_000), Ok(Admission { clamped: Some(256), context_warning: false }));
+    }
+
+    #[test]
+    fn an_o_series_floor_is_the_least_room_a_confident_clamp_may_leave() {
+        // o3: 200,000 window, floor 1,024. 500 tokens of room cannot hold the floor.
+        let refused = admit("o3", 199_500, 4_000).unwrap_err();
+        assert!(refused.context_exceeded && !refused.retryable);
+        assert_eq!(refused.message, "prompt exceeds model context: ~200524 tokens of 200000");
+        // 1,500 tokens of room holds the floor, so the clamp lands on the room.
+        assert_eq!(admit("o3", 198_500, 4_000), Ok(Admission { clamped: Some(1_500), context_warning: false }));
+        // The same room is enough for a request that already fits under the floor.
+        assert_eq!(admit("o3", 198_500, 1_000), Ok(Admission::default()));
+    }
+
+    #[test]
+    fn an_uncertain_row_keeps_its_floor_advisory() {
+        // gpt-5 is an uncertain row: 500 tokens of room warns and is sent as asked.
+        assert_eq!(admit("gpt-5", 271_500, 4_000), Ok(Admission { clamped: None, context_warning: true }));
     }
 
     #[test]
