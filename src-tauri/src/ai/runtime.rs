@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -192,6 +193,46 @@ pub(crate) fn usage_ledger(conn: Arc<std::sync::Mutex<rusqlite::Connection>>) ->
     })
 }
 
+/// Writes the row for a ledgered call whose future is dropped before its reply is
+/// read: a `tokio::time::timeout` around the call, or a cancelled `select!`. It is
+/// created right before the HTTP send and disarmed as soon as the send returns, so
+/// a call writes exactly one row: the normal one, or this interrupted one, never
+/// both. Drop may write: the sink is a sync insert behind a mutex.
+struct CallGuard {
+    sink: Option<LedgerSink>,
+    provider: String,
+    model: String,
+    started: Instant,
+}
+
+impl CallGuard {
+    /// The send returned: the caller writes the normal row.
+    fn disarm(mut self) {
+        self.sink = None;
+    }
+}
+
+impl Drop for CallGuard {
+    fn drop(&mut self) {
+        let Some(sink) = self.sink.take() else { return };
+        // Nothing is known about the interrupted call: no usage and no estimate.
+        let error = ModelError::classed("AI call was interrupted before its reply", true, "interrupted");
+        sink(ledger_record(
+            &self.provider,
+            &Value::Null,
+            LedgerCall {
+                model: &self.model,
+                latency_ms: elapsed_ms(self.started),
+                usage: None,
+                provider_request_id: None,
+                outcome: Err(&error),
+                finish_reason: None,
+                admission: Admission::default(),
+            },
+        ));
+    }
+}
+
 /// One gateway call as the ledger sees it: the provider's facts or the failure.
 struct LedgerCall<'a> {
     model: &'a str,
@@ -325,7 +366,7 @@ impl LanguageModel for AiRuntime {
         let admission = self.admit_completion(&mut request);
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
         let (admission, reply) = match admission {
-            Ok(admission) => (admission, self.send_completion(&body).await),
+            Ok(admission) => (admission, self.send_ledgered(self.send_completion(&body)).await),
             Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
         };
         self.record_completion(&body, &reply, admission);
@@ -365,7 +406,7 @@ impl AgentModel for AiRuntime {
         let admission = self.admit_agent(&mut request);
         let body = agent_request_body(&self.config.model, &self.config.base_url, &request);
         let (admission, result) = match admission {
-            Ok(admission) => (admission, self.send_agent(&body).await),
+            Ok(admission) => (admission, self.send_ledgered(self.send_agent(&body)).await),
             Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
         };
         self.record_agent(&body, &result, admission);
@@ -382,13 +423,28 @@ impl AiRuntime {
         let admission = self.admit_completion(&mut request);
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
         let (admission, reply) = match admission {
-            Ok(admission) => (admission, self.send_completion(&body).await),
+            Ok(admission) => (admission, self.send_ledgered(self.send_completion(&body)).await),
             Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
         };
         self.record_completion(&body, &reply, admission);
         let reply = reply.map_err(|failure| failure.error)?;
         let truncated = is_truncated(reply.finish_reason.as_deref());
         Ok(PartialCompletion { response: reply.response, truncated })
+    }
+
+    /// Awaits one ledgered send under a [`CallGuard`]. The guard is disarmed when
+    /// the send returns; if this future is dropped first, the guard writes the
+    /// interrupted row instead.
+    async fn send_ledgered<T>(&self, send: impl Future<Output = T>) -> T {
+        let guard = CallGuard {
+            sink: self.ledger.clone(),
+            provider: self.config.provider.clone(),
+            model: self.config.model.clone(),
+            started: Instant::now(),
+        };
+        let reply = send.await;
+        guard.disarm();
+        reply
     }
 
     /// The pre-send guard for a plain completion. Runs before any HTTP call.
@@ -3399,6 +3455,149 @@ mod tests {
     fn a_context_window_stop_reason_is_a_truncation() {
         assert!(is_truncated(Some("model_context_window_exceeded")));
         assert!(!is_truncated(Some("stop")));
+    }
+
+    /// Reads one chat request off `stream` and returns its JSON body.
+    fn read_chat_request(stream: &mut std::net::TcpStream) -> Value {
+        let mut request = Vec::new();
+        let mut chunk = [0; 1024];
+        let headers_end = loop {
+            let read = stream.read(&mut chunk).unwrap();
+            assert!(read > 0, "request ended before headers");
+            request.extend_from_slice(&chunk[..read]);
+            if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                break end;
+            }
+        };
+        let headers = std::str::from_utf8(&request[..headers_end]).unwrap().to_owned();
+        let length: usize = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length").then(|| value.trim().parse().unwrap())
+            })
+            .unwrap();
+        let body_start = headers_end + 4;
+        while request.len() < body_start + length {
+            let read = stream.read(&mut chunk).unwrap();
+            assert!(read > 0, "request ended before body");
+            request.extend_from_slice(&chunk[..read]);
+        }
+        serde_json::from_slice(&request[body_start..body_start + length]).unwrap()
+    }
+
+    /// Reads the first request, reports it on `seen`, and never answers it. The
+    /// next request is answered with `answer`.
+    fn stall_then_answer_fixture(
+        seen: tokio::sync::oneshot::Sender<()>,
+        answer: &'static str,
+    ) -> (AiRuntime, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stalled, _) = listener.accept().unwrap();
+            read_chat_request(&mut stalled);
+            let _ = seen.send(());
+            thread::sleep(Duration::from_millis(200));
+            drop(stalled);
+            let (mut stream, _) = listener.accept().unwrap();
+            read_chat_request(&mut stream);
+            write!(
+                stream,
+                "HTTP/1.1 200 Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
+                answer.len(),
+            )
+            .unwrap();
+        });
+        let runtime = AiRuntime::new(
+            AiProviderConfig {
+                provider: "loopback".into(),
+                base_url: format!("http://{address}"),
+                model: "configured-model".into(),
+                secret_name: "fixture".into(),
+                timeout: Duration::from_secs(5),
+            },
+            "fixture-key".into(),
+        )
+        .unwrap();
+        (runtime, server)
+    }
+
+    fn interrupted_error() -> Value {
+        json!({"status": null, "class": "interrupted", "retryable": true})
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_completion_writes_one_interrupted_row_and_a_normal_call_one_more() {
+        let answer = r#"{"id":"normal","model":"configured-model","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let (seen_tx, seen_rx) = tokio::sync::oneshot::channel();
+        let (runtime, server) = stall_then_answer_fixture(seen_tx, answer);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        // Cancel only once the fixture has the request: the send is mid-flight.
+        tokio::select! {
+            _ = runtime.complete(fixture_completion_request()) => panic!("a stalled call cannot return"),
+            _ = seen_rx => {}
+        }
+        {
+            let rows = rows.lock().unwrap();
+            assert_eq!(rows.len(), 1, "the cancelled call writes its row when it is dropped");
+            let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+            assert_eq!(error, interrupted_error());
+            assert!(rows[0].usage_json.is_none(), "an interrupted call has no usage and no estimate");
+        }
+
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        server.join().unwrap();
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2, "the normal call adds exactly one row");
+        assert!(rows[1].error_json.is_none());
+        assert_eq!(rows[1].provider_request_id.as_deref(), Some("normal"));
+        let usage: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["promptTokens"], json!(10));
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_agent_round_writes_one_interrupted_row_and_a_normal_call_one_more() {
+        let answer = r#"{"id":"normal","model":"configured-model","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"done"},"finish_reason":"stop"}]}"#;
+        let (seen_tx, seen_rx) = tokio::sync::oneshot::channel();
+        let (runtime, server) = stall_then_answer_fixture(seen_tx, answer);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        tokio::select! {
+            _ = runtime.respond(fixture_agent_request()) => panic!("a stalled round cannot return"),
+            _ = seen_rx => {}
+        }
+        {
+            let rows = rows.lock().unwrap();
+            assert_eq!(rows.len(), 1);
+            let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+            assert_eq!(error, interrupted_error());
+        }
+
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        server.join().unwrap();
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[1].error_json.is_none());
+    }
+
+    #[tokio::test]
+    async fn the_coach_trace_is_not_ledgered_even_when_it_is_cancelled() {
+        let (seen_tx, seen_rx) = tokio::sync::oneshot::channel();
+        let (runtime, server) = stall_then_answer_fixture(seen_tx, "{}");
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        tokio::select! {
+            _ = runtime.complete_with_trace(fixture_completion_request()) => panic!("a stalled call cannot return"),
+            _ = seen_rx => {}
+        }
+        // The fixture's second accept is never reached, so its thread is not joined.
+        drop(server);
+        assert!(rows.lock().unwrap().is_empty(), "the coach trace owns its own record");
     }
 
     #[tokio::test]

@@ -99,7 +99,7 @@ pub struct ModelError {
     pub status: Option<u16>,
     /// Coarse failure class for the usage ledger (`http_4xx`, `http_5xx`,
     /// `timeout`, `transport`, `stream_error`, `invalid_response`, `truncated`,
-    /// `context_exceeded`, `provider_error`). Never carries provider text.
+    /// `context_exceeded`, `provider_error`, `interrupted`). Never carries provider text.
     pub class: &'static str,
 }
 
