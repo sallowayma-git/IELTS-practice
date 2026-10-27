@@ -94,12 +94,21 @@ const WINDOW_RULES: &[Rule] = &[
     // GLM (Zhipu). The GLM-4 line is 128k. Later GLM-4.6 is larger, so 128k is
     // the conservative figure. UNSURE.
     unsure("glm", 128_000, 8_192),
-    // Claude through OpenRouter. Claude 2 and Instant are 100k. Claude 3 and 4
-    // are 200k; the 1M beta is not assumed. Output 8k is the conservative
-    // ceiling for the family.
-    sure("claude-2", 100_000, 4_096),
+    // Claude through OpenRouter. Claude Instant is 100k in every version, so
+    // its row is confident. Claude 2 is 100k for 2.0 but 200k for 2.1, so the
+    // family takes the larger figure and stays advisory: it only warns.
+    // Claude 3 and 4 families are 200k, but Sonnet 4.6 and Opus 4.6 have 1M
+    // windows, so the broad `claude` row must never refuse or clamp a request
+    // that a newer model would accept. Advisory on purpose.
+    unsure("claude-2", 200_000, 4_096),
     sure("claude-instant", 100_000, 4_096),
-    sure("claude", 200_000, 8_192),
+    unsure("claude", 200_000, 8_192),
+    // Claude Sonnet 4.6 and Opus 4.6: 1M windows (OpenRouter and native ids).
+    // Advisory until checked against the model card; never refuse or clamp.
+    unsure("claude-sonnet-4.6", 1_000_000, 8_192),
+    unsure("claude-sonnet-4-6", 1_000_000, 8_192),
+    unsure("claude-opus-4.6", 1_000_000, 8_192),
+    unsure("claude-opus-4-6", 1_000_000, 8_192),
     // Gemini through OpenRouter. Gemini 1.0 Pro is 32k. Gemini 1.5 Pro is 2M,
     // so the 1.5-named Pro id gets the smaller 1M figure. Gemini 2.x is about
     // 1,048,576, so 1M is used for the family. UNSURE on the exact numbers.
@@ -357,7 +366,7 @@ mod tests {
         assert_eq!(window_of("gemini-1.5-pro"), 1_000_000);
         assert_eq!(window_of("moonshot-v1-8k"), 8_192);
         assert_eq!(window_of("moonshot-v1-128k"), 131_072);
-        assert_eq!(window_of("claude-2.1"), 100_000);
+        assert_eq!(window_of("claude-2.1"), 200_000);
         assert_eq!(window_of("claude-3-5-sonnet-20241022"), 200_000);
         assert_eq!(window_of("deepseek-chat"), 128_000);
         assert_eq!(window_of("deepseek-v3"), 64_000);
@@ -397,12 +406,29 @@ mod tests {
 
     #[test]
     fn uncertain_rows_are_marked_and_confident_rows_are_not() {
-        for model in ["qwen3-235b", "moonshot", "kimi-k2", "glm-4.6", "o1", "gpt-5", "deepseek-v3"] {
+        for model in [
+            "qwen3-235b", "moonshot", "kimi-k2", "glm-4.6", "o1", "gpt-5", "deepseek-v3",
+            "claude-3-5-sonnet", "claude-2.1", "claude-sonnet-4.6", "claude-opus-4-6",
+        ] {
             assert!(!model_window(model).confident, "{model} must be advisory");
         }
-        for model in ["gpt-4o", "o3-mini", "deepseek-chat", "claude-3-5-sonnet", "moonshot-v1-8k"] {
+        for model in ["gpt-4o", "o3-mini", "deepseek-chat", "claude-instant-1.2", "moonshot-v1-8k"] {
             assert!(model_window(model).confident, "{model} must be confident");
         }
+    }
+
+    #[test]
+    fn a_250k_sonnet_46_request_is_admitted() {
+        // Sonnet 4.6 has a 1M window. The broad claude row is 200k, so before this
+        // the request was refused as if it were over the window.
+        assert_eq!(window_of("anthropic/claude-sonnet-4.6"), 1_000_000);
+        assert_eq!(window_of("openrouter/anthropic/claude-sonnet-4.6:beta"), 1_000_000);
+        assert_eq!(admit("anthropic/claude-sonnet-4.6", 250_000, 2_000), Ok(Admission::default()));
+        assert_eq!(admit("claude-sonnet-4-6", 250_000, 2_000), Ok(Admission::default()));
+        assert_eq!(admit("anthropic/claude-opus-4.6", 250_000, 2_000), Ok(Admission::default()));
+        // The broad family is advisory: an oversized estimate warns but is not refused.
+        let broad = admit("anthropic/claude-3.5-sonnet", 250_000, 2_000).unwrap();
+        assert_eq!(broad, Admission { clamped: None, context_warning: true });
     }
 
     #[test]
