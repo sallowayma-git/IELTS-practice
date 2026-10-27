@@ -1016,7 +1016,7 @@ struct WireFunctionCall {
     arguments: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct ChatUsage {
     #[serde(default)]
     prompt_tokens: u64,
@@ -1329,12 +1329,15 @@ impl AiRuntime {
             match response.chunk().await {
                 Ok(Some(bytes)) => {
                     if let Err(message) = fold.push(&bytes, on_delta) {
-                        return Err(fail(stream_error(message, false)));
+                        let error = stream_error(message, false);
+                        return Err(fold.failure(error, elapsed_ms(started), retry_count, header_request_id.clone()));
                     }
                 }
                 Ok(None) => break,
                 Err(error) => {
-                    return Err(fail(stream_error(format!("AI stream failed: {error}"), error.is_timeout())));
+                    let retryable = error.is_timeout();
+                    let error = stream_error(format!("AI stream failed: {error}"), retryable);
+                    return Err(fold.failure(error, elapsed_ms(started), retry_count, header_request_id.clone()));
                 }
             }
             if fold.done {
@@ -1342,7 +1345,8 @@ impl AiRuntime {
             }
         }
         if let Err(message) = fold.finish(on_delta) {
-            return Err(fail(stream_error(message, false)));
+            let error = stream_error(message, false);
+            return Err(fold.failure(error, elapsed_ms(started), retry_count, header_request_id.clone()));
         }
         fold.into_reply(&self.config.model, elapsed_ms(started), retry_count, header_request_id)
     }
@@ -1550,6 +1554,26 @@ impl StreamFold {
             retry_count,
             finish_reason,
         })
+    }
+
+    /// A failure of this stream that keeps what the fold already read: the usage
+    /// of a usage event that arrived, the served model, and the body's response
+    /// id. The header request id takes precedence, as on every other path.
+    fn failure(
+        &self,
+        error: ModelError,
+        latency_ms: u64,
+        retry_count: u32,
+        header_request_id: Option<String>,
+    ) -> AgentModelFailure {
+        AgentModelFailure::with_trace(
+            error,
+            self.model.clone(),
+            latency_ms,
+            self.usage.clone().map(token_usage),
+            prefer_provider_request_id(header_request_id, self.id.clone()),
+            retry_count,
+        )
     }
 
     fn push(&mut self, bytes: &[u8], on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
@@ -3197,6 +3221,88 @@ mod tests {
         server.join().unwrap();
         assert!(failure.error.truncated);
         assert_eq!(deltas, [r#"{"answer":"Cut"#]);
+    }
+
+    /// Answers with `body` as a stream that is cut off after it: the declared
+    /// length is longer than what is sent, and then the socket closes.
+    fn cut_stream_fixture(body: &'static str) -> (AiRuntime, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            read_chat_request(&mut stream);
+            write!(
+                stream,
+                "HTTP/1.1 200 Fixture\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len() + 500,
+            )
+            .unwrap();
+        });
+        let runtime = AiRuntime::new(
+            AiProviderConfig {
+                provider: "loopback".into(),
+                base_url: format!("http://{address}"),
+                model: "configured-model".into(),
+                secret_name: "fixture".into(),
+                timeout: Duration::from_secs(5),
+            },
+            "fixture-key".into(),
+        )
+        .unwrap();
+        (runtime, server)
+    }
+
+    #[tokio::test]
+    async fn a_stream_error_event_after_usage_keeps_the_usage_and_model_on_the_failure() {
+        let usage = r#"{"id":"chatcmpl-err","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+        let body: &'static str = Box::leak(
+            format!("{}event: error\ndata: {{\"error\":{{\"message\":\"overloaded\"}}}}\n\n", sse(&[usage]))
+                .into_boxed_str(),
+        );
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |_: &str| {})
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+        assert_eq!(failure.error.class, "stream_error");
+        assert_eq!(failure.error.message, "AI provider stream failed: overloaded");
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("chatcmpl-err"));
+    }
+
+    #[tokio::test]
+    async fn a_stream_cut_off_after_usage_keeps_the_usage_and_model_on_the_failure() {
+        let usage = r#"{"id":"chatcmpl-cut","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+        let partial = r#"{"choices":[{"delta":{"content":"{\"answer\":\"Ha"}}]}"#;
+        let body: &'static str = Box::leak(sse(&[usage, partial]).into_boxed_str());
+        let (runtime, server) = cut_stream_fixture(body);
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |_: &str| {})
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+        assert_eq!(failure.error.class, "stream_error");
+        assert!(failure.error.message.starts_with("AI stream failed"), "{}", failure.error.message);
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("chatcmpl-cut"));
+    }
+
+    #[test]
+    fn a_stream_failure_prefers_the_header_request_id_and_keeps_the_fold_usage() {
+        let mut fold = StreamFold::new();
+        let usage = r#"data: {"id":"body-id","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}
+
+"#;
+        fold.push(usage.as_bytes(), &mut |_| {}).unwrap();
+        let failure = fold.failure(stream_error("AI stream failed", false), 9, 1, Some("header-id".into()));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("header-id"));
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.retry_count, 1);
+        assert_eq!(failure.latency_ms, 9);
     }
 
     #[tokio::test]
