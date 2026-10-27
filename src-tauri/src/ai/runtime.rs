@@ -158,13 +158,18 @@ impl AiRuntime {
         admission: Admission,
     ) {
         let Some(sink) = &self.ledger else { return };
+        let truncated = ModelError::output_truncated();
         let call = match result {
             Ok(reply) => LedgerCall {
                 model: &reply.response.model,
                 latency_ms: reply.response.latency_ms,
                 usage: reply.response.usage.as_ref(),
                 provider_request_id: reply.response.provider_request_id.as_deref(),
-                outcome: Ok(reply.response.content.as_deref().unwrap_or("")),
+                outcome: if is_truncated(reply.finish_reason.as_deref()) {
+                    Err(&truncated)
+                } else {
+                    Ok(reply.response.content.as_deref().unwrap_or(""))
+                },
                 finish_reason: reply.finish_reason.as_deref(),
                 admission,
             },
@@ -364,7 +369,7 @@ impl AgentModel for AiRuntime {
             Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
         };
         self.record_agent(&body, &result, admission);
-        result.map(|reply| reply.response)
+        result.and_then(AgentReply::into_result).map(|reply| reply.response)
     }
 }
 
@@ -441,10 +446,31 @@ impl CompletionReply {
     }
 }
 
-/// A tool-calling or plain agent reply plus its finish reason (ledger only).
+/// A tool-calling or plain agent reply plus its finish reason.
 struct AgentReply {
     response: AgentModelResponse,
     finish_reason: Option<String>,
+}
+
+impl AgentReply {
+    /// The same truncation check as `CompletionReply::into_result`. A cut-off
+    /// round is a typed error whatever it carries: a partial answer is not a
+    /// final answer, and a partial tool call has incomplete arguments, so the
+    /// agent service must never see it as a success.
+    fn into_result(self) -> Result<Self, AgentModelFailure> {
+        if !is_truncated(self.finish_reason.as_deref()) {
+            return Ok(self);
+        }
+        let response = self.response;
+        Err(AgentModelFailure::with_trace(
+            ModelError::output_truncated(),
+            Some(response.model),
+            response.latency_ms,
+            response.usage,
+            response.provider_request_id,
+            response.retry_count,
+        ))
+    }
 }
 
 /// Whether a provider finish reason means the output was cut off.
@@ -2398,8 +2424,9 @@ mod tests {
         assert!(error.truncated && !error.retryable);
         assert_eq!(runtime.complete(fixture_completion_request()).await.unwrap().content, r#"{"ok":true}"#);
         runtime.complete(fixture_completion_request()).await.unwrap();
-        let agent = runtime.respond(fixture_agent_request()).await.unwrap();
-        assert_eq!(agent.content.as_deref(), Some("partial answer"));
+        // 4. an agent round cut off at the ceiling is a typed error, never a partial answer.
+        let agent = runtime.respond(fixture_agent_request()).await.unwrap_err();
+        assert!(agent.error.truncated && !agent.error.retryable);
         let traced = runtime.complete_with_trace(fixture_completion_request()).await.unwrap_err();
         assert!(traced.error.truncated);
         server.join().unwrap();
@@ -2419,6 +2446,84 @@ mod tests {
         assert!(usage(&rows[2]).get("finishReason").is_none());
         assert_eq!(usage(&rows[2])["promptTokens"], json!(5));
         assert_eq!(usage(&rows[3])["finishReason"], json!("max_tokens"));
+        let agent_error: Value = serde_json::from_str(rows[3].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(agent_error, json!({"status": null, "class": "truncated", "retryable": false}));
+        assert!(rows[3].response_hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_truncated_agent_text_reply_fails_the_round_with_a_failed_ledger_row() {
+        let reply = r#"{"id":"cut-agent","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":"The answer is hal"},"finish_reason":"length"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let failure = runtime.respond(fixture_agent_request()).await.unwrap_err();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 1, "a truncated round is never retried");
+        assert!(failure.error.truncated && !failure.error.retryable);
+        assert_eq!(failure.error.class, "truncated");
+        assert_eq!(failure.model.as_deref(), Some("m"), "the trace still names the served model");
+        assert_eq!(failure.usage.as_ref().map(|usage| usage.output_tokens), Some(2_000));
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].provider_request_id.as_deref(), Some("cut-agent"));
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("length"));
+        assert_eq!(usage["completionTokens"], json!(2000));
+        let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "truncated", "retryable": false}));
+        assert!(rows[0].response_hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_truncated_agent_tool_call_is_never_returned_with_its_arguments() {
+        // The arguments cut off mid-object: returning this as a tool call would
+        // hand the agent service half a call.
+        let reply = r#"{"id":"cut-tool","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":null,"tool_calls":[{"id":"call-1","function":{"name":"read_file","arguments":"{\"path\":\"/tm"}}]},"finish_reason":"length"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let failure = runtime.respond(fixture_agent_request()).await.unwrap_err();
+        server.join().unwrap();
+        assert!(failure.error.truncated && !failure.error.retryable);
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "truncated", "retryable": false}));
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("length"));
+    }
+
+    #[tokio::test]
+    async fn a_normal_stop_agent_reply_with_a_tool_call_is_unchanged() {
+        let reply = r#"{"id":"stop-tool","model":"m","usage":{"prompt_tokens":12,"completion_tokens":20},"choices":[{"message":{"content":null,"tool_calls":[{"id":"call-1","function":{"name":"read_file","arguments":"{\"path\":\"/tmp/a\"}"}}]},"finish_reason":"tool_calls"}]}"#;
+        let stop = r#"{"id":"stop-text","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"choices":[{"message":{"content":"Done."},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (200, "application/json", reply),
+            (200, "application/json", stop),
+        ]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let tool_round = runtime.respond(fixture_agent_request()).await.unwrap();
+        let text_round = runtime.respond(fixture_agent_request()).await.unwrap();
+        server.join().unwrap();
+        assert_eq!(tool_round.tool_calls.len(), 1);
+        assert_eq!(tool_round.tool_calls[0].name, "read_file");
+        assert_eq!(tool_round.tool_calls[0].arguments_json, r#"{"path":"/tmp/a"}"#);
+        assert_eq!(text_round.content.as_deref(), Some("Done."));
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2);
+        for row in rows.iter() {
+            assert!(row.error_json.is_none(), "a stop reply is a success row");
+        }
+        let usage: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("stop"));
     }
 
     #[tokio::test]
