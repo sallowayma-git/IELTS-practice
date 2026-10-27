@@ -16,6 +16,11 @@ pub const COACH_FEEDBACK_SCHEMA_VERSION: u32 = 1;
 pub const MAX_COACH_FEEDBACK_PAYLOAD_BYTES: usize = 8 * 1024;
 pub const MAX_COACH_STRATEGY_SKILLS: usize = 32;
 pub const MAX_COACH_STRATEGY_MEMORY_IDS: usize = 64;
+/// Longest learner quote and strategy label a teaching note may carry. The host
+/// gate rejects anything longer, and the weekly pack reads the same limits, so a
+/// note the host keeps is never skipped later for length.
+pub const TEACHING_NOTE_EVIDENCE_CHARS: usize = 120;
+pub const TEACHING_NOTE_STRATEGY_CHARS: usize = 80;
 
 /// Canonical user-interaction feedback kinds for a coach message.
 ///

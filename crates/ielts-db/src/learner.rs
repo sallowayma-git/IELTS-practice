@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use ielts_domain::{
     apply_skill_observation, familiarity_weights, has_priority_evidence, preferred_probe,
     priority_band, review_priority, trend_direction, uncertainty_band, LearnerModelConfig,
@@ -29,6 +29,11 @@ const MAX_AVOID_ASSETS: usize = 5;
 const MAX_LEARNER_RESPONSE_BYTES: usize = 1_048_576;
 const EMPTY_REFERENCE_AT: &str = "1970-01-01T00:00:00Z";
 const DESKTOP_USER_ID: &str = "local";
+/// A skill of one user at one observed instant.
+type SkillInstant = ((String, String), String);
+
+/// Floor on an observation's weight when same-instant outcomes are averaged.
+const SAME_INSTANT_WEIGHT_FLOOR: f64 = 0.1;
 
 #[derive(Debug, Clone)]
 struct SourceObservation {
@@ -278,12 +283,13 @@ fn read_learner_state_snapshot(
         })
         .collect::<Vec<_>>();
     let state_hash = hash_derived(&states, &schedules)?;
-    let generated_at = states
-        .iter()
-        .filter_map(|state| state.last_practiced_at.as_deref())
-        .max()
-        .unwrap_or(EMPTY_REFERENCE_AT)
-        .to_string();
+    let generated_at = latest_instant(
+        states
+            .iter()
+            .filter_map(|state| state.last_practiced_at.as_deref()),
+    )
+    .unwrap_or(EMPTY_REFERENCE_AT)
+    .to_string();
     let view_states = states.iter().map(state_view).collect::<Vec<_>>();
     let response = LearnerStateSnapshot {
         schema_version: LEARNER_MODEL_SCHEMA_VERSION,
@@ -435,17 +441,18 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
         }
     }
     observations.sort_by(|left, right| {
-        left.observed_at
-            .cmp(&right.observed_at)
+        replay_instant(&left.observed_at)
+            .cmp(&replay_instant(&right.observed_at))
             .then_with(|| left.id.cmp(&right.id))
     });
     input_parts.sort();
-    let reference_at = observations
-        .iter()
-        .map(|observation| observation.observed_at.as_str())
-        .max()
-        .unwrap_or(EMPTY_REFERENCE_AT)
-        .to_string();
+    let reference_at = latest_instant(
+        observations
+            .iter()
+            .map(|observation| observation.observed_at.as_str()),
+    )
+    .unwrap_or(EMPTY_REFERENCE_AT)
+    .to_string();
     Ok(BuildResult {
         observations,
         input_count: sources.len() as u64,
@@ -471,13 +478,17 @@ fn practice_gaps(
         let at = practices
             .entry(practice_key(source))
             .or_insert_with(|| source.observed_at.clone());
-        if source.observed_at < *at {
+        if replay_instant(&source.observed_at) < replay_instant(at.as_str()) {
             *at = source.observed_at.clone();
         }
     }
     let mut ordered = practices.into_iter().collect::<Vec<_>>();
     // Session order is independent of question IDs, including equal-time events.
-    ordered.sort_by(|left, right| left.1.cmp(&right.1).then_with(|| left.0.cmp(&right.0)));
+    ordered.sort_by(|left, right| {
+        replay_instant(&left.1)
+            .cmp(&replay_instant(&right.1))
+            .then_with(|| left.0.cmp(&right.0))
+    });
     let mut last_asset_at = BTreeMap::new();
     let mut gaps = BTreeMap::new();
     for (key, at) in ordered {
@@ -778,12 +789,13 @@ fn insert_skill_observations(conn: &Connection, observations: &[SkillObservation
 
 /// Trend measures transfer across first attempts on independent materials.
 /// Repeated practice still updates the posterior, but cannot establish transfer.
-fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> {
+/// Returns the trend outcomes in time order (one per instant, callers window the
+/// tail) and how many distinct assets the first attempts cover. The mastery
+/// ceiling counts assets: two articles finished at the same instant are still two.
+fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> (Vec<f64>, u64) {
     let mut attempts = BTreeMap::new();
     for observation in observations {
-        if observation.asset_id.is_empty()
-            || ielts_domain::effective_observation_weight(observation) <= 0.0
-        {
+        if !counts_as_asset(observation) {
             continue;
         }
         let practice = observation
@@ -794,15 +806,21 @@ fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> 
         let entry = attempts
             .entry((observation.asset_id.as_str(), practice))
             .or_insert((observation.observed_at.as_str(), Vec::new()));
-        entry.0 = entry.0.min(observation.observed_at.as_str());
+        if replay_instant(&observation.observed_at) < replay_instant(entry.0) {
+            entry.0 = observation.observed_at.as_str();
+        }
         entry.1.push(observation.outcome.clamp(0.0, 1.0));
     }
     let mut attempts = attempts.into_iter().collect::<Vec<_>>();
-    attempts.sort_by(|left, right| left.1.0.cmp(right.1.0).then_with(|| left.0.cmp(&right.0)));
+    attempts.sort_by(|left, right| {
+        replay_instant(left.1.0)
+            .cmp(&replay_instant(right.1.0))
+            .then_with(|| left.0.cmp(&right.0))
+    });
     let mut first_assets: BTreeMap<&str, (&str, Vec<f64>)> = BTreeMap::new();
     for ((asset, _), (at, mut outcomes)) in attempts {
         let first = first_assets.entry(asset).or_insert((at, Vec::new()));
-        if first.0 != at {
+        if instant_key(first.0) != instant_key(at) {
             continue;
         }
         // Equal-time evidence has no temporal direction; question IDs must not
@@ -810,21 +828,49 @@ fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> Vec<f64> 
         outcomes.sort_by(f64::total_cmp);
         first.1.push(outcomes.iter().sum::<f64>() / outcomes.len() as f64);
     }
+    let distinct_assets = first_assets.len() as u64;
     let mut temporal_outcomes: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
     for (at, mut values) in first_assets.into_values() {
         values.sort_by(f64::total_cmp);
         temporal_outcomes.entry(at).or_default()
             .push(values.iter().sum::<f64>() / values.len() as f64);
     }
-    let mut outcomes = temporal_outcomes
+    let outcomes = temporal_outcomes
         .into_values()
         .map(|mut values| {
             values.sort_by(f64::total_cmp);
             values.iter().sum::<f64>() / values.len() as f64
         })
         .collect::<Vec<_>>();
-    outcomes.drain(..outcomes.len().saturating_sub(8));
-    outcomes
+    (outcomes, distinct_assets)
+}
+
+/// Each skill's same-instant observations as one stability outcome: the mean of
+/// their outcomes weighted by observation weight, with the largest weight. Sorting
+/// before the sum keeps the result independent of the order the ids arrive in.
+fn stability_groups(observations: &[SkillObservation]) -> BTreeMap<SkillInstant, (f64, f64)> {
+    let mut groups: BTreeMap<SkillInstant, Vec<(f64, f64)>> = BTreeMap::new();
+    for observation in observations {
+        let instant = (
+            (observation.user_id.clone(), observation.skill_key.clone()),
+            instant_key(&observation.observed_at),
+        );
+        groups.entry(instant).or_default().push((
+            observation.outcome.clamp(0.0, 1.0),
+            ielts_domain::effective_observation_weight(observation),
+        ));
+    }
+    groups
+        .into_iter()
+        .map(|(instant, mut items)| {
+            items.sort_by(|left, right| left.0.total_cmp(&right.0).then(left.1.total_cmp(&right.1)));
+            let weight_of = |weight: f64| weight.max(SAME_INSTANT_WEIGHT_FLOOR);
+            let total: f64 = items.iter().map(|&(_, weight)| weight_of(weight)).sum();
+            let outcome = items.iter().map(|&(value, weight)| value * weight_of(weight)).sum::<f64>() / total;
+            let weight = items.iter().map(|&(_, weight)| weight).fold(f64::NEG_INFINITY, f64::max);
+            (instant, (outcome, weight))
+        })
+        .collect()
 }
 
 fn build_states_and_schedules(
@@ -832,6 +878,8 @@ fn build_states_and_schedules(
     reference_at: &str,
     config: LearnerModelConfig,
 ) -> DbResult<(Vec<SkillState>, Vec<ScheduleRecord>, String)> {
+    let stability_by_instant = stability_groups(observations);
+    let mut stability_judged: BTreeSet<SkillInstant> = BTreeSet::new();
     let mut states: BTreeMap<(String, String), SkillState> = BTreeMap::new();
     let mut assets: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
     let mut recent_outcomes: BTreeMap<(String, String), Vec<f64>> = BTreeMap::new();
@@ -863,26 +911,28 @@ fn build_states_and_schedules(
             model_version: LEARNER_STATE_MODEL_VERSION.into(),
             explanation: Value::Null,
         });
+        // None on the skill's first practice: there is no previous session to repeat.
         let elapsed_days = state
             .last_practiced_at
             .as_deref()
             .and_then(|previous| gap_hours(previous, &observation.observed_at))
-            .map(|hours| (hours / 24.0).max(0.0))
-            .unwrap_or(0.0);
+            .map(|hours| (hours / 24.0).max(0.0));
         let previous_stability = state.stability_days.unwrap_or(1.0);
-        let weight = ielts_domain::effective_observation_weight(observation);
-        apply_skill_observation(state, observation, elapsed_days, config);
-        state.last_practiced_at = Some(observation.observed_at.clone());
-        state.stability_days = Some(update_stability(
-            previous_stability,
-            elapsed_days,
-            observation.outcome,
-            weight,
-        ));
-        assets
-            .entry(key.clone())
-            .or_default()
-            .insert(observation.asset_id.clone());
+        apply_skill_observation(state, observation, elapsed_days.unwrap_or(0.0), config);
+        advance_practice_clock(state, &observation.observed_at);
+        // Stability moves once per skill and instant, by that instant's aggregate.
+        let instant = (key.clone(), instant_key(&observation.observed_at));
+        if stability_judged.insert(instant.clone()) {
+            let (outcome, weight) = stability_by_instant[&instant];
+            state.stability_days =
+                Some(update_stability(previous_stability, elapsed_days, outcome, weight));
+        }
+        if counts_as_asset(observation) {
+            assets
+                .entry(key.clone())
+                .or_default()
+                .insert(observation.asset_id.clone());
+        }
         state.distinct_asset_count = assets.get(&key).map_or(0, |items| items.len() as u64);
         let outcomes = recent_outcomes.entry(key.clone()).or_default();
         outcomes.push(observation.outcome.clamp(0.0, 1.0));
@@ -940,9 +990,7 @@ fn build_states_and_schedules(
         let latest = user_references
             .entry(&observation.user_id)
             .or_insert(&observation.observed_at);
-        if observation.observed_at.as_str() > *latest {
-            *latest = &observation.observed_at;
-        }
+        *latest = latest_instant([*latest, observation.observed_at.as_str()]).unwrap_or(*latest);
     }
     let mut output_states = Vec::new();
     let mut schedules = Vec::new();
@@ -954,8 +1002,16 @@ fn build_states_and_schedules(
         let reference =
             parse_time(reference_at).unwrap_or_else(|| parse_time(EMPTY_REFERENCE_AT).unwrap());
         let outcomes = recent_outcomes.get(&key).cloned().unwrap_or_default();
-        let trend_outcomes = independent_attempt_outcomes(&trend_observations[&key]);
+        let (mut trend_outcomes, independent_attempts) =
+            independent_attempt_outcomes(&trend_observations[&key]);
+        trend_outcomes.drain(..trend_outcomes.len().saturating_sub(8));
         let trend = trend_direction(&trend_outcomes);
+        // Single finalization point for mastery: every consumer (review delay,
+        // priority, reason codes, weak-skill profile) reads this capped value.
+        // alpha/beta stay the raw evidence; uncertainty is unchanged.
+        state.mastery_mean = state
+            .mastery_mean
+            .min(mastery_ceiling(independent_attempts));
         let delay_days = review_delay_days(&state);
         let next_review_at = state
             .last_practiced_at
@@ -1298,12 +1354,39 @@ fn review_delay_days(state: &SkillState) -> f64 {
     }
 }
 
-fn update_stability(previous: f64, elapsed_days: f64, outcome: f64, weight: f64) -> f64 {
-    if outcome >= 0.5 {
-        (previous + elapsed_days.max(1.0) * weight.max(0.1)).clamp(0.0, 365.0)
-    } else {
-        (previous * 0.5).clamp(0.0, 365.0)
+/// Mastery ceiling by independent attempt count: one first attempt on one
+/// article cannot establish mastery, two cannot exceed 0.8, and from three on
+/// the Beta posterior speaks for itself.
+/// The one definition of an article that counts as evidence: a named asset and a
+/// non-zero observation weight. Both the mastery ceiling and `distinct_asset_count`
+/// (the weak-skill and review-priority gate) read it, so they cannot disagree.
+fn counts_as_asset(observation: &SkillObservation) -> bool {
+    !observation.asset_id.is_empty() && ielts_domain::effective_observation_weight(observation) > 0.0
+}
+
+fn mastery_ceiling(independent_attempts: u64) -> f64 {
+    match independent_attempts {
+        0 | 1 => 0.5,
+        2 => 0.8,
+        _ => 1.0,
     }
+}
+
+/// Repeats closer than this to the skill's previous practice are the same
+/// study session (DeepTutor scheduler rule): a success there adds no stability.
+const SAME_SESSION_REPEAT_DAYS: f64 = 0.25;
+
+/// `elapsed_days` is `None` on a skill's first practice, which earns the
+/// one-day floor credit as before.
+fn update_stability(previous: f64, elapsed_days: Option<f64>, outcome: f64, weight: f64) -> f64 {
+    if outcome < 0.5 {
+        return (previous * 0.5).clamp(0.0, 365.0);
+    }
+    if elapsed_days.is_some_and(|days| days < SAME_SESSION_REPEAT_DAYS) {
+        return previous.clamp(0.0, 365.0);
+    }
+    let days = elapsed_days.unwrap_or(0.0);
+    (previous + days.max(1.0) * weight.max(0.1)).clamp(0.0, 365.0)
 }
 
 /// The one name of a reading question type: the skill key every layer (learner
@@ -1354,6 +1437,45 @@ fn parse_time(value: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .ok()
         .map(|value| value.with_timezone(&Utc))
+}
+
+/// Replay order: parsed instants chronologically, then unparseable text by its raw
+/// value after them. Equivalent spellings of one instant compare equal here.
+fn replay_instant(value: &str) -> (bool, Option<DateTime<Utc>>, &str) {
+    let parsed = parse_time(value);
+    (parsed.is_none(), parsed, if parsed.is_none() { value } else { "" })
+}
+
+/// The latest instant among RFC 3339 texts, compared as parsed instants. Returns the
+/// text of that instant; unparseable text ranks below every parsed instant.
+fn latest_instant<'a>(values: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    values.into_iter().max_by_key(|value| {
+        let parsed = parse_time(value);
+        (parsed.is_some(), parsed, if parsed.is_none() { *value } else { "" })
+    })
+}
+
+/// The practice clock only moves forward. Compares parsed instants, so an equivalent
+/// spelling of the stored instant, or an earlier one, leaves it unchanged.
+fn advance_practice_clock(state: &mut SkillState, observed_at: &str) {
+    let previous = state.last_practiced_at.as_deref().and_then(parse_time);
+    let advances = match (parse_time(observed_at), previous) {
+        (Some(current), Some(previous)) => current > previous,
+        (Some(_), None) => true,
+        (None, _) => state.last_practiced_at.is_none(),
+    };
+    if advances {
+        state.last_practiced_at = Some(observed_at.to_string());
+    }
+}
+
+/// Grouping key for one instant: equivalent RFC 3339 spellings (`Z` vs an offset)
+/// collapse to the same key. Unparseable input keeps its raw text.
+fn instant_key(value: &str) -> String {
+    parse_time(value).map_or_else(
+        || value.to_string(),
+        |time| time.to_rfc3339_opts(SecondsFormat::Nanos, true),
+    )
 }
 
 fn value_string(value: &Value, key: &str) -> Option<String> {
@@ -1436,4 +1558,162 @@ fn ensure_response_size<T: Serialize>(value: &T) -> DbResult<()> {
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_session_success_does_not_grow_stability() {
+        assert_eq!(update_stability(2.0, Some(0.01), 1.0, 1.0), 2.0);
+        assert_eq!(update_stability(2.0, Some(0.2499), 0.6, 1.0), 2.0);
+    }
+
+    #[test]
+    fn success_after_a_day_grows_stability_as_before() {
+        assert_eq!(update_stability(2.0, Some(1.0), 1.0, 0.5), 2.5);
+        // First practice of a skill has no previous session and keeps the floor credit.
+        assert_eq!(update_stability(1.0, None, 1.0, 1.0), 2.0);
+    }
+
+    #[test]
+    fn same_session_failure_still_halves_stability() {
+        assert_eq!(update_stability(2.0, Some(0.01), 0.0, 1.0), 1.0);
+    }
+
+    #[test]
+    fn mastery_ceiling_follows_independent_attempt_count() {
+        assert_eq!(mastery_ceiling(0), 0.5);
+        assert_eq!(mastery_ceiling(1), 0.5);
+        assert_eq!(mastery_ceiling(2), 0.8);
+        assert_eq!(mastery_ceiling(3), 1.0);
+    }
+
+    fn same_instant_observation(id: &str, outcome: f64) -> SkillObservation {
+        SkillObservation {
+            id: id.into(),
+            user_id: "local".into(),
+            event_id: format!("event-{id}"),
+            skill_key: "reading.tfng".into(),
+            outcome,
+            mapping_weight: 1.0,
+            evidence_weight: 1.0,
+            novelty_weight: 1.0,
+            familiarity_weight: 1.0,
+            time_weight: 1.0,
+            error_type: None,
+            context: Value::Null,
+            observed_at: "2026-08-12T00:00:00Z".into(),
+            asset_id: format!("asset-{id}"),
+            question_id: "q1".into(),
+            attempt_id: None,
+            intervention_id: None,
+            intervention_type: None,
+        }
+    }
+
+    #[test]
+    fn same_instant_stability_is_independent_of_observation_order_and_ids() {
+        let mut prior = same_instant_observation("prior", 1.0);
+        prior.observed_at = "2026-08-11T00:00:00Z".into();
+        let mut results = Vec::new();
+        for (correct_id, wrong_id) in [("a-correct", "z-wrong"), ("z-correct", "a-wrong")] {
+            let correct = same_instant_observation(correct_id, 1.0);
+            let wrong = same_instant_observation(wrong_id, 0.0);
+            for order in [[&correct, &wrong], [&wrong, &correct]] {
+                let observations = vec![prior.clone(), order[0].clone(), order[1].clone()];
+                let (states, _, _) = build_states_and_schedules(
+                    &observations,
+                    "2026-08-12T12:00:00Z",
+                    LearnerModelConfig::default(),
+                )
+                .unwrap();
+                results.push(states[0].stability_days);
+            }
+        }
+        assert!(results.windows(2).all(|pair| pair[0] == pair[1]), "{results:?}");
+    }
+
+    fn asset_observation(id: &str, asset: &str, outcome: f64, familiarity: f64) -> SkillObservation {
+        SkillObservation {
+            familiarity_weight: familiarity,
+            asset_id: asset.into(),
+            ..same_instant_observation(id, outcome)
+        }
+    }
+
+    fn built_state(observations: &[SkillObservation]) -> SkillState {
+        let (states, _, _) = build_states_and_schedules(
+            observations,
+            "2026-08-12T12:00:00Z",
+            LearnerModelConfig::default(),
+        )
+        .unwrap();
+        states.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn weight_zero_and_unnamed_observations_are_not_articles() {
+        let real = asset_observation("real", "asset-real", 1.0, 1.0);
+        let zero_first = asset_observation("zero-1", "asset-zero", 1.0, 0.0);
+        let zero_second = asset_observation("zero-2", "asset-zero", 1.0, 0.0);
+        let unnamed = asset_observation("unnamed", "", 1.0, 1.0);
+        let state = built_state(&[real, zero_first, zero_second, unnamed]);
+        // Only the one weighted, named article is evidence of breadth; the ceiling agrees.
+        assert_eq!(state.distinct_asset_count, 1);
+        assert!(state.mastery_mean <= 0.5 + 1e-12, "{}", state.mastery_mean);
+    }
+
+    #[test]
+    fn repeated_correct_answers_on_a_weight_zero_article_are_not_breadth() {
+        let observations = [
+            asset_observation("zero-1", "asset-zero", 1.0, 0.0),
+            asset_observation("zero-2", "asset-zero", 1.0, 0.0),
+        ];
+        assert_eq!(built_state(&observations).distinct_asset_count, 0);
+    }
+
+    #[test]
+    fn same_instant_stability_merges_equivalent_rfc3339_spellings() {
+        let mut prior = same_instant_observation("prior", 1.0);
+        prior.observed_at = "2026-08-11T00:00:00Z".into();
+        let same_string = [
+            same_instant_observation("correct", 1.0),
+            same_instant_observation("wrong", 0.0),
+        ];
+        let mut offset_wrong = same_instant_observation("wrong", 0.0);
+        offset_wrong.observed_at = "2026-08-12T08:00:00+08:00".into();
+        let mixed = [same_instant_observation("correct", 1.0), offset_wrong];
+
+        let expected = built_state(&[prior.clone(), same_string[0].clone(), same_string[1].clone()]);
+        let mixed_forward = built_state(&[prior.clone(), mixed[0].clone(), mixed[1].clone()]);
+        let mixed_reversed = built_state(&[prior.clone(), mixed[1].clone(), mixed[0].clone()]);
+        assert!(expected.stability_days.is_some());
+        assert_eq!(mixed_forward.stability_days, expected.stability_days);
+        assert_eq!(mixed_reversed.stability_days, expected.stability_days);
+    }
+
+    #[test]
+    fn same_instant_stability_is_independent_of_order_with_three_observations() {
+        let mut prior = same_instant_observation("prior", 1.0);
+        prior.observed_at = "2026-08-11T00:00:00Z".into();
+        let mut weighted_down = same_instant_observation("b-wrong", 0.0);
+        weighted_down.familiarity_weight = 0.4;
+        let items = [
+            same_instant_observation("a-correct", 1.0),
+            weighted_down,
+            same_instant_observation("c-middle", 0.5),
+        ];
+        let results: Vec<_> = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+            .into_iter()
+            .map(|order| {
+                let mut observations = vec![prior.clone()];
+                observations.extend(order.iter().map(|&index| items[index].clone()));
+                built_state(&observations).stability_days
+            })
+            .collect();
+        assert!(results[0].is_some());
+        assert!(results.windows(2).all(|pair| pair[0] == pair[1]), "{results:?}");
+    }
 }

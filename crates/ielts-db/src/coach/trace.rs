@@ -206,6 +206,11 @@ fn close_trace(
     let retries = response
         .and_then(|r| r.get("retryCount"))
         .and_then(Value::as_u64);
+    // Written only when the run reports a count: a null here would read as "no notes checked".
+    let notes_patch = response
+        .and_then(|r| r.get("teachingNotesRejected"))
+        .and_then(Value::as_u64)
+        .map(|rejected| json!({"teachingNotesRejected": rejected}).to_string());
     let error_json = error.map(Value::to_string);
     let changed = conn.execute("UPDATE llm_invocations SET response_hash=?1,usage_json=?2,model=COALESCE(?3,model),latency_ms=?4,provider_request_id=?5,error_json=?6
         WHERE id=?7 AND response_hash IS NULL AND error_json IS NULL AND run_id IN (SELECT id FROM agent_runs WHERE status='running')",
@@ -215,9 +220,9 @@ fn close_trace(
     }
     let now = chrono::Utc::now().to_rfc3339();
     let changed = conn.execute("UPDATE agent_runs SET status=?1,rounds=1,error_json=?2,updated_at=?3,completed_at=?3,
-        result_json=json_set(result_json,'$.assistantMessageId',?4,'$.actualModel',?5,'$.usage',json(?6),'$.latencyMs',?7,'$.providerRequestId',?8,'$.retryCount',?9)
+        result_json=json_patch(json_set(result_json,'$.assistantMessageId',?4,'$.actualModel',?5,'$.usage',json(?6),'$.latencyMs',?7,'$.providerRequestId',?8,'$.retryCount',?9),COALESCE(?11,'{}'))
         WHERE id=?10 AND status='running'",
-        params![if error.is_some(){"failed"}else{"completed"},error_json,now,assistant,model,usage.unwrap_or_else(||"null".into()),latency,request_id,retries,run_id])?;
+        params![if error.is_some(){"failed"}else{"completed"},error_json,now,assistant,model,usage.unwrap_or_else(||"null".into()),latency,request_id,retries,run_id,notes_patch])?;
     if changed != 1 {
         return Err(DbError::Validation("coach run is not active".into()));
     }

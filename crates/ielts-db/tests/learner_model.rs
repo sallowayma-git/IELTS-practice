@@ -418,6 +418,256 @@ fn mapping_priority_uses_curated_question_mapping_before_deterministic_kind() {
     assert!((mapping.1 - 0.8).abs() < f64::EPSILON);
 }
 
+#[test]
+fn same_session_success_adds_no_stability_but_a_later_success_does() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "event-1", "asset-a", "q1", "tfng", "2026-08-12T00:00:00Z", false, None);
+    // Redo of the same question minutes later: a same-session success.
+    insert_question(&conn, "event-2", "asset-a", "q1", "tfng", "2026-08-12T00:05:00Z", true, None);
+    // A different article minutes later is still the same session for the skill.
+    insert_question(&conn, "event-3", "asset-b", "q1", "tfng", "2026-08-12T00:10:00Z", true, None);
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let stability = |conn: &Connection| state(conn).states[0].stability_days.unwrap();
+    // First miss halves the 1.0 default; same-session successes leave it alone.
+    assert!((stability(&conn) - 0.5).abs() < 1e-9);
+
+    // A success a full day later grows stability by the observation weight.
+    insert_question(&conn, "event-4", "asset-c", "q1", "tfng", "2026-08-13T00:10:00Z", true, None);
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    assert!((stability(&conn) - 1.5).abs() < 1e-9);
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+/// Equivalent spellings must preserve the interleaved practice clock and the
+/// resulting review schedule, regardless of event insertion order.
+#[test]
+fn equivalent_timestamp_spellings_replay_by_instant_and_never_rewind_the_clock() {
+    for wrong_at in [
+        "2026-08-12T00:00:00Z",
+        "2026-08-12T08:00:00+08:00",
+        "2026-08-12T08:00:00.000000000+08:00",
+        "2026-08-12T14:00:00+14:00",
+        "2026-08-11T16:00:00-08:00",
+    ] {
+        for reverse in [false, true] {
+            let (_dir, conn) = open_db();
+            let mut events = [
+                ("prior", "2026-08-11T00:00:00Z", true),
+                ("correct", "2026-08-12T00:00:00Z", true),
+                ("wrong", wrong_at, false),
+                ("intervening", "2026-08-12T07:00:00Z", true),
+                ("same-session", "2026-08-12T10:00:00Z", true),
+            ];
+            if reverse {
+                events.reverse();
+            }
+            for (event, at, correct) in events {
+                // Distinct assets keep every observation's effective weight at 1.
+                insert_question(
+                    &conn,
+                    event,
+                    &format!("asset-{event}"),
+                    "q1",
+                    "tfng",
+                    at,
+                    correct,
+                    None,
+                );
+            }
+            learning_observations_rebuild(&conn).unwrap();
+            let rebuilt = learner_model_rebuild(&conn).unwrap();
+            let snapshot = state(&conn);
+            let skill = &snapshot.states[0];
+            // 1 -> 2 on the first success, -> 3 on the mixed midnight group,
+            // -> 4 at 07:00. The 10:00 success is only three hours later.
+            assert_eq!(
+                skill.stability_days,
+                Some(4.0),
+                "{wrong_at}, reverse={reverse}",
+            );
+            assert_eq!(
+                skill.last_practiced_at.as_deref(),
+                Some("2026-08-12T10:00:00Z"),
+                "{wrong_at}, reverse={reverse}",
+            );
+            assert!(skill.mastery_mean >= 0.70 && skill.uncertainty <= 0.55);
+            // This mastery selects the stability-based delay: 4 * 1.5 + 3 = 9 days.
+            assert_eq!(
+                skill.next_review_at.as_deref(),
+                Some("2026-08-21T10:00:00+00:00"),
+                "{wrong_at}, reverse={reverse}",
+            );
+            assert_eq!(skill.explanation["referenceAt"], "2026-08-12T10:00:00Z");
+            assert_eq!(snapshot.generated_at, "2026-08-12T10:00:00Z");
+            let needs =
+                ielts_db::skill_review_needs_snapshot(&conn, &SkillReviewNeedsQuery::default())
+                    .unwrap();
+            assert_eq!(needs.needs[0].due_at, "2026-08-21T10:00:00+00:00");
+            assert!(learner_model_verify(&conn).unwrap().consistent);
+            assert_eq!(
+                learner_model_rebuild(&conn).unwrap().state_hash,
+                rebuilt.state_hash,
+            );
+        }
+    }
+}
+
+/// Mixed spellings inside one attempt: the attempt starts at 00:00Z even though its
+/// text sorts after a 02:00Z source. The next attempt on the same asset (13:00Z) is
+/// 13h later, so it gets the 12-72h familiarity weight, not the under-12h one.
+#[test]
+fn mixed_spelling_attempt_start_uses_the_earliest_instant_for_same_asset_gaps() {
+    let familiarity_of_third = |second_at: &str| {
+        let (_dir, conn) = open_db();
+        insert_attempt_question(&conn, "event-1", "attempt-p1", "asset-a", "q1", "2026-08-12T02:00:00Z");
+        insert_attempt_question(&conn, "event-2", "attempt-p1", "asset-a", "q2", second_at);
+        insert_attempt_question(&conn, "event-3", "attempt-p2", "asset-a", "q3", "2026-08-12T13:00:00Z");
+        learning_observations_rebuild(&conn).unwrap();
+        learner_model_rebuild(&conn).unwrap();
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+        conn.query_row(
+            "SELECT familiarity_weight FROM learner_skill_observations WHERE event_id = 'event-3'",
+            [],
+            |row| row.get::<_, f64>(0),
+        )
+        .unwrap()
+    };
+    let utc = familiarity_of_third("2026-08-12T00:00:00Z");
+    let offset = familiarity_of_third("2026-08-12T08:00:00+08:00");
+    assert!((utc - 0.5).abs() < 1e-9, "12-72h familiarity expected, got {utc}");
+    assert!((offset - utc).abs() < 1e-9, "+08:00 gave {offset}, Z gave {utc}");
+}
+
+/// The reference clock is the latest instant. "...T08:00:00+08:00" is 00:00Z, so it
+/// is earlier than 02:00Z even though its text sorts later.
+#[test]
+fn mixed_spelling_reference_clock_is_the_latest_instant_not_the_latest_text() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "event-1", "asset-a", "q1", "tfng", "2026-08-12T02:00:00Z", true, None);
+    insert_question(&conn, "event-2", "asset-b", "q1", "tfng", "2026-08-12T08:00:00+08:00", false, None);
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let row = state(&conn).states.into_iter().next().unwrap();
+    let reference = row.explanation["referenceAt"].as_str().unwrap();
+    let parsed = chrono::DateTime::parse_from_rfc3339(reference).unwrap();
+    assert_eq!(
+        parsed,
+        chrono::DateTime::parse_from_rfc3339("2026-08-12T02:00:00Z").unwrap(),
+        "referenceAt {reference}"
+    );
+}
+
+/// Like `insert_question`, but the event carries an attempt identity.
+fn insert_attempt_question(
+    conn: &Connection,
+    event_id: &str,
+    attempt_id: &str,
+    asset_id: &str,
+    question_id: &str,
+    occurred_at: &str,
+) {
+    conn.execute(
+        "INSERT OR IGNORE INTO attempts
+           (id, activity, mode, status, started_at, duration_ms, schema_version, created_at, updated_at)
+         VALUES (?1, 'reading', 'single', 'completed', ?2, 0, 2, ?2, ?2)",
+        params![attempt_id, occurred_at],
+    )
+    .unwrap();
+    let payload = json!({
+        "attemptId": attempt_id,
+        "assetId": asset_id,
+        "questionId": question_id,
+        "attemptOrdinal": 1,
+        "isCorrect": true,
+        "questionKind": "tfng",
+        "changeCount": 0,
+        "visitCount": 1,
+        "elapsedMs": 900,
+        "firstTryCorrect": true,
+    })
+    .to_string();
+    conn.execute(
+        "INSERT INTO learning_events
+         (id, user_id, event_type, source_kind, source_id, idempotency_key, activity, asset_id,
+          attempt_id, question_id, skill_key, occurred_at, payload_json, content_hash,
+          schema_version, consolidation_state, sensitivity, created_at, updated_at)
+         VALUES (?1, 'local', 'reading_question_outcome', 'test', ?1, ?1, 'reading', ?2,
+                 ?3, ?4, NULL, ?5, ?6, ?7, 1, 'pending', 'normal', ?5, ?5)",
+        params![
+            event_id,
+            asset_id,
+            attempt_id,
+            question_id,
+            occurred_at,
+            payload,
+            sha256_hex(&payload),
+        ],
+    )
+    .unwrap();
+}
+
+#[test]
+fn mastery_is_capped_by_independent_attempt_count() {
+    let (dir, conn) = open_db();
+    submit_trend_attempt(dir.path(), &conn, "cap-a", "cap-a-1", 12, &[true; 8], false);
+    let one = state(&conn).states[0].mastery_mean;
+    assert!(one <= 0.5 + 1e-12, "one independent attempt: {one}");
+
+    submit_trend_attempt(dir.path(), &conn, "cap-b", "cap-b-1", 13, &[true; 8], false);
+    let two = state(&conn).states[0].mastery_mean;
+    assert!(two <= 0.8 + 1e-12 && two > 0.5, "two independent attempts: {two}");
+
+    submit_trend_attempt(dir.path(), &conn, "cap-c", "cap-c-1", 14, &[true; 8], false);
+    let three = state(&conn);
+    assert!(three.states[0].mastery_mean > 0.9, "three attempts stay uncapped");
+    assert!(learner_model_verify(&conn).unwrap().consistent);
+}
+
+#[test]
+fn two_articles_finished_at_the_same_instant_are_two_independent_attempts() {
+    let (_dir, conn) = open_db();
+    for question in ["q1", "q2", "q3", "q4"] {
+        insert_question(&conn, &format!("event-a-{question}"), "asset-a", question, "tfng", "2026-08-12T00:00:00Z", true, None);
+        insert_question(&conn, &format!("event-b-{question}"), "asset-b", question, "tfng", "2026-08-12T00:00:00Z", true, None);
+    }
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let row = &state(&conn).states[0];
+    assert_eq!(row.distinct_asset_count, 2);
+    // Two first attempts on two articles lift the ceiling to 0.8; they are not one timestamp bucket.
+    assert!(row.mastery_mean > 0.5 + 1e-9, "not capped at one attempt: {}", row.mastery_mean);
+    assert!(row.mastery_mean >= 0.6, "not a weak skill: {}", row.mastery_mean);
+}
+
+#[test]
+fn repeat_practice_on_one_article_does_not_lift_the_cap() {
+    let (dir, conn) = open_db();
+    for (attempt, day) in [("same-1", 12), ("same-2", 13), ("same-3", 14)] {
+        submit_trend_attempt(dir.path(), &conn, "cap-same", attempt, day, &[true; 8], false);
+    }
+    let snapshot = state(&conn);
+    assert_eq!(snapshot.states[0].distinct_asset_count, 1);
+    assert!(snapshot.states[0].mastery_mean <= 0.5 + 1e-12);
+    assert_eq!(snapshot.states[0].explanation["trendOutcomes"], json!([1.0]));
+}
+
+#[test]
+fn coach_assisted_second_article_does_not_make_a_strong_skill_look_weak() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "event-solo", "asset-s", "q1", "tfng", "2026-08-12T00:00:00Z", true, None);
+    insert_question(&conn, "event-helped2", "asset-t", "q1", "tfng", "2026-08-13T00:00:00Z", true,
+        Some(("coach-t", "coach_micro_drill")));
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let row = &state(&conn).states[0];
+    assert_eq!(row.distinct_asset_count, 2);
+    // Two articles of evidence: the two-attempt ceiling applies, not the one-attempt cap,
+    // so the skill stays above the weak-skill mastery line.
+    assert!(row.mastery_mean >= 0.6, "mastery {}", row.mastery_mean);
+}
+
 fn insert_question(
     conn: &Connection,
     event_id: &str,

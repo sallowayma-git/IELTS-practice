@@ -17,6 +17,7 @@ pub mod learning_observations;
 pub mod learner;
 pub mod memory;
 pub mod ports;
+pub mod teaching_notes;
 pub mod writing_evaluation;
 
 pub use agent::*;
