@@ -275,6 +275,9 @@ async fn evaluate_language_model<M: LanguageModel>(
     prepared: &PreparedEvaluation,
     cancelled: &CancelCheck<'_>,
 ) -> Result<ProviderOutput, ProviderError> {
+    if cancelled() {
+        return Err(provider_error("evaluation cancelled before scoring", false));
+    }
     let samples = collect_samples(model, prepared, cancelled).await?;
     let (score, diagnosis) = aggregate_samples(&samples)?;
     let feedback = if cancelled() {
@@ -373,13 +376,14 @@ async fn review<M: LanguageModel>(
     parse_review(&response.content)
 }
 
-/// Median per criterion, snapped and re-derived like any single score. The
-/// diagnosis is rebuilt to describe those final bands: each criterion's
-/// rationale comes from the sample closest on that criterion, and a ceiling is
-/// reported only if it lowered some sample and the final band still obeys it.
+/// Median per criterion, snapped and re-derived like any single score. Each
+/// explanation must support the final band, including any enforced ceiling.
 fn aggregate_samples(
     samples: &[ScoringSample],
 ) -> Result<(WritingScoreV4, Option<WritingDiagnosisV4>), ProviderError> {
+    if samples.is_empty() {
+        return Err(provider_error("AI evaluation returned no score", false));
+    }
     let columns = [0, 1, 2, 3].map(|index| {
         samples
             .iter()
@@ -397,17 +401,7 @@ fn aggregate_samples(
         })
     };
     let score = bands_by(median)?;
-    let closest = samples
-        .iter()
-        .min_by(|a, b| distance(&a.score, &score).total_cmp(&distance(&b.score, &score)))
-        .ok_or_else(|| provider_error("AI evaluation returned no score", false))?;
-    let mut diagnosis = closest.diagnosis.clone().unwrap_or(WritingDiagnosisV4 {
-        task: None,
-        rationale: None,
-        confidence: None,
-        ceilings: Vec::new(),
-    });
-    diagnosis.rationale = merged_rationale(samples, &score);
+    let mut diagnosis = diagnosis_for_bands(samples, &score);
     diagnosis.ceilings = binding_ceilings(samples, &score);
     diagnosis.confidence = Some(WritingScoreConfidenceV4 {
         samples: samples.len() as u32,
@@ -418,26 +412,67 @@ fn aggregate_samples(
     Ok((score, Some(diagnosis)))
 }
 
-/// Per criterion, the rationale of the sample whose band is nearest the final one.
-fn merged_rationale(
-    samples: &[ScoringSample],
-    score: &WritingScoreV4,
-) -> Option<serde_json::Value> {
-    let finals = criteria(score);
-    let mut merged = serde_json::Map::new();
-    for (index, key) in RATIONALE_KEYS.iter().enumerate() {
-        let text = samples
+fn diagnosis_for_bands(samples: &[ScoringSample], score: &WritingScoreV4) -> WritingDiagnosisV4 {
+    let mut diagnosis = WritingDiagnosisV4 {
+        task: None,
+        rationale: None,
+        confidence: None,
+        ceilings: Vec::new(),
+    };
+    let mut rationale = serde_json::Map::new();
+    for (index, key) in RATIONALE_KEYS.into_iter().enumerate() {
+        let band = criteria(score)[index];
+        let source = samples
             .iter()
-            .filter_map(|sample| {
-                let text = sample.diagnosis.as_ref()?.rationale.as_ref()?.get(*key)?;
-                Some(((criteria(&sample.score)[index] - finals[index]).abs(), text))
+            .filter(|sample| criteria(&sample.score)[index] == band)
+            .min_by(|a, b| distance(&a.score, score).total_cmp(&distance(&b.score, score)));
+        let Some(source) = source else {
+            let bands = samples
+                .iter()
+                .map(|sample| format!("{:.1}", criteria(&sample.score)[index]))
+                .collect::<Vec<_>>()
+                .join("、");
+            rationale.insert(
+                key.into(),
+                format!("本项独立评分为 {bands} 分，按中位数并取最近的半分档，最终评分为 {band:.1} 分。").into(),
+            );
+            continue;
+        };
+        let supporting = source
+            .ceilings
+            .iter()
+            .filter(|ceiling| {
+                ceiling.criteria.contains(&index)
+                    && ceiling.criteria.iter().all(|&i| criteria(score)[i] <= ceiling.limit)
             })
-            .min_by(|a, b| a.0.total_cmp(&b.0));
-        if let Some((_, text)) = text {
-            merged.insert((*key).to_string(), text.clone());
+            .collect::<Vec<_>>();
+        let uncapped_band = criteria(&source.raw)[index];
+        if uncapped_band != band {
+            let reasons = supporting
+                .iter()
+                .map(|ceiling| ceiling.reason)
+                .collect::<Vec<_>>()
+                .join("；");
+            rationale.insert(
+                key.into(),
+                format!("本项原始评分为 {uncapped_band:.1} 分，{reasons}，最终评分为 {band:.1} 分。").into(),
+            );
+        } else if let Some(value) = source
+            .diagnosis
+            .as_ref()
+            .and_then(|d| d.rationale.as_ref())
+            .and_then(|r| r.get(key))
+        {
+            rationale.insert(key.into(), value.clone());
+        }
+        if index == 0 && uncapped_band == band {
+            diagnosis.task = source.diagnosis.as_ref().and_then(|d| d.task.clone());
         }
     }
-    (!merged.is_empty()).then_some(serde_json::Value::Object(merged))
+    if !rationale.is_empty() {
+        diagnosis.rationale = Some(rationale.into());
+    }
+    diagnosis
 }
 
 /// Ceilings that lowered at least one sample and that the final bands respect.
@@ -772,6 +807,7 @@ mod tests {
         events: Vec<ielts_db::EvaluationEvent>,
         finish: Option<FinishCapture>,
         prepared_provider: Option<(String, String)>,
+        cancel_requested: bool,
     }
 
     #[derive(Clone)]
@@ -788,6 +824,7 @@ mod tests {
                     prepared,
                     finish: None,
                     prepared_provider: None,
+                    cancel_requested: false,
                 })),
             }
         }
@@ -806,6 +843,7 @@ mod tests {
                     prepared: prepared_evaluation(Some(existing)),
                     finish: None,
                     prepared_provider: None,
+                    cancel_requested: false,
                 })),
             }
         }
@@ -855,7 +893,7 @@ mod tests {
                 .as_ref()
                 .map(|error| (error.message.clone(), error.retryable));
             let result_score = score.ok();
-            let result = completed_result(
+            let mut result = completed_result(
                 vec![
                     event(1, EvaluationStage::Preparing),
                     event(2, EvaluationStage::Scoring),
@@ -865,6 +903,13 @@ mod tests {
                 result_score,
                 feedback.clone(),
             );
+            if self.state.lock().unwrap().cancel_requested {
+                result.session.cancel_requested = true;
+                result.session.status = EvaluationStatus::Interrupted;
+                result.evaluation.status = EvaluationStatus::Interrupted;
+                result.evaluation.score = None;
+                result.evaluation.feedback = None;
+            }
             assert_eq!(prepared.evaluation_id, "evaluation-1");
             self.state.lock().unwrap().finish = Some(FinishCapture {
                 score: score_capture,
@@ -875,11 +920,14 @@ mod tests {
         }
 
         fn request_cancel(&self, evaluation_id: &str) -> Result<bool, ApplicationError> {
-            Ok(evaluation_id == "evaluation-1")
+            assert_eq!(evaluation_id, "evaluation-1");
+            self.state.lock().unwrap().cancel_requested = true;
+            Ok(true)
         }
 
-        fn cancel_requested(&self, _evaluation_id: &str) -> Result<bool, ApplicationError> {
-            Ok(false)
+        fn cancel_requested(&self, evaluation_id: &str) -> Result<bool, ApplicationError> {
+            assert_eq!(evaluation_id, "evaluation-1");
+            Ok(self.state.lock().unwrap().cancel_requested)
         }
     }
 
@@ -1196,6 +1244,92 @@ mod tests {
 
     /// Parses one scoring reply with the given checks and returns the capped
     /// score plus the reasons of the ceilings that actually lowered a band.
+    fn diagnosed_task1_sample(bands: [f64; 4], overview_present: bool) -> ScoringSample {
+        let [tr, cc, lr, gra] = bands;
+        let content = serde_json::json!({
+            "score": {"taskResponse": tr, "coherence": cc, "lexical": lr, "grammar": gra},
+            "checks": {"overviewPresent": overview_present},
+            "diagnosis": {
+                "task": {"overview_quality": format!("overview present: {overview_present}")},
+                "rationale": {
+                    "task_achievement": format!("Task band {tr}"),
+                    "coherence_cohesion": format!("Coherence band {cc}"),
+                    "lexical_resource": format!("Lexical band {lr}"),
+                    "grammatical_range": format!("Grammar band {gra}")
+                }
+            }
+        });
+        parse_scoring(
+            &content.to_string(),
+            Some(WritingTaskType::Task1),
+            &EssayFacts {
+                words: 180,
+                paragraphs: 3,
+                minimum_words: 150,
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn aggregation_reconciles_mixed_criterion_ceilings_and_rationales() {
+        let samples = [
+            diagnosed_task1_sample([7.0, 7.0, 7.0, 7.0], false),
+            diagnosed_task1_sample([6.0, 6.0, 6.0, 6.0], true),
+            diagnosed_task1_sample([6.0, 8.0, 8.0, 8.0], true),
+        ];
+        assert_eq!(criteria(&samples[0].score), [5.0, 7.0, 7.0, 7.0]);
+        assert_eq!(samples[0].ceilings.len(), 1);
+        let (score, diagnosis) = aggregate_samples(&samples).unwrap();
+        assert_eq!(criteria(&score), [6.0, 7.0, 7.0, 7.0]);
+        let diagnosis = diagnosis.unwrap();
+        assert!(diagnosis.ceilings.is_empty());
+        assert_eq!(
+            diagnosis.task.unwrap()["overview_quality"],
+            "overview present: true"
+        );
+        let rationale = diagnosis.rationale.unwrap();
+        assert_eq!(rationale["task_achievement"], "Task band 6");
+        assert_eq!(rationale["coherence_cohesion"], "Coherence band 7");
+        assert_eq!(rationale["lexical_resource"], "Lexical band 7");
+        assert_eq!(rationale["grammatical_range"], "Grammar band 7");
+    }
+
+    #[test]
+    fn aggregation_explains_an_enforced_ceiling_instead_of_the_uncapped_band() {
+        let samples = [
+            diagnosed_task1_sample([7.0; 4], false),
+            diagnosed_task1_sample([7.0; 4], false),
+        ];
+        let (score, diagnosis) = aggregate_samples(&samples).unwrap();
+        assert_eq!(score.task_response, 5.0);
+        let diagnosis = diagnosis.unwrap();
+        assert_eq!(diagnosis.ceilings.len(), 1);
+        assert!(diagnosis.ceilings[0].contains("封顶 5 分"));
+        assert!(diagnosis.task.is_none());
+        let rationale = diagnosis.rationale.unwrap();
+        let task = rationale["task_achievement"].as_str().unwrap();
+        assert!(task.contains("原始评分为 7.0 分"));
+        assert!(task.contains("最终评分为 5.0 分"));
+        assert_eq!(rationale["coherence_cohesion"], "Coherence band 7");
+    }
+
+    #[test]
+    fn aggregation_explains_a_median_without_an_exact_supporting_sample() {
+        let samples = [
+            diagnosed_task1_sample([6.0; 4], true),
+            diagnosed_task1_sample([7.0; 4], true),
+        ];
+        let (score, diagnosis) = aggregate_samples(&samples).unwrap();
+        assert_eq!(criteria(&score), [6.5; 4]);
+        let diagnosis = diagnosis.unwrap();
+        assert!(diagnosis.task.is_none());
+        assert!(diagnosis.ceilings.is_empty());
+        for rationale in diagnosis.rationale.unwrap().as_object().unwrap().values() {
+            assert!(rationale.as_str().unwrap().contains("最终评分为 6.5 分"));
+        }
+    }
+
     fn capped(
         bands: [f64; 4],
         checks: &str,
@@ -1470,6 +1604,124 @@ mod tests {
             .unwrap();
         assert_eq!(model.requests.lock().unwrap().len(), 2);
         assert!(output.feedback.is_err());
+    }
+
+    #[tokio::test]
+    async fn invalid_checks_use_the_surviving_sample_fallback() {
+        let model = ScriptedModel::new(vec![
+            Ok(r#"{"checks":{"relevance":"unrelated","memorised":true,"unaddressedParts":"n/a"},"score":{"taskResponse":7,"coherence":7,"lexical":7,"grammar":7}}"#.into()),
+            Ok(score_json(6.0, 6.0, 6.0, 6.0)),
+            Ok(review_json()),
+        ]);
+        let output = evaluate_language_model(&model, &long_essay(), &|| false)
+            .await
+            .unwrap();
+        assert_eq!(output.score.overall, 6.0);
+        let confidence = output.diagnosis.unwrap().confidence.unwrap();
+        assert_eq!(confidence.samples, 1);
+        assert!(!confidence.agreed);
+        assert_eq!(model.requests.lock().unwrap().len(), 3);
+    }
+
+    #[derive(Clone)]
+    struct BlockingModel {
+        inner: ScriptedModel,
+        started: Arc<tokio::sync::Semaphore>,
+        release: Arc<tokio::sync::Semaphore>,
+    }
+
+    #[async_trait]
+    impl LanguageModel for BlockingModel {
+        async fn complete(
+            &self,
+            request: CompletionRequest,
+        ) -> Result<crate::CompletionResponse, ModelError> {
+            let response = self.inner.complete(request).await;
+            self.started.add_permits(1);
+            self.release.acquire().await.unwrap().forget();
+            response
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_during_initial_samples_prevents_third_sample_and_review() {
+        // Exercise both the disagreement branch and the direct-to-review path.
+        for second_band in [6.0, 8.0] {
+            let store = FakeWritingStore::fresh();
+            let model = BlockingModel {
+                inner: ScriptedModel::new(vec![
+                    Ok(score_json(6.0, 6.0, 6.0, 6.0)),
+                    Ok(score_json(second_band, second_band, second_band, second_band)),
+                ]),
+                started: Arc::new(tokio::sync::Semaphore::new(0)),
+                release: Arc::new(tokio::sync::Semaphore::new(0)),
+            };
+            let sink = RecordingSink::default();
+            let execution = WritingEvaluationService::execute(
+                &store,
+                long_essay(),
+                EvaluationBackend::Language(model.clone()),
+                &sink,
+            );
+            let cancellation = async {
+                model.started.acquire_many(2).await.unwrap().forget();
+                assert!(store.request_cancel("evaluation-1").unwrap());
+                model.release.add_permits(2);
+            };
+            let (result, ()) = tokio::join!(execution, cancellation);
+            let result = result.unwrap();
+            assert_eq!(model.inner.requests.lock().unwrap().len(), 2);
+            assert!(result.session.cancel_requested);
+            assert_eq!(result.evaluation.status, EvaluationStatus::Interrupted);
+            assert!(result.evaluation.score.is_none());
+            assert!(result.evaluation.feedback.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_during_third_sample_prevents_review() {
+        let store = FakeWritingStore::fresh();
+        let model = BlockingModel {
+            inner: ScriptedModel::new(vec![
+                Ok(score_json(6.0, 6.0, 6.0, 6.0)),
+                Ok(score_json(8.0, 8.0, 8.0, 8.0)),
+                Ok(score_json(7.0, 7.0, 7.0, 7.0)),
+            ]),
+            started: Arc::new(tokio::sync::Semaphore::new(0)),
+            release: Arc::new(tokio::sync::Semaphore::new(2)),
+        };
+        let sink = RecordingSink::default();
+        let execution = WritingEvaluationService::execute(
+            &store,
+            long_essay(),
+            EvaluationBackend::Language(model.clone()),
+            &sink,
+        );
+        let cancellation = async {
+            model.started.acquire_many(3).await.unwrap().forget();
+            assert!(store.request_cancel("evaluation-1").unwrap());
+            model.release.add_permits(1);
+        };
+        let (result, ()) = tokio::join!(execution, cancellation);
+        assert_eq!(result.unwrap().evaluation.status, EvaluationStatus::Interrupted);
+        assert_eq!(model.inner.requests.lock().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_execution_prevents_all_model_requests() {
+        let store = FakeWritingStore::fresh();
+        let model = ScriptedModel::new(vec![]);
+        store.request_cancel("evaluation-1").unwrap();
+        let result = WritingEvaluationService::execute(
+            &store,
+            long_essay(),
+            EvaluationBackend::Language(model.clone()),
+            &RecordingSink::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.evaluation.status, EvaluationStatus::Interrupted);
+        assert!(model.requests.lock().unwrap().is_empty());
     }
 
     fn start_command() -> StartEvaluationCommand {

@@ -950,7 +950,9 @@ fn cancel_is_immediately_persisted_and_idempotent_start_cannot_overwrite_it() {
     };
     let prepared = prepare_evaluation(&conn, &command, "openai-compatible", "test-model").unwrap();
 
+    assert!(!ielts_db::evaluation_cancel_requested(&conn, &prepared.evaluation_id).unwrap());
     assert!(request_cancel(&conn, &prepared.evaluation_id).unwrap());
+    assert!(ielts_db::evaluation_cancel_requested(&conn, &prepared.evaluation_id).unwrap());
     assert!(!request_cancel(&conn, &prepared.evaluation_id).unwrap());
     let snapshot = load_evaluation_for_attempt(&conn, "a-cancel-now")
         .unwrap()
@@ -963,6 +965,17 @@ fn cancel_is_immediately_persisted_and_idempotent_start_cannot_overwrite_it() {
 
     let result = start_evaluation(&conn, &command, &DeterministicProvider).unwrap();
     assert_eq!(result.evaluation.status, EvaluationStatus::Interrupted);
+    let late_result = ielts_db::finish_evaluation(
+        &conn,
+        &prepared,
+        DeterministicProvider.score(&essay, None, None),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(late_result.evaluation.status, EvaluationStatus::Interrupted);
+    assert!(late_result.evaluation.score.is_none());
     assert_eq!(
         get_writing_draft(&conn, "a-cancel-now")
             .unwrap()

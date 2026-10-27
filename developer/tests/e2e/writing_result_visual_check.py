@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from copy import deepcopy
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -147,8 +148,8 @@ HISTORY_DETAIL = {
 }
 
 
-def install_tauri_mock(page):
-    detail_json = json.dumps(HISTORY_DETAIL, ensure_ascii=False)
+def install_tauri_mock(page, detail=None):
+    detail_json = json.dumps(HISTORY_DETAIL if detail is None else detail, ensure_ascii=False)
     script = r"""
     (() => {
       const detail = __DETAIL__;
@@ -500,6 +501,51 @@ def verify_annotated_view(page, name, width):
     return annotated
 
 
+def verify_confidence_messages(browser):
+    cases = (
+        ("legacy", None, None, ()),
+        ("single-survivor", (1, False, 6.0, 6.0), "只有 1 次评分成功", ("分歧", "中位数")),
+        ("agreed", (2, True, 6.0, 6.5), "2 次独立评分基本一致", ("采样不足", "分歧")),
+        ("disagreed", (3, False, 5.0, 7.0), "独立评分出现分歧", ("采样不足",)),
+    )
+    report = []
+    for name, confidence, expected, excluded in cases:
+        detail = deepcopy(HISTORY_DETAIL)
+        if confidence is not None:
+            samples, agreed, low, high = confidence
+            def bands(band):
+                return dict(overall=band, taskResponse=band, coherence=band, lexical=band, grammar=band)
+            detail["evaluation"]["score"] = bands(6.0)
+            detail["summary"]["scoreValue"] = 6.0
+            detail["summary"]["scoreDisplay"] = "6.0"
+            detail["attempt"]["scoreValue"] = 6.0
+            detail["evaluation"]["diagnosis"]["confidence"] = {
+                "samples": samples, "agreed": agreed, "low": bands(low), "high": bands(high),
+            }
+        page = browser.new_page(viewport={"width": 1024, "height": 720})
+        try:
+            install_tauri_mock(page, detail)
+            page.goto(f"{BASE_URL}/#/result/writing-result-visual", wait_until="domcontentloaded")
+            page.wait_for_selector(".result-page .score-total")
+            page.wait_for_function(
+                "score => Number(document.querySelector('.score-total')?.textContent.trim()) === score",
+                arg=7.5 if confidence is None else 6.0,
+            )
+            note = page.locator(".score-confidence")
+            if expected is None:
+                assert note.count() == 0, "legacy results must not show a confidence warning"
+                text = ""
+            else:
+                note.wait_for()
+                text = note.inner_text()
+                assert expected in text, f"{name}: unexpected confidence message: {text}"
+                assert all(word not in text for word in excluded), f"{name}: misleading confidence message: {text}"
+            report.append({"name": name, "message": text})
+        finally:
+            page.close()
+    return report
+
+
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = {"status": "passed", "cases": []}
@@ -534,6 +580,7 @@ def main():
                     {"name": name, "geometry": geometry, "original": original, "annotated": annotated}
                 )
                 page.close()
+            report["confidence"] = verify_confidence_messages(browser)
         finally:
             browser.close()
     (REPORT_DIR / "writing-result-visual-report.json").write_text(
