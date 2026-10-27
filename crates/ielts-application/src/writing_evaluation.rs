@@ -1238,9 +1238,9 @@ mod tests {
         assert!(!diagnosis.unwrap().confidence.unwrap().agreed);
     }
 
-    fn diagnosed_task1_sample(bands: [f64; 4], overview_present: bool) -> ScoringSample {
+    fn diagnosed_task1_reply(bands: [f64; 4], overview_present: bool) -> String {
         let [tr, cc, lr, gra] = bands;
-        let content = serde_json::json!({
+        serde_json::json!({
             "score": {"taskResponse": tr, "coherence": cc, "lexical": lr, "grammar": gra},
             "checks": {"overviewPresent": overview_present},
             "diagnosis": {
@@ -1252,9 +1252,13 @@ mod tests {
                     "grammatical_range": format!("Grammar band {gra}")
                 }
             }
-        });
+        })
+        .to_string()
+    }
+
+    fn diagnosed_task1_sample(bands: [f64; 4], overview_present: bool) -> ScoringSample {
         parse_scoring(
-            &content.to_string(),
+            &diagnosed_task1_reply(bands, overview_present),
             Some(WritingTaskType::Task1),
             &EssayFacts {
                 words: 180,
@@ -1591,6 +1595,110 @@ mod tests {
         assert_eq!(output.score.task_response, 6.0);
         assert_eq!(model.requests.lock().unwrap().len(), 4);
         assert_eq!(output.diagnosis.unwrap().confidence.unwrap().samples, 3);
+    }
+
+    #[tokio::test]
+    async fn accepted_ceiling_evidence_survives_review_and_history_reload() {
+        use ielts_domain::domain::{Activity, AttemptMode};
+        use ielts_domain::dto::SaveDraftCommand;
+
+        for overview_present in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let options = ielts_db::DbOpenOptions::create(dir.path().join("evidence.db"));
+            let mut conn = ielts_db::open_connection(&options).unwrap();
+            ielts_db::migrate(&mut conn).unwrap();
+            ielts_db::save_writing_draft(
+                &conn,
+                &SaveDraftCommand {
+                    attempt_id: "ceiling-evidence".into(),
+                    activity: Activity::Writing,
+                    mode: AttemptMode::Freeform,
+                    asset_id: None,
+                    content_text: Some("The chart shows changes in public transport use. ".repeat(20)),
+                    prompt_snapshot: Some("Summarise the information in the chart.".into()),
+                    task_type: Some(WritingTaskType::Task1),
+                    idempotency_key: "draft-evidence".into(),
+                },
+            )
+            .unwrap();
+            let prepared = ielts_db::prepare_evaluation(
+                &conn,
+                &StartEvaluationCommand {
+                    attempt_id: "ceiling-evidence".into(),
+                    idempotency_key: "evaluate-evidence".into(),
+                    task_type: Some("task1".into()),
+                    retry_of: None,
+                },
+                "openai-compatible",
+                "fake-model",
+            )
+            .unwrap();
+
+            let raw_task_band = if overview_present { 4.0 } else { 7.0 };
+            let supporting_reply =
+                diagnosed_task1_reply([raw_task_band, 7.0, 7.0, 7.0], overview_present);
+            let mut replies = vec![
+                Ok(diagnosed_task1_reply([7.0; 4], false)),
+                Ok(supporting_reply.clone()),
+            ];
+            if overview_present {
+                // TA 5 versus TA 4 requests a third sample, which confirms TA 4.
+                replies.push(Ok(supporting_reply));
+            }
+            replies.push(Ok(review_json()));
+            let model = ScriptedModel::new(replies);
+            let output = evaluate_language_model(&model, &prepared, &|| false)
+                .await
+                .unwrap();
+            let final_task_band = if overview_present { 4.0 } else { 5.0 };
+            assert_eq!(criteria(&output.score), [final_task_band, 7.0, 7.0, 7.0]);
+            assert_eq!(output.score.overall, 6.5);
+            let diagnosis = output.diagnosis.as_ref().unwrap();
+            let rationale = diagnosis.rationale.as_ref().unwrap();
+            if overview_present {
+                assert!(diagnosis.ceilings.is_empty());
+                assert_eq!(
+                    diagnosis.task.as_ref().unwrap()["overview_quality"],
+                    "overview present: true"
+                );
+                assert_eq!(rationale["task_achievement"], "Task band 4");
+            } else {
+                assert_eq!(diagnosis.ceilings, vec![NO_OVERVIEW.reason.to_string()]);
+                assert!(diagnosis.task.is_none());
+                assert!(rationale["task_achievement"]
+                    .as_str()
+                    .unwrap()
+                    .contains(NO_OVERVIEW.reason));
+            }
+            let requests = model.requests.lock().unwrap();
+            assert_eq!(requests.len(), if overview_present { 4 } else { 3 });
+            let review_message = &requests.last().unwrap().messages[1].content;
+            assert!(review_message.contains(&format!("Final bands: Task {final_task_band:.1}")));
+            assert!(review_message.contains(&format!("Examiner rationale: {rationale}")));
+            assert_eq!(
+                review_message.contains(NO_OVERVIEW.reason),
+                !overview_present
+            );
+            drop(requests);
+
+            let expected_diagnosis = output.diagnosis.clone();
+            let completed = ielts_db::finish_evaluation(
+                &conn,
+                &prepared,
+                Ok(output.score),
+                output.diagnosis,
+                Some(output.feedback.unwrap()),
+                None,
+            )
+            .unwrap();
+            drop(conn);
+            let conn = ielts_db::open_connection(&options).unwrap();
+            let history = ielts_db::get_history_detail(&conn, "ceiling-evidence").unwrap();
+            let persisted = history.evaluation.unwrap();
+            assert_eq!(persisted.status, EvaluationStatus::Completed);
+            assert_eq!(persisted, completed.evaluation);
+            assert_eq!(persisted.diagnosis, expected_diagnosis);
+        }
     }
 
     #[tokio::test]
