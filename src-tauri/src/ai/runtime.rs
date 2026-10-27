@@ -743,7 +743,10 @@ fn finish_reason_of(choice_reason: Option<&Value>, stop_reason: Option<&Value>) 
 //     (the template put `<think>` in the prompt: everything before it is thought).
 // Streaming (`complete_with_trace_streaming`) is the one exception: its deltas
 // are raw content, so they are forwarded only while the content opens as JSON
-// and carries no reasoning tag (`streamable`). The final answer still comes
+// and carries no reasoning tag (`streamable`). A model whose id may carry inline
+// reasoning (`may_carry_inline_reasoning`) is not streamed at all: its deltas
+// wait for the completed reply, because a bare `</think>` can arrive after
+// answer-shaped reasoning has already been sent. The final answer still comes
 // from `strip_inline_reasoning`, never from the deltas.
 // Tool intents come ONLY from the structured `tool_calls` field, never from text.
 //
@@ -842,6 +845,32 @@ fn strip_inline_reasoning(content: &str) -> String {
         answer.push_str(rest);
     }
     answer.trim().to_string()
+}
+
+/// Model-id fragments of families whose answers may carry inline reasoning that
+/// `strip_inline_reasoning` removes: DeepSeek-R1 and reasoner, QwQ, Qwen3 (hybrid
+/// thinking, so every Qwen3 id is listed), GLM-Z1, and any id naming R1, thinking
+/// or reasoning. Matched on the lowercased whole id, so a vendor prefix does not
+/// hide the family.
+const INLINE_REASONING_MODEL_MARKERS: [&str; 8] = [
+    "deepseek-r1",
+    "deepseek-reasoner",
+    "qwq",
+    "qwen3",
+    "glm-z1",
+    "-r1",
+    "thinking",
+    "reason",
+];
+
+/// Whether `model` may answer with inline reasoning, so its streamed deltas must
+/// wait for the completed reply. Unknown models stream incrementally: their
+/// content is checked as it arrives, and a bare closer that shows up late only
+/// ends forwarding (see `StreamFold::append_content`). That cannot retract text
+/// already sent, which is why this list stays conservative.
+fn may_carry_inline_reasoning(model: &str) -> bool {
+    let id = model.to_ascii_lowercase();
+    INLINE_REASONING_MODEL_MARKERS.iter().any(|marker| id.contains(marker))
 }
 
 #[derive(Deserialize)]
@@ -1235,7 +1264,11 @@ impl AiRuntime {
             }
             return Ok(reply);
         }
-        let mut fold = StreamFold::new();
+        let mut fold = if may_carry_inline_reasoning(&self.config.model) {
+            StreamFold::buffered()
+        } else {
+            StreamFold::new()
+        };
         loop {
             match response.chunk().await {
                 Ok(Some(bytes)) => {
@@ -1390,6 +1423,9 @@ struct StreamFold {
     opened: bool,
     /// Whether deltas are still forwarded (see [`streamable`]). Latched off for good.
     streaming: bool,
+    /// The model may carry inline reasoning: nothing is forwarded until the reply
+    /// completes, then the sanitized answer goes out as one delta.
+    buffered: bool,
     finish_reason: Option<String>,
     usage: Option<ChatUsage>,
     model: Option<String>,
@@ -1398,8 +1434,14 @@ struct StreamFold {
 }
 
 impl StreamFold {
+    /// Forwards content deltas as they arrive, while [`streamable`] allows.
     fn new() -> Self {
         Self { streaming: true, ..Self::default() }
+    }
+
+    /// Forwards nothing until the reply completes, then one sanitized delta.
+    fn buffered() -> Self {
+        Self { streaming: false, buffered: true, ..Self::default() }
     }
 
     /// The reply a plain request would have returned for the same stream.
@@ -1488,6 +1530,18 @@ impl StreamFold {
             self.end_line(on_delta)?;
         }
         self.dispatch(on_delta)?;
+        if self.buffered {
+            // Only a completed, not cut-off reply is shown, and only its final
+            // answer: the same text `into_reply` returns.
+            let completed = self.done || self.finish_reason.is_some();
+            if completed && !is_truncated(self.finish_reason.as_deref()) {
+                let answer = self.content.as_deref().map(strip_inline_reasoning).unwrap_or_default();
+                if !answer.is_empty() {
+                    on_delta(&answer);
+                }
+            }
+            return Ok(());
+        }
         if self.streaming && self.opened {
             if let Some(content) = self.content.as_deref() {
                 if self.forwarded < content.len() {
@@ -2590,7 +2644,19 @@ mod tests {
 
     /// Runs the fold over `chunks`, returning the forwarded deltas and the reply.
     fn fold_stream(chunks: &[&[u8]]) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
-        let mut fold = StreamFold::new();
+        fold_stream_with(StreamFold::new(), chunks)
+    }
+
+    /// As `fold_stream`, with the fold the runtime would pick for `model`.
+    fn fold_stream_for(model: &str, chunks: &[&[u8]]) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
+        let fold = if may_carry_inline_reasoning(model) { StreamFold::buffered() } else { StreamFold::new() };
+        fold_stream_with(fold, chunks)
+    }
+
+    fn fold_stream_with(
+        mut fold: StreamFold,
+        chunks: &[&[u8]],
+    ) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
         let mut deltas = Vec::new();
         let reply = {
             let mut sink = |delta: &str| deltas.push(delta.to_owned());
@@ -2676,6 +2742,84 @@ mod tests {
         let (deltas, reply) = fold_stream(&[body.as_bytes()]);
         assert!(deltas.is_empty(), "reasoning must not stream: {deltas:?}");
         assert_eq!(reply.unwrap().response.content, r#"{"answer":"yes"}"#);
+    }
+
+    #[test]
+    fn an_answer_shaped_reasoning_prefix_is_never_streamed_on_a_reasoning_model() {
+        // The prefix opens as JSON and has no tag, so an incremental fold would
+        // forward it before the bare closer arrives. A buffered fold must not.
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"PRIVATE PLAN\"}"}}]}"#,
+            r#"{"choices":[{"delta":{"content":"</think>{\"answer\":\"Final answer\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("deepseek-r1", &[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Final answer"}"#], "only the sanitized answer may be shown");
+        assert!(deltas.iter().all(|delta| !delta.contains("PRIVATE")));
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"Final answer"}"#);
+    }
+
+    #[test]
+    fn a_buffered_stream_that_is_cut_off_or_incomplete_shows_nothing() {
+        let truncated = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"Half"},"finish_reason":"length"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("qwq-32b", &[truncated.as_bytes()]);
+        assert!(deltas.is_empty(), "a cut-off reply is never shown: {deltas:?}");
+        assert!(reply.and_then(CompletionReply::into_result).unwrap_err().error.truncated);
+
+        let incomplete = sse(&[r#"{"choices":[{"delta":{"content":"{\"answer\":\"cut"}}]}"#]);
+        let (deltas, reply) = fold_stream_for("qwq-32b", &[incomplete.as_bytes()]);
+        assert!(deltas.is_empty());
+        assert!(reply.err().unwrap().error.retryable);
+    }
+
+    #[test]
+    fn only_inline_reasoning_families_are_buffered() {
+        for model in [
+            "deepseek-r1",
+            "deepseek/deepseek-r1:free",
+            "deepseek-reasoner",
+            "qwq-32b",
+            "qwen3-235b-a22b",
+            "openrouter/qwen/qwen3-32b",
+            "glm-z1-air",
+            "acme-r1-large",
+            "kimi-k2-thinking",
+            "some-reasoning-model",
+        ] {
+            assert!(may_carry_inline_reasoning(model), "{model} must be buffered");
+        }
+        // Unknown and ordinary ids stream incrementally.
+        for model in ["gpt-4o", "claude-sonnet-4.6", "deepseek-chat", "configured-model", "o3-mini"] {
+            assert!(!may_carry_inline_reasoning(model), "{model} streams");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_reasoning_model_stream_never_forwards_an_answer_shaped_prefix() {
+        let body: &'static str = Box::leak(
+            sse(&[
+                r#"{"choices":[{"delta":{"content":"{\"answer\":\"PRIVATE PLAN\"}"}}]}"#,
+                r#"{"choices":[{"delta":{"content":"</think>{\"answer\":\"Final answer\"}"},"finish_reason":"stop"}]}"#,
+                "[DONE]",
+            ])
+            .into_boxed_str(),
+        );
+        let (runtime, server) = scripted_fixture_for("deepseek-r1", vec![(200, "text/event-stream", body)]);
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies[0]["stream"], json!(true), "the request is still streamed");
+        assert!(deltas.iter().all(|delta| !delta.contains("PRIVATE")), "prefix leaked: {deltas:?}");
+        assert_eq!(deltas, [r#"{"answer":"Final answer"}"#]);
+        assert_eq!(response.content, r#"{"answer":"Final answer"}"#);
     }
 
     #[test]
