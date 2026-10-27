@@ -473,6 +473,100 @@ fn equivalent_timestamp_spellings_replay_by_instant_and_never_rewind_the_clock()
     }
 }
 
+/// Mixed spellings inside one attempt: the attempt starts at 00:00Z even though its
+/// text sorts after a 02:00Z source. The next attempt on the same asset (13:00Z) is
+/// 13h later, so it gets the 12-72h familiarity weight, not the under-12h one.
+#[test]
+fn mixed_spelling_attempt_start_uses_the_earliest_instant_for_same_asset_gaps() {
+    let familiarity_of_third = |second_at: &str| {
+        let (_dir, conn) = open_db();
+        insert_attempt_question(&conn, "event-1", "attempt-p1", "asset-a", "q1", "2026-08-12T02:00:00Z");
+        insert_attempt_question(&conn, "event-2", "attempt-p1", "asset-a", "q2", second_at);
+        insert_attempt_question(&conn, "event-3", "attempt-p2", "asset-a", "q3", "2026-08-12T13:00:00Z");
+        learning_observations_rebuild(&conn).unwrap();
+        learner_model_rebuild(&conn).unwrap();
+        assert!(learner_model_verify(&conn).unwrap().consistent);
+        conn.query_row(
+            "SELECT familiarity_weight FROM learner_skill_observations WHERE event_id = 'event-3'",
+            [],
+            |row| row.get::<_, f64>(0),
+        )
+        .unwrap()
+    };
+    let utc = familiarity_of_third("2026-08-12T00:00:00Z");
+    let offset = familiarity_of_third("2026-08-12T08:00:00+08:00");
+    assert!((utc - 0.5).abs() < 1e-9, "12-72h familiarity expected, got {utc}");
+    assert!((offset - utc).abs() < 1e-9, "+08:00 gave {offset}, Z gave {utc}");
+}
+
+/// The reference clock is the latest instant. "...T08:00:00+08:00" is 00:00Z, so it
+/// is earlier than 02:00Z even though its text sorts later.
+#[test]
+fn mixed_spelling_reference_clock_is_the_latest_instant_not_the_latest_text() {
+    let (_dir, conn) = open_db();
+    insert_question(&conn, "event-1", "asset-a", "q1", "tfng", "2026-08-12T02:00:00Z", true, None);
+    insert_question(&conn, "event-2", "asset-b", "q1", "tfng", "2026-08-12T08:00:00+08:00", false, None);
+    learning_observations_rebuild(&conn).unwrap();
+    learner_model_rebuild(&conn).unwrap();
+    let row = state(&conn).states.into_iter().next().unwrap();
+    let reference = row.explanation["referenceAt"].as_str().unwrap();
+    let parsed = chrono::DateTime::parse_from_rfc3339(reference).unwrap();
+    assert_eq!(
+        parsed,
+        chrono::DateTime::parse_from_rfc3339("2026-08-12T02:00:00Z").unwrap(),
+        "referenceAt {reference}"
+    );
+}
+
+/// Like `insert_question`, but the event carries an attempt identity.
+fn insert_attempt_question(
+    conn: &Connection,
+    event_id: &str,
+    attempt_id: &str,
+    asset_id: &str,
+    question_id: &str,
+    occurred_at: &str,
+) {
+    conn.execute(
+        "INSERT OR IGNORE INTO attempts
+           (id, activity, mode, status, started_at, duration_ms, schema_version, created_at, updated_at)
+         VALUES (?1, 'reading', 'single', 'completed', ?2, 0, 2, ?2, ?2)",
+        params![attempt_id, occurred_at],
+    )
+    .unwrap();
+    let payload = json!({
+        "attemptId": attempt_id,
+        "assetId": asset_id,
+        "questionId": question_id,
+        "attemptOrdinal": 1,
+        "isCorrect": true,
+        "questionKind": "tfng",
+        "changeCount": 0,
+        "visitCount": 1,
+        "elapsedMs": 900,
+        "firstTryCorrect": true,
+    })
+    .to_string();
+    conn.execute(
+        "INSERT INTO learning_events
+         (id, user_id, event_type, source_kind, source_id, idempotency_key, activity, asset_id,
+          attempt_id, question_id, skill_key, occurred_at, payload_json, content_hash,
+          schema_version, consolidation_state, sensitivity, created_at, updated_at)
+         VALUES (?1, 'local', 'reading_question_outcome', 'test', ?1, ?1, 'reading', ?2,
+                 ?3, ?4, NULL, ?5, ?6, ?7, 1, 'pending', 'normal', ?5, ?5)",
+        params![
+            event_id,
+            asset_id,
+            attempt_id,
+            question_id,
+            occurred_at,
+            payload,
+            sha256_hex(&payload),
+        ],
+    )
+    .unwrap();
+}
+
 #[test]
 fn mastery_is_capped_by_independent_attempt_count() {
     let (dir, conn) = open_db();

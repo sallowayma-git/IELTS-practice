@@ -283,12 +283,13 @@ fn read_learner_state_snapshot(
         })
         .collect::<Vec<_>>();
     let state_hash = hash_derived(&states, &schedules)?;
-    let generated_at = states
-        .iter()
-        .filter_map(|state| state.last_practiced_at.as_deref())
-        .max()
-        .unwrap_or(EMPTY_REFERENCE_AT)
-        .to_string();
+    let generated_at = latest_instant(
+        states
+            .iter()
+            .filter_map(|state| state.last_practiced_at.as_deref()),
+    )
+    .unwrap_or(EMPTY_REFERENCE_AT)
+    .to_string();
     let view_states = states.iter().map(state_view).collect::<Vec<_>>();
     let response = LearnerStateSnapshot {
         schema_version: LEARNER_MODEL_SCHEMA_VERSION,
@@ -445,12 +446,13 @@ fn build_skill_observations(conn: &Connection, allow_seed_mapping: bool) -> DbRe
             .then_with(|| left.id.cmp(&right.id))
     });
     input_parts.sort();
-    let reference_at = observations
-        .iter()
-        .map(|observation| observation.observed_at.as_str())
-        .max()
-        .unwrap_or(EMPTY_REFERENCE_AT)
-        .to_string();
+    let reference_at = latest_instant(
+        observations
+            .iter()
+            .map(|observation| observation.observed_at.as_str()),
+    )
+    .unwrap_or(EMPTY_REFERENCE_AT)
+    .to_string();
     Ok(BuildResult {
         observations,
         input_count: sources.len() as u64,
@@ -476,13 +478,17 @@ fn practice_gaps(
         let at = practices
             .entry(practice_key(source))
             .or_insert_with(|| source.observed_at.clone());
-        if source.observed_at < *at {
+        if replay_instant(&source.observed_at) < replay_instant(at.as_str()) {
             *at = source.observed_at.clone();
         }
     }
     let mut ordered = practices.into_iter().collect::<Vec<_>>();
     // Session order is independent of question IDs, including equal-time events.
-    ordered.sort_by(|left, right| left.1.cmp(&right.1).then_with(|| left.0.cmp(&right.0)));
+    ordered.sort_by(|left, right| {
+        replay_instant(&left.1)
+            .cmp(&replay_instant(&right.1))
+            .then_with(|| left.0.cmp(&right.0))
+    });
     let mut last_asset_at = BTreeMap::new();
     let mut gaps = BTreeMap::new();
     for (key, at) in ordered {
@@ -800,15 +806,21 @@ fn independent_attempt_outcomes(observations: &[&SkillObservation]) -> (Vec<f64>
         let entry = attempts
             .entry((observation.asset_id.as_str(), practice))
             .or_insert((observation.observed_at.as_str(), Vec::new()));
-        entry.0 = entry.0.min(observation.observed_at.as_str());
+        if replay_instant(&observation.observed_at) < replay_instant(entry.0) {
+            entry.0 = observation.observed_at.as_str();
+        }
         entry.1.push(observation.outcome.clamp(0.0, 1.0));
     }
     let mut attempts = attempts.into_iter().collect::<Vec<_>>();
-    attempts.sort_by(|left, right| left.1.0.cmp(right.1.0).then_with(|| left.0.cmp(&right.0)));
+    attempts.sort_by(|left, right| {
+        replay_instant(left.1.0)
+            .cmp(&replay_instant(right.1.0))
+            .then_with(|| left.0.cmp(&right.0))
+    });
     let mut first_assets: BTreeMap<&str, (&str, Vec<f64>)> = BTreeMap::new();
     for ((asset, _), (at, mut outcomes)) in attempts {
         let first = first_assets.entry(asset).or_insert((at, Vec::new()));
-        if first.0 != at {
+        if instant_key(first.0) != instant_key(at) {
             continue;
         }
         // Equal-time evidence has no temporal direction; question IDs must not
@@ -978,9 +990,7 @@ fn build_states_and_schedules(
         let latest = user_references
             .entry(&observation.user_id)
             .or_insert(&observation.observed_at);
-        if observation.observed_at.as_str() > *latest {
-            *latest = &observation.observed_at;
-        }
+        *latest = latest_instant([*latest, observation.observed_at.as_str()]).unwrap_or(*latest);
     }
     let mut output_states = Vec::new();
     let mut schedules = Vec::new();
@@ -1434,6 +1444,15 @@ fn parse_time(value: &str) -> Option<DateTime<Utc>> {
 fn replay_instant(value: &str) -> (bool, Option<DateTime<Utc>>, &str) {
     let parsed = parse_time(value);
     (parsed.is_none(), parsed, if parsed.is_none() { value } else { "" })
+}
+
+/// The latest instant among RFC 3339 texts, compared as parsed instants. Returns the
+/// text of that instant; unparseable text ranks below every parsed instant.
+fn latest_instant<'a>(values: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    values.into_iter().max_by_key(|value| {
+        let parsed = parse_time(value);
+        (parsed.is_some(), parsed, if parsed.is_none() { *value } else { "" })
+    })
 }
 
 /// The practice clock only moves forward. Compares parsed instants, so an equivalent
