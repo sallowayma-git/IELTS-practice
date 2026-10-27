@@ -160,6 +160,7 @@ impl AiRuntime {
     ) {
         let Some(sink) = &self.ledger else { return };
         let truncated = ModelError::output_truncated();
+        let estimate_text = result.as_ref().map(|reply| agent_estimate_text(&reply.response)).unwrap_or_default();
         let call = match result {
             Ok(reply) => LedgerCall {
                 model: &reply.response.model,
@@ -169,7 +170,7 @@ impl AiRuntime {
                 outcome: if is_truncated(reply.finish_reason.as_deref()) {
                     Err(&truncated)
                 } else {
-                    Ok(reply.response.content.as_deref().unwrap_or(""))
+                    Ok(estimate_text.as_str())
                 },
                 finish_reason: reply.finish_reason.as_deref(),
                 admission,
@@ -344,6 +345,21 @@ fn provider_usage_json(usage: &TokenUsage) -> Value {
         value["reasoningTokens"] = json!(bounded_count(usage.reasoning_tokens));
     }
     value
+}
+
+/// The text an agent round is estimated from when the provider reported no usage:
+/// the visible answer plus each tool call's name and arguments, since a tool-only
+/// round has no visible answer at all. Only its token count is kept; this text is
+/// never stored.
+fn agent_estimate_text(response: &AgentModelResponse) -> String {
+    let mut text = response.content.clone().unwrap_or_default();
+    for call in &response.tool_calls {
+        text.push('\n');
+        text.push_str(&call.name);
+        text.push('\n');
+        text.push_str(&call.arguments_json);
+    }
+    text
 }
 
 /// No provider usage: estimate the serialized request and the answer, flagged.
@@ -2658,6 +2674,33 @@ mod tests {
         }
         let usage: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
         assert_eq!(usage["finishReason"], json!("stop"));
+    }
+
+    #[tokio::test]
+    async fn a_usage_less_tool_only_round_is_estimated_from_its_tool_calls() {
+        // content is null: the only output is a tool call, and the provider sent no usage.
+        let reply = r#"{"id":"tool-only","model":"m","choices":[{"message":{"content":null,"tool_calls":[{"id":"call-1","function":{"name":"read_file","arguments":"{\"path\":\"/tmp/a long path for the estimate\"}"}}]},"finish_reason":"tool_calls"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let round = runtime.respond(fixture_agent_request()).await.unwrap();
+        server.join().unwrap();
+        assert_eq!(round.tool_calls[0].name, "read_file");
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["estimated"], json!(true));
+        let completion = usage["completionTokens"].as_u64().unwrap();
+        assert!(completion > 0, "a tool-only round is not estimated as zero tokens");
+        let expected = u64::from(estimate_tokens(
+            "\nread_file\n{\"path\":\"/tmp/a long path for the estimate\"}",
+        ));
+        assert_eq!(completion, expected);
+        // Only counts are stored: neither the tool name nor its arguments reach the row.
+        let stored = rows[0].usage_json.as_deref().unwrap();
+        assert!(!stored.contains("read_file") && !stored.contains("/tmp/a"));
     }
 
     #[tokio::test]
