@@ -440,36 +440,77 @@ fn same_session_success_adds_no_stability_but_a_later_success_does() {
     assert!(learner_model_verify(&conn).unwrap().consistent);
 }
 
-/// Reviewer example: an equivalent `+08:00` spelling of one instant must replay in
-/// instant order, so the practice clock is not rewound and the same-session
-/// success at 10:00 is still a three-hour repeat (no stability change).
+/// Equivalent spellings must preserve the interleaved practice clock and the
+/// resulting review schedule, regardless of event insertion order.
 #[test]
 fn equivalent_timestamp_spellings_replay_by_instant_and_never_rewind_the_clock() {
-    let run = |late_miss_at: &str| {
-        let (_dir, conn) = open_db();
-        insert_question(&conn, "event-1", "asset-a", "q1", "tfng", "2026-08-11T00:00:00Z", true, None);
-        insert_question(&conn, "event-2", "asset-b", "q1", "tfng", "2026-08-12T00:00:00Z", true, None);
-        insert_question(&conn, "event-3", "asset-c", "q1", "tfng", late_miss_at, false, None);
-        insert_question(&conn, "event-4", "asset-d", "q1", "tfng", "2026-08-12T07:00:00Z", true, None);
-        insert_question(&conn, "event-5", "asset-e", "q1", "tfng", "2026-08-12T10:00:00Z", true, None);
-        learning_observations_rebuild(&conn).unwrap();
-        learner_model_rebuild(&conn).unwrap();
-        assert!(learner_model_verify(&conn).unwrap().consistent);
-        let row = state(&conn).states.into_iter().next().unwrap();
-        (row.stability_days.unwrap(), row.last_practiced_at.unwrap())
-    };
-    let (utc_stability, utc_last) = run("2026-08-12T00:00:00Z");
-    let (offset_stability, offset_last) = run("2026-08-12T08:00:00+08:00");
-
-    assert!((utc_stability - 4.0).abs() < 1e-9, "stability {utc_stability}");
-    assert!(
-        (offset_stability - utc_stability).abs() < 1e-9,
-        "+08:00 spelling gave {offset_stability}, Z gave {utc_stability}"
-    );
-    let latest = chrono::DateTime::parse_from_rfc3339("2026-08-12T10:00:00Z").unwrap();
-    for last in [utc_last, offset_last] {
-        let parsed = chrono::DateTime::parse_from_rfc3339(&last).unwrap();
-        assert_eq!(parsed, latest, "last practiced at {last}");
+    for wrong_at in [
+        "2026-08-12T00:00:00Z",
+        "2026-08-12T08:00:00+08:00",
+        "2026-08-12T08:00:00.000000000+08:00",
+        "2026-08-12T14:00:00+14:00",
+        "2026-08-11T16:00:00-08:00",
+    ] {
+        for reverse in [false, true] {
+            let (_dir, conn) = open_db();
+            let mut events = [
+                ("prior", "2026-08-11T00:00:00Z", true),
+                ("correct", "2026-08-12T00:00:00Z", true),
+                ("wrong", wrong_at, false),
+                ("intervening", "2026-08-12T07:00:00Z", true),
+                ("same-session", "2026-08-12T10:00:00Z", true),
+            ];
+            if reverse {
+                events.reverse();
+            }
+            for (event, at, correct) in events {
+                // Distinct assets keep every observation's effective weight at 1.
+                insert_question(
+                    &conn,
+                    event,
+                    &format!("asset-{event}"),
+                    "q1",
+                    "tfng",
+                    at,
+                    correct,
+                    None,
+                );
+            }
+            learning_observations_rebuild(&conn).unwrap();
+            let rebuilt = learner_model_rebuild(&conn).unwrap();
+            let snapshot = state(&conn);
+            let skill = &snapshot.states[0];
+            // 1 -> 2 on the first success, -> 3 on the mixed midnight group,
+            // -> 4 at 07:00. The 10:00 success is only three hours later.
+            assert_eq!(
+                skill.stability_days,
+                Some(4.0),
+                "{wrong_at}, reverse={reverse}",
+            );
+            assert_eq!(
+                skill.last_practiced_at.as_deref(),
+                Some("2026-08-12T10:00:00Z"),
+                "{wrong_at}, reverse={reverse}",
+            );
+            assert!(skill.mastery_mean >= 0.70 && skill.uncertainty <= 0.55);
+            // This mastery selects the stability-based delay: 4 * 1.5 + 3 = 9 days.
+            assert_eq!(
+                skill.next_review_at.as_deref(),
+                Some("2026-08-21T10:00:00+00:00"),
+                "{wrong_at}, reverse={reverse}",
+            );
+            assert_eq!(skill.explanation["referenceAt"], "2026-08-12T10:00:00Z");
+            assert_eq!(snapshot.generated_at, "2026-08-12T10:00:00Z");
+            let needs =
+                ielts_db::skill_review_needs_snapshot(&conn, &SkillReviewNeedsQuery::default())
+                    .unwrap();
+            assert_eq!(needs.needs[0].due_at, "2026-08-21T10:00:00+00:00");
+            assert!(learner_model_verify(&conn).unwrap().consistent);
+            assert_eq!(
+                learner_model_rebuild(&conn).unwrap().state_hash,
+                rebuilt.state_hash,
+            );
+        }
     }
 }
 
