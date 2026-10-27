@@ -402,7 +402,6 @@ fn aggregate_samples(
     };
     let score = bands_by(median)?;
     let mut diagnosis = diagnosis_for_bands(samples, &score);
-    diagnosis.ceilings = binding_ceilings(samples, &score);
     diagnosis.confidence = Some(WritingScoreConfidenceV4 {
         samples: samples.len() as u32,
         agreed: samples.len() >= 2 && max_spread(samples) < DISAGREEMENT_BANDS,
@@ -412,6 +411,10 @@ fn aggregate_samples(
     Ok((score, Some(diagnosis)))
 }
 
+/// Per criterion, one supporting sample with the exact final band supplies the
+/// rationale, the task analysis and any ceiling notice, so they never disagree.
+/// A ceiling is reported only when it lowered that supporting sample on that
+/// criterion; an outlier's observation is never presented as an enforced fact.
 fn diagnosis_for_bands(samples: &[ScoringSample], score: &WritingScoreV4) -> WritingDiagnosisV4 {
     let mut diagnosis = WritingDiagnosisV4 {
         task: None,
@@ -443,11 +446,24 @@ fn diagnosis_for_bands(samples: &[ScoringSample], score: &WritingScoreV4) -> Wri
             .iter()
             .filter(|ceiling| {
                 ceiling.criteria.contains(&index)
-                    && ceiling.criteria.iter().all(|&i| criteria(score)[i] <= ceiling.limit)
+                    && criteria(&source.raw)[index] > ceiling.limit
+                    && ceiling
+                        .criteria
+                        .iter()
+                        .all(|&i| criteria(score)[i] <= ceiling.limit)
             })
             .collect::<Vec<_>>();
         let uncapped_band = criteria(&source.raw)[index];
         if uncapped_band != band {
+            for ceiling in &supporting {
+                if !diagnosis
+                    .ceilings
+                    .iter()
+                    .any(|reason| reason == ceiling.reason)
+                {
+                    diagnosis.ceilings.push(ceiling.reason.to_string());
+                }
+            }
             let reasons = supporting
                 .iter()
                 .map(|ceiling| ceiling.reason)
@@ -455,7 +471,10 @@ fn diagnosis_for_bands(samples: &[ScoringSample], score: &WritingScoreV4) -> Wri
                 .join("；");
             rationale.insert(
                 key.into(),
-                format!("本项原始评分为 {uncapped_band:.1} 分，{reasons}，最终评分为 {band:.1} 分。").into(),
+                format!(
+                    "本项原始评分为 {uncapped_band:.1} 分，{reasons}，最终评分为 {band:.1} 分。"
+                )
+                .into(),
             );
         } else if let Some(value) = source
             .diagnosis
@@ -473,29 +492,6 @@ fn diagnosis_for_bands(samples: &[ScoringSample], score: &WritingScoreV4) -> Wri
         diagnosis.rationale = Some(rationale.into());
     }
     diagnosis
-}
-
-/// Ceilings that lowered at least one sample and that the final bands respect.
-fn binding_ceilings(samples: &[ScoringSample], score: &WritingScoreV4) -> Vec<String> {
-    let finals = criteria(score);
-    let mut reasons: Vec<String> = Vec::new();
-    for sample in samples {
-        let raw = criteria(&sample.raw);
-        for ceiling in &sample.ceilings {
-            let lowered = ceiling
-                .criteria
-                .iter()
-                .any(|&index| raw[index] > ceiling.limit);
-            let holds = ceiling
-                .criteria
-                .iter()
-                .all(|&index| finals[index] <= ceiling.limit);
-            if lowered && holds && !reasons.iter().any(|reason| reason == ceiling.reason) {
-                reasons.push(ceiling.reason.to_string());
-            }
-        }
-    }
-    reasons
 }
 
 fn median(values: &[f64]) -> f64 {
@@ -1242,8 +1238,6 @@ mod tests {
         assert!(!diagnosis.unwrap().confidence.unwrap().agreed);
     }
 
-    /// Parses one scoring reply with the given checks and returns the capped
-    /// score plus the reasons of the ceilings that actually lowered a band.
     fn diagnosed_task1_sample(bands: [f64; 4], overview_present: bool) -> ScoringSample {
         let [tr, cc, lr, gra] = bands;
         let content = serde_json::json!({
@@ -1296,6 +1290,29 @@ mod tests {
     }
 
     #[test]
+    fn an_outlier_ceiling_is_not_reported_when_the_final_band_falls_below_it() {
+        let samples = [
+            diagnosed_task1_sample([7.0, 7.0, 7.0, 7.0], false),
+            diagnosed_task1_sample([4.0, 7.0, 7.0, 7.0], true),
+            diagnosed_task1_sample([4.0, 7.0, 7.0, 7.0], true),
+        ];
+        let (score, diagnosis) = aggregate_samples(&samples).unwrap();
+        assert_eq!(criteria(&score), [4.0, 7.0, 7.0, 7.0]);
+        let diagnosis = diagnosis.unwrap();
+        // TA 4 is supported by samples that saw an overview, so the outlier's
+        // no-overview cap did not decide it and must not be shown beside them.
+        assert!(diagnosis.ceilings.is_empty());
+        assert_eq!(
+            diagnosis.task.unwrap()["overview_quality"],
+            "overview present: true"
+        );
+        assert_eq!(
+            diagnosis.rationale.unwrap()["task_achievement"],
+            "Task band 4"
+        );
+    }
+
+    #[test]
     fn aggregation_explains_an_enforced_ceiling_instead_of_the_uncapped_band() {
         let samples = [
             diagnosed_task1_sample([7.0; 4], false),
@@ -1330,6 +1347,8 @@ mod tests {
         }
     }
 
+    /// Parses one scoring reply with the given checks and returns the capped
+    /// score plus the reasons of the ceilings that actually lowered a band.
     fn capped(
         bands: [f64; 4],
         checks: &str,
@@ -1337,8 +1356,8 @@ mod tests {
         words: usize,
     ) -> (WritingScoreV4, Vec<String>) {
         let sample = parse_with(bands, checks, task_type, words).unwrap();
-        let reasons = binding_ceilings(std::slice::from_ref(&sample), &sample.score);
-        (sample.score, reasons)
+        let (score, diagnosis) = aggregate_samples(std::slice::from_ref(&sample)).unwrap();
+        (score, diagnosis.unwrap().ceilings)
     }
 
     fn parse_with(
@@ -1651,7 +1670,12 @@ mod tests {
             let model = BlockingModel {
                 inner: ScriptedModel::new(vec![
                     Ok(score_json(6.0, 6.0, 6.0, 6.0)),
-                    Ok(score_json(second_band, second_band, second_band, second_band)),
+                    Ok(score_json(
+                        second_band,
+                        second_band,
+                        second_band,
+                        second_band,
+                    )),
                 ]),
                 started: Arc::new(tokio::sync::Semaphore::new(0)),
                 release: Arc::new(tokio::sync::Semaphore::new(0)),
@@ -1703,7 +1727,10 @@ mod tests {
             model.release.add_permits(1);
         };
         let (result, ()) = tokio::join!(execution, cancellation);
-        assert_eq!(result.unwrap().evaluation.status, EvaluationStatus::Interrupted);
+        assert_eq!(
+            result.unwrap().evaluation.status,
+            EvaluationStatus::Interrupted
+        );
         assert_eq!(model.inner.requests.lock().unwrap().len(), 3);
     }
 
