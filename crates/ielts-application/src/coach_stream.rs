@@ -139,8 +139,9 @@ impl AnswerStream {
                     Some(digit) => {
                         self.escape = Escape::Unicode { value: (value << 4) | digit, digits: digits + 1 };
                     }
-                    // Not valid JSON: drop the malformed escape and keep scanning.
-                    None => self.escape = Escape::None,
+                    // Not valid JSON. The string cannot be decoded past this point, and
+                    // the byte may be the closing quote, so the answer ends here.
+                    None => self.finished = true,
                 }
                 return;
             }
@@ -332,6 +333,15 @@ mod tests {
         assert_eq!(stream.push(br#"qualifier"#), "qualifier");
         assert_eq!(stream.push(br#"\u00"#), "");
         assert_eq!(stream.push(br#"e9"}"#), "\u{e9}");
+    }
+
+    #[test]
+    fn a_malformed_unicode_escape_ends_the_answer_before_the_closing_quote() {
+        let reply = br#"{"answer":"hi \u12","teachingNotes":[{"text":"secret note"}]}"#;
+        assert_eq!(visible(&[reply]), "hi ");
+        let mut stream = AnswerStream::default();
+        assert_eq!(stream.push(br#"{"answer":"hi \u12"#), "hi ");
+        assert_eq!(stream.push(br#"","teachingNotes":[{"text":"secret note"}]}"#), "");
     }
 
     #[test]
