@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -79,6 +80,9 @@ pub(crate) struct AiRuntime {
     client: reqwest::Client,
     transport_retries: u32,
     ledger: Option<LedgerSink>,
+    /// Set once this endpoint refused a streamed request: later calls on this
+    /// runtime go straight to the plain request.
+    stream_unsupported: AtomicBool,
 }
 
 impl AiRuntime {
@@ -98,6 +102,7 @@ impl AiRuntime {
             client,
             transport_retries: MAX_RETRIES,
             ledger: None,
+            stream_unsupported: AtomicBool::new(false),
         })
     }
 
@@ -638,16 +643,7 @@ fn status_failure_message(status: reqwest::StatusCode, detail: Option<String>) -
 /// enough that a provider echoing a large payload cannot flood the UI.
 const MAX_PROVIDER_ERROR_DETAIL: usize = 300;
 
-/// Pull a short, human-readable reason out of a provider error response.
-///
-/// Prefers the OpenAI-compatible `{"error":{"message":...}}` shape, falls back
-/// to `{"error":"..."}`, then to the raw body. Returns `None` when the body is
-/// empty or unreadable, so the caller keeps its status-only message.
-async fn provider_error_detail(response: reqwest::Response) -> Option<String> {
-    extract_provider_error_detail(&response.text().await.ok()?)
-}
-
-/// The body-parsing half of [`provider_error_detail`], split out so it is
+/// A short readable reason from a provider error body, split out so it is
 /// testable without standing up an HTTP server.
 fn extract_provider_error_detail(body: &str) -> Option<String> {
     let body = body.trim();
@@ -657,7 +653,7 @@ fn extract_provider_error_detail(body: &str) -> Option<String> {
     let extracted = serde_json::from_str::<Value>(body)
         .ok()
         .and_then(|value| {
-            let error = value.get("error")?;
+            let error = value.get("error").or_else(|| value.get("message"))?;
             error
                 .get("message")
                 .and_then(Value::as_str)
@@ -1165,6 +1161,9 @@ impl AiRuntime {
         body: &Value,
         on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
     ) -> Result<CompletionReply, AgentModelFailure> {
+        if self.stream_unsupported.load(Ordering::Relaxed) {
+            return self.plain_as_one_delta(body, on_delta).await;
+        }
         let mut streamed = body.clone();
         streamed["stream"] = json!(true);
         streamed["stream_options"] = json!({"include_usage": true});
@@ -1172,12 +1171,8 @@ impl AiRuntime {
         let (mut response, retry_count) = match self.post_streaming(&streamed).await {
             Ok(Some(open)) => open,
             Ok(None) => {
-                // Refused: the plain answer, delivered as one delta.
-                let reply = self.send_completion(body).await?;
-                if !reply.response.content.is_empty() && streamable(&reply.response.content) {
-                    on_delta(&reply.response.content);
-                }
-                return Ok(reply);
+                self.stream_unsupported.store(true, Ordering::Relaxed);
+                return self.plain_as_one_delta(body, on_delta).await;
             }
             Err(failure) => return Err(failure.into_trace()),
         };
@@ -1222,9 +1217,23 @@ impl AiRuntime {
         fold.into_reply(&self.config.model, elapsed_ms(started), retry_count, header_request_id)
     }
 
+    /// The plain request, its answer delivered as one delta when it may be shown.
+    async fn plain_as_one_delta(
+        &self,
+        body: &Value,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<CompletionReply, AgentModelFailure> {
+        let reply = self.send_completion(body).await?;
+        if !reply.response.content.is_empty() && streamable(&reply.response.content) {
+            on_delta(&reply.response.content);
+        }
+        Ok(reply)
+    }
+
     /// The streamed request under the same transport policy as
-    /// `post_chat_completion`. `Ok(None)` means the provider refused streaming
-    /// (a non-retryable HTTP error), so the caller sends the plain request.
+    /// `post_chat_completion`. `Ok(None)` means this endpoint does not accept
+    /// streaming (a 400, 404, 405 or 422 whose body names the stream), so the
+    /// caller sends the plain request. Any other failure is a typed error.
     async fn post_streaming(
         &self,
         body: &Value,
@@ -1247,16 +1256,16 @@ impl AiRuntime {
                     let status = response.status();
                     let provider_request_id = provider_request_id_from_headers(response.headers());
                     let retryable = status.is_server_error() || status.as_u16() == 429;
-                    if !retryable {
-                        return Ok(None);
-                    }
-                    if attempt < self.transport_retries {
+                    if retryable && attempt < self.transport_retries {
                         retry_delay(attempt).await;
                         continue;
                     }
-                    let detail = provider_error_detail(response).await;
+                    let body = response.text().await.unwrap_or_default();
+                    if stream_refused(status, &body) {
+                        return Ok(None);
+                    }
                     return Err(ChatCompletionFailure::new(
-                        ModelError::http_status(status_failure_message(status, detail), true, status.as_u16()),
+                        provider_http_error(status, &body, retryable),
                         elapsed_ms(started),
                         attempt,
                         provider_request_id,
@@ -1281,6 +1290,12 @@ impl AiRuntime {
     }
 }
 
+/// Whether a failed streamed request means "this endpoint does not stream":
+/// a client-error status whose body names the stream parameter or the stream.
+fn stream_refused(status: reqwest::StatusCode, body: &str) -> bool {
+    matches!(status.as_u16(), 400 | 404 | 405 | 422) && body.to_ascii_lowercase().contains("stream")
+}
+
 fn is_event_stream(response: &reqwest::Response) -> bool {
     response
         .headers()
@@ -1302,18 +1317,37 @@ fn streamable(content_so_far: &str) -> bool {
     opens_as_json && next_reasoning_tag(content_so_far).is_none()
 }
 
+/// Bounds on one streamed reply. A provider that exceeds them is failing, not
+/// answering: the call ends with a non-retryable error.
+const MAX_STREAM_LINE_BYTES: usize = 1 << 20;
+const MAX_STREAM_DATA_BYTES: usize = 1 << 20;
+const MAX_STREAM_CONTENT_BYTES: usize = 8 << 20;
+
+/// Longest reasoning tag in bytes (`<thinking>`). A tag can straddle two chunks
+/// by at most this much minus one.
+const MAX_REASONING_TAG_LEN: usize = 10;
+
 /// Folds the server-sent events of one streamed chat completion into the parts
 /// a plain reply carries. Only `delta.content` is answer text; reasoning fields
-/// are never read.
+/// are never read. Lines end in LF, CRLF or a bare CR.
 #[derive(Default)]
 struct StreamFold {
-    /// Bytes of the line being read (lines split on `\n`, so UTF-8 stays whole).
+    /// Bytes of the line being read (UTF-8 is decoded once the line is whole).
     line: Vec<u8>,
-    /// `data:` payloads of the event being read.
+    /// The last line ended on a CR, so an LF right after it is the same break.
+    skip_lf: bool,
+    /// `event:` name of the event being read.
+    event: Option<String>,
+    /// `data:` payloads of the event being read, and their total size.
     data: Vec<String>,
+    data_bytes: usize,
     /// Answer text so far; `None` while no content delta has arrived.
     content: Option<String>,
-    /// Whether deltas are still forwarded (see [`streamable`]).
+    /// Bytes of `content` already forwarded to the caller.
+    forwarded: usize,
+    /// The first non-blank character of the content has been seen.
+    opened: bool,
+    /// Whether deltas are still forwarded (see [`streamable`]). Latched off for good.
     streaming: bool,
     finish_reason: Option<String>,
     usage: Option<ChatUsage>,
@@ -1384,43 +1418,83 @@ impl StreamFold {
             if self.done {
                 break;
             }
-            if byte == b'\n' {
-                let line = std::mem::take(&mut self.line);
-                self.line_read(&line, on_delta)?;
-            } else {
-                self.line.push(byte);
+            match byte {
+                b'\r' => {
+                    self.end_line(on_delta)?;
+                    self.skip_lf = true;
+                }
+                b'\n' => {
+                    if !std::mem::take(&mut self.skip_lf) {
+                        self.end_line(on_delta)?;
+                    }
+                }
+                _ => {
+                    self.skip_lf = false;
+                    self.line.push(byte);
+                    if self.line.len() > MAX_STREAM_LINE_BYTES {
+                        return Err("AI stream line too long".into());
+                    }
+                }
             }
         }
         Ok(())
     }
 
-    /// Flushes a last line that had no newline, then the open event.
+    /// Flushes a last line that had no terminator, then the open event, then any
+    /// answer text still held back while the stream was undecided.
     fn finish(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
         if !self.line.is_empty() {
-            let line = std::mem::take(&mut self.line);
-            self.line_read(&line, on_delta)?;
+            self.end_line(on_delta)?;
         }
-        self.dispatch(on_delta)
-    }
-
-    fn line_read(&mut self, line: &[u8], on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
-        let line = String::from_utf8_lossy(line);
-        let line = line.strip_suffix('\r').unwrap_or(&line);
-        if line.is_empty() {
-            return self.dispatch(on_delta);
-        }
-        if let Some(value) = line.strip_prefix("data:") {
-            self.data.push(value.strip_prefix(' ').unwrap_or(value).to_string());
+        self.dispatch(on_delta)?;
+        if self.streaming && self.opened {
+            if let Some(content) = self.content.as_deref() {
+                if self.forwarded < content.len() {
+                    on_delta(&content[self.forwarded..]);
+                    self.forwarded = content.len();
+                }
+            }
         }
         Ok(())
     }
 
-    /// Applies the event that just ended, if it carried data.
+    fn end_line(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        let line = std::mem::take(&mut self.line);
+        self.line_read(&line, on_delta)
+    }
+
+    fn line_read(&mut self, line: &[u8], on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        if line.is_empty() {
+            return self.dispatch(on_delta);
+        }
+        let line = String::from_utf8_lossy(line);
+        if let Some(value) = line.strip_prefix("data:") {
+            let value = value.strip_prefix(' ').unwrap_or(value);
+            self.data_bytes += value.len();
+            if self.data_bytes > MAX_STREAM_DATA_BYTES {
+                return Err("AI stream event too large".into());
+            }
+            self.data.push(value.to_string());
+        } else if let Some(name) = line.strip_prefix("event:") {
+            self.event = Some(name.trim().to_string());
+        }
+        Ok(())
+    }
+
+    /// Applies the event that just ended. Its `event:` name is consumed either way.
     fn dispatch(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        let event = self.event.take();
         if self.data.is_empty() {
             return Ok(());
         }
         let data = std::mem::take(&mut self.data).join("\n");
+        self.data_bytes = 0;
+        if event.as_deref() == Some("error") {
+            return Err(match extract_provider_error_detail(&data) {
+                Some(detail) => format!("AI provider stream failed: {detail}"),
+                None => "AI provider stream failed".to_string(),
+            });
+        }
         if data.trim() == "[DONE]" {
             self.done = true;
             return Ok(());
@@ -1440,25 +1514,83 @@ impl StreamFold {
             self.model = value.get("model").and_then(Value::as_str).map(str::to_string);
         }
         // With include_usage the counts arrive in a final chunk with no choices.
+        // A later chunk whose usage does not parse keeps the earlier valid counts.
         if let Some(usage) = value.get("usage").filter(|usage| !usage.is_null()) {
-            self.usage = serde_json::from_value::<ChatUsage>(usage.clone()).ok();
+            if let Ok(parsed) = serde_json::from_value::<ChatUsage>(usage.clone()) {
+                self.usage = Some(parsed);
+            }
         }
         let Some(choice) = value.get("choices").and_then(Value::as_array).and_then(|choices| choices.first()) else {
             return Ok(());
         };
         if let Some(text) = choice.pointer("/delta/content").and_then(Value::as_str).filter(|text| !text.is_empty()) {
-            let content = self.content.get_or_insert_with(String::new);
-            content.push_str(text);
-            self.streaming = self.streaming && streamable(content);
-            if self.streaming {
-                on_delta(text);
-            }
+            self.append_content(text, on_delta)?;
         }
         if let Some(reason) = finish_reason_of(choice.get("finish_reason"), value.get("stop_reason")) {
             self.finish_reason = Some(reason);
         }
         Ok(())
     }
+
+    /// Adds a content delta and forwards the part that is safe to show. The
+    /// reply must open as JSON and carry no reasoning tag; the tag check scans
+    /// only the new text (plus the few bytes a tag can straddle), and a trailing
+    /// partial `<...` is held back until it resolves, so a tag prefix is never
+    /// forwarded.
+    fn append_content(&mut self, text: &str, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        let content = self.content.get_or_insert_with(String::new);
+        let previous_len = content.len();
+        if previous_len + text.len() > MAX_STREAM_CONTENT_BYTES {
+            return Err("AI stream content too large".into());
+        }
+        content.push_str(text);
+        if !self.streaming {
+            return Ok(());
+        }
+        let content = self.content.as_deref().unwrap_or_default();
+        if !self.opened {
+            match content.trim_start().chars().next() {
+                None => return Ok(()),
+                Some(first) => {
+                    self.opened = true;
+                    if first != '{' {
+                        self.streaming = false;
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        let mut scan_from = previous_len.saturating_sub(MAX_REASONING_TAG_LEN - 1);
+        while !content.is_char_boundary(scan_from) {
+            scan_from -= 1;
+        }
+        if next_reasoning_tag(&content[scan_from..]).is_some() {
+            self.streaming = false;
+            return Ok(());
+        }
+        let safe_end = content.len() - partial_reasoning_tag_len(content);
+        if safe_end > self.forwarded {
+            on_delta(&content[self.forwarded..safe_end]);
+            self.forwarded = safe_end;
+        }
+        Ok(())
+    }
+}
+
+/// Bytes at the end of `text` that could still become a reasoning tag: a
+/// trailing `<` followed by a prefix of one, compared case-insensitively.
+fn partial_reasoning_tag_len(text: &str) -> usize {
+    let mut start = text.len().saturating_sub(MAX_REASONING_TAG_LEN - 1);
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    let tail = &text[start..];
+    let Some(open) = tail.rfind('<') else { return 0 };
+    let candidate = tail[open..].to_ascii_lowercase();
+    let could_become_tag = INLINE_REASONING_TAGS
+        .iter()
+        .any(|(tag, _)| tag.len() > candidate.len() && tag.starts_with(candidate.as_str()));
+    if could_become_tag { tail.len() - open } else { 0 }
 }
 
 async fn retry_delay(attempt: u32) {
@@ -2461,6 +2593,132 @@ mod tests {
         let failure = reply.err().unwrap();
         assert!(failure.error.retryable);
         assert!(failure.error.message.contains("ended before"));
+    }
+
+    #[test]
+    fn crlf_and_bare_cr_line_endings_split_across_chunks_fold_to_one_reply() {
+        let (deltas, reply) = fold_stream(&[
+            b"data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"a\\\":1}\"},\"finish_reason\":\"stop\"}]}\r",
+            b"\n\rdata: [DONE]\r\n\r\n",
+        ]);
+        let reply = reply.unwrap_or_else(|_| panic!("a CR-split stream must fold"));
+        assert_eq!(reply.response.content, r#"{"a":1}"#);
+        assert_eq!(deltas.concat(), r#"{"a":1}"#);
+    }
+
+    #[test]
+    fn an_error_event_fails_with_its_detail_and_is_not_retryable() {
+        let mut fold = StreamFold::new();
+        let mut deltas = Vec::new();
+        let error = fold
+            .push(
+                b"event: error\ndata: {\"error\":{\"message\":\"overloaded\"}}\n\n",
+                &mut |delta: &str| deltas.push(delta.to_owned()),
+            )
+            .unwrap_err();
+        assert_eq!(error, "AI provider stream failed: overloaded");
+        assert!(deltas.is_empty());
+        // The caller maps any fold error to a non-retryable stream error.
+        let failure = stream_error(error, false);
+        assert!(!failure.retryable);
+        assert_eq!(failure.class, "stream_error");
+    }
+
+    #[test]
+    fn stream_lines_events_and_content_are_capped() {
+        let mut fold = StreamFold::new();
+        let long_line = vec![b'a'; MAX_STREAM_LINE_BYTES + 1];
+        let error = fold.push(&long_line, &mut |_| {}).unwrap_err();
+        assert_eq!(error, "AI stream line too long");
+
+        let mut fold = StreamFold::new();
+        let filler = "a".repeat(900_000);
+        let mut failed = None;
+        for _ in 0..10 {
+            let event = format!("data: {{\"choices\":[{{\"delta\":{{\"content\":\"{{{filler}\"}}}}]}}\n\n");
+            if let Err(error) = fold.push(event.as_bytes(), &mut |_| {}) {
+                failed = Some(error);
+                break;
+            }
+        }
+        assert_eq!(failed.as_deref(), Some("AI stream content too large"));
+    }
+
+    #[test]
+    fn a_partial_reasoning_tag_is_held_back_and_never_forwarded() {
+        let (deltas, _) = fold_stream(&[
+            br#"data: {"choices":[{"delta":{"content":"{\"answer\":\"x <"}}]}
+
+"#,
+            br#"data: {"choices":[{"delta":{"content":"th"}}]}
+
+"#,
+            br#"data: {"choices":[{"delta":{"content":"ink>hidden"}}]}
+
+"#,
+        ]);
+        let forwarded = deltas.concat();
+        assert_eq!(forwarded, r#"{"answer":"x "#);
+        assert!(!forwarded.contains("<th") && !forwarded.contains("hidden"));
+    }
+
+    #[test]
+    fn a_later_unparseable_usage_keeps_the_earlier_counts() {
+        let (_, reply) = fold_stream(&[
+            br#"data: {"choices":[{"delta":{"content":"{}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}
+
+"#,
+            br#"data: {"choices":[],"usage":{"prompt_tokens":"oops"}}
+
+"#,
+            b"data: [DONE]\n\n",
+        ]);
+        let usage = reply.unwrap().response.usage.unwrap();
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 2);
+    }
+
+    #[tokio::test]
+    async fn only_a_stream_refusal_falls_back_and_the_refusal_is_remembered() {
+        let plain = r#"{"model":"m","choices":[{"message":{"content":"{\"answer\":\"plain\"}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (400, "application/json", r#"{"error":{"message":"stream_options is not supported"}}"#),
+            (200, "application/json", plain),
+            (200, "application/json", plain),
+        ]);
+        let mut deltas = Vec::new();
+        runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 3, "after one refusal the runtime sends plain requests only");
+        assert_eq!(bodies[0]["stream"], json!(true));
+        assert!(bodies[1].get("stream").is_none());
+        assert!(bodies[2].get("stream").is_none());
+        assert_eq!(deltas.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_client_error_that_does_not_name_the_stream_is_a_typed_error_not_a_fallback() {
+        let (runtime, server) = scripted_fixture(vec![(422, "application/json", r#"{"error":{"message":"bad temperature"}}"#)]);
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |_: &str| {})
+            .await
+            .unwrap_err();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 1, "no plain retry for an unrelated rejection");
+        assert!(failure.error.message.contains("HTTP 422"), "{}", failure.error.message);
+        assert_eq!(failure.error.status, Some(422));
+        assert_eq!(failure.error.class, "http_4xx");
     }
 
     #[test]
