@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 
@@ -65,7 +65,7 @@ impl AppPaths {
 
 /// Process-local SQLite handle. Commands take short-lived locks.
 pub struct AppDb {
-    conn: Mutex<rusqlite::Connection>,
+    conn: Arc<Mutex<rusqlite::Connection>>,
     pub path: PathBuf,
 }
 
@@ -78,7 +78,7 @@ impl AppDb {
         // snapshot; if the snapshot cannot be written the migration never runs.
         migrate_with_snapshot(&mut conn, &paths.backups)?;
         Ok(Self {
-            conn: Mutex::new(conn),
+            conn: Arc::new(Mutex::new(conn)),
             path,
         })
     }
@@ -97,6 +97,12 @@ impl AppDb {
             })
     }
 
+    /// The connection behind this handle, for the AI usage ledger: it writes
+    /// under the same lock without borrowing this state.
+    pub(crate) fn shared_connection(&self) -> Arc<Mutex<rusqlite::Connection>> {
+        Arc::clone(&self.conn)
+    }
+
     pub fn with_conn<T>(
         &self,
         f: impl FnOnce(&rusqlite::Connection) -> DbResult<T>,
@@ -111,7 +117,7 @@ impl AppDb {
     #[cfg(test)]
     pub(crate) fn from_test_connection(conn: rusqlite::Connection, path: PathBuf) -> Self {
         Self {
-            conn: Mutex::new(conn),
+            conn: Arc::new(Mutex::new(conn)),
             path,
         }
     }

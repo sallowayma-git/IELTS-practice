@@ -1,3 +1,6 @@
+use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -7,8 +10,12 @@ use ielts_application::{
     ReasoningEcho, TokenUsage,
 };
 use serde::de::DeserializeOwned;
+use ielts_db::{MAX_USAGE_COUNT, UNLINKED_REQUEST_HASH};
+use ielts_domain::estimate_tokens;
 use serde::Deserialize;
 use serde_json::{json, Value};
+
+use super::context_window::{agent_input_tokens, budget_for, context_budget, Admission};
 
 /// Transport-layer retries (5xx / 429 / timeout / connect) inside ONE gateway
 /// call. The bound is per call; a caller that owns its own semantic retry loop
@@ -63,6 +70,9 @@ pub(crate) struct AiProviderConfig {
     pub timeout: Duration,
 }
 
+/// Receives one `llm_invocations` row per ledgered gateway call.
+pub(crate) type LedgerSink = Arc<dyn Fn(ielts_db::LlmInvocationRecord) + Send + Sync>;
+
 // The runtime owns the API key. Do not derive Debug/Clone: formatting or
 // copying this value would make accidental credential exposure easy.
 pub(crate) struct AiRuntime {
@@ -70,6 +80,10 @@ pub(crate) struct AiRuntime {
     api_key: String,
     client: reqwest::Client,
     transport_retries: u32,
+    ledger: Option<LedgerSink>,
+    /// Set once this endpoint refused a streamed request: later calls on this
+    /// runtime go straight to the plain request.
+    stream_unsupported: AtomicBool,
 }
 
 impl AiRuntime {
@@ -88,6 +102,8 @@ impl AiRuntime {
             api_key,
             client,
             transport_retries: MAX_RETRIES,
+            ledger: None,
+            stream_unsupported: AtomicBool::new(false),
         })
     }
 
@@ -96,39 +112,304 @@ impl AiRuntime {
         self.transport_retries = retries;
         self
     }
+
+    /// Ledger every plain completion and agent call. `complete_with_trace`
+    /// callers (the coach) keep their own invocation row and are not ledgered.
+    pub(crate) fn with_ledger(mut self, sink: LedgerSink) -> Self {
+        self.ledger = Some(sink);
+        self
+    }
+
+    /// `clamped` is the output ceiling the pre-send guard lowered this call to,
+    /// if it did; it lands in the row's `usage_json`.
+    fn record_completion(
+        &self,
+        body: &Value,
+        result: &Result<CompletionReply, AgentModelFailure>,
+        admission: Admission,
+    ) {
+        let Some(sink) = &self.ledger else { return };
+        let truncated = ModelError::output_truncated();
+        let call = match result {
+            Ok(reply) => {
+                let response = &reply.response;
+                LedgerCall {
+                    model: &response.model,
+                    latency_ms: response.latency_ms,
+                    usage: response.usage.as_ref(),
+                    provider_request_id: response.provider_request_id.as_deref(),
+                    outcome: if is_truncated(reply.finish_reason.as_deref()) {
+                        Err(&truncated)
+                    } else {
+                        Ok(&response.content)
+                    },
+                    finish_reason: reply.finish_reason.as_deref(),
+                    admission,
+                }
+            }
+            Err(failure) => LedgerCall { admission, ..LedgerCall::failed(failure, &self.config.model) },
+        };
+        sink(ledger_record(&self.config.provider, body, call));
+    }
+
+    fn record_agent(
+        &self,
+        body: &Value,
+        result: &Result<AgentReply, AgentModelFailure>,
+        admission: Admission,
+    ) {
+        let Some(sink) = &self.ledger else { return };
+        let truncated = ModelError::output_truncated();
+        let estimate_text = result.as_ref().map(|reply| agent_estimate_text(&reply.response)).unwrap_or_default();
+        let call = match result {
+            Ok(reply) => LedgerCall {
+                model: &reply.response.model,
+                latency_ms: reply.response.latency_ms,
+                usage: reply.response.usage.as_ref(),
+                provider_request_id: reply.response.provider_request_id.as_deref(),
+                outcome: if is_truncated(reply.finish_reason.as_deref()) {
+                    Err(&truncated)
+                } else {
+                    Ok(estimate_text.as_str())
+                },
+                finish_reason: reply.finish_reason.as_deref(),
+                admission,
+            },
+            Err(failure) => LedgerCall { admission, ..LedgerCall::failed(failure, &self.config.model) },
+        };
+        sink(ledger_record(&self.config.provider, body, call));
+    }
+}
+
+/// Writes ledger rows under the host connection's lock. A failed write is logged
+/// and dropped: spend bookkeeping must never fail the user's call.
+pub(crate) fn usage_ledger(conn: Arc<std::sync::Mutex<rusqlite::Connection>>) -> LedgerSink {
+    Arc::new(move |record| match conn.lock() {
+        Ok(conn) => {
+            if let Err(error) = ielts_db::record_llm_invocation(&conn, &record) {
+                tracing::warn!(%error, "llm usage ledger write failed");
+            }
+        }
+        Err(_) => tracing::warn!("llm usage ledger skipped: db lock poisoned"),
+    })
+}
+
+/// Writes the row for a ledgered call whose future is dropped before its reply is
+/// read: a `tokio::time::timeout` around the call, or a cancelled `select!`. It is
+/// created right before the HTTP send and disarmed as soon as the send returns, so
+/// a call writes exactly one row: the normal one, or this interrupted one, never
+/// both. Drop may write: the sink is a sync insert behind a mutex.
+struct CallGuard {
+    sink: Option<LedgerSink>,
+    provider: String,
+    model: String,
+    started: Instant,
+}
+
+impl CallGuard {
+    /// The send returned: the caller writes the normal row.
+    fn disarm(mut self) {
+        self.sink = None;
+    }
+}
+
+impl Drop for CallGuard {
+    fn drop(&mut self) {
+        let Some(sink) = self.sink.take() else { return };
+        // Nothing is known about the interrupted call: no usage and no estimate.
+        let error = ModelError::classed("AI call was interrupted before its reply", true, "interrupted");
+        sink(ledger_record(
+            &self.provider,
+            &Value::Null,
+            LedgerCall {
+                model: &self.model,
+                latency_ms: elapsed_ms(self.started),
+                usage: None,
+                provider_request_id: None,
+                outcome: Err(&error),
+                finish_reason: None,
+                admission: Admission::default(),
+            },
+        ));
+    }
+}
+
+/// One gateway call as the ledger sees it: the provider's facts or the failure.
+struct LedgerCall<'a> {
+    model: &'a str,
+    latency_ms: u64,
+    usage: Option<&'a TokenUsage>,
+    provider_request_id: Option<&'a str>,
+    outcome: Result<&'a str, &'a ModelError>,
+    /// The provider's finish reason, when the reply carried one.
+    finish_reason: Option<&'a str>,
+    /// What the pre-send guard decided (clamp and advisory context warning).
+    admission: Admission,
+}
+
+impl<'a> LedgerCall<'a> {
+    fn failed(failure: &'a AgentModelFailure, configured_model: &'a str) -> Self {
+        Self {
+            model: failure.model.as_deref().unwrap_or(configured_model),
+            latency_ms: failure.latency_ms,
+            usage: failure.usage.as_ref(),
+            provider_request_id: failure.provider_request_id.as_deref(),
+            outcome: Err(&failure.error),
+            finish_reason: None,
+            admission: Admission::default(),
+        }
+    }
+}
+
+/// The `llm_invocations` row for one call. Usage comes from the provider when it
+/// reports any; a successful call without usage gets a chars-based estimate.
+fn ledger_record(provider: &str, request: &Value, call: LedgerCall<'_>) -> ielts_db::LlmInvocationRecord {
+    let usage = match (call.usage, call.outcome) {
+        (Some(usage), _) => Some(provider_usage_json(usage)),
+        (None, Ok(content)) => Some(estimated_usage_json(request, content)),
+        (None, Err(_)) => None,
+    };
+    let usage = with_finish_reason(usage, call.finish_reason);
+    let usage = with_max_tokens_clamped(usage, call.admission.clamped);
+    let usage = with_context_warning(usage, call.admission.context_warning);
+    ielts_db::LlmInvocationRecord {
+        id: format!("llm-{}", uuid::Uuid::new_v4()),
+        provider: provider.into(),
+        model: call.model.into(),
+        // Unlinked: no content hash (see `UNLINKED_REQUEST_HASH`), no response hash.
+        request_hash: UNLINKED_REQUEST_HASH.into(),
+        response_hash: None,
+        usage_json: usage.map(|value| value.to_string()),
+        latency_ms: call.latency_ms,
+        provider_request_id: call.provider_request_id.map(str::to_string),
+        error_json: call.outcome.err().map(|error| error_record(error).to_string()),
+        created_at: chrono::Utc::now().to_rfc3339(),
+    }
+}
+
+/// Records why the provider stopped next to the counts (`finishReason`), so a
+/// truncated call is visible in the usage ledger.
+fn with_finish_reason(usage: Option<Value>, finish_reason: Option<&str>) -> Option<Value> {
+    let Some(reason) = finish_reason else { return usage };
+    let mut value = usage.unwrap_or_else(|| json!({}));
+    value["finishReason"] = json!(reason);
+    Some(value)
+}
+
+/// Marks a call the context estimate said might not fit. Advisory only: the call
+/// was still sent, so this is for spend review, not an error.
+fn with_context_warning(usage: Option<Value>, warned: bool) -> Option<Value> {
+    if !warned {
+        return usage;
+    }
+    let mut value = usage.unwrap_or_else(|| json!({}));
+    value["contextWarning"] = json!(true);
+    Some(value)
+}
+
+/// Records that the pre-send guard lowered `max_tokens` to `clamped`, so a short
+/// answer caused by a small remaining window is visible in the usage ledger.
+fn with_max_tokens_clamped(usage: Option<Value>, clamped: Option<u32>) -> Option<Value> {
+    let Some(max_tokens) = clamped else { return usage };
+    let mut value = usage.unwrap_or_else(|| json!({}));
+    value["maxTokensClamped"] = json!(max_tokens);
+    Some(value)
+}
+
+/// What the ledger keeps of a failed call: the HTTP status when there was one,
+/// the failure class and whether it was retryable. Never the provider's error
+/// text, a URL or anything from the request.
+fn error_record(error: &ModelError) -> Value {
+    json!({"status": error.status, "class": error.class, "retryable": error.retryable})
+}
+
+/// A count as the ledger may store it: never above [`MAX_USAGE_COUNT`].
+fn bounded_count(value: u64) -> u64 {
+    value.min(MAX_USAGE_COUNT)
+}
+
+/// Provider-reported counts. Cache and reasoning keys appear only when non-zero:
+/// the parsed `TokenUsage` cannot tell "reported as 0" from "not reported".
+fn provider_usage_json(usage: &TokenUsage) -> Value {
+    let prompt = bounded_count(usage.input_tokens);
+    let completion = bounded_count(usage.output_tokens);
+    let mut value = json!({
+        "promptTokens": prompt,
+        "completionTokens": completion,
+        "totalTokens": prompt.saturating_add(completion),
+    });
+    if usage.cached_input_tokens > 0 {
+        value["cachedInputTokens"] = json!(bounded_count(usage.cached_input_tokens));
+    }
+    if usage.reasoning_tokens > 0 {
+        value["reasoningTokens"] = json!(bounded_count(usage.reasoning_tokens));
+    }
+    value
+}
+
+/// The text an agent round is estimated from when the provider reported no usage:
+/// the visible answer plus each tool call's name and arguments, since a tool-only
+/// round has no visible answer at all. Only its token count is kept; this text is
+/// never stored.
+fn agent_estimate_text(response: &AgentModelResponse) -> String {
+    let mut text = response.content.clone().unwrap_or_default();
+    for call in &response.tool_calls {
+        text.push('\n');
+        text.push_str(&call.name);
+        text.push('\n');
+        text.push_str(&call.arguments_json);
+    }
+    text
+}
+
+/// No provider usage: estimate the serialized request and the answer, flagged.
+fn estimated_usage_json(request: &Value, content: &str) -> Value {
+    let prompt = u64::from(estimate_tokens(&request.to_string()));
+    let completion = u64::from(estimate_tokens(content));
+    json!({
+        "promptTokens": prompt,
+        "completionTokens": completion,
+        "totalTokens": prompt.saturating_add(completion),
+        "estimated": true,
+    })
 }
 
 #[async_trait]
 impl LanguageModel for AiRuntime {
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
-        self.complete_with_trace(request).await.map(|(response, _)| response).map_err(|failure| failure.error)
+    async fn complete(&self, mut request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        // A refused request is still ledgered (with its error), as every plain
+        // failure is; it is never sent.
+        let admission = self.admit_completion(&mut request);
+        let body = completion_body(&self.config.model, &self.config.base_url, &request);
+        let (admission, reply) = match admission {
+            Ok(admission) => (admission, self.send_ledgered(self.send_completion(&body)).await),
+            Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
+        };
+        self.record_completion(&body, &reply, admission);
+        reply
+            .and_then(CompletionReply::into_result)
+            .map(|(response, _)| response)
+            .map_err(|failure| failure.error)
     }
 
     fn identity(&self) -> (&str, &str) { (&self.config.provider, &self.config.model) }
 
-    async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+    // The coach path owns its own trace row, so a refusal here is returned in
+    // the failure for that trace and is not ledgered.
+    async fn complete_with_trace(&self, mut request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+        self.admit_completion(&mut request).map_err(AgentModelFailure::new)?;
         let body = completion_body(&self.config.model, &self.config.base_url, &request);
-        let (envelope, latency_ms, retry_count, header_request_id): (ChatResponse, _, _, _) = self
-            .post_chat_completion(&body, "AI response envelope invalid")
-            .await
-            .map_err(ChatCompletionFailure::into_trace)?;
-        let model = envelope.model.unwrap_or_else(|| self.config.model.clone());
-        let usage = envelope.usage.map(token_usage);
-        let provider_request_id = prefer_provider_request_id(header_request_id, envelope.id);
-        let content = envelope
-            .choices
-            .into_iter()
-            .next()
-            .and_then(|choice| choice.message.content)
-            .map(WireContent::into_final_answer)
-            .ok_or_else(|| AgentModelFailure::with_trace(model_error("AI response contained no choices", false), Some(model.clone()), latency_ms, usage.clone(), provider_request_id.clone(), retry_count))?;
-        Ok((CompletionResponse {
-            content,
-            model,
-            latency_ms,
-            usage,
-            provider_request_id,
-        }, retry_count))
+        self.send_completion(&body).await.and_then(CompletionReply::into_result)
+    }
+
+    async fn complete_with_trace_streaming(
+        &self,
+        mut request: CompletionRequest,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+        self.admit_completion(&mut request).map_err(AgentModelFailure::new)?;
+        let body = completion_body(&self.config.model, &self.config.base_url, &request);
+        self.send_completion_streaming(&body, on_delta).await.and_then(CompletionReply::into_result)
     }
 }
 
@@ -136,24 +417,204 @@ impl LanguageModel for AiRuntime {
 impl AgentModel for AiRuntime {
     async fn respond(
         &self,
-        request: AgentModelRequest,
+        mut request: AgentModelRequest,
     ) -> Result<AgentModelResponse, AgentModelFailure> {
-        let body = agent_request_body(&self.config.model, &request);
+        let admission = self.admit_agent(&mut request);
+        let body = agent_request_body(&self.config.model, &self.config.base_url, &request);
+        let (admission, result) = match admission {
+            Ok(admission) => (admission, self.send_ledgered(self.send_agent(&body)).await),
+            Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
+        };
+        self.record_agent(&body, &result, admission);
+        result.and_then(AgentReply::into_result).map(|reply| reply.response)
+    }
+}
+
+impl AiRuntime {
+    /// A plain completion for the sidecar. Unlike `complete`, a reply cut off at
+    /// its ceiling is returned with whatever text arrived and `truncated` set, so
+    /// the sidecar's own malformed-output handling decides what it means. Ledgered
+    /// exactly like `complete`.
+    pub(crate) async fn complete_partial(&self, mut request: CompletionRequest) -> Result<PartialCompletion, ModelError> {
+        let admission = self.admit_completion(&mut request);
+        let body = completion_body(&self.config.model, &self.config.base_url, &request);
+        let (admission, reply) = match admission {
+            Ok(admission) => (admission, self.send_ledgered(self.send_completion(&body)).await),
+            Err(error) => (Admission::default(), Err(AgentModelFailure::new(error))),
+        };
+        self.record_completion(&body, &reply, admission);
+        let reply = reply.map_err(|failure| failure.error)?;
+        let truncated = is_truncated(reply.finish_reason.as_deref());
+        Ok(PartialCompletion { response: reply.response, truncated })
+    }
+
+    /// Awaits one ledgered send under a [`CallGuard`]. The guard is disarmed when
+    /// the send returns; if this future is dropped first, the guard writes the
+    /// interrupted row instead.
+    async fn send_ledgered<T>(&self, send: impl Future<Output = T>) -> T {
+        let guard = CallGuard {
+            sink: self.ledger.clone(),
+            provider: self.config.provider.clone(),
+            model: self.config.model.clone(),
+            started: Instant::now(),
+        };
+        let reply = send.await;
+        guard.disarm();
+        reply
+    }
+
+    /// The pre-send guard for a plain completion. Runs before any HTTP call.
+    /// `request.max_tokens` is updated to the clamped ceiling, if any.
+    fn admit_completion(&self, request: &mut CompletionRequest) -> Result<Admission, ModelError> {
+        let admission = context_budget(&self.config.model, &request.messages, request.max_tokens).admit()?;
+        if let Some(max_tokens) = admission.clamped {
+            request.max_tokens = max_tokens;
+        }
+        Ok(admission)
+    }
+
+    /// The pre-send guard for an agent round, counting tool definitions as input.
+    fn admit_agent(&self, request: &mut AgentModelRequest) -> Result<Admission, ModelError> {
+        let estimated = agent_input_tokens(&request.messages, &request.tools);
+        let admission = budget_for(&self.config.model, estimated, request.max_tokens).admit()?;
+        if let Some(max_tokens) = admission.clamped {
+            request.max_tokens = max_tokens;
+        }
+        Ok(admission)
+    }
+}
+
+/// A completion that may be cut off: the text that arrived and whether the
+/// provider stopped at the output ceiling.
+pub(crate) struct PartialCompletion {
+    pub response: CompletionResponse,
+    pub truncated: bool,
+}
+
+/// One provider completion before the caller-facing check. `finish_reason` is
+/// what the provider said about why it stopped; only truncation acts on it.
+struct CompletionReply {
+    response: CompletionResponse,
+    retry_count: u32,
+    finish_reason: Option<String>,
+}
+
+impl CompletionReply {
+    /// A reply cut off at the output ceiling is a typed error for every caller:
+    /// a JSON caller would otherwise fail with a confusing parse error. Never
+    /// retried here with a larger ceiling.
+    fn into_result(self) -> Result<(CompletionResponse, u32), AgentModelFailure> {
+        if !is_truncated(self.finish_reason.as_deref()) {
+            return Ok((self.response, self.retry_count));
+        }
+        Err(AgentModelFailure::with_trace(
+            ModelError::output_truncated(),
+            Some(self.response.model),
+            self.response.latency_ms,
+            self.response.usage,
+            self.response.provider_request_id,
+            self.retry_count,
+        ))
+    }
+}
+
+/// A tool-calling or plain agent reply plus its finish reason.
+struct AgentReply {
+    response: AgentModelResponse,
+    finish_reason: Option<String>,
+}
+
+impl AgentReply {
+    /// The same truncation check as `CompletionReply::into_result`. A cut-off
+    /// round is a typed error whatever it carries: a partial answer is not a
+    /// final answer, and a partial tool call has incomplete arguments, so the
+    /// agent service must never see it as a success.
+    fn into_result(self) -> Result<Self, AgentModelFailure> {
+        if !is_truncated(self.finish_reason.as_deref()) {
+            return Ok(self);
+        }
+        let response = self.response;
+        Err(AgentModelFailure::with_trace(
+            ModelError::output_truncated(),
+            Some(response.model),
+            response.latency_ms,
+            response.usage,
+            response.provider_request_id,
+            response.retry_count,
+        ))
+    }
+}
+
+/// Whether a provider finish reason means the output was cut off.
+/// `length` is OpenAI-style; `max_tokens` is Anthropic-style `stop_reason`.
+/// `model_context_window_exceeded` stops the reply the same way: the prompt
+/// plus the output reached the window before the answer finished.
+fn is_truncated(finish_reason: Option<&str>) -> bool {
+    matches!(
+        finish_reason,
+        Some("length" | "max_tokens" | "model_context_window_exceeded")
+    )
+}
+
+impl AiRuntime {
+    async fn send_completion(&self, body: &Value) -> Result<CompletionReply, AgentModelFailure> {
+        let (envelope, latency_ms, retry_count, header_request_id): (ChatResponse, _, _, _) = self
+            .post_chat_completion(body, "AI response envelope invalid")
+            .await
+            .map_err(ChatCompletionFailure::into_trace)?;
+        self.completion_reply(envelope, latency_ms, retry_count, header_request_id)
+    }
+
+    /// The caller-facing reply for one decoded chat envelope (shared with the
+    /// streamed path, which falls back to a plain JSON body).
+    fn completion_reply(
+        &self,
+        envelope: ChatResponse,
+        latency_ms: u64,
+        retry_count: u32,
+        header_request_id: Option<String>,
+    ) -> Result<CompletionReply, AgentModelFailure> {
+        let model = envelope.model.clone().unwrap_or_else(|| self.config.model.clone());
+        let finish_reason = envelope.finish_reason();
+        let truncated = is_truncated(finish_reason.as_deref());
+        let usage = envelope.usage.map(token_usage);
+        let provider_request_id = prefer_provider_request_id(header_request_id, envelope.id);
+        let content = match envelope.choices.into_iter().next().and_then(|choice| choice.message.content) {
+            Some(content) => content.into_final_answer(),
+            // A reply cut off at the ceiling can carry no text at all: that is a
+            // truncation, reported as such rather than as an empty envelope.
+            None if truncated => String::new(),
+            None => return Err(AgentModelFailure::with_trace(invalid_response("AI response contained no choices"), Some(model), latency_ms, usage, provider_request_id, retry_count)),
+        };
+        Ok(CompletionReply {
+            response: CompletionResponse {
+                content,
+                model,
+                latency_ms,
+                usage,
+                provider_request_id,
+            },
+            retry_count,
+            finish_reason,
+        })
+    }
+
+    async fn send_agent(&self, body: &Value) -> Result<AgentReply, AgentModelFailure> {
         let (envelope, latency_ms, retry_count, header_request_id): (AgentChatResponse, _, _, _) =
-            self.post_chat_completion(&body, "AI agent response envelope invalid")
+            self.post_chat_completion(body, "AI agent response envelope invalid")
                 .await
                 .map_err(ChatCompletionFailure::into_trace)?;
-        parse_agent_response(
+        let finish_reason = envelope.finish_reason();
+        let response = parse_agent_response(
             envelope,
             &self.config.model,
             latency_ms,
             retry_count,
             header_request_id,
-        )
+        )?;
+        Ok(AgentReply { response, finish_reason })
     }
-}
 
-impl AiRuntime {
     async fn post_chat_completion<T: DeserializeOwned>(
         &self,
         body: &Value,
@@ -177,7 +638,7 @@ impl AiRuntime {
                     let provider_request_id = provider_request_id_from_headers(response.headers());
                     let value = response.json::<Value>().await.map_err(|error| {
                         ChatCompletionFailure::new(
-                            model_error(format!("{invalid_envelope}: {error}"), false),
+                            invalid_response(format!("{invalid_envelope}: {error}")),
                             elapsed_ms(started),
                             attempt,
                             provider_request_id.clone(),
@@ -192,7 +653,7 @@ impl AiRuntime {
                         // Serde errors can quote invalid string values. Keep only metadata,
                         // never response content, in the failure sent to persistence/UI.
                         ChatCompletionFailure {
-                            error: model_error(invalid_envelope, false),
+                            error: invalid_response(invalid_envelope),
                             model,
                             usage,
                             latency_ms: elapsed_ms(started),
@@ -219,16 +680,9 @@ impl AiRuntime {
                     // which is undiagnosable. The body is the provider's error
                     // text, not our request, so the bearer token is not in it —
                     // but it is still bounded and never logged.
-                    let detail = provider_error_detail(response).await;
-                    let message = match detail {
-                        Some(detail) => format!(
-                            "AI provider returned HTTP {}: {detail}",
-                            status.as_u16()
-                        ),
-                        None => format!("AI provider returned HTTP {}", status.as_u16()),
-                    };
+                    let body = response.text().await.unwrap_or_default();
                     return Err(ChatCompletionFailure::new(
-                        model_error(message, retryable),
+                        provider_http_error(status, &body, retryable),
                         elapsed_ms(started),
                         attempt,
                         provider_request_id,
@@ -241,7 +695,7 @@ impl AiRuntime {
                         continue;
                     }
                     return Err(ChatCompletionFailure::new(
-                        model_error(format!("AI request failed: {error}"), retryable),
+                        transport_error(&error, retryable),
                         elapsed_ms(started),
                         attempt,
                         None,
@@ -253,21 +707,41 @@ impl AiRuntime {
     }
 }
 
+/// The typed error for a provider HTTP failure. A 400 whose body says the prompt
+/// is over the context window is the context-exceeded error, so the caller can
+/// tell it from a bad request.
+fn provider_http_error(status: reqwest::StatusCode, body: &str, retryable: bool) -> ModelError {
+    let message = status_failure_message(status, extract_provider_error_detail(body));
+    if status.as_u16() == 400 && is_context_overflow_body(body) {
+        return ModelError::provider_context_exceeded(message, status.as_u16());
+    }
+    ModelError::http_status(message, retryable, status.as_u16())
+}
+
+/// Provider wording for a prompt longer than the model accepts. Checked only on
+/// HTTP 400 bodies, where these phrases mean the request itself is too long.
+fn is_context_overflow_body(body: &str) -> bool {
+    let lower = body.to_ascii_lowercase();
+    ["context_length_exceeded", "maximum context length", "context window"]
+        .iter()
+        .any(|phrase| lower.contains(phrase))
+}
+
+/// The user-facing message for a non-success HTTP status, with the provider's
+/// own explanation when it sent one.
+fn status_failure_message(status: reqwest::StatusCode, detail: Option<String>) -> String {
+    match detail {
+        Some(detail) => format!("AI provider returned HTTP {}: {detail}", status.as_u16()),
+        None => format!("AI provider returned HTTP {}", status.as_u16()),
+    }
+}
+
 /// Longest provider error excerpt kept in a user-facing message. Enough for the
 /// real explanation ("Incorrect API key provided", "model not found"), short
 /// enough that a provider echoing a large payload cannot flood the UI.
 const MAX_PROVIDER_ERROR_DETAIL: usize = 300;
 
-/// Pull a short, human-readable reason out of a provider error response.
-///
-/// Prefers the OpenAI-compatible `{"error":{"message":...}}` shape, falls back
-/// to `{"error":"..."}`, then to the raw body. Returns `None` when the body is
-/// empty or unreadable, so the caller keeps its status-only message.
-async fn provider_error_detail(response: reqwest::Response) -> Option<String> {
-    extract_provider_error_detail(&response.text().await.ok()?)
-}
-
-/// The body-parsing half of [`provider_error_detail`], split out so it is
+/// A short readable reason from a provider error body, split out so it is
 /// testable without standing up an HTTP server.
 fn extract_provider_error_detail(body: &str) -> Option<String> {
     let body = body.trim();
@@ -277,7 +751,7 @@ fn extract_provider_error_detail(body: &str) -> Option<String> {
     let extracted = serde_json::from_str::<Value>(body)
         .ok()
         .and_then(|value| {
-            let error = value.get("error")?;
+            let error = value.get("error").or_else(|| value.get("message"))?;
             error
                 .get("message")
                 .and_then(Value::as_str)
@@ -305,6 +779,24 @@ struct ChatResponse {
     choices: Vec<Choice>,
     #[serde(default)]
     usage: Option<ChatUsage>,
+    // Anthropic-style top-level stop reason.
+    #[serde(default)]
+    stop_reason: Option<Value>,
+}
+
+impl ChatResponse {
+    fn finish_reason(&self) -> Option<String> {
+        finish_reason_of(self.choices.first().and_then(|c| c.finish_reason.as_ref()), self.stop_reason.as_ref())
+    }
+}
+
+/// OpenAI-style `choices[0].finish_reason`, else Anthropic-style `stop_reason`.
+/// A non-string value counts as absent.
+fn finish_reason_of(choice_reason: Option<&Value>, stop_reason: Option<&Value>) -> Option<String> {
+    choice_reason
+        .and_then(Value::as_str)
+        .or_else(|| stop_reason.and_then(Value::as_str))
+        .map(str::to_string)
 }
 
 // Reasoning separation (one gateway, every caller).
@@ -321,8 +813,14 @@ struct ChatResponse {
 //     style gateways), including an unterminated leading block (output cut off
 //     mid-thought: the answer is empty) and a bare `</think>` with no opener
 //     (the template put `<think>` in the prompt: everything before it is thought).
-// Streaming is not used by this gateway (every call is one JSON response); if it
-// ever is, deltas must pass the same filter before they are forwarded.
+// Streaming (`complete_with_trace_streaming`) is the one exception: its deltas
+// are raw content, so they are forwarded only while the content opens as JSON
+// and carries no reasoning tag (`streamable`). Incremental display also requires
+// an endpoint with a known reasoning-separation contract. Custom endpoints and
+// models that may carry inline reasoning buffer until completion: a bare
+// `</think>` can arrive after answer-shaped reasoning. Served model metadata can
+// disable incremental display before its content is processed. The final answer
+// still comes from `strip_inline_reasoning`, never from the deltas.
 // Tool intents come ONLY from the structured `tool_calls` field, never from text.
 //
 // Provider docs consulted 2026-10-05 for the echo rule:
@@ -422,9 +920,57 @@ fn strip_inline_reasoning(content: &str) -> String {
     answer.trim().to_string()
 }
 
+/// Model-id fragments of families whose answers may carry inline reasoning that
+/// `strip_inline_reasoning` removes: DeepSeek-R1 and reasoner, QwQ, Qwen3 (hybrid
+/// thinking, so every Qwen3 id is listed), GLM-Z1, and any id naming R1, thinking
+/// or reasoning. Matched on the lowercased whole id, so a vendor prefix does not
+/// hide the family.
+const INLINE_REASONING_MODEL_MARKERS: [&str; 8] = [
+    "deepseek-r1",
+    "deepseek-reasoner",
+    "qwq",
+    "qwen3",
+    "glm-z1",
+    "-r1",
+    "thinking",
+    "reason",
+];
+
+/// A model-name hint can require buffering, but cannot establish that content
+/// is safe to display. Unknown aliases need an endpoint contract as well.
+fn may_carry_inline_reasoning(model: &str) -> bool {
+    let id = model.to_ascii_lowercase();
+    INLINE_REASONING_MODEL_MARKERS.iter().any(|marker| id.contains(marker))
+}
+
+/// Only the documented provider endpoints may opt into incremental display.
+/// A custom OpenAI-compatible gateway can put reasoning in `content`, even when
+/// its configured or served model name looks familiar. Check the final response
+/// URL too, so redirects cannot silently change the protocol we rely on.
+/// Reasoning-field contracts: see the provider documentation above.
+fn separates_reasoning(url: &reqwest::Url) -> bool {
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return false;
+    }
+    matches!(
+        (url.host_str(), url.path().trim_end_matches('/')),
+        (Some("api.openai.com"), "/v1" | "/v1/chat/completions")
+            | (Some("api.deepseek.com"), "/v1" | "/v1/chat/completions")
+            | (Some("openrouter.ai"), "/api/v1" | "/api/v1/chat/completions")
+    )
+}
+
 #[derive(Deserialize)]
 struct Choice {
     message: Message,
+    #[serde(default)]
+    finish_reason: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -442,11 +988,21 @@ struct AgentChatResponse {
     choices: Vec<AgentChoice>,
     #[serde(default)]
     usage: Option<ChatUsage>,
+    #[serde(default)]
+    stop_reason: Option<Value>,
+}
+
+impl AgentChatResponse {
+    fn finish_reason(&self) -> Option<String> {
+        finish_reason_of(self.choices.first().and_then(|c| c.finish_reason.as_ref()), self.stop_reason.as_ref())
+    }
 }
 
 #[derive(Deserialize)]
 struct AgentChoice {
     message: AgentResponseMessage,
+    #[serde(default)]
+    finish_reason: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -497,7 +1053,7 @@ struct WireFunctionCall {
     arguments: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct ChatUsage {
     #[serde(default)]
     prompt_tokens: u64,
@@ -513,6 +1069,9 @@ struct ChatUsage {
     // DeepSeek reports the cached share at the top level.
     #[serde(default)]
     prompt_cache_hit_tokens: Option<Value>,
+    // Anthropic-style gateways: cache reads at the top level.
+    #[serde(default)]
+    cache_read_input_tokens: Option<Value>,
 }
 
 /// Output-limit rules by model-name prefix: (prefix, request field, floor).
@@ -528,14 +1087,29 @@ const OUTPUT_LIMIT_RULES: &[(&str, &str, u32)] = &[
     ("gpt-5", "max_completion_tokens", 1024),
 ];
 
-/// `(field, value)` for the output ceiling of `model`, matched on the name after
-/// any `vendor/` routing prefix (e.g. `openai/o3-mini`).
-fn output_limit(model: &str, requested: u32) -> (&'static str, u32) {
+/// The request field and floor of the first rule matching `model`, matched on the
+/// name after any `vendor/` routing prefix (e.g. `openai/o3-mini`).
+fn output_limit_rule(model: &str) -> Option<(&'static str, u32)> {
     let name = model.rsplit('/').next().unwrap_or(model).to_ascii_lowercase();
     OUTPUT_LIMIT_RULES
         .iter()
         .find(|(prefix, _, _)| name.starts_with(prefix))
-        .map_or(("max_tokens", requested), |(_, field, floor)| (*field, requested.max(*floor)))
+        .map(|(_, field, floor)| (*field, *floor))
+}
+
+/// `(field, value)` for the output ceiling of `model`.
+fn output_limit(model: &str, requested: u32) -> (&'static str, u32) {
+    match output_limit_rule(model) {
+        Some((field, floor)) => (field, requested.max(floor)),
+        None => ("max_tokens", requested),
+    }
+}
+
+/// The smallest output ceiling `model` is ever sent with: the floor from
+/// `OUTPUT_LIMIT_RULES`, or zero when no rule applies. The pre-send guard keeps at
+/// least this much room, so a clamp is never raised back past the room left.
+pub(crate) fn output_floor(model: &str) -> u32 {
+    output_limit_rule(model).map_or(0, |(_, floor)| floor)
 }
 
 /// Sampling + output ceiling. The models that need `max_completion_tokens`
@@ -577,6 +1151,13 @@ fn cache_routing_field(base_url: &str) -> Option<&'static str> {
         .map(|(_, field)| *field)
 }
 
+/// Writes the caller's stable routing key into the field this endpoint documents.
+fn apply_cache_key(body: &mut Value, base_url: &str, cache_key: Option<&str>) {
+    if let (Some(key), Some(field)) = (cache_key, cache_routing_field(base_url)) {
+        body[field] = json!(key);
+    }
+}
+
 /// Build the chat-completion body. The output ceiling is mandatory, so every
 /// provider request is bounded.
 fn completion_body(model: &str, base_url: &str, request: &CompletionRequest) -> Value {
@@ -586,13 +1167,11 @@ fn completion_body(model: &str, base_url: &str, request: &CompletionRequest) -> 
         "messages": request.messages
     });
     apply_output_controls(&mut body, model, request.temperature, request.max_tokens);
-    if let (Some(key), Some(field)) = (&request.cache_key, cache_routing_field(base_url)) {
-        body[field] = json!(key);
-    }
+    apply_cache_key(&mut body, base_url, request.cache_key.as_deref());
     body
 }
 
-fn agent_request_body(model: &str, request: &AgentModelRequest) -> Value {
+fn agent_request_body(model: &str, base_url: &str, request: &AgentModelRequest) -> Value {
     let messages = request
         .messages
         .iter()
@@ -619,6 +1198,7 @@ fn agent_request_body(model: &str, request: &AgentModelRequest) -> Value {
         "tool_choice": "auto",
     });
     apply_output_controls(&mut body, model, request.temperature, request.max_tokens);
+    apply_cache_key(&mut body, base_url, request.cache_key.as_deref());
     body
 }
 
@@ -678,7 +1258,7 @@ fn parse_agent_response(
         .map(|choice| choice.message)
         .ok_or_else(|| {
             AgentModelFailure::with_trace(
-                model_error("AI agent response contained no choices", false),
+                invalid_response("AI agent response contained no choices"),
                 Some(actual_model.clone()),
                 latency_ms,
                 usage.clone(),
@@ -727,9 +1307,521 @@ fn token_usage(usage: ChatUsage) -> TokenUsage {
             .as_ref()
             .and_then(|details| details.get("cached_tokens"))
             .or(usage.prompt_cache_hit_tokens.as_ref())
+            .or(usage.cache_read_input_tokens.as_ref())
             .and_then(Value::as_u64)
             .unwrap_or(0),
     }
+}
+
+impl AiRuntime {
+    /// One completion requested as a stream. Content deltas reach `on_delta`
+    /// incrementally only under a known reasoning-separation contract; otherwise
+    /// the sanitized answer arrives at completion. A provider that refuses
+    /// streaming gets the plain request. A
+    /// plain JSON answer to a streamed request is read as is, so no call is
+    /// billed twice.
+    async fn send_completion_streaming(
+        &self,
+        body: &Value,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<CompletionReply, AgentModelFailure> {
+        if self.stream_unsupported.load(Ordering::Relaxed) {
+            return self.plain_as_one_delta(body, on_delta).await;
+        }
+        let mut streamed = body.clone();
+        streamed["stream"] = json!(true);
+        streamed["stream_options"] = json!({"include_usage": true});
+        let started = Instant::now();
+        let (mut response, retry_count) = match self.post_streaming(&streamed).await {
+            Ok(Some(open)) => open,
+            Ok(None) => {
+                self.stream_unsupported.store(true, Ordering::Relaxed);
+                return self.plain_as_one_delta(body, on_delta).await;
+            }
+            Err(failure) => return Err(failure.into_trace()),
+        };
+        let header_request_id = provider_request_id_from_headers(response.headers());
+        let fail = |error: ModelError| {
+            ChatCompletionFailure::new(error, elapsed_ms(started), retry_count, header_request_id.clone())
+                .into_trace()
+        };
+        if !is_event_stream(&response) {
+            let value = response
+                .json::<Value>()
+                .await
+                .map_err(|error| fail(invalid_response(format!("AI response envelope invalid: {error}"))))?;
+            let envelope = serde_json::from_value::<ChatResponse>(value)
+                .map_err(|_| fail(invalid_response("AI response envelope invalid")))?;
+            let reply = self.completion_reply(envelope, elapsed_ms(started), retry_count, header_request_id.clone())?;
+            if !is_truncated(reply.finish_reason.as_deref()) && !reply.response.content.is_empty() && streamable(&reply.response.content) {
+                on_delta(&reply.response.content);
+            }
+            return Ok(reply);
+        }
+        let mut fold = StreamFold::for_endpoint(
+            &self.config.base_url,
+            response.url(),
+            &self.config.model,
+        );
+        loop {
+            match response.chunk().await {
+                Ok(Some(bytes)) => {
+                    if let Err(message) = fold.push(&bytes, on_delta) {
+                        let error = stream_error(message, false);
+                        return Err(fold.failure(error, elapsed_ms(started), retry_count, header_request_id.clone()));
+                    }
+                }
+                Ok(None) => break,
+                Err(error) => {
+                    let retryable = error.is_timeout();
+                    let error = stream_error(format!("AI stream failed: {error}"), retryable);
+                    return Err(fold.failure(error, elapsed_ms(started), retry_count, header_request_id.clone()));
+                }
+            }
+            if fold.done {
+                break;
+            }
+        }
+        if let Err(message) = fold.finish(on_delta) {
+            let error = stream_error(message, false);
+            return Err(fold.failure(error, elapsed_ms(started), retry_count, header_request_id.clone()));
+        }
+        fold.into_reply(&self.config.model, elapsed_ms(started), retry_count, header_request_id)
+    }
+
+    /// The plain request, its answer delivered as one delta when it may be shown.
+    async fn plain_as_one_delta(
+        &self,
+        body: &Value,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<CompletionReply, AgentModelFailure> {
+        let reply = self.send_completion(body).await?;
+        if !is_truncated(reply.finish_reason.as_deref()) && !reply.response.content.is_empty() && streamable(&reply.response.content) {
+            on_delta(&reply.response.content);
+        }
+        Ok(reply)
+    }
+
+    /// The streamed request under the same transport policy as
+    /// `post_chat_completion`. `Ok(None)` means this endpoint does not accept
+    /// streaming (a 400, 404, 405 or 422 whose body names the stream), so the
+    /// caller sends the plain request. Any other failure is a typed error.
+    async fn post_streaming(
+        &self,
+        body: &Value,
+    ) -> Result<Option<(reqwest::Response, u32)>, ChatCompletionFailure> {
+        let endpoint = format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'));
+        let started = Instant::now();
+        for attempt in 0..=self.transport_retries {
+            let response = self
+                .client
+                .post(&endpoint)
+                .bearer_auth(&self.api_key)
+                .json(body)
+                .send()
+                .await;
+            match response {
+                Ok(response) if response.status().is_success() => {
+                    return Ok(Some((response, attempt)));
+                }
+                Ok(response) => {
+                    let status = response.status();
+                    let provider_request_id = provider_request_id_from_headers(response.headers());
+                    let retryable = status.is_server_error() || status.as_u16() == 429;
+                    if retryable && attempt < self.transport_retries {
+                        retry_delay(attempt).await;
+                        continue;
+                    }
+                    let body = response.text().await.unwrap_or_default();
+                    if stream_refused(status, &body) {
+                        return Ok(None);
+                    }
+                    return Err(ChatCompletionFailure::new(
+                        provider_http_error(status, &body, retryable),
+                        elapsed_ms(started),
+                        attempt,
+                        provider_request_id,
+                    ));
+                }
+                Err(error) => {
+                    let retryable = error.is_timeout() || error.is_connect();
+                    if retryable && attempt < self.transport_retries {
+                        retry_delay(attempt).await;
+                        continue;
+                    }
+                    return Err(ChatCompletionFailure::new(
+                        transport_error(&error, retryable),
+                        elapsed_ms(started),
+                        attempt,
+                        None,
+                    ));
+                }
+            }
+        }
+        unreachable!("retry loop always returns")
+    }
+}
+
+/// Whether a failed streamed request means "this endpoint does not stream":
+/// a client-error status whose body names the stream parameter or the stream.
+fn stream_refused(status: reqwest::StatusCode, body: &str) -> bool {
+    matches!(status.as_u16(), 400 | 404 | 405 | 422) && body.to_ascii_lowercase().contains("stream")
+}
+
+fn is_event_stream(response: &reqwest::Response) -> bool {
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.trim().to_ascii_lowercase().starts_with("text/event-stream"))
+}
+
+/// Whether content seen so far may be forwarded as it streams. The coach reply
+/// is one JSON object, so content that does not open with `{` (an inline
+/// reasoning block, say) or that carries a reasoning tag is never forwarded:
+/// the call still completes, the answer just arrives in one piece.
+fn streamable(content_so_far: &str) -> bool {
+    let opens_as_json = content_so_far
+        .trim_start()
+        .chars()
+        .next()
+        .map_or(true, |first| first == '{');
+    opens_as_json && next_reasoning_tag(content_so_far).is_none()
+}
+
+/// Bounds on one streamed reply. A provider that exceeds them is failing, not
+/// answering: the call ends with a non-retryable error.
+const MAX_STREAM_LINE_BYTES: usize = 1 << 20;
+const MAX_STREAM_DATA_BYTES: usize = 1 << 20;
+const MAX_STREAM_CONTENT_BYTES: usize = 8 << 20;
+
+/// Longest reasoning tag in bytes (`<thinking>`). A tag can straddle two chunks
+/// by at most this much minus one.
+const MAX_REASONING_TAG_LEN: usize = 10;
+
+/// Folds the server-sent events of one streamed chat completion into the parts
+/// a plain reply carries. Only `delta.content` is answer text; reasoning fields
+/// are never read. Lines end in LF, CRLF or a bare CR.
+#[derive(Default)]
+struct StreamFold {
+    /// Bytes of the line being read (UTF-8 is decoded once the line is whole).
+    line: Vec<u8>,
+    /// The last line ended on a CR, so an LF right after it is the same break.
+    skip_lf: bool,
+    /// `event:` name of the event being read.
+    event: Option<String>,
+    /// `data:` payloads of the event being read, and their total size.
+    data: Vec<String>,
+    data_bytes: usize,
+    /// Answer text so far; `None` while no content delta has arrived.
+    content: Option<String>,
+    /// Bytes of `content` already forwarded to the caller.
+    forwarded: usize,
+    /// The first non-blank character of the content has been seen.
+    opened: bool,
+    /// Whether deltas are still forwarded (see [`streamable`]). Latched off for good.
+    streaming: bool,
+    /// The model may carry inline reasoning: nothing is forwarded until the reply
+    /// completes, then the sanitized answer goes out as one delta.
+    buffered: bool,
+    finish_reason: Option<String>,
+    usage: Option<ChatUsage>,
+    model: Option<String>,
+    id: Option<String>,
+    done: bool,
+}
+
+impl StreamFold {
+    fn for_endpoint(base_url: &str, response_url: &reqwest::Url, model: &str) -> Self {
+        let known_protocol = reqwest::Url::parse(base_url)
+            .is_ok_and(|url| separates_reasoning(&url))
+            && separates_reasoning(response_url);
+        if known_protocol && !may_carry_inline_reasoning(model) {
+            Self::new()
+        } else {
+            Self::buffered()
+        }
+    }
+
+    /// Forwards content deltas as they arrive, while [`streamable`] allows.
+    fn new() -> Self {
+        Self { streaming: true, ..Self::default() }
+    }
+
+    /// Forwards nothing until the reply completes, then one sanitized delta.
+    fn buffered() -> Self {
+        Self { streaming: false, buffered: true, ..Self::default() }
+    }
+
+    /// The reply a plain request would have returned for the same stream.
+    fn into_reply(
+        mut self,
+        fallback_model: &str,
+        latency_ms: u64,
+        retry_count: u32,
+        header_request_id: Option<String>,
+    ) -> Result<CompletionReply, AgentModelFailure> {
+        if !self.done && self.finish_reason.is_none() {
+            return Err(self.failure(
+                stream_error("AI stream ended before the reply completed", true),
+                latency_ms,
+                retry_count,
+                header_request_id,
+            ));
+        }
+        let usage = self.usage.take().map(token_usage);
+        let finish_reason = self.finish_reason.clone();
+        let truncated = is_truncated(finish_reason.as_deref());
+        let model = self.model.clone().unwrap_or_else(|| fallback_model.to_string());
+        let provider_request_id = prefer_provider_request_id(header_request_id, self.id.clone());
+        let content = match self.content.take() {
+            Some(text) => strip_inline_reasoning(&text),
+            // Same rule as the plain path: no text at all is a truncation when
+            // the ceiling was hit, and otherwise an envelope without choices.
+            None if truncated => String::new(),
+            None => {
+                return Err(AgentModelFailure::with_trace(
+                    invalid_response("AI response contained no choices"),
+                    Some(model),
+                    latency_ms,
+                    usage,
+                    provider_request_id,
+                    retry_count,
+                ));
+            }
+        };
+        Ok(CompletionReply {
+            response: CompletionResponse {
+                content,
+                model,
+                latency_ms,
+                usage,
+                provider_request_id,
+            },
+            retry_count,
+            finish_reason,
+        })
+    }
+
+    /// A failure of this stream that keeps what the fold already read: the usage
+    /// of a usage event that arrived, the served model, and the body's response
+    /// id. The header request id takes precedence, as on every other path.
+    fn failure(
+        &self,
+        error: ModelError,
+        latency_ms: u64,
+        retry_count: u32,
+        header_request_id: Option<String>,
+    ) -> AgentModelFailure {
+        AgentModelFailure::with_trace(
+            error,
+            self.model.clone(),
+            latency_ms,
+            self.usage.clone().map(token_usage),
+            prefer_provider_request_id(header_request_id, self.id.clone()),
+            retry_count,
+        )
+    }
+
+    fn push(&mut self, bytes: &[u8], on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        for &byte in bytes {
+            if self.done {
+                break;
+            }
+            match byte {
+                b'\r' => {
+                    self.end_line(on_delta)?;
+                    self.skip_lf = true;
+                }
+                b'\n' => {
+                    if !std::mem::take(&mut self.skip_lf) {
+                        self.end_line(on_delta)?;
+                    }
+                }
+                _ => {
+                    self.skip_lf = false;
+                    self.line.push(byte);
+                    if self.line.len() > MAX_STREAM_LINE_BYTES {
+                        return Err("AI stream line too long".into());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Flushes a last line that had no terminator, then the open event, then any
+    /// answer text still held back while the stream was undecided.
+    fn finish(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        if !self.line.is_empty() {
+            self.end_line(on_delta)?;
+        }
+        self.dispatch(on_delta)?;
+        if self.buffered {
+            // Only a completed, not cut-off reply is shown, and only its final
+            // answer: the same text `into_reply` returns. If late model metadata
+            // stopped an incremental stream, the final receipt replaces it;
+            // replaying the full answer here would duplicate an emitted prefix.
+            let completed = self.done || self.finish_reason.is_some();
+            if completed && self.forwarded == 0 && !is_truncated(self.finish_reason.as_deref()) {
+                let answer = self.content.as_deref().map(strip_inline_reasoning).unwrap_or_default();
+                if !answer.is_empty() {
+                    on_delta(&answer);
+                }
+            }
+            return Ok(());
+        }
+        if self.streaming && self.opened {
+            if let Some(content) = self.content.as_deref() {
+                if self.forwarded < content.len() {
+                    on_delta(&content[self.forwarded..]);
+                    self.forwarded = content.len();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn end_line(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        let line = std::mem::take(&mut self.line);
+        self.line_read(&line, on_delta)
+    }
+
+    fn line_read(&mut self, line: &[u8], on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        if line.is_empty() {
+            return self.dispatch(on_delta);
+        }
+        let line = String::from_utf8_lossy(line);
+        if let Some(value) = line.strip_prefix("data:") {
+            let value = value.strip_prefix(' ').unwrap_or(value);
+            self.data_bytes += value.len();
+            if self.data_bytes > MAX_STREAM_DATA_BYTES {
+                return Err("AI stream event too large".into());
+            }
+            self.data.push(value.to_string());
+        } else if let Some(name) = line.strip_prefix("event:") {
+            self.event = Some(name.trim().to_string());
+        }
+        Ok(())
+    }
+
+    /// Applies the event that just ended. Its `event:` name is consumed either way.
+    fn dispatch(&mut self, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        let event = self.event.take();
+        if self.data.is_empty() {
+            return Ok(());
+        }
+        let data = std::mem::take(&mut self.data).join("\n");
+        self.data_bytes = 0;
+        if event.as_deref() == Some("error") {
+            return Err(match extract_provider_error_detail(&data) {
+                Some(detail) => format!("AI provider stream failed: {detail}"),
+                None => "AI provider stream failed".to_string(),
+            });
+        }
+        if data.trim() == "[DONE]" {
+            self.done = true;
+            return Ok(());
+        }
+        let value: Value = serde_json::from_str(&data)
+            .map_err(|_| "AI stream chunk invalid".to_string())?;
+        if value.get("error").is_some_and(|error| !error.is_null()) {
+            return Err(match extract_provider_error_detail(&data) {
+                Some(detail) => format!("AI provider stream failed: {detail}"),
+                None => "AI provider stream failed".to_string(),
+            });
+        }
+        if self.id.is_none() {
+            self.id = value.get("id").and_then(Value::as_str).map(str::to_string);
+        }
+        if self.model.is_none() {
+            self.model = value.get("model").and_then(Value::as_str).map(str::to_string);
+        }
+        // Apply every reported model before reading this event's content. The
+        // decision is one-way: metadata can require buffering, never establish
+        // trust in a custom endpoint or reopen a stream after a reasoning tag.
+        if value.get("model").and_then(Value::as_str).is_some_and(may_carry_inline_reasoning) {
+            self.streaming = false;
+            self.buffered = true;
+        }
+        // With include_usage the counts arrive in a final chunk with no choices.
+        // A later chunk whose usage does not parse keeps the earlier valid counts.
+        if let Some(usage) = value.get("usage").filter(|usage| !usage.is_null()) {
+            if let Ok(parsed) = serde_json::from_value::<ChatUsage>(usage.clone()) {
+                self.usage = Some(parsed);
+            }
+        }
+        let Some(choice) = value.get("choices").and_then(Value::as_array).and_then(|choices| choices.first()) else {
+            return Ok(());
+        };
+        if let Some(text) = choice.pointer("/delta/content").and_then(Value::as_str).filter(|text| !text.is_empty()) {
+            self.append_content(text, on_delta)?;
+        }
+        if let Some(reason) = finish_reason_of(choice.get("finish_reason"), value.get("stop_reason")) {
+            self.finish_reason = Some(reason);
+        }
+        Ok(())
+    }
+
+    /// Adds a content delta and forwards the part that is safe to show. The
+    /// reply must open as JSON and carry no reasoning tag; the tag check scans
+    /// only the new text (plus the few bytes a tag can straddle), and a trailing
+    /// partial `<...` is held back until it resolves, so a tag prefix is never
+    /// forwarded.
+    fn append_content(&mut self, text: &str, on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send)) -> Result<(), String> {
+        let content = self.content.get_or_insert_with(String::new);
+        let previous_len = content.len();
+        if previous_len + text.len() > MAX_STREAM_CONTENT_BYTES {
+            return Err("AI stream content too large".into());
+        }
+        content.push_str(text);
+        if !self.streaming {
+            return Ok(());
+        }
+        let content = self.content.as_deref().unwrap_or_default();
+        if !self.opened {
+            match content.trim_start().chars().next() {
+                None => return Ok(()),
+                Some(first) => {
+                    self.opened = true;
+                    if first != '{' {
+                        self.streaming = false;
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        let mut scan_from = previous_len.saturating_sub(MAX_REASONING_TAG_LEN - 1);
+        while !content.is_char_boundary(scan_from) {
+            scan_from -= 1;
+        }
+        if next_reasoning_tag(&content[scan_from..]).is_some() {
+            self.streaming = false;
+            return Ok(());
+        }
+        let safe_end = content.len() - partial_reasoning_tag_len(content);
+        if safe_end > self.forwarded {
+            on_delta(&content[self.forwarded..safe_end]);
+            self.forwarded = safe_end;
+        }
+        Ok(())
+    }
+}
+
+/// Bytes at the end of `text` that could still become a reasoning tag: a
+/// trailing `<` followed by a prefix of one, compared case-insensitively.
+fn partial_reasoning_tag_len(text: &str) -> usize {
+    let mut start = text.len().saturating_sub(MAX_REASONING_TAG_LEN - 1);
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    let tail = &text[start..];
+    let Some(open) = tail.rfind('<') else { return 0 };
+    let candidate = tail[open..].to_ascii_lowercase();
+    let could_become_tag = INLINE_REASONING_TAGS
+        .iter()
+        .any(|(tag, _)| tag.len() > candidate.len() && tag.starts_with(candidate.as_str()));
+    if could_become_tag { tail.len() - open } else { 0 }
 }
 
 async fn retry_delay(attempt: u32) {
@@ -757,6 +1849,20 @@ fn prefer_provider_request_id(
 
 fn model_error(message: impl Into<String>, retryable: bool) -> ModelError {
     ModelError::new(message, retryable)
+}
+
+fn invalid_response(message: impl Into<String>) -> ModelError {
+    ModelError::classed(message, false, "invalid_response")
+}
+
+fn stream_error(message: impl Into<String>, retryable: bool) -> ModelError {
+    ModelError::classed(message, retryable, "stream_error")
+}
+
+/// A send that never got an answer: a timeout, or a transport failure.
+fn transport_error(error: &reqwest::Error, retryable: bool) -> ModelError {
+    let class = if error.is_timeout() { "timeout" } else { "transport" };
+    ModelError::classed(format!("AI request failed: {error}"), retryable, class)
 }
 
 #[cfg(test)]
@@ -841,6 +1947,7 @@ mod tests {
             tools: vec![],
             temperature: 0.2,
             max_tokens: 100,
+            cache_key: None,
         }
     }
 
@@ -985,6 +2092,8 @@ mod tests {
         let none = usage(r#"{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":"odd"}"#);
         assert_eq!((none.input_tokens, none.cached_input_tokens), (100, 0));
         assert!(!serde_json::to_string(&none).unwrap().contains("cachedInputTokens"));
+        let anthropic = usage(r#"{"prompt_tokens":100,"completion_tokens":5,"cache_read_input_tokens":50}"#);
+        assert_eq!(anthropic.cached_input_tokens, 50);
     }
 
     #[test]
@@ -1047,11 +2156,12 @@ mod tests {
             }],
             temperature: 0.1,
             max_tokens: 1_500,
+            cache_key: None,
         };
-        let body = agent_request_body("fake-model", &request);
+        let body = agent_request_body("fake-model", "https://example.test/v1", &request);
         assert!(body.get("response_format").is_none());
         assert_eq!(body["max_tokens"], json!(1_500));
-        let reasoning = agent_request_body("o3-mini", &request);
+        let reasoning = agent_request_body("o3-mini", "https://example.test/v1", &request);
         assert_eq!(reasoning["max_completion_tokens"], json!(1_500));
         assert!(reasoning.get("max_tokens").is_none());
         assert_eq!(body["tool_choice"], "auto");
@@ -1267,13 +2377,14 @@ mod tests {
                 tools: vec![],
                 temperature: 0.0,
                 max_tokens: 16,
+                cache_key: None,
             };
-            let body = agent_request_body("deepseek-reasoner", &request);
+            let body = agent_request_body("deepseek-reasoner", "https://example.test/v1", &request);
             assert!(body["messages"][1][echoed].to_string().contains(COT), "{name} must echo in-turn");
             assert_eq!(body["messages"][1]["tool_calls"][0]["id"], "call-1");
             // The output ceiling rule is untouched by the echo.
             assert_eq!(body["max_tokens"], json!(16));
-            assert_eq!(agent_request_body("gpt-5", &request)["max_completion_tokens"], json!(1024));
+            assert_eq!(agent_request_body("gpt-5", "https://example.test/v1", &request)["max_completion_tokens"], json!(1024));
 
             // The same turn without an echo (a final answer, or a provider that
             // sent none) serializes no reasoning field at all.
@@ -1281,7 +2392,7 @@ mod tests {
             if let AgentMessage::Assistant { reasoning, .. } = &mut stripped.messages[1] {
                 *reasoning = None;
             }
-            let body = agent_request_body("deepseek-reasoner", &stripped);
+            let body = agent_request_body("deepseek-reasoner", "https://example.test/v1", &stripped);
             for field in ["reasoning_content", "reasoning", "reasoning_details"] {
                 assert!(body["messages"][1].get(field).is_none(), "{name}: {field}");
             }
@@ -1348,5 +2459,1500 @@ mod tests {
             .as_deref(),
             Some("provider-request")
         );
+    }
+
+    #[test]
+    fn ledger_usage_keeps_each_provider_cache_and_reasoning_shape() {
+        let ledger_usage = |raw: Value| {
+            let usage = token_usage(serde_json::from_value::<ChatUsage>(raw).unwrap());
+            provider_usage_json(&usage)
+        };
+        let openai = ledger_usage(json!({"prompt_tokens": 100, "completion_tokens": 40,
+            "prompt_tokens_details": {"cached_tokens": 64},
+            "completion_tokens_details": {"reasoning_tokens": 30}}));
+        assert_eq!(openai, json!({"promptTokens": 100, "completionTokens": 40, "totalTokens": 140,
+            "cachedInputTokens": 64, "reasoningTokens": 30}));
+        let deepseek = ledger_usage(json!({"prompt_tokens": 100, "completion_tokens": 5,
+            "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20}));
+        assert_eq!(deepseek["cachedInputTokens"], json!(80));
+        assert!(deepseek.get("reasoningTokens").is_none());
+        let anthropic = ledger_usage(json!({"prompt_tokens": 100, "completion_tokens": 5,
+            "cache_read_input_tokens": 50}));
+        assert_eq!(anthropic["cachedInputTokens"], json!(50));
+        assert!(anthropic.get("estimated").is_none());
+    }
+
+    #[test]
+    fn ledger_estimates_only_a_successful_call_without_provider_usage() {
+        let request = json!({"model": "m", "messages": [{"role": "user", "content": "x".repeat(400)}]});
+        let estimate = estimated_usage_json(&request, &"y".repeat(40));
+        assert_eq!(estimate["estimated"], json!(true));
+        assert_eq!(estimate["promptTokens"], json!(u64::from(estimate_tokens(&request.to_string()))));
+        assert_eq!(estimate["completionTokens"], json!(10));
+        assert_eq!(estimate["totalTokens"], json!(estimate["promptTokens"].as_u64().unwrap() + 10));
+
+        let error = model_error("boom", true);
+        let failed = LedgerCall {
+            model: "m",
+            latency_ms: 3,
+            usage: None,
+            provider_request_id: None,
+            outcome: Err(&error),
+            finish_reason: None,
+            admission: Admission::default(),
+        };
+        let row = ledger_record("p", &request, failed);
+        assert_eq!(row.usage_json, None);
+        assert_eq!(row.response_hash, None);
+        assert_eq!(row.request_hash, UNLINKED_REQUEST_HASH, "a ledger row stores no content hash");
+        let error: Value = serde_json::from_str(&row.error_json.unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "provider_error", "retryable": true}));
+    }
+
+    #[tokio::test]
+    async fn gateway_ledgers_each_plain_call_once_and_not_the_traced_coach_call() {
+        use std::sync::Mutex;
+        let rows = Arc::new(Mutex::new(Vec::<ielts_db::LlmInvocationRecord>::new()));
+        let sink_rows = Arc::clone(&rows);
+        let sink: LedgerSink = Arc::new(move |row| sink_rows.lock().unwrap().push(row));
+        let (runtime, server) = http_fixture(vec![
+            (200, r#"{"id":"traced","model":"actual-v2","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            (200, r#"{"id":"plain-request","model":"actual-v2","usage":{"prompt_tokens":100,"completion_tokens":4,"prompt_tokens_details":{"cached_tokens":60},"completion_tokens_details":{"reasoning_tokens":2}},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            (200, r#"{"id":"agent-request","model":"actual-v2","choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            (401, r#"{"error":{"message":"bad key"}}"#, false),
+        ]);
+        let runtime = runtime.with_ledger(sink);
+
+        runtime.complete_with_trace(fixture_completion_request()).await.unwrap();
+        assert!(rows.lock().unwrap().is_empty(), "the coach trace owns its own row");
+
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        runtime.respond(fixture_agent_request()).await.unwrap();
+        runtime.complete(fixture_completion_request()).await.unwrap_err();
+        server.join().unwrap();
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 3, "one row per plain or agent call");
+        let plain: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(plain["promptTokens"], json!(100));
+        assert_eq!(plain["cachedInputTokens"], json!(60));
+        assert_eq!(plain["reasoningTokens"], json!(2));
+        assert_eq!(rows[0].provider_request_id.as_deref(), Some("plain-request"));
+        assert_eq!(rows[0].model, "actual-v2");
+        assert!(rows[0].error_json.is_none() && rows[0].response_hash.is_none());
+        assert_eq!(rows[0].request_hash, UNLINKED_REQUEST_HASH);
+        let agent: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(agent["estimated"], json!(true));
+        assert!(rows[2].usage_json.is_none() && rows[2].response_hash.is_none());
+        // The provider's own words and any URL stay out of the ledger: status and class only.
+        let error = rows[2].error_json.as_deref().unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(error).unwrap(),
+            json!({"status": 401, "class": "http_4xx", "retryable": false})
+        );
+        assert!(!error.contains("bad key") && !error.contains("https://"));
+        assert_ne!(rows[0].id, rows[1].id);
+    }
+
+
+    #[test]
+    fn provider_counts_are_bounded_at_write_time_and_never_overflow() {
+        let usage = TokenUsage {
+            input_tokens: u64::MAX,
+            output_tokens: u64::MAX,
+            reasoning_tokens: u64::MAX,
+            cached_input_tokens: u64::MAX,
+        };
+        let value = provider_usage_json(&usage);
+        assert_eq!(value["promptTokens"], json!(MAX_USAGE_COUNT));
+        assert_eq!(value["completionTokens"], json!(MAX_USAGE_COUNT));
+        assert_eq!(value["totalTokens"], json!(MAX_USAGE_COUNT * 2));
+        assert_eq!(value["cachedInputTokens"], json!(MAX_USAGE_COUNT));
+        assert_eq!(value["reasoningTokens"], json!(MAX_USAGE_COUNT));
+        assert!(MAX_USAGE_COUNT <= i64::MAX as u64 / 4);
+    }
+
+    #[test]
+    fn finish_reason_is_read_from_the_openai_or_anthropic_shape() {
+        let reason = |raw: Value| serde_json::from_value::<ChatResponse>(raw).unwrap().finish_reason();
+        let choice = |finish: Value| json!({"choices":[{"message":{"content":"x"}, "finish_reason": finish}]});
+        assert_eq!(reason(choice(json!("length"))).as_deref(), Some("length"));
+        assert_eq!(reason(choice(json!("stop"))).as_deref(), Some("stop"));
+        assert_eq!(reason(json!({"choices":[{"message":{"content":"x"}}]})), None);
+        // A non-string value is treated as absent, never as an envelope error.
+        assert_eq!(reason(choice(json!(5))), None);
+        assert_eq!(
+            reason(json!({"stop_reason":"max_tokens","choices":[{"message":{"content":"x"}}]})).as_deref(),
+            Some("max_tokens"),
+        );
+        assert!(is_truncated(Some("length")) && is_truncated(Some("max_tokens")));
+        assert!(!is_truncated(Some("stop")) && !is_truncated(Some("tool_calls")) && !is_truncated(None));
+    }
+
+    #[tokio::test]
+    async fn truncated_replies_are_typed_errors_and_ledgered_with_their_finish_reason() {
+        use std::sync::Mutex;
+        let rows = Arc::new(Mutex::new(Vec::<ielts_db::LlmInvocationRecord>::new()));
+        let sink_rows = Arc::clone(&rows);
+        let sink: LedgerSink = Arc::new(move |row| sink_rows.lock().unwrap().push(row));
+        let (runtime, server) = http_fixture(vec![
+            // 1. plain call cut off at the ceiling: typed error, not content.
+            (200, r#"{"id":"cut","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":"{\"ok\":"},"finish_reason":"length"}]}"#, false),
+            // 2. ordinary stop: content, finishReason stop.
+            (200, r#"{"id":"stop","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#, false),
+            // 3. no finish reason at all: content, and the ledger says nothing about it.
+            (200, r#"{"id":"missing","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#, false),
+            // 4. agent reply with an Anthropic-style top-level stop_reason: content kept, reason ledgered.
+            (200, r#"{"id":"agent","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"stop_reason":"max_tokens","choices":[{"message":{"content":"partial answer"}}]}"#, false),
+            // 5. traced coach call cut off: typed error, no ledger row of its own.
+            (200, r#"{"id":"traced","model":"m","choices":[{"message":{"content":null},"finish_reason":"length"}]}"#, false),
+        ]);
+        let runtime = runtime.with_ledger(sink);
+
+        let error = runtime.complete(fixture_completion_request()).await.unwrap_err();
+        assert_eq!(error.message, "model output truncated at max_tokens");
+        assert!(error.truncated && !error.retryable);
+        assert_eq!(runtime.complete(fixture_completion_request()).await.unwrap().content, r#"{"ok":true}"#);
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        // 4. an agent round cut off at the ceiling is a typed error, never a partial answer.
+        let agent = runtime.respond(fixture_agent_request()).await.unwrap_err();
+        assert!(agent.error.truncated && !agent.error.retryable);
+        let traced = runtime.complete_with_trace(fixture_completion_request()).await.unwrap_err();
+        assert!(traced.error.truncated);
+        server.join().unwrap();
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 4, "the traced coach call is not ledgered here");
+        let usage = |row: &ielts_db::LlmInvocationRecord| -> Value {
+            serde_json::from_str(row.usage_json.as_deref().unwrap()).unwrap()
+        };
+        assert_eq!(usage(&rows[0])["finishReason"], json!("length"));
+        assert_eq!(usage(&rows[0])["completionTokens"], json!(2000));
+        assert!(rows[0].response_hash.is_none());
+        let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "truncated", "retryable": false}));
+        assert_eq!(usage(&rows[1])["finishReason"], json!("stop"));
+        assert!(rows[1].response_hash.is_none() && rows[1].error_json.is_none());
+        assert!(usage(&rows[2]).get("finishReason").is_none());
+        assert_eq!(usage(&rows[2])["promptTokens"], json!(5));
+        assert_eq!(usage(&rows[3])["finishReason"], json!("max_tokens"));
+        let agent_error: Value = serde_json::from_str(rows[3].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(agent_error, json!({"status": null, "class": "truncated", "retryable": false}));
+        assert!(rows[3].response_hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_truncated_agent_text_reply_fails_the_round_with_a_failed_ledger_row() {
+        let reply = r#"{"id":"cut-agent","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":"The answer is hal"},"finish_reason":"length"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let failure = runtime.respond(fixture_agent_request()).await.unwrap_err();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 1, "a truncated round is never retried");
+        assert!(failure.error.truncated && !failure.error.retryable);
+        assert_eq!(failure.error.class, "truncated");
+        assert_eq!(failure.model.as_deref(), Some("m"), "the trace still names the served model");
+        assert_eq!(failure.usage.as_ref().map(|usage| usage.output_tokens), Some(2_000));
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].provider_request_id.as_deref(), Some("cut-agent"));
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("length"));
+        assert_eq!(usage["completionTokens"], json!(2000));
+        let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "truncated", "retryable": false}));
+        assert!(rows[0].response_hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_truncated_agent_tool_call_is_never_returned_with_its_arguments() {
+        // The arguments cut off mid-object: returning this as a tool call would
+        // hand the agent service half a call.
+        let reply = r#"{"id":"cut-tool","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":null,"tool_calls":[{"id":"call-1","function":{"name":"read_file","arguments":"{\"path\":\"/tm"}}]},"finish_reason":"length"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let failure = runtime.respond(fixture_agent_request()).await.unwrap_err();
+        server.join().unwrap();
+        assert!(failure.error.truncated && !failure.error.retryable);
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error, json!({"status": null, "class": "truncated", "retryable": false}));
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("length"));
+    }
+
+    #[tokio::test]
+    async fn a_normal_stop_agent_reply_with_a_tool_call_is_unchanged() {
+        let reply = r#"{"id":"stop-tool","model":"m","usage":{"prompt_tokens":12,"completion_tokens":20},"choices":[{"message":{"content":null,"tool_calls":[{"id":"call-1","function":{"name":"read_file","arguments":"{\"path\":\"/tmp/a\"}"}}]},"finish_reason":"tool_calls"}]}"#;
+        let stop = r#"{"id":"stop-text","model":"m","usage":{"prompt_tokens":5,"completion_tokens":3},"choices":[{"message":{"content":"Done."},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (200, "application/json", reply),
+            (200, "application/json", stop),
+        ]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let tool_round = runtime.respond(fixture_agent_request()).await.unwrap();
+        let text_round = runtime.respond(fixture_agent_request()).await.unwrap();
+        server.join().unwrap();
+        assert_eq!(tool_round.tool_calls.len(), 1);
+        assert_eq!(tool_round.tool_calls[0].name, "read_file");
+        assert_eq!(tool_round.tool_calls[0].arguments_json, r#"{"path":"/tmp/a"}"#);
+        assert_eq!(text_round.content.as_deref(), Some("Done."));
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2);
+        for row in rows.iter() {
+            assert!(row.error_json.is_none(), "a stop reply is a success row");
+        }
+        let usage: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("stop"));
+    }
+
+    #[tokio::test]
+    async fn a_usage_less_tool_only_round_is_estimated_from_its_tool_calls() {
+        // content is null: the only output is a tool call, and the provider sent no usage.
+        let reply = r#"{"id":"tool-only","model":"m","choices":[{"message":{"content":null,"tool_calls":[{"id":"call-1","function":{"name":"read_file","arguments":"{\"path\":\"/tmp/a long path for the estimate\"}"}}]},"finish_reason":"tool_calls"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let round = runtime.respond(fixture_agent_request()).await.unwrap();
+        server.join().unwrap();
+        assert_eq!(round.tool_calls[0].name, "read_file");
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["estimated"], json!(true));
+        let completion = usage["completionTokens"].as_u64().unwrap();
+        assert!(completion > 0, "a tool-only round is not estimated as zero tokens");
+        let expected = u64::from(estimate_tokens(
+            "\nread_file\n{\"path\":\"/tmp/a long path for the estimate\"}",
+        ));
+        assert_eq!(completion, expected);
+        // Only counts are stored: neither the tool name nor its arguments reach the row.
+        let stored = rows[0].usage_json.as_deref().unwrap();
+        assert!(!stored.contains("read_file") && !stored.contains("/tmp/a"));
+    }
+
+    #[tokio::test]
+    async fn a_truncated_sidecar_completion_returns_the_partial_text_and_truncated_true() {
+        let (runtime, server) = http_fixture(vec![(
+            200,
+            r#"{"id":"cut","model":"m","usage":{"prompt_tokens":12,"completion_tokens":2000},"choices":[{"message":{"content":"{\"digest\":"},"finish_reason":"length"}]}"#,
+            false,
+        )]);
+        let completion = runtime.complete_partial(fixture_completion_request()).await.unwrap();
+        server.join().unwrap();
+        assert!(completion.truncated);
+        assert_eq!(completion.response.content, r#"{"digest":"#);
+    }
+
+    #[test]
+    fn finish_reason_lands_in_ledger_usage_even_without_provider_counts() {
+        let request = json!({"model": "m", "messages": []});
+        let row = ledger_record("p", &request, LedgerCall {
+            model: "m",
+            latency_ms: 1,
+            usage: None,
+            provider_request_id: None,
+            outcome: Ok("text"),
+            finish_reason: Some("stop"),
+            admission: Admission::default(),
+        });
+        let usage: Value = serde_json::from_str(row.usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["finishReason"], json!("stop"));
+        assert_eq!(usage["estimated"], json!(true));
+    }
+
+    #[test]
+    fn agent_body_carries_the_cache_key_only_where_documented() {
+        let request = |system: &str, user: &str| AgentModelRequest {
+            messages: vec![
+                AgentMessage::System { content: system.into() },
+                AgentMessage::User { content: user.into() },
+            ],
+            tools: vec![],
+            temperature: 0.1,
+            max_tokens: 1_500,
+            cache_key: Some(ielts_application::prompt_cache_key("agent-workspace", system)),
+        };
+        let first = agent_request_body("m", "https://api.openai.com/v1", &request("sys", "one"));
+        let second = agent_request_body("m", "https://api.openai.com/v1", &request("sys", "two"));
+        let other = agent_request_body("m", "https://api.openai.com/v1", &request("sys 2", "one"));
+        assert!(first["prompt_cache_key"].is_string());
+        assert_eq!(first["prompt_cache_key"], second["prompt_cache_key"]);
+        assert_ne!(first["prompt_cache_key"], other["prompt_cache_key"]);
+        assert_eq!(
+            agent_request_body("m", "https://openrouter.ai/api/v1", &request("sys", "one"))["session_id"],
+            first["prompt_cache_key"],
+        );
+        let plain = AgentModelRequest { cache_key: None, ..request("sys", "one") };
+        assert!(agent_request_body("m", "https://api.openai.com/v1", &plain).get("prompt_cache_key").is_none());
+    }
+
+
+    /// One `data:` event per payload, the way a streaming provider writes them.
+    fn sse(events: &[&str]) -> String {
+        events.iter().map(|event| format!("data: {event}\n\n")).collect()
+    }
+
+    /// Runs the fold over `chunks`, returning the forwarded deltas and the reply.
+    fn fold_stream(chunks: &[&[u8]]) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
+        fold_stream_with(StreamFold::new(), chunks)
+    }
+
+    /// As `fold_stream`, with the fold the runtime would pick for `model`.
+    fn fold_stream_for(model: &str, chunks: &[&[u8]]) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
+        let url = reqwest::Url::parse("https://api.openai.com/v1/chat/completions").unwrap();
+        let fold = StreamFold::for_endpoint("https://api.openai.com/v1", &url, model);
+        fold_stream_with(fold, chunks)
+    }
+
+    fn fold_stream_with(
+        mut fold: StreamFold,
+        chunks: &[&[u8]],
+    ) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
+        let mut deltas = Vec::new();
+        let reply = {
+            let mut sink = |delta: &str| deltas.push(delta.to_owned());
+            for chunk in chunks {
+                fold.push(chunk, &mut sink).unwrap();
+            }
+            fold.finish(&mut sink).unwrap();
+            fold.into_reply("configured-model", 7, 0, None)
+        };
+        (deltas, reply)
+    }
+
+    const CONTENT_EVENTS: [&str; 6] = [
+        r#"{"id":"chatcmpl-1","model":"served-model","choices":[{"index":0,"delta":{"role":"assistant","content":"{\"ans"},"finish_reason":null}]}"#,
+        r#"{"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":"wer\":\"Hi 你"},"finish_reason":null}]}"#,
+        r#"{"choices":[{"index":0,"delta":{"content":"好\"}"},"finish_reason":null}]}"#,
+        r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#,
+        r#"{"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14,"prompt_tokens_details":{"cached_tokens":2}}}"#,
+        "[DONE]",
+    ];
+
+    #[test]
+    fn sse_content_deltas_arrive_in_order_and_fold_to_the_plain_reply() {
+        let body = sse(&CONTENT_EVENTS);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        let reply = reply.unwrap();
+        assert_eq!(deltas, [r#"{"ans"#, "wer\":\"Hi 你", "好\"}"]);
+        assert_eq!(reply.response.content, deltas.concat());
+        assert_eq!(reply.response.model, "served-model");
+        assert_eq!(reply.response.provider_request_id.as_deref(), Some("chatcmpl-1"));
+        assert_eq!(reply.finish_reason.as_deref(), Some("stop"));
+        let usage = reply.response.usage.unwrap();
+        assert_eq!((usage.input_tokens, usage.output_tokens, usage.cached_input_tokens), (10, 4, 2));
+    }
+
+    #[test]
+    fn sse_folds_the_same_however_the_bytes_are_split() {
+        let body = sse(&CONTENT_EVENTS);
+        let bytes = body.as_bytes();
+        let (whole_deltas, whole) = fold_stream(&[bytes]);
+        let byte_chunks: Vec<&[u8]> = bytes.chunks(1).collect();
+        let (split_deltas, split) = fold_stream(&byte_chunks);
+        assert_eq!(split_deltas.concat(), whole_deltas.concat());
+        assert_eq!(split.unwrap().response.content, whole.unwrap().response.content);
+    }
+
+    #[test]
+    fn sse_comments_crlf_line_endings_and_data_after_done_are_handled() {
+        let body = format!(
+            ": keep-alive\r\n\r\ndata: {}\r\n\r\ndata: [DONE]\r\n\r\ndata: {}\r\n\r\ndata: {}\r\n\r\n",
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"ok\"}"},"finish_reason":"stop"}]}"#,
+            r#"{"choices":[{"delta":{"content":" late"}}]}"#,
+            r#"{"choices":[{"delta":{"content":" later"}}]}"#,
+        );
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"ok"}"#]);
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"ok"}"#);
+    }
+
+    #[test]
+    fn reasoning_fields_are_never_forwarded_or_kept() {
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"reasoning_content":"private plan"}}]}"#,
+            r#"{"choices":[{"delta":{"reasoning":"more plan"}}]}"#,
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"A\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"A"}"#]);
+        let content = reply.unwrap().response.content;
+        assert_eq!(content, r#"{"answer":"A"}"#);
+        assert!(!content.contains("private plan"));
+    }
+
+    #[test]
+    fn inline_reasoning_is_stripped_from_the_answer_and_never_streamed() {
+        // Reasoning before the JSON: nothing is forwarded, the final answer is clean.
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"<think>plan {\"answer\":\"no\"}"}}]}"#,
+            r#"{"choices":[{"delta":{"content":"</think>{\"answer\":\"yes\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert!(deltas.is_empty(), "reasoning must not stream: {deltas:?}");
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"yes"}"#);
+    }
+
+    #[test]
+    fn an_answer_shaped_reasoning_prefix_is_never_streamed_on_a_reasoning_model() {
+        // The prefix opens as JSON and has no tag, so an incremental fold would
+        // forward it before the bare closer arrives. A buffered fold must not.
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"PRIVATE PLAN\"}"}}]}"#,
+            r#"{"choices":[{"delta":{"content":"</think>{\"answer\":\"Final answer\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("deepseek-r1", &[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Final answer"}"#], "only the sanitized answer may be shown");
+        assert!(deltas.iter().all(|delta| !delta.contains("PRIVATE")));
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"Final answer"}"#);
+    }
+
+    #[test]
+    fn a_buffered_stream_that_is_cut_off_or_incomplete_shows_nothing() {
+        let truncated = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"Half"},"finish_reason":"length"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("qwq-32b", &[truncated.as_bytes()]);
+        assert!(deltas.is_empty(), "a cut-off reply is never shown: {deltas:?}");
+        assert!(reply.and_then(CompletionReply::into_result).unwrap_err().error.truncated);
+
+        let incomplete = sse(&[r#"{"choices":[{"delta":{"content":"{\"answer\":\"cut"}}]}"#]);
+        let (deltas, reply) = fold_stream_for("qwq-32b", &[incomplete.as_bytes()]);
+        assert!(deltas.is_empty());
+        assert!(reply.err().unwrap().error.retryable);
+    }
+
+    #[test]
+    fn inline_reasoning_families_require_buffering_even_on_known_endpoints() {
+        for model in [
+            "deepseek-r1",
+            "deepseek/deepseek-r1:free",
+            "deepseek-reasoner",
+            "qwq-32b",
+            "qwen3-235b-a22b",
+            "openrouter/qwen/qwen3-32b",
+            "glm-z1-air",
+            "acme-r1-large",
+            "kimi-k2-thinking",
+            "some-reasoning-model",
+        ] {
+            assert!(may_carry_inline_reasoning(model), "{model} must be buffered");
+        }
+        // These ids provide no hint: only a known endpoint can allow streaming.
+        for model in ["gpt-4o", "claude-sonnet-4.6", "deepseek-chat", "configured-model", "o3-mini"] {
+            assert!(!may_carry_inline_reasoning(model), "{model} has no reasoning hint");
+        }
+    }
+
+    #[test]
+    fn incremental_display_requires_a_known_endpoint_before_and_after_redirects() {
+        for base in [
+            "https://api.openai.com/v1",
+            "https://api.deepseek.com/v1",
+            "https://openrouter.ai/api/v1",
+        ] {
+            let response = reqwest::Url::parse(&format!("{base}/chat/completions")).unwrap();
+            let mut fold = StreamFold::for_endpoint(base, &response, "coach-alias");
+            let mut deltas = Vec::new();
+            fold.push(sse(&CONTENT_EVENTS[..1]).as_bytes(), &mut |text| deltas.push(text.to_owned())).unwrap();
+            assert_eq!(deltas, [r#"{"ans"#], "{base} should still stream before completion");
+            assert!(!fold.done);
+        }
+        let official = reqwest::Url::parse("https://api.openai.com/v1/chat/completions").unwrap();
+        for untrusted in [
+            "http://api.openai.com/v1",
+            "https://api.openai.com.evil.test/v1",
+            "https://api.openai.com:8443/v1",
+            "https://api.openai.com/custom/v1",
+            "https://api.openai.com/v1?route=custom",
+            "https://api.openai.com/v1#custom",
+            "https://api.openai.com@proxy.example/v1",
+            "https://user@api.openai.com/v1",
+            "https://proxy.example/v1",
+            "http://127.0.0.1:8080/v1",
+        ] {
+            let url = reqwest::Url::parse(untrusted).unwrap();
+            // Neither a familiar model id nor the other URL can grant trust.
+            assert!(StreamFold::for_endpoint(untrusted, &official, "gpt-4o").buffered, "{untrusted}");
+            assert!(StreamFold::for_endpoint("https://api.openai.com/v1", &url, "gpt-4o").buffered, "{untrusted}");
+        }
+    }
+
+    #[test]
+    fn served_model_policy_precedes_content_and_never_reopens_streaming() {
+        let body = sse(&[
+            r#"{"model":"coach-alias","choices":[]}"#,
+            r#"{"model":"deepseek-r1","choices":[{"delta":{"content":"{\"answer\":\"PRIVATE PLAN\"}"}}]}"#,
+            r#"{"model":"gpt-4o","choices":[{"delta":{"content":"</think>{\"answer\":\"Final answer\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("coach-alias", &[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Final answer"}"#]);
+        assert_eq!(reply.unwrap().response.content, deltas.concat());
+    }
+
+    #[test]
+    fn late_model_metadata_does_not_duplicate_already_forwarded_text() {
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"Hello"}}]}"#,
+            r#"{"model":"deepseek-r1","choices":[{"delta":{"content":" there\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("coach-alias", &[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Hello"#]);
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"Hello there"}"#);
+    }
+
+    #[tokio::test]
+    async fn custom_endpoint_aliases_never_forward_answer_shaped_reasoning() {
+        for (configured, first_model, late_model) in [
+            ("coach-local", Some("deepseek-r1"), None),
+            ("coach-local", None, None),
+            ("coach-local", Some("coach-local"), Some("deepseek-r1")),
+            ("gpt-4o", Some("gpt-4o"), None),
+        ] {
+            let first = json!({"model": first_model, "choices": [{"delta": {"content": r#"{"answer":"PRIVATE PLAN"}"#}}]}).to_string();
+            let last = json!({"model": late_model, "choices": [{"delta": {"content": r#"</think>{"answer":"Final answer"}"#}, "finish_reason": "stop"}]}).to_string();
+            let body: &'static str = Box::leak(sse(&[&first, &last, "[DONE]"]).into_boxed_str());
+            let (runtime, server) = scripted_fixture_for(configured, vec![(200, "text/event-stream", body)]);
+            let mut deltas = Vec::new();
+            let (response, _) = runtime
+                .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                    assert!(!delta.contains("PRIVATE"), "reasoning reached the callback: {delta}");
+                    deltas.push(delta.to_owned());
+                })
+                .await
+                .unwrap();
+            let bodies = server.join().unwrap();
+            assert_eq!(bodies.len(), 1);
+            assert_eq!(bodies[0]["stream"], json!(true));
+            assert_eq!(bodies[0]["model"], json!(configured));
+            assert_eq!(deltas, [r#"{"answer":"Final answer"}"#]);
+            assert_eq!(response.content, deltas.concat());
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_plain_stream_responses_never_forward_an_unfinished_reasoning_prefix() {
+        let plain = r#"{"model":"deepseek-r1","choices":[{"message":{"content":"{\"answer\":\"PRIVATE PLAN\"}"},"finish_reason":"length"}]}"#;
+        for refused in [false, true] {
+            let mut responses = Vec::new();
+            if refused {
+                responses.push((400, "application/json", r#"{"error":{"message":"stream is unsupported"}}"#));
+            }
+            responses.push((200, "application/json", plain));
+            let (runtime, server) = scripted_fixture_for("coach-local", responses);
+            let mut deltas = Vec::new();
+            let failure = runtime
+                .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                    deltas.push(delta.to_owned());
+                })
+                .await
+                .unwrap_err();
+            let bodies = server.join().unwrap();
+            assert_eq!(bodies.len(), if refused { 2 } else { 1 });
+            assert!(failure.error.truncated);
+            assert!(deltas.is_empty(), "an unfinished reply must never reach the callback: {deltas:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_reasoning_model_stream_never_forwards_an_answer_shaped_prefix() {
+        let body: &'static str = Box::leak(
+            sse(&[
+                r#"{"choices":[{"delta":{"content":"{\"answer\":\"PRIVATE PLAN\"}"}}]}"#,
+                r#"{"choices":[{"delta":{"content":"</think>{\"answer\":\"Final answer\"}"},"finish_reason":"stop"}]}"#,
+                "[DONE]",
+            ])
+            .into_boxed_str(),
+        );
+        let (runtime, server) = scripted_fixture_for("deepseek-r1", vec![(200, "text/event-stream", body)]);
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies[0]["stream"], json!(true), "the request is still streamed");
+        assert!(deltas.iter().all(|delta| !delta.contains("PRIVATE")), "prefix leaked: {deltas:?}");
+        assert_eq!(deltas, [r#"{"answer":"Final answer"}"#]);
+        assert_eq!(response.content, r#"{"answer":"Final answer"}"#);
+    }
+
+    #[test]
+    fn truncation_is_the_typed_error_after_the_partial_text_was_sent() {
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"Half"},"finish_reason":null}]}"#,
+            r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Half"#]);
+        let failure = reply.and_then(CompletionReply::into_result).unwrap_err();
+        assert!(failure.error.truncated, "a cut-off reply is the typed truncation error");
+        assert_eq!(failure.model.as_deref(), Some("configured-model"));
+    }
+
+    #[test]
+    fn a_stream_with_no_choices_is_an_error_unless_truncated() {
+        let body = sse(&[r#"{"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":0}}"#, "[DONE]"]);
+        let (_, reply) = fold_stream(&[body.as_bytes()]);
+        let failure = reply.err().unwrap();
+        assert_eq!(failure.error.message, "AI response contained no choices");
+        assert_eq!(failure.usage.unwrap().input_tokens, 3);
+
+        let body = sse(&[r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#, "[DONE]"]);
+        let (_, reply) = fold_stream(&[body.as_bytes()]);
+        assert!(reply.and_then(CompletionReply::into_result).unwrap_err().error.truncated);
+    }
+
+    #[test]
+    fn a_stream_that_ends_without_done_or_a_finish_reason_is_retryable() {
+        let body = sse(&[r#"{"choices":[{"delta":{"content":"{\"answer\":\"cut"}}]}"#]);
+        let (deltas, reply) = fold_stream(&[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"cut"#]);
+        let failure = reply.err().unwrap();
+        assert!(failure.error.retryable);
+        assert!(failure.error.message.contains("ended before"));
+    }
+
+    #[test]
+    fn crlf_and_bare_cr_line_endings_split_across_chunks_fold_to_one_reply() {
+        let (deltas, reply) = fold_stream(&[
+            b"data: {\"choices\":[{\"delta\":{\"content\":\"{\\\"a\\\":1}\"},\"finish_reason\":\"stop\"}]}\r",
+            b"\n\rdata: [DONE]\r\n\r\n",
+        ]);
+        let reply = reply.unwrap_or_else(|_| panic!("a CR-split stream must fold"));
+        assert_eq!(reply.response.content, r#"{"a":1}"#);
+        assert_eq!(deltas.concat(), r#"{"a":1}"#);
+    }
+
+    #[test]
+    fn an_error_event_fails_with_its_detail_and_is_not_retryable() {
+        let mut fold = StreamFold::new();
+        let mut deltas = Vec::new();
+        let error = fold
+            .push(
+                b"event: error\ndata: {\"error\":{\"message\":\"overloaded\"}}\n\n",
+                &mut |delta: &str| deltas.push(delta.to_owned()),
+            )
+            .unwrap_err();
+        assert_eq!(error, "AI provider stream failed: overloaded");
+        assert!(deltas.is_empty());
+        // The caller maps any fold error to a non-retryable stream error.
+        let failure = stream_error(error, false);
+        assert!(!failure.retryable);
+        assert_eq!(failure.class, "stream_error");
+    }
+
+    #[test]
+    fn stream_lines_events_and_content_are_capped() {
+        let mut fold = StreamFold::new();
+        let long_line = vec![b'a'; MAX_STREAM_LINE_BYTES + 1];
+        let error = fold.push(&long_line, &mut |_| {}).unwrap_err();
+        assert_eq!(error, "AI stream line too long");
+
+        let mut fold = StreamFold::new();
+        let filler = "a".repeat(900_000);
+        let mut failed = None;
+        for _ in 0..10 {
+            let event = format!("data: {{\"choices\":[{{\"delta\":{{\"content\":\"{{{filler}\"}}}}]}}\n\n");
+            if let Err(error) = fold.push(event.as_bytes(), &mut |_| {}) {
+                failed = Some(error);
+                break;
+            }
+        }
+        assert_eq!(failed.as_deref(), Some("AI stream content too large"));
+    }
+
+    #[test]
+    fn a_partial_reasoning_tag_is_held_back_and_never_forwarded() {
+        let (deltas, _) = fold_stream(&[
+            br#"data: {"choices":[{"delta":{"content":"{\"answer\":\"x <"}}]}
+
+"#,
+            br#"data: {"choices":[{"delta":{"content":"th"}}]}
+
+"#,
+            br#"data: {"choices":[{"delta":{"content":"ink>hidden"}}]}
+
+"#,
+        ]);
+        let forwarded = deltas.concat();
+        assert_eq!(forwarded, r#"{"answer":"x "#);
+        assert!(!forwarded.contains("<th") && !forwarded.contains("hidden"));
+    }
+
+    #[test]
+    fn a_later_unparseable_usage_keeps_the_earlier_counts() {
+        let (_, reply) = fold_stream(&[
+            br#"data: {"choices":[{"delta":{"content":"{}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}
+
+"#,
+            br#"data: {"choices":[],"usage":{"prompt_tokens":"oops"}}
+
+"#,
+            b"data: [DONE]\n\n",
+        ]);
+        let usage = reply.unwrap().response.usage.unwrap();
+        assert_eq!(usage.input_tokens, 10);
+        assert_eq!(usage.output_tokens, 2);
+    }
+
+    #[tokio::test]
+    async fn only_a_stream_refusal_falls_back_and_the_refusal_is_remembered() {
+        let plain = r#"{"model":"m","choices":[{"message":{"content":"{\"answer\":\"plain\"}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (400, "application/json", r#"{"error":{"message":"stream_options is not supported"}}"#),
+            (200, "application/json", plain),
+            (200, "application/json", plain),
+        ]);
+        let mut deltas = Vec::new();
+        runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 3, "after one refusal the runtime sends plain requests only");
+        assert_eq!(bodies[0]["stream"], json!(true));
+        assert!(bodies[1].get("stream").is_none());
+        assert!(bodies[2].get("stream").is_none());
+        assert_eq!(deltas.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_client_error_that_does_not_name_the_stream_is_a_typed_error_not_a_fallback() {
+        let (runtime, server) = scripted_fixture(vec![(422, "application/json", r#"{"error":{"message":"bad temperature"}}"#)]);
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |_: &str| {})
+            .await
+            .unwrap_err();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 1, "no plain retry for an unrelated rejection");
+        assert!(failure.error.message.contains("HTTP 422"), "{}", failure.error.message);
+        assert_eq!(failure.error.status, Some(422));
+        assert_eq!(failure.error.class, "http_4xx");
+    }
+
+    #[test]
+    fn stream_errors_and_bad_chunks_are_reported_without_echoing_content() {
+        let mut fold = StreamFold::new();
+        let error = fold
+            .push(sse(&[r#"{"error":{"message":"quota exhausted"}}"#]).as_bytes(), &mut |_| {})
+            .unwrap_err();
+        assert!(error.contains("quota exhausted"), "{error}");
+
+        let mut fold = StreamFold::new();
+        let error = fold.push(b"data: secret-text-not-json\n\n", &mut |_| {}).unwrap_err();
+        assert_eq!(error, "AI stream chunk invalid");
+    }
+
+    #[test]
+    fn streamed_request_asks_for_usage_and_plain_request_does_not() {
+        let body = fixture_completion_request();
+        let plain = completion_body("m", "https://api.example.com/v1", &body);
+        assert!(plain.get("stream").is_none());
+        assert!(plain.get("stream_options").is_none());
+    }
+
+    /// Scripted provider: one response per request, each with its own content
+    /// type. Returns the request bodies it received, in order.
+    fn scripted_fixture(
+        responses: Vec<(u16, &'static str, &'static str)>,
+    ) -> (AiRuntime, thread::JoinHandle<Vec<Value>>) {
+        scripted_fixture_for("configured-model", responses)
+    }
+
+    /// As `scripted_fixture`, configured with `model` (its window decides admission).
+    fn scripted_fixture_for(
+        model: &str,
+        responses: Vec<(u16, &'static str, &'static str)>,
+    ) -> (AiRuntime, thread::JoinHandle<Vec<Value>>) {
+        let model = model.to_owned();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let mut bodies = Vec::new();
+            for (status, content_type, body) in responses {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                let mut stream = loop {
+                    match listener.accept() {
+                        Ok((stream, _)) => break stream,
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            assert!(Instant::now() < deadline, "fixture request timed out");
+                            thread::sleep(Duration::from_millis(5));
+                        }
+                        Err(error) => panic!("fixture accept failed: {error}"),
+                    }
+                };
+                stream.set_nonblocking(false).unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                let mut request = Vec::new();
+                let mut chunk = [0; 1024];
+                let headers_end = loop {
+                    let read = stream.read(&mut chunk).unwrap();
+                    assert!(read > 0, "request ended before headers");
+                    request.extend_from_slice(&chunk[..read]);
+                    if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                        break end;
+                    }
+                };
+                let headers = std::str::from_utf8(&request[..headers_end]).unwrap().to_owned();
+                assert!(headers.starts_with("POST /chat/completions HTTP/1.1"));
+                let length: usize = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length").then(|| value.trim().parse().unwrap())
+                    })
+                    .unwrap();
+                let body_start = headers_end + 4;
+                while request.len() < body_start + length {
+                    let read = stream.read(&mut chunk).unwrap();
+                    assert!(read > 0, "request ended before body");
+                    request.extend_from_slice(&chunk[..read]);
+                }
+                bodies.push(serde_json::from_slice(&request[body_start..body_start + length]).unwrap());
+                write!(
+                    stream,
+                    "HTTP/1.1 {status} Fixture\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len(),
+                )
+                .unwrap();
+            }
+            bodies
+        });
+        let runtime = AiRuntime::new(
+            AiProviderConfig {
+                provider: "loopback".into(),
+                base_url: format!("http://{address}"),
+                model,
+                secret_name: "fixture".into(),
+                timeout: Duration::from_secs(5),
+            },
+            "fixture-key".into(),
+        )
+        .unwrap();
+        (runtime, server)
+    }
+
+    fn sse_body() -> String {
+        sse(&CONTENT_EVENTS)
+    }
+
+    #[tokio::test]
+    async fn custom_endpoint_stream_emits_a_clean_answer_and_matches_the_plain_result() {
+        let body: &'static str = Box::leak(sse_body().into_boxed_str());
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let rows = Arc::new(std::sync::Mutex::new(Vec::<ielts_db::LlmInvocationRecord>::new()));
+        let sink_rows = Arc::clone(&rows);
+        let runtime = runtime.with_ledger(Arc::new(move |row| sink_rows.lock().unwrap().push(row)));
+
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+
+        assert_eq!(deltas, [r#"{"answer":"Hi 你好"}"#]);
+        assert_eq!(response.content, deltas.concat());
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
+        // One provider call, streamed, with usage requested in the stream.
+        assert_eq!(bodies.len(), 1);
+        assert_eq!(bodies[0]["stream"], json!(true));
+        assert_eq!(bodies[0]["stream_options"], json!({"include_usage": true}));
+        // Traced calls keep their own trace: the gateway ledgers nothing here.
+        assert!(rows.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn loopback_truncated_stream_is_the_typed_error() {
+        let body: &'static str = Box::leak(
+            sse(&[
+                r#"{"choices":[{"delta":{"content":"{\"answer\":\"Cut"}}]}"#,
+                r#"{"choices":[{"delta":{},"finish_reason":"length"}]}"#,
+                "[DONE]",
+            ])
+            .into_boxed_str(),
+        );
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let mut deltas = Vec::new();
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+        assert!(failure.error.truncated);
+        assert!(deltas.is_empty(), "custom endpoints never display a truncated reply");
+    }
+
+    /// Answers with `body` as a stream that is cut off after it: the declared
+    /// length is longer than what is sent, and then the socket closes.
+    fn cut_stream_fixture(body: &'static str) -> (AiRuntime, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            read_chat_request(&mut stream);
+            write!(
+                stream,
+                "HTTP/1.1 200 Fixture\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len() + 500,
+            )
+            .unwrap();
+        });
+        let runtime = AiRuntime::new(
+            AiProviderConfig {
+                provider: "loopback".into(),
+                base_url: format!("http://{address}"),
+                model: "configured-model".into(),
+                secret_name: "fixture".into(),
+                timeout: Duration::from_secs(5),
+            },
+            "fixture-key".into(),
+        )
+        .unwrap();
+        (runtime, server)
+    }
+
+    #[tokio::test]
+    async fn a_stream_error_event_after_usage_keeps_the_usage_and_model_on_the_failure() {
+        let usage = r#"{"id":"chatcmpl-err","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+        let body: &'static str = Box::leak(
+            format!("{}event: error\ndata: {{\"error\":{{\"message\":\"overloaded\"}}}}\n\n", sse(&[usage]))
+                .into_boxed_str(),
+        );
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |_: &str| {})
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+        assert_eq!(failure.error.class, "stream_error");
+        assert_eq!(failure.error.message, "AI provider stream failed: overloaded");
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("chatcmpl-err"));
+    }
+
+    #[tokio::test]
+    async fn a_stream_cut_off_after_usage_keeps_the_usage_and_model_on_the_failure() {
+        let usage = r#"{"id":"chatcmpl-cut","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+        let partial = r#"{"choices":[{"delta":{"content":"{\"answer\":\"Ha"}}]}"#;
+        let body: &'static str = Box::leak(sse(&[usage, partial]).into_boxed_str());
+        let (runtime, server) = cut_stream_fixture(body);
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |_: &str| {})
+            .await
+            .unwrap_err();
+        server.join().unwrap();
+        assert_eq!(failure.error.class, "stream_error");
+        assert!(failure.error.message.starts_with("AI stream failed"), "{}", failure.error.message);
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("chatcmpl-cut"));
+    }
+
+    #[test]
+    fn a_stream_failure_prefers_the_header_request_id_and_keeps_the_fold_usage() {
+        let mut fold = StreamFold::new();
+        let usage = r#"data: {"id":"body-id","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}
+
+"#;
+        fold.push(usage.as_bytes(), &mut |_| {}).unwrap();
+        let failure = fold.failure(stream_error("AI stream failed", false), 9, 1, Some("header-id".into()));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("header-id"));
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.retry_count, 1);
+        assert_eq!(failure.latency_ms, 9);
+    }
+
+    #[tokio::test]
+    async fn a_stream_ending_at_http_eof_keeps_the_usage_model_and_response_id() {
+        let usage = r#"{"id":"body-id","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+        let body: &'static str = Box::leak(sse(&[usage]).into_boxed_str());
+        // This fixture advertises the exact Content-Length: the HTTP response
+        // succeeds, but the SSE reply has neither [DONE] nor a finish reason.
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let mut deltas = Vec::new();
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(server.join().unwrap().len(), 1);
+        assert!(deltas.is_empty());
+        assert_eq!(failure.error.class, "stream_error");
+        assert_eq!(failure.error.message, "AI stream ended before the reply completed");
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("body-id"));
+        assert_eq!(failure.retry_count, 0);
+    }
+
+    #[test]
+    fn an_incomplete_stream_reply_keeps_metadata_and_prefers_the_header_request_id() {
+        for (header_request_id, expected_id) in [(None, "body-id"), (Some("header-id"), "header-id")] {
+            let mut fold = StreamFold::new();
+            let usage = r#"{"id":"body-id","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+            fold.push(sse(&[usage]).as_bytes(), &mut |_| {}).unwrap();
+            let failure = fold
+                .into_reply("configured-alias", 9, 1, header_request_id.map(str::to_owned))
+                .err()
+                .expect("an unfinished stream must fail");
+            assert_eq!(failure.error.message, "AI stream ended before the reply completed");
+            assert_eq!(failure.model.as_deref(), Some("served-model"));
+            assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+            assert_eq!(failure.provider_request_id.as_deref(), Some(expected_id));
+            assert_eq!(failure.latency_ms, 9);
+            assert_eq!(failure.retry_count, 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_provider_refusing_streaming_gets_the_plain_request_instead() {
+        let plain = r#"{"model":"m","choices":[{"message":{"content":"{\"answer\":\"plain\"}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (400, "application/json", r#"{"error":{"message":"stream_options is not supported"}}"#),
+            (200, "application/json", plain),
+        ]);
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(response.content, r#"{"answer":"plain"}"#);
+        assert_eq!(deltas, [r#"{"answer":"plain"}"#]);
+        assert_eq!(bodies.len(), 2);
+        assert_eq!(bodies[0]["stream"], json!(true));
+        assert!(bodies[1].get("stream").is_none());
+        assert!(bodies[1].get("stream_options").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_plain_json_answer_to_a_streamed_request_is_read_without_a_second_call() {
+        let plain = r#"{"model":"m","usage":{"prompt_tokens":4,"completion_tokens":2},"choices":[{"message":{"content":"{\"answer\":\"json\"}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![(200, "application/json", plain)]);
+        let mut deltas = Vec::new();
+        let (response, _) = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 1, "a provider that answers in JSON is billed once");
+        assert_eq!(response.content, r#"{"answer":"json"}"#);
+        assert_eq!(deltas, [r#"{"answer":"json"}"#]);
+    }
+
+    // Pre-send context guard. A refused request must never reach the endpoint.
+
+    /// A runtime pointed at a listener that is never accepted from. A request
+    /// that reached it would connect and stay pending, so `accept` would succeed.
+    fn uncalled_endpoint(model: &str) -> (AiRuntime, TcpListener) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let runtime = AiRuntime::new(AiProviderConfig {
+            provider: "loopback".into(),
+            base_url: format!("http://{address}"),
+            model: model.into(),
+            secret_name: "fixture".into(),
+            timeout: Duration::from_secs(5),
+        }, "fixture-key".into()).unwrap();
+        (runtime, listener)
+    }
+
+    fn no_request_reached(listener: &TcpListener) -> bool {
+        listener.accept().is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock)
+    }
+
+    fn ledger_rows() -> (LedgerSink, Arc<std::sync::Mutex<Vec<ielts_db::LlmInvocationRecord>>>) {
+        let rows = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink_rows = Arc::clone(&rows);
+        (Arc::new(move |row| sink_rows.lock().unwrap().push(row)), rows)
+    }
+
+    /// ASCII text the estimator counts as exactly `tokens` (chars / 4).
+    fn ascii_tokens(tokens: u32) -> String {
+        "a".repeat(4 * tokens as usize)
+    }
+
+    fn completion_of(text: String, max_tokens: u32) -> CompletionRequest {
+        CompletionRequest {
+            messages: vec![ielts_application::ChatMessage::new("user", text)],
+            temperature: 0.2,
+            max_tokens,
+            cache_key: None,
+        }
+    }
+
+    fn agent_of(text: String, max_tokens: u32) -> AgentModelRequest {
+        AgentModelRequest {
+            messages: vec![AgentMessage::User { content: text }],
+            tools: vec![],
+            temperature: 0.2,
+            max_tokens,
+            cache_key: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn oversize_prompt_is_refused_before_any_http_request_and_ledgered() {
+        // gpt-4o is a confident 128,000-token row: an input that fills it is refused.
+        let (runtime, listener) = uncalled_endpoint("gpt-4o");
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        // Each message adds four framing tokens, so 127,996 tokens of text is 128,000 of input.
+        let error = runtime.complete(completion_of(ascii_tokens(127_996), 2_000)).await.unwrap_err();
+        assert!(error.context_exceeded);
+        assert!(!error.retryable && !error.truncated);
+        assert_eq!(error.message, "prompt exceeds model context: ~128000 tokens of 128000");
+
+        let traced = runtime.complete_with_trace(completion_of(ascii_tokens(127_996), 2_000)).await.unwrap_err();
+        assert!(traced.error.context_exceeded);
+        let agent = runtime.respond(agent_of(ascii_tokens(127_996), 100)).await.unwrap_err();
+        assert!(agent.error.context_exceeded);
+
+        assert!(no_request_reached(&listener), "a refused request must make no HTTP call");
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2, "plain and agent calls are ledgered; the traced call is the coach's row");
+        assert_eq!(rows[0].model, "gpt-4o");
+        assert!(rows[0].usage_json.is_none() && rows[0].response_hash.is_none());
+        let error_json: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error_json, json!({"status": null, "class": "context_exceeded", "retryable": false}));
+    }
+
+    #[tokio::test]
+    async fn a_prompt_with_less_room_than_the_minimum_is_refused_before_any_http_request() {
+        // gpt-4o: 127,999 input tokens (127,995 of text plus framing) leave one token,
+        // below the 256-token minimum output room, so nothing is sent.
+        let (runtime, listener) = uncalled_endpoint("gpt-4o");
+        let error = runtime.complete(completion_of(ascii_tokens(127_995), 2_000)).await.unwrap_err();
+        assert!(error.context_exceeded && !error.retryable);
+        assert!(no_request_reached(&listener), "a refused request must make no HTTP call");
+    }
+
+    #[tokio::test]
+    async fn an_o3_request_with_500_tokens_of_room_is_refused_before_any_http_call() {
+        // o3: 200,000 window. 199,496 tokens of text plus framing leave 500 tokens,
+        // below the 1,024 floor the provider is always sent, so nothing goes out.
+        let (runtime, listener) = uncalled_endpoint("o3");
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        let error = runtime.complete(completion_of(ascii_tokens(199_496), 4_000)).await.unwrap_err();
+        assert!(error.context_exceeded && !error.retryable && !error.truncated);
+        assert_eq!(error.message, "prompt exceeds model context: ~200524 tokens of 200000");
+        assert!(no_request_reached(&listener), "a refused o3 request must make no HTTP call");
+
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 1);
+        let error_json: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+        assert_eq!(error_json, json!({"status": null, "class": "context_exceeded", "retryable": false}));
+    }
+
+    #[tokio::test]
+    async fn an_o3_request_with_1500_tokens_of_room_is_sent_clamped_to_the_room_not_raised_to_the_floor() {
+        // o3: 198,496 tokens of text plus framing leave 1,500 tokens of room. The
+        // 4,000 request is clamped to 1,500, which is above the 1,024 floor, so the
+        // wire value is exactly the clamp and never overflows the room.
+        let reply = r#"{"model":"o3","choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture_for("o3", vec![(200, "application/json", reply)]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        runtime.complete(completion_of(ascii_tokens(198_496), 4_000)).await.unwrap();
+        let bodies = server.join().unwrap();
+        let sent = bodies[0]["max_completion_tokens"].as_u64().unwrap();
+        assert_eq!(sent, 1_500);
+        assert!(sent >= 1_024, "the o-series floor still holds");
+        assert!(bodies[0].get("max_tokens").is_none());
+
+        let rows = rows.lock().unwrap();
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["maxTokensClamped"], json!(1_500));
+    }
+
+    #[tokio::test]
+    async fn a_prompt_with_some_room_is_sent_with_the_output_clamped_and_ledgered() {
+        // gpt-4o: 127,004 estimated input tokens leave 996 of 128,000: 2,000 is clamped to 996.
+        let plain = r#"{"id":"clamped","model":"gpt-4o","usage":{"prompt_tokens":127004,"completion_tokens":40},"choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let agent = r#"{"model":"gpt-4o","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}"#;
+        let small = r#"{"id":"small","model":"gpt-4o","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"{\"ok\":true}"}}]}"#;
+        let (runtime, server) = scripted_fixture_for("gpt-4o", vec![
+            (200, "application/json", plain),
+            (200, "application/json", agent),
+            (200, "application/json", small),
+        ]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        runtime.complete(completion_of(ascii_tokens(127_000), 2_000)).await.unwrap();
+        runtime.respond(agent_of(ascii_tokens(127_000), 2_000)).await.unwrap();
+        runtime.complete(completion_of("hello".into(), 2_000)).await.unwrap();
+        let bodies = server.join().unwrap();
+
+        assert_eq!(bodies[0]["max_tokens"], json!(996));
+        assert_eq!(bodies[1]["max_tokens"], json!(996));
+        assert_eq!(bodies[2]["max_tokens"], json!(2_000), "a request that fits is sent unchanged");
+
+        let rows = rows.lock().unwrap();
+        let clamped: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(clamped["maxTokensClamped"], json!(996));
+        assert_eq!(clamped["promptTokens"], json!(127_004));
+        assert!(rows[0].error_json.is_none());
+
+        let agent_row: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(agent_row["maxTokensClamped"], json!(996));
+        assert_eq!(agent_row["estimated"], json!(true));
+
+        let unclamped: Value = serde_json::from_str(rows[2].usage_json.as_deref().unwrap()).unwrap();
+        assert!(unclamped.get("maxTokensClamped").is_none());
+        assert!(unclamped.get("contextWarning").is_none());
+    }
+
+    #[tokio::test]
+    async fn an_unknown_model_with_a_60k_prompt_is_sent_unchanged_with_a_warning() {
+        let plain = r#"{"model":"some-unknown-model","usage":{"prompt_tokens":60000,"completion_tokens":4},"choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture_for("some-unknown-model", vec![
+            (200, "application/json", plain),
+        ]);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+        runtime.complete(completion_of(ascii_tokens(60_000), 2_000)).await.unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies[0]["max_tokens"], json!(2_000), "advisory rows never clamp");
+
+        let rows = rows.lock().unwrap();
+        let usage: Value = serde_json::from_str(rows[0].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["contextWarning"], json!(true));
+        assert!(usage.get("maxTokensClamped").is_none());
+        assert!(rows[0].error_json.is_none());
+    }
+
+    #[tokio::test]
+    async fn an_uncertain_row_is_sent_as_asked_even_when_the_input_exceeds_its_window() {
+        // qwen3 is an advisory 32,768 row: a 40k-token prompt goes out unchanged.
+        let (runtime, server) = scripted_fixture_for("qwen3-235b", vec![(
+            200,
+            "application/json",
+            r#"{"model":"qwen3-235b","choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#,
+        )]);
+        runtime.complete(completion_of(ascii_tokens(40_000), 2_000)).await.unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies[0]["max_tokens"], json!(2_000));
+    }
+
+    #[tokio::test]
+    async fn a_provider_context_length_400_is_a_typed_context_error_without_a_retry() {
+        let body = r#"{"error":{"message":"This model's maximum context length is 128000 tokens.","code":"context_length_exceeded"}}"#;
+        let (runtime, server) = scripted_fixture(vec![(400, "application/json", body)]);
+        let error = runtime.complete(completion_of("hello".into(), 100)).await.unwrap_err();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 1, "a context rejection is never retried");
+        assert!(error.context_exceeded);
+        assert!(!error.retryable && !error.truncated);
+        assert!(error.message.contains("maximum context length"));
+    }
+
+    #[test]
+    fn a_context_window_stop_reason_is_a_truncation() {
+        assert!(is_truncated(Some("model_context_window_exceeded")));
+        assert!(!is_truncated(Some("stop")));
+    }
+
+    /// Reads one chat request off `stream` and returns its JSON body.
+    fn read_chat_request(stream: &mut std::net::TcpStream) -> Value {
+        let mut request = Vec::new();
+        let mut chunk = [0; 1024];
+        let headers_end = loop {
+            let read = stream.read(&mut chunk).unwrap();
+            assert!(read > 0, "request ended before headers");
+            request.extend_from_slice(&chunk[..read]);
+            if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                break end;
+            }
+        };
+        let headers = std::str::from_utf8(&request[..headers_end]).unwrap().to_owned();
+        let length: usize = headers
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length").then(|| value.trim().parse().unwrap())
+            })
+            .unwrap();
+        let body_start = headers_end + 4;
+        while request.len() < body_start + length {
+            let read = stream.read(&mut chunk).unwrap();
+            assert!(read > 0, "request ended before body");
+            request.extend_from_slice(&chunk[..read]);
+        }
+        serde_json::from_slice(&request[body_start..body_start + length]).unwrap()
+    }
+
+    /// Reads the first request, reports it on `seen`, and never answers it. The
+    /// next request is answered with `answer`.
+    fn stall_then_answer_fixture(
+        seen: tokio::sync::oneshot::Sender<()>,
+        answer: &'static str,
+    ) -> (AiRuntime, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stalled, _) = listener.accept().unwrap();
+            read_chat_request(&mut stalled);
+            let _ = seen.send(());
+            thread::sleep(Duration::from_millis(200));
+            drop(stalled);
+            let (mut stream, _) = listener.accept().unwrap();
+            read_chat_request(&mut stream);
+            write!(
+                stream,
+                "HTTP/1.1 200 Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
+                answer.len(),
+            )
+            .unwrap();
+        });
+        let runtime = AiRuntime::new(
+            AiProviderConfig {
+                provider: "loopback".into(),
+                base_url: format!("http://{address}"),
+                model: "configured-model".into(),
+                secret_name: "fixture".into(),
+                timeout: Duration::from_secs(5),
+            },
+            "fixture-key".into(),
+        )
+        .unwrap();
+        (runtime, server)
+    }
+
+    fn interrupted_error() -> Value {
+        json!({"status": null, "class": "interrupted", "retryable": true})
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_completion_writes_one_interrupted_row_and_a_normal_call_one_more() {
+        let answer = r#"{"id":"normal","model":"configured-model","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let (seen_tx, seen_rx) = tokio::sync::oneshot::channel();
+        let (runtime, server) = stall_then_answer_fixture(seen_tx, answer);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        // Cancel only once the fixture has the request: the send is mid-flight.
+        tokio::select! {
+            _ = runtime.complete(fixture_completion_request()) => panic!("a stalled call cannot return"),
+            _ = seen_rx => {}
+        }
+        {
+            let rows = rows.lock().unwrap();
+            assert_eq!(rows.len(), 1, "the cancelled call writes its row when it is dropped");
+            let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+            assert_eq!(error, interrupted_error());
+            assert!(rows[0].usage_json.is_none(), "an interrupted call has no usage and no estimate");
+        }
+
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        server.join().unwrap();
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2, "the normal call adds exactly one row");
+        assert!(rows[1].error_json.is_none());
+        assert_eq!(rows[1].provider_request_id.as_deref(), Some("normal"));
+        let usage: Value = serde_json::from_str(rows[1].usage_json.as_deref().unwrap()).unwrap();
+        assert_eq!(usage["promptTokens"], json!(10));
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_agent_round_writes_one_interrupted_row_and_a_normal_call_one_more() {
+        let answer = r#"{"id":"normal","model":"configured-model","usage":{"prompt_tokens":10,"completion_tokens":4},"choices":[{"message":{"content":"done"},"finish_reason":"stop"}]}"#;
+        let (seen_tx, seen_rx) = tokio::sync::oneshot::channel();
+        let (runtime, server) = stall_then_answer_fixture(seen_tx, answer);
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        tokio::select! {
+            _ = runtime.respond(fixture_agent_request()) => panic!("a stalled round cannot return"),
+            _ = seen_rx => {}
+        }
+        {
+            let rows = rows.lock().unwrap();
+            assert_eq!(rows.len(), 1);
+            let error: Value = serde_json::from_str(rows[0].error_json.as_deref().unwrap()).unwrap();
+            assert_eq!(error, interrupted_error());
+        }
+
+        runtime.complete(fixture_completion_request()).await.unwrap();
+        server.join().unwrap();
+        let rows = rows.lock().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[1].error_json.is_none());
+    }
+
+    #[tokio::test]
+    async fn the_coach_trace_is_not_ledgered_even_when_it_is_cancelled() {
+        let (seen_tx, seen_rx) = tokio::sync::oneshot::channel();
+        let (runtime, server) = stall_then_answer_fixture(seen_tx, "{}");
+        let (sink, rows) = ledger_rows();
+        let runtime = runtime.with_ledger(sink);
+
+        tokio::select! {
+            _ = runtime.complete_with_trace(fixture_completion_request()) => panic!("a stalled call cannot return"),
+            _ = seen_rx => {}
+        }
+        // The fixture's second accept is never reached, so its thread is not joined.
+        drop(server);
+        assert!(rows.lock().unwrap().is_empty(), "the coach trace owns its own record");
+    }
+
+    #[tokio::test]
+    async fn cjk_prompt_is_budgeted_at_one_token_per_character_on_the_wire() {
+        // 120,000 CJK characters are 120,000 tokens, not 30,000. With framing that
+        // leaves 7,996 of 128,000, so a 10,000 request is clamped to 7,996.
+        let cjk_reply = r#"{"model":"gpt-4o","choices":[{"message":{"content":"{\"ok\":true}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture_for("gpt-4o", vec![(200, "application/json", cjk_reply)]);
+        runtime.complete(completion_of("中".repeat(120_000), 10_000)).await.unwrap();
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies[0]["max_tokens"], json!(7_996));
     }
 }

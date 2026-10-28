@@ -59,6 +59,7 @@
             class="reading-coach-msg"
             :class="[entry.role, { error: entry.isError }]"
             :data-reading-coach-message="entry.role"
+            :aria-busy="entry.status === 'streaming' ? 'true' : undefined"
           >
             {{ entry.content }}
           </div>

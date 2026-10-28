@@ -7,6 +7,7 @@ use ielts_domain::dto::{WritingFeedbackV4, WritingScoreV4};
 use ielts_domain::{EmbeddingRequest, EmbeddingResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::ApplicationError;
 
@@ -34,9 +35,9 @@ pub struct CompletionRequest {
     /// Provider-side output ceiling. Required: every completion declares its
     /// own ceiling, so no call site can ship an unbounded request by omission.
     pub max_tokens: u32,
-    /// Stable routing key for provider-side prompt caching (one per coach
-    /// thread). The gateway sends it only to providers that document a routing
-    /// parameter for it; everywhere else it is ignored.
+    /// Stable routing key for provider-side prompt caching, set by the caller
+    /// (see `prompt_cache_key`). The gateway sends it only to endpoints that
+    /// document a routing parameter for it; everywhere else it is ignored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_key: Option<String>,
 }
@@ -86,15 +87,84 @@ pub struct CompletionResponse {
 pub struct ModelError {
     pub message: String,
     pub retryable: bool,
+    /// True when the provider stopped at the output ceiling (`finish_reason`
+    /// `length` / `max_tokens`). The reply is cut off, so a JSON caller cannot
+    /// use it; the gateway never retries it with a larger ceiling.
+    pub truncated: bool,
+    /// True when the prompt does not fit the model's context window: refused by
+    /// the gateway before any HTTP call, or rejected by the provider with a
+    /// context-length 400. Never retryable.
+    pub context_exceeded: bool,
+    /// HTTP status of a provider error response, when there was one.
+    pub status: Option<u16>,
+    /// Coarse failure class for the usage ledger (`http_4xx`, `http_5xx`,
+    /// `timeout`, `transport`, `stream_error`, `invalid_response`, `truncated`,
+    /// `context_exceeded`, `provider_error`, `interrupted`). Never carries provider text.
+    pub class: &'static str,
 }
 
 impl ModelError {
     pub fn new(message: impl Into<String>, retryable: bool) -> Self {
+        Self::classed(message, retryable, "provider_error")
+    }
+
+    /// A failure with a ledger class and no HTTP status.
+    pub fn classed(message: impl Into<String>, retryable: bool, class: &'static str) -> Self {
         Self {
             message: message.into(),
             retryable,
+            truncated: false,
+            context_exceeded: false,
+            status: None,
+            class,
         }
     }
+
+    /// A non-success HTTP status from the provider.
+    pub fn http_status(message: impl Into<String>, retryable: bool, status: u16) -> Self {
+        let class = if status >= 500 { "http_5xx" } else { "http_4xx" };
+        Self { status: Some(status), ..Self::classed(message, retryable, class) }
+    }
+
+    /// The typed error for a reply cut off at its output ceiling.
+    pub fn output_truncated() -> Self {
+        Self {
+            truncated: true,
+            ..Self::classed("model output truncated at max_tokens", false, "truncated")
+        }
+    }
+
+    /// The typed refusal for a prompt that cannot fit the context window.
+    /// `input_tokens` is the estimated input alone.
+    pub fn prompt_exceeds_context(input_tokens: u32, window: u32) -> Self {
+        Self {
+            context_exceeded: true,
+            ..Self::classed(
+                format!("prompt exceeds model context: ~{input_tokens} tokens of {window}"),
+                false,
+                "context_exceeded",
+            )
+        }
+    }
+
+    /// A provider's own context-length rejection (HTTP 400 with its message).
+    pub fn provider_context_exceeded(message: impl Into<String>, status: u16) -> Self {
+        Self {
+            context_exceeded: true,
+            status: Some(status),
+            ..Self::classed(message, false, "context_exceeded")
+        }
+    }
+}
+
+/// Stable prompt-cache routing key for one call path: a fixed per-purpose label
+/// plus a digest of its byte-stable system prefix. Calls whose prefix is
+/// identical share a key; the user content never enters it. Callers opt in by
+/// setting `CompletionRequest::cache_key` (or the agent request's key) to this.
+pub fn prompt_cache_key(purpose: &str, stable_prefix: &str) -> String {
+    let digest = Sha256::digest(stable_prefix.as_bytes());
+    let hex: String = digest.iter().take(16).map(|byte| format!("{byte:02x}")).collect();
+    format!("{purpose}-{hex}")
 }
 
 impl std::fmt::Display for ModelError {
@@ -122,6 +192,18 @@ pub trait LanguageModel: Send + Sync {
 
     async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), crate::AgentModelFailure> {
         self.complete(request).await.map(|response| (response, 0)).map_err(Into::into)
+    }
+
+    /// Same result as [`complete_with_trace`], while forwarding the raw content
+    /// deltas of the reply as they arrive. A model that cannot stream ignores
+    /// `on_delta` and answers as `complete_with_trace` does.
+    async fn complete_with_trace_streaming(
+        &self,
+        request: CompletionRequest,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<(CompletionResponse, u32), crate::AgentModelFailure> {
+        let _ = on_delta;
+        self.complete_with_trace(request).await
     }
 
     /// M5-04: request an embedding batch through the Rust Model Gateway.
@@ -207,4 +289,18 @@ pub trait CoachStore: Send + Sync {
         &self,
         thread_id: &str,
     ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prompt_cache_key;
+
+    #[test]
+    fn prompt_cache_key_is_stable_for_one_prefix_and_differs_across_prefixes() {
+        let key = prompt_cache_key("dream-weekly", "system prompt");
+        assert_eq!(key, prompt_cache_key("dream-weekly", "system prompt"));
+        assert!(key.starts_with("dream-weekly-") && key.len() == "dream-weekly-".len() + 32);
+        assert_ne!(key, prompt_cache_key("dream-weekly", "system prompt 2"));
+        assert_ne!(key, prompt_cache_key("memory-candidate", "system prompt"));
+    }
 }

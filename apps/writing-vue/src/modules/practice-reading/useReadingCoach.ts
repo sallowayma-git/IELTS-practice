@@ -185,9 +185,22 @@ function formatCoachStreamMessage(streamEvent: unknown, mode: StreamMode = 'coac
   return ''
 }
 
+// Learner-facing text for the typed coach failures the host reports. Null for
+// every other code, which keeps the provider's own message.
+function coachFailureDetail(error: unknown): string | null {
+  const code = errorField(error, 'code').toLowerCase()
+  if (code === 'coach.output_truncated') return '回答过长，已被截断，请换个更具体的问题再试'
+  if (code === 'coach.context_exceeded') return '内容超出模型上下文长度，请缩短选中的原文或问题后再试'
+  return null
+}
+
 function formatLlmFailureStatusMessage(error: unknown): string {
   const code = errorField(error, 'code').toLowerCase()
   const rawMessage = errorField(error, 'message')
+  const detail = coachFailureDetail(error)
+  if (detail) {
+    return `AI 复盘暂不可用：${detail}`
+  }
   if (code === 'coach_locked_until_submit') {
     return 'AI 复盘暂不可用：请先完成并提交本轮作答。'
   }
@@ -218,6 +231,10 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   const coachFeedback = ref<Record<string, ReadingCoachFeedbackState>>({})
   let coachRequestSequence = 0
   let coachHydrationSequence = 0
+  // Token of the one request whose streamed deltas may still show. Bumped to
+  // close the stream (reset, hydrate, or the request settling), so a late delta
+  // from an old request cannot re-add a bubble.
+  let coachStreamToken = 0
 
   const submission = computed(() => readSource(options.submissionSource))
   const singleAttemptAnalysisLlm = computed(() => (
@@ -262,8 +279,16 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
   }
 
+  // Ends the current stream: its late deltas are ignored and its provisional
+  // bubble is dropped.
+  function closeCoachStream() {
+    coachStreamToken += 1
+    coachTranscriptState.value = coachTranscriptState.value.filter((entry) => entry.status !== 'streaming')
+  }
+
   function resetReadingCoachState() {
     coachHydrationSequence += 1
+    closeCoachStream()
     coachError.value = ''
     coachResponse.value = null
     coachStreamMessage.value = ''
@@ -283,6 +308,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
 
   async function hydratePersistedCoachMessages(sessionId: string) {
     const hydrationId = ++coachHydrationSequence
+    closeCoachStream()
     if (!sessionId) {
       coachTranscriptState.value = []
       coachThreadId.value = ''
@@ -347,6 +373,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     if (hydrateOptions.open) {
       readingCoachOpen.value = true
     }
+    closeCoachStream()
     coachResponse.value = null
     const sessionId = String(nextSubmission?.sessionId || nextSubmission?.attemptId || '').trim()
     if (sessionId) void hydratePersistedCoachMessages(sessionId)
@@ -516,6 +543,28 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }]
   }
 
+  // Streamed answer text shown before the reply is validated and persisted. The
+  // entry is never persisted: the final reply replaces it, and a failure drops it.
+  function appendProvisionalCoachText(id: string, text: string) {
+    const transcript = coachTranscriptState.value
+    coachTranscriptState.value = transcript.some((entry) => entry.id === id)
+      ? transcript.map((entry) => (entry.id === id ? { ...entry, content: entry.content + text } : entry))
+      : [...transcript, {
+        id,
+        role: 'assistant',
+        status: 'streaming',
+        content: text,
+        isError: false,
+        persisted: false,
+        followUps: [],
+        snapshot: null
+      }]
+  }
+
+  function dropProvisionalCoachText(id: string) {
+    coachTranscriptState.value = coachTranscriptState.value.filter((entry) => entry.id !== id)
+  }
+
   function isCurrentSubmission(expectedSessionId: unknown) {
     const normalized = String(expectedSessionId || '').trim()
     return Boolean(normalized && String(submission.value?.sessionId || '').trim() === normalized)
@@ -569,6 +618,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
     const expectedSessionId = String(submission.value.sessionId || '').trim()
     const requestId = ++coachRequestSequence
+    const provisionalId = `coach-stream-${requestId}`
+    const streamToken = ++coachStreamToken
+    const streamIsOpen = () => streamToken === coachStreamToken
     coachLoading.value = true
     coachError.value = ''
     coachResponse.value = null
@@ -576,7 +628,10 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     try {
       const requestPayload = buildCoachPayload(normalizedQuery, queryOptions)
       const response = await readingCoachApi.query(requestPayload, expectedSessionId, {
-        onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'coach' })
+        onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'coach' }),
+        onDelta: (text) => {
+          if (streamIsOpen() && isCurrentSubmission(expectedSessionId)) appendProvisionalCoachText(provisionalId, text)
+        }
       })
       if (!isReadingCoachEnabled()) {
         return response
@@ -600,12 +655,17 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         return null
       }
       const failureMessage = errorField(coachFailure, 'message')
-      coachError.value = failureMessage
-        ? `阅读教练请求失败：${failureMessage}`
-        : '阅读教练请求失败，请稍后重试'
+      const detail = coachFailureDetail(coachFailure)
+      coachError.value = detail
+        ? `阅读教练请求失败：${detail}`
+        : failureMessage
+          ? `阅读教练请求失败：${failureMessage}`
+          : '阅读教练请求失败，请稍后重试'
       appendLocalCoachError(coachError.value)
       return null
     } finally {
+      if (streamIsOpen()) closeCoachStream()
+      dropProvisionalCoachText(provisionalId)
       if (coachRequestSequence === requestId && isCurrentSubmission(expectedSessionId)) {
         coachLoading.value = false
         coachStreamMessage.value = ''

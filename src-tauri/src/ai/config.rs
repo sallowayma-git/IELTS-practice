@@ -6,6 +6,7 @@ use ielts_domain::dto::{AiConfigDto, SecretRef};
 
 use crate::app::state::{AppDb, AppVault};
 
+use super::runtime::usage_ledger;
 use super::{AiProviderConfig, AiRuntime};
 
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
@@ -271,7 +272,7 @@ pub(crate) fn load_runtime_from_provider_config(
     }
     let secret_ref = db.with_conn(|conn| resolve_secret_ref(conn, &config.secret_name))?;
     let api_key = resolve_api_key(vault, &secret_ref)?;
-    AiRuntime::new(config, api_key)
+    Ok(AiRuntime::new(config, api_key)?.with_ledger(usage_ledger(db.shared_connection())))
 }
 
 #[cfg(test)]

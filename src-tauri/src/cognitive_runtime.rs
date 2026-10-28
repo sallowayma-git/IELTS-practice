@@ -14,12 +14,12 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::{oneshot, Mutex, Notify, OwnedMutexGuard};
 
-use ielts_application::{ChatMessage, CompletionRequest, LanguageModel};
+use ielts_application::{ChatMessage, CompletionRequest};
 use ielts_db::{
     BeginAgentToolCallCommand, FinishAgentToolCallCommand, StoredAgentToolStatus,
 };
 
-use crate::ai::load_runtime;
+use crate::ai::{load_runtime, PartialCompletion};
 use crate::app::state::{AppDb, AppVault};
 
 pub(crate) const PROTOCOL_VERSION: u32 = 1;
@@ -685,6 +685,17 @@ enum RunKind {
 }
 
 impl RunKind {
+    /// Fixed label of this run's prompt-cache key (see `sidecar_cache_key`).
+    fn cache_purpose(self) -> &'static str {
+        match self {
+            Self::MemoryCandidate => "memory-candidate",
+            #[cfg(feature = "daily-dream-v1")]
+            Self::WeeklyDream => "dream-weekly",
+            #[cfg(feature = "agent-threads-v1")]
+            Self::StudyPlanner => "study-planner",
+        }
+    }
+
     fn from_host_method(method: &str) -> Result<Self, RuntimeHostError> {
         match method {
             "memory.candidates.generate" => Ok(Self::MemoryCandidate),
@@ -1800,7 +1811,8 @@ impl RuntimeManager {
             .get("request")
             .cloned()
             .ok_or_else(|| RuntimeHostError::InvalidResponse("model request is missing".into()))?;
-        let request = parse_model_request(request, kind)?;
+        let mut request = parse_model_request(request, kind)?;
+        apply_host_cache_key(kind, &mut request);
         let db = app.state::<AppDb>();
         let vault = app.state::<AppVault>();
         let runtime = load_runtime(&db, &vault)
@@ -1808,15 +1820,14 @@ impl RuntimeManager {
             .with_transport_retries(kind.model_transport_retries());
         // The gateway already returns final content only (no reasoning), so the
         // sidecar can never receive chain-of-thought.
-        let response = tokio::time::timeout(timeout, runtime.complete(request))
+        let completion = tokio::time::timeout(timeout, runtime.complete_partial(request))
             .await
             .map_err(|_| RuntimeHostError::Timeout)?
             .map_err(|error| RuntimeHostError::Provider {
                 message: error.message,
                 retryable: error.retryable,
             })?;
-        serde_json::to_value(response)
-            .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))
+        sidecar_completion_result(completion)
     }
 
     async fn write_to_child(
@@ -1926,6 +1937,35 @@ pub(crate) const HOST_ONLY_METHODS: &[&str] = &[
 
 pub(crate) fn is_host_only_method(method: &str) -> bool {
     HOST_ONLY_METHODS.contains(&method)
+}
+
+/// Longest prompt-cache key the host will send for a sidecar call.
+const MAX_SIDECAR_CACHE_KEY_LEN: usize = 64;
+
+/// Prompt-cache routing key for a sidecar model call: the run kind plus its
+/// system prompt. The sidecar builds that prompt from constants and persona
+/// only, so repeated calls of one run kind share a key. The user payload (the
+/// pack, the repair list) never enters it.
+fn sidecar_cache_key(kind: RunKind, request: &CompletionRequest) -> Option<String> {
+    let system = request.messages.first().filter(|message| message.role == "system")?;
+    let key = ielts_application::prompt_cache_key(kind.cache_purpose(), &system.content);
+    Some(key.chars().take(MAX_SIDECAR_CACHE_KEY_LEN).collect())
+}
+
+/// The host always decides the routing key of a sidecar call. A key the sidecar
+/// supplied is overwritten, never kept.
+fn apply_host_cache_key(kind: RunKind, request: &mut CompletionRequest) {
+    request.cache_key = sidecar_cache_key(kind, request);
+}
+
+/// The sidecar's view of one completion. A cut-off reply is a normal result with
+/// `truncated: true` and whatever text arrived, so the sidecar's own
+/// malformed-output handling decides what it means. It is not a host error.
+fn sidecar_completion_result(completion: PartialCompletion) -> Result<Value, RuntimeHostError> {
+    let mut value = serde_json::to_value(completion.response)
+        .map_err(|error| RuntimeHostError::InvalidResponse(error.to_string()))?;
+    value["truncated"] = json!(completion.truncated);
+    Ok(value)
 }
 
 /// A sidecar completion must declare `maxTokens` (serde rejects a missing
@@ -2123,6 +2163,72 @@ mod capability_contract_tests;
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_sidecar_supplied_cache_key_is_overwritten_and_capped() {
+        let mut request = CompletionRequest {
+            messages: vec![ChatMessage::new("system", "sys"), ChatMessage::new("user", "pack")],
+            temperature: 0.0,
+            max_tokens: 100,
+            cache_key: Some("x".repeat(500)),
+        };
+        apply_host_cache_key(RunKind::MemoryCandidate, &mut request);
+        let key = request.cache_key.clone().unwrap();
+        assert!(key.starts_with("memory-candidate-") && key.len() <= MAX_SIDECAR_CACHE_KEY_LEN);
+        assert_ne!(key, "x".repeat(500));
+        request.messages = vec![ChatMessage::new("user", "no system")];
+        apply_host_cache_key(RunKind::MemoryCandidate, &mut request);
+        assert!(request.cache_key.is_none(), "no stable system prefix, so no routing key");
+    }
+
+    #[test]
+    fn a_truncated_sidecar_completion_is_a_normal_result_with_truncated_true() {
+        let partial = PartialCompletion {
+            response: ielts_application::CompletionResponse {
+                content: r#"{"digest":"#.into(),
+                model: "m".into(),
+                latency_ms: 4,
+                usage: None,
+                provider_request_id: None,
+            },
+            truncated: true,
+        };
+        let value = sidecar_completion_result(partial).unwrap();
+        assert_eq!(value["content"], json!(r#"{"digest":"#));
+        assert_eq!(value["truncated"], json!(true));
+        let whole = PartialCompletion {
+            response: ielts_application::CompletionResponse {
+                content: "{}".into(),
+                model: "m".into(),
+                latency_ms: 4,
+                usage: None,
+                provider_request_id: None,
+            },
+            truncated: false,
+        };
+        assert_eq!(sidecar_completion_result(whole).unwrap()["truncated"], json!(false));
+    }
+
+    #[test]
+    fn sidecar_calls_share_a_cache_key_per_system_prefix_and_never_hash_the_payload() {
+        let call = |system: &str, user: &str| CompletionRequest {
+            messages: vec![ChatMessage::new("system", system), ChatMessage::new("user", user)],
+            temperature: 0.0,
+            max_tokens: 100,
+            cache_key: None,
+        };
+        let key = sidecar_cache_key(RunKind::MemoryCandidate, &call("sys", "pack A")).unwrap();
+        assert!(key.starts_with("memory-candidate-"), "{key}");
+        assert_eq!(key, sidecar_cache_key(RunKind::MemoryCandidate, &call("sys", "pack B")).unwrap());
+        assert_ne!(key, sidecar_cache_key(RunKind::MemoryCandidate, &call("other", "pack A")).unwrap());
+        #[cfg(feature = "daily-dream-v1")]
+        assert_ne!(key, sidecar_cache_key(RunKind::WeeklyDream, &call("sys", "pack A")).unwrap());
+        let no_system = CompletionRequest {
+            messages: vec![ChatMessage::new("user", "pack A")],
+            ..call("", "")
+        };
+        assert!(sidecar_cache_key(RunKind::MemoryCandidate, &no_system).is_none());
+    }
 
     fn framed_reverse_request(method: &str) -> Value {
         let frame = encode_frame(&json!({
