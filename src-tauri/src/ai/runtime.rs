@@ -815,11 +815,12 @@ fn finish_reason_of(choice_reason: Option<&Value>, stop_reason: Option<&Value>) 
 //     (the template put `<think>` in the prompt: everything before it is thought).
 // Streaming (`complete_with_trace_streaming`) is the one exception: its deltas
 // are raw content, so they are forwarded only while the content opens as JSON
-// and carries no reasoning tag (`streamable`). A model whose id may carry inline
-// reasoning (`may_carry_inline_reasoning`) is not streamed at all: its deltas
-// wait for the completed reply, because a bare `</think>` can arrive after
-// answer-shaped reasoning has already been sent. The final answer still comes
-// from `strip_inline_reasoning`, never from the deltas.
+// and carries no reasoning tag (`streamable`). Incremental display also requires
+// an endpoint with a known reasoning-separation contract. Custom endpoints and
+// models that may carry inline reasoning buffer until completion: a bare
+// `</think>` can arrive after answer-shaped reasoning. Served model metadata can
+// disable incremental display before its content is processed. The final answer
+// still comes from `strip_inline_reasoning`, never from the deltas.
 // Tool intents come ONLY from the structured `tool_calls` field, never from text.
 //
 // Provider docs consulted 2026-10-05 for the echo rule:
@@ -935,14 +936,34 @@ const INLINE_REASONING_MODEL_MARKERS: [&str; 8] = [
     "reason",
 ];
 
-/// Whether `model` may answer with inline reasoning, so its streamed deltas must
-/// wait for the completed reply. Unknown models stream incrementally: their
-/// content is checked as it arrives, and a bare closer that shows up late only
-/// ends forwarding (see `StreamFold::append_content`). That cannot retract text
-/// already sent, which is why this list stays conservative.
+/// A model-name hint can require buffering, but cannot establish that content
+/// is safe to display. Unknown aliases need an endpoint contract as well.
 fn may_carry_inline_reasoning(model: &str) -> bool {
     let id = model.to_ascii_lowercase();
     INLINE_REASONING_MODEL_MARKERS.iter().any(|marker| id.contains(marker))
+}
+
+/// Only the documented provider endpoints may opt into incremental display.
+/// A custom OpenAI-compatible gateway can put reasoning in `content`, even when
+/// its configured or served model name looks familiar. Check the final response
+/// URL too, so redirects cannot silently change the protocol we rely on.
+/// Reasoning-field contracts: see the provider documentation above.
+fn separates_reasoning(url: &reqwest::Url) -> bool {
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return false;
+    }
+    matches!(
+        (url.host_str(), url.path().trim_end_matches('/')),
+        (Some("api.openai.com"), "/v1" | "/v1/chat/completions")
+            | (Some("api.deepseek.com"), "/v1" | "/v1/chat/completions")
+            | (Some("openrouter.ai"), "/api/v1" | "/api/v1/chat/completions")
+    )
 }
 
 #[derive(Deserialize)]
@@ -1293,9 +1314,10 @@ fn token_usage(usage: ChatUsage) -> TokenUsage {
 }
 
 impl AiRuntime {
-    /// One completion requested as a stream. Content deltas reach `on_delta` as
-    /// they arrive; the returned reply is what the plain request would have
-    /// returned. A provider that refuses streaming gets the plain request. A
+    /// One completion requested as a stream. Content deltas reach `on_delta`
+    /// incrementally only under a known reasoning-separation contract; otherwise
+    /// the sanitized answer arrives at completion. A provider that refuses
+    /// streaming gets the plain request. A
     /// plain JSON answer to a streamed request is read as is, so no call is
     /// billed twice.
     async fn send_completion_streaming(
@@ -1331,16 +1353,16 @@ impl AiRuntime {
             let envelope = serde_json::from_value::<ChatResponse>(value)
                 .map_err(|_| fail(invalid_response("AI response envelope invalid")))?;
             let reply = self.completion_reply(envelope, elapsed_ms(started), retry_count, header_request_id.clone())?;
-            if !reply.response.content.is_empty() && streamable(&reply.response.content) {
+            if !is_truncated(reply.finish_reason.as_deref()) && !reply.response.content.is_empty() && streamable(&reply.response.content) {
                 on_delta(&reply.response.content);
             }
             return Ok(reply);
         }
-        let mut fold = if may_carry_inline_reasoning(&self.config.model) {
-            StreamFold::buffered()
-        } else {
-            StreamFold::new()
-        };
+        let mut fold = StreamFold::for_endpoint(
+            &self.config.base_url,
+            response.url(),
+            &self.config.model,
+        );
         loop {
             match response.chunk().await {
                 Ok(Some(bytes)) => {
@@ -1374,7 +1396,7 @@ impl AiRuntime {
         on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
     ) -> Result<CompletionReply, AgentModelFailure> {
         let reply = self.send_completion(body).await?;
-        if !reply.response.content.is_empty() && streamable(&reply.response.content) {
+        if !is_truncated(reply.finish_reason.as_deref()) && !reply.response.content.is_empty() && streamable(&reply.response.content) {
             on_delta(&reply.response.content);
         }
         Ok(reply)
@@ -1510,6 +1532,17 @@ struct StreamFold {
 }
 
 impl StreamFold {
+    fn for_endpoint(base_url: &str, response_url: &reqwest::Url, model: &str) -> Self {
+        let known_protocol = reqwest::Url::parse(base_url)
+            .is_ok_and(|url| separates_reasoning(&url))
+            && separates_reasoning(response_url);
+        if known_protocol && !may_carry_inline_reasoning(model) {
+            Self::new()
+        } else {
+            Self::buffered()
+        }
+    }
+
     /// Forwards content deltas as they arrive, while [`streamable`] allows.
     fn new() -> Self {
         Self { streaming: true, ..Self::default() }
@@ -1528,17 +1561,15 @@ impl StreamFold {
         retry_count: u32,
         header_request_id: Option<String>,
     ) -> Result<CompletionReply, AgentModelFailure> {
-        let usage = self.usage.take().map(token_usage);
         if !self.done && self.finish_reason.is_none() {
-            return Err(AgentModelFailure::with_trace(
+            return Err(self.failure(
                 stream_error("AI stream ended before the reply completed", true),
-                None,
                 latency_ms,
-                usage,
-                prefer_provider_request_id(header_request_id, self.id),
                 retry_count,
+                header_request_id,
             ));
         }
+        let usage = self.usage.take().map(token_usage);
         let finish_reason = self.finish_reason.clone();
         let truncated = is_truncated(finish_reason.as_deref());
         let model = self.model.clone().unwrap_or_else(|| fallback_model.to_string());
@@ -1628,9 +1659,11 @@ impl StreamFold {
         self.dispatch(on_delta)?;
         if self.buffered {
             // Only a completed, not cut-off reply is shown, and only its final
-            // answer: the same text `into_reply` returns.
+            // answer: the same text `into_reply` returns. If late model metadata
+            // stopped an incremental stream, the final receipt replaces it;
+            // replaying the full answer here would duplicate an emitted prefix.
             let completed = self.done || self.finish_reason.is_some();
-            if completed && !is_truncated(self.finish_reason.as_deref()) {
+            if completed && self.forwarded == 0 && !is_truncated(self.finish_reason.as_deref()) {
                 let answer = self.content.as_deref().map(strip_inline_reasoning).unwrap_or_default();
                 if !answer.is_empty() {
                     on_delta(&answer);
@@ -1703,6 +1736,13 @@ impl StreamFold {
         }
         if self.model.is_none() {
             self.model = value.get("model").and_then(Value::as_str).map(str::to_string);
+        }
+        // Apply every reported model before reading this event's content. The
+        // decision is one-way: metadata can require buffering, never establish
+        // trust in a custom endpoint or reopen a stream after a reasoning tag.
+        if value.get("model").and_then(Value::as_str).is_some_and(may_carry_inline_reasoning) {
+            self.streaming = false;
+            self.buffered = true;
         }
         // With include_usage the counts arrive in a final chunk with no choices.
         // A later chunk whose usage does not parse keeps the earlier valid counts.
@@ -2772,7 +2812,8 @@ mod tests {
 
     /// As `fold_stream`, with the fold the runtime would pick for `model`.
     fn fold_stream_for(model: &str, chunks: &[&[u8]]) -> (Vec<String>, Result<CompletionReply, AgentModelFailure>) {
-        let fold = if may_carry_inline_reasoning(model) { StreamFold::buffered() } else { StreamFold::new() };
+        let url = reqwest::Url::parse("https://api.openai.com/v1/chat/completions").unwrap();
+        let fold = StreamFold::for_endpoint("https://api.openai.com/v1", &url, model);
         fold_stream_with(fold, chunks)
     }
 
@@ -2899,7 +2940,7 @@ mod tests {
     }
 
     #[test]
-    fn only_inline_reasoning_families_are_buffered() {
+    fn inline_reasoning_families_require_buffering_even_on_known_endpoints() {
         for model in [
             "deepseek-r1",
             "deepseek/deepseek-r1:free",
@@ -2914,9 +2955,121 @@ mod tests {
         ] {
             assert!(may_carry_inline_reasoning(model), "{model} must be buffered");
         }
-        // Unknown and ordinary ids stream incrementally.
+        // These ids provide no hint: only a known endpoint can allow streaming.
         for model in ["gpt-4o", "claude-sonnet-4.6", "deepseek-chat", "configured-model", "o3-mini"] {
-            assert!(!may_carry_inline_reasoning(model), "{model} streams");
+            assert!(!may_carry_inline_reasoning(model), "{model} has no reasoning hint");
+        }
+    }
+
+    #[test]
+    fn incremental_display_requires_a_known_endpoint_before_and_after_redirects() {
+        for base in [
+            "https://api.openai.com/v1",
+            "https://api.deepseek.com/v1",
+            "https://openrouter.ai/api/v1",
+        ] {
+            let response = reqwest::Url::parse(&format!("{base}/chat/completions")).unwrap();
+            let mut fold = StreamFold::for_endpoint(base, &response, "coach-alias");
+            let mut deltas = Vec::new();
+            fold.push(sse(&CONTENT_EVENTS[..1]).as_bytes(), &mut |text| deltas.push(text.to_owned())).unwrap();
+            assert_eq!(deltas, [r#"{"ans"#], "{base} should still stream before completion");
+            assert!(!fold.done);
+        }
+        let official = reqwest::Url::parse("https://api.openai.com/v1/chat/completions").unwrap();
+        for untrusted in [
+            "http://api.openai.com/v1",
+            "https://api.openai.com.evil.test/v1",
+            "https://api.openai.com:8443/v1",
+            "https://api.openai.com/custom/v1",
+            "https://api.openai.com/v1?route=custom",
+            "https://api.openai.com/v1#custom",
+            "https://api.openai.com@proxy.example/v1",
+            "https://user@api.openai.com/v1",
+            "https://proxy.example/v1",
+            "http://127.0.0.1:8080/v1",
+        ] {
+            let url = reqwest::Url::parse(untrusted).unwrap();
+            // Neither a familiar model id nor the other URL can grant trust.
+            assert!(StreamFold::for_endpoint(untrusted, &official, "gpt-4o").buffered, "{untrusted}");
+            assert!(StreamFold::for_endpoint("https://api.openai.com/v1", &url, "gpt-4o").buffered, "{untrusted}");
+        }
+    }
+
+    #[test]
+    fn served_model_policy_precedes_content_and_never_reopens_streaming() {
+        let body = sse(&[
+            r#"{"model":"coach-alias","choices":[]}"#,
+            r#"{"model":"deepseek-r1","choices":[{"delta":{"content":"{\"answer\":\"PRIVATE PLAN\"}"}}]}"#,
+            r#"{"model":"gpt-4o","choices":[{"delta":{"content":"</think>{\"answer\":\"Final answer\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("coach-alias", &[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Final answer"}"#]);
+        assert_eq!(reply.unwrap().response.content, deltas.concat());
+    }
+
+    #[test]
+    fn late_model_metadata_does_not_duplicate_already_forwarded_text() {
+        let body = sse(&[
+            r#"{"choices":[{"delta":{"content":"{\"answer\":\"Hello"}}]}"#,
+            r#"{"model":"deepseek-r1","choices":[{"delta":{"content":" there\"}"},"finish_reason":"stop"}]}"#,
+            "[DONE]",
+        ]);
+        let (deltas, reply) = fold_stream_for("coach-alias", &[body.as_bytes()]);
+        assert_eq!(deltas, [r#"{"answer":"Hello"#]);
+        assert_eq!(reply.unwrap().response.content, r#"{"answer":"Hello there"}"#);
+    }
+
+    #[tokio::test]
+    async fn custom_endpoint_aliases_never_forward_answer_shaped_reasoning() {
+        for (configured, first_model, late_model) in [
+            ("coach-local", Some("deepseek-r1"), None),
+            ("coach-local", None, None),
+            ("coach-local", Some("coach-local"), Some("deepseek-r1")),
+            ("gpt-4o", Some("gpt-4o"), None),
+        ] {
+            let first = json!({"model": first_model, "choices": [{"delta": {"content": r#"{"answer":"PRIVATE PLAN"}"#}}]}).to_string();
+            let last = json!({"model": late_model, "choices": [{"delta": {"content": r#"</think>{"answer":"Final answer"}"#}, "finish_reason": "stop"}]}).to_string();
+            let body: &'static str = Box::leak(sse(&[&first, &last, "[DONE]"]).into_boxed_str());
+            let (runtime, server) = scripted_fixture_for(configured, vec![(200, "text/event-stream", body)]);
+            let mut deltas = Vec::new();
+            let (response, _) = runtime
+                .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                    assert!(!delta.contains("PRIVATE"), "reasoning reached the callback: {delta}");
+                    deltas.push(delta.to_owned());
+                })
+                .await
+                .unwrap();
+            let bodies = server.join().unwrap();
+            assert_eq!(bodies.len(), 1);
+            assert_eq!(bodies[0]["stream"], json!(true));
+            assert_eq!(bodies[0]["model"], json!(configured));
+            assert_eq!(deltas, [r#"{"answer":"Final answer"}"#]);
+            assert_eq!(response.content, deltas.concat());
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_plain_stream_responses_never_forward_an_unfinished_reasoning_prefix() {
+        let plain = r#"{"model":"deepseek-r1","choices":[{"message":{"content":"{\"answer\":\"PRIVATE PLAN\"}"},"finish_reason":"length"}]}"#;
+        for refused in [false, true] {
+            let mut responses = Vec::new();
+            if refused {
+                responses.push((400, "application/json", r#"{"error":{"message":"stream is unsupported"}}"#));
+            }
+            responses.push((200, "application/json", plain));
+            let (runtime, server) = scripted_fixture_for("coach-local", responses);
+            let mut deltas = Vec::new();
+            let failure = runtime
+                .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                    deltas.push(delta.to_owned());
+                })
+                .await
+                .unwrap_err();
+            let bodies = server.join().unwrap();
+            assert_eq!(bodies.len(), if refused { 2 } else { 1 });
+            assert!(failure.error.truncated);
+            assert!(deltas.is_empty(), "an unfinished reply must never reach the callback: {deltas:?}");
         }
     }
 
@@ -3216,7 +3369,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn loopback_stream_emits_deltas_in_order_and_matches_the_plain_result() {
+    async fn custom_endpoint_stream_emits_a_clean_answer_and_matches_the_plain_result() {
         let body: &'static str = Box::leak(sse_body().into_boxed_str());
         let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
         let rows = Arc::new(std::sync::Mutex::new(Vec::<ielts_db::LlmInvocationRecord>::new()));
@@ -3232,7 +3385,7 @@ mod tests {
             .unwrap();
         let bodies = server.join().unwrap();
 
-        assert_eq!(deltas, [r#"{"ans"#, "wer\":\"Hi 你", "好\"}"]);
+        assert_eq!(deltas, [r#"{"answer":"Hi 你好"}"#]);
         assert_eq!(response.content, deltas.concat());
         assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
         // One provider call, streamed, with usage requested in the stream.
@@ -3263,7 +3416,7 @@ mod tests {
             .unwrap_err();
         server.join().unwrap();
         assert!(failure.error.truncated);
-        assert_eq!(deltas, [r#"{"answer":"Cut"#]);
+        assert!(deltas.is_empty(), "custom endpoints never display a truncated reply");
     }
 
     /// Answers with `body` as a stream that is cut off after it: the declared
@@ -3346,6 +3499,49 @@ mod tests {
         assert_eq!(failure.model.as_deref(), Some("served-model"));
         assert_eq!(failure.retry_count, 1);
         assert_eq!(failure.latency_ms, 9);
+    }
+
+    #[tokio::test]
+    async fn a_stream_ending_at_http_eof_keeps_the_usage_model_and_response_id() {
+        let usage = r#"{"id":"body-id","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+        let body: &'static str = Box::leak(sse(&[usage]).into_boxed_str());
+        // This fixture advertises the exact Content-Length: the HTTP response
+        // succeeds, but the SSE reply has neither [DONE] nor a finish reason.
+        let (runtime, server) = scripted_fixture(vec![(200, "text/event-stream", body)]);
+        let mut deltas = Vec::new();
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                deltas.push(delta.to_owned());
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(server.join().unwrap().len(), 1);
+        assert!(deltas.is_empty());
+        assert_eq!(failure.error.class, "stream_error");
+        assert_eq!(failure.error.message, "AI stream ended before the reply completed");
+        assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+        assert_eq!(failure.model.as_deref(), Some("served-model"));
+        assert_eq!(failure.provider_request_id.as_deref(), Some("body-id"));
+        assert_eq!(failure.retry_count, 0);
+    }
+
+    #[test]
+    fn an_incomplete_stream_reply_keeps_metadata_and_prefers_the_header_request_id() {
+        for (header_request_id, expected_id) in [(None, "body-id"), (Some("header-id"), "header-id")] {
+            let mut fold = StreamFold::new();
+            let usage = r#"{"id":"body-id","model":"served-model","choices":[],"usage":{"prompt_tokens":23,"completion_tokens":7}}"#;
+            fold.push(sse(&[usage]).as_bytes(), &mut |_| {}).unwrap();
+            let failure = fold
+                .into_reply("configured-alias", 9, 1, header_request_id.map(str::to_owned))
+                .err()
+                .expect("an unfinished stream must fail");
+            assert_eq!(failure.error.message, "AI stream ended before the reply completed");
+            assert_eq!(failure.model.as_deref(), Some("served-model"));
+            assert_eq!(failure.usage, Some(TokenUsage { input_tokens: 23, output_tokens: 7, ..Default::default() }));
+            assert_eq!(failure.provider_request_id.as_deref(), Some(expected_id));
+            assert_eq!(failure.latency_ms, 9);
+            assert_eq!(failure.retry_count, 1);
+        }
     }
 
     #[tokio::test]
