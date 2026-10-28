@@ -2172,12 +2172,12 @@ mod tests {
             max_tokens: 100,
             cache_key: Some("x".repeat(500)),
         };
-        apply_host_cache_key(RunKind::WeeklyDream, &mut request);
+        apply_host_cache_key(RunKind::MemoryCandidate, &mut request);
         let key = request.cache_key.clone().unwrap();
-        assert!(key.starts_with("dream-weekly-") && key.len() <= MAX_SIDECAR_CACHE_KEY_LEN);
+        assert!(key.starts_with("memory-candidate-") && key.len() <= MAX_SIDECAR_CACHE_KEY_LEN);
         assert_ne!(key, "x".repeat(500));
         request.messages = vec![ChatMessage::new("user", "no system")];
-        apply_host_cache_key(RunKind::WeeklyDream, &mut request);
+        apply_host_cache_key(RunKind::MemoryCandidate, &mut request);
         assert!(request.cache_key.is_none(), "no stable system prefix, so no routing key");
     }
 
@@ -2217,16 +2217,17 @@ mod tests {
             max_tokens: 100,
             cache_key: None,
         };
-        let key = sidecar_cache_key(RunKind::WeeklyDream, &call("sys", "pack A")).unwrap();
-        assert!(key.starts_with("dream-weekly-"), "{key}");
-        assert_eq!(key, sidecar_cache_key(RunKind::WeeklyDream, &call("sys", "pack B")).unwrap());
-        assert_ne!(key, sidecar_cache_key(RunKind::WeeklyDream, &call("other", "pack A")).unwrap());
-        assert_ne!(key, sidecar_cache_key(RunKind::MemoryCandidate, &call("sys", "pack A")).unwrap());
+        let key = sidecar_cache_key(RunKind::MemoryCandidate, &call("sys", "pack A")).unwrap();
+        assert!(key.starts_with("memory-candidate-"), "{key}");
+        assert_eq!(key, sidecar_cache_key(RunKind::MemoryCandidate, &call("sys", "pack B")).unwrap());
+        assert_ne!(key, sidecar_cache_key(RunKind::MemoryCandidate, &call("other", "pack A")).unwrap());
+        #[cfg(feature = "daily-dream-v1")]
+        assert_ne!(key, sidecar_cache_key(RunKind::WeeklyDream, &call("sys", "pack A")).unwrap());
         let no_system = CompletionRequest {
             messages: vec![ChatMessage::new("user", "pack A")],
             ..call("", "")
         };
-        assert!(sidecar_cache_key(RunKind::WeeklyDream, &no_system).is_none());
+        assert!(sidecar_cache_key(RunKind::MemoryCandidate, &no_system).is_none());
     }
 
     fn framed_reverse_request(method: &str) -> Value {
