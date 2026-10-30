@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    # Python Playwright 1.56.0 supports Ubuntu 24.04, but not Ubuntu 26.04.
+    # Keep this runner compatible with the pinned browser toolchain below.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
