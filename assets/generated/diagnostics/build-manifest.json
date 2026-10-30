@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.2-fix",
-  "buildId": "sha256:5c3090743603c1284b2f32feb7b2e0cc97acac6b07e1ec6839f6436085bf930f",
+  "buildId": "sha256:3fc637cfa606f7f84a1f9f6b151fa5e52c7a133c47c5cda409f4671688658bca",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -546,7 +546,7 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "65b6d54b52b4da6d556ee394066a89e705ae7a89f33f8fda4ea229ffd797d200"
+      "sha256": "7836ec1a46a88f09735f4199e54bb1f4aca3480c8740971bf87eeffd32a28460"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
@@ -962,97 +962,97 @@
       {
         "source": "js/views/legacyViewBundle.js",
         "startLine": 784,
-        "endLine": 5226,
+        "endLine": 5240,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/practiceRecordSource.js",
-        "startLine": 5230,
-        "endLine": 5428,
+        "startLine": 5244,
+        "endLine": 5442,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examActions.js",
-        "startLine": 5432,
-        "endLine": 7553,
+        "startLine": 5446,
+        "endLine": 7606,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/spellingErrorCollector.js",
-        "startLine": 7557,
-        "endLine": 8867,
+        "startLine": 7610,
+        "endLine": 8920,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examSessionMixin.js",
-        "startLine": 8871,
-        "endLine": 16202,
+        "startLine": 8924,
+        "endLine": 16255,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/practiceReviewFlow.js",
-        "startLine": 16206,
-        "endLine": 16503,
+        "startLine": 16259,
+        "endLine": 16556,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/browseController.js",
-        "startLine": 16507,
-        "endLine": 17177,
+        "startLine": 16560,
+        "endLine": 17230,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/PDFHandler.js",
-        "startLine": 17181,
-        "endLine": 17613,
+        "startLine": 17234,
+        "endLine": 17666,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/BrowseStateManager.js",
-        "startLine": 17617,
-        "endLine": 18179,
+        "startLine": 17670,
+        "endLine": 18232,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/suiteBackGuard.js",
-        "startLine": 18183,
-        "endLine": 18352,
+        "startLine": 18236,
+        "endLine": 18405,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 18356,
-        "endLine": 18570,
+        "startLine": 18409,
+        "endLine": 18623,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerComparisonUtils.js",
-        "startLine": 18574,
-        "endLine": 19345,
+        "startLine": 18627,
+        "endLine": 19398,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 19349,
-        "endLine": 20381,
+        "startLine": 19402,
+        "endLine": 20434,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 20385,
-        "endLine": 20646,
+        "startLine": 20438,
+        "endLine": 20699,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 20650,
-        "endLine": 20855,
+        "startLine": 20703,
+        "endLine": 20908,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 20859,
-        "endLine": 26570,
+        "startLine": 20912,
+        "endLine": 26671,
         "sourceStartLine": 1
       }
     ],
