@@ -21385,6 +21385,18 @@ async function syncPracticeRecords(options = {}) {
         }
     } catch (_) { /* 保底不中断同步流程 */ }
 
+    console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
+    // 评分只改复盘计划，不改练习摘要。即使摘要签名没有变化，也必须重新读取队列；
+    // 否则其他标签页的评分会让徽标、排序与复盘统计一直停留在旧快照。
+    // Publish the article review index before scheduling the completion repaint,
+    // so existing Browse cards can expose Replay even when this read is delayed.
+    let reviewQueueChanged = false;
+    try {
+        reviewQueueChanged = await loadPracticeReviewQueue();
+    } catch (error) {
+        console.warn('[Review] 同步复盘队列失败:', error);
+    }
+
     // Publish Browse ownership only after the derived completion state,
     // anchors, and any active-view repaint have accepted this snapshot. A
     // newer invocation that reads successfully but fails publication must not
@@ -21406,15 +21418,6 @@ async function syncPracticeRecords(options = {}) {
         }
     }
 
-    console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
-    // 评分只改复盘计划，不改练习摘要。即使摘要签名没有变化，也必须重新读取队列；
-    // 否则其他标签页的评分会让徽标、排序与复盘统计一直停留在旧快照。
-    let reviewQueueChanged = false;
-    try {
-        reviewQueueChanged = await loadPracticeReviewQueue();
-    } catch (error) {
-        console.warn('[Review] 同步复盘队列失败:', error);
-    }
     if (!recordsUnchanged || reviewQueueChanged) {
         updatePracticeView(records, examIndex);
     } else if (typeof flushPracticeInsightsRender === 'function') {
