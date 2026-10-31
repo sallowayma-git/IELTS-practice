@@ -1752,6 +1752,23 @@
             actions.appendChild(startBtn);
         }
 
+        const reviewTask = !isSelecting && !isMemorizeSelecting
+            && exam.type === 'reading'
+            && typeof global.getPracticeReviewTaskForExam === 'function'
+            ? global.getPracticeReviewTaskForExam(exam)
+            : null;
+        if (reviewTask && reviewTask.id) {
+            const reviewBtn = document.createElement('button');
+            reviewBtn.className = 'btn btn-outline exam-item-action-btn';
+            reviewBtn.type = 'button';
+            reviewBtn.dataset.action = 'browse-review';
+            reviewBtn.dataset.examId = exam.id;
+            reviewBtn.dataset.reviewTaskId = reviewTask.id;
+            reviewBtn.textContent = '复盘';
+            reviewBtn.title = reviewTask.isDue ? '开始复盘这篇文章' : '提前复盘这篇文章';
+            actions.appendChild(reviewBtn);
+        }
+
         if (pdfAvailable) {
             const pdfBtn = document.createElement('button');
             pdfBtn.className = 'btn btn-outline exam-item-action-btn';
@@ -1891,6 +1908,25 @@
                 return;
             }
 
+            if (action === 'browse-review') {
+                const flow = global.PracticeReviewFlow;
+                const reviewTaskId = target.dataset.reviewTaskId;
+                if (!flow || typeof flow.start !== 'function') {
+                    if (typeof global.showMessage === 'function') {
+                        global.showMessage('复盘功能尚未初始化', 'warning');
+                    }
+                    return;
+                }
+                if (!reviewTaskId) {
+                    if (typeof global.showMessage === 'function') {
+                        global.showMessage('未找到这篇文章的复盘记录', 'warning');
+                    }
+                    return;
+                }
+                flow.start(reviewTaskId);
+                return;
+            }
+
             if (action === 'start') {
                 if (global.app && typeof global.app.openExam === 'function') {
                     global.app.openExam(examId);
@@ -1957,6 +1993,9 @@
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="reading-memorize-select"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="browse-review"]', function (event) {
                 invoke(this, event);
             });
         } else if (typeof document !== 'undefined') {

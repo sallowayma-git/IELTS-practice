@@ -3248,6 +3248,20 @@
             actions.appendChild(startBtn);
         }
 
+        var reviewTask = !isSelecting && !isMemorizeSelecting
+            && exam.type === 'reading'
+            && typeof global.getPracticeReviewTaskForExam === 'function'
+            ? global.getPracticeReviewTaskForExam(exam)
+            : null;
+        if (reviewTask && reviewTask.id) {
+            actions.appendChild(this._createElement('button', {
+                className: 'btn btn-outline exam-item-action-btn',
+                dataset: { action: 'browse-review', examId: exam.id, reviewTaskId: reviewTask.id },
+                type: 'button',
+                title: reviewTask.isDue ? '开始复盘这篇文章' : '提前复盘这篇文章'
+            }, '复盘'));
+        }
+
         if (actionConfig.includePdfButton) {
             if (pdfAvailable) {
                 var pdfBtn = this._createElement('button', {

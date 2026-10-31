@@ -474,6 +474,18 @@ async function syncPracticeRecords(options = {}) {
         }
     } catch (_) { /* 保底不中断同步流程 */ }
 
+    console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
+    // 评分只改复盘计划，不改练习摘要。即使摘要签名没有变化，也必须重新读取队列；
+    // 否则其他标签页的评分会让徽标、排序与复盘统计一直停留在旧快照。
+    // Publish the article review index before scheduling the completion repaint,
+    // so existing Browse cards can expose Replay even when this read is delayed.
+    let reviewQueueChanged = false;
+    try {
+        reviewQueueChanged = await loadPracticeReviewQueue();
+    } catch (error) {
+        console.warn('[Review] 同步复盘队列失败:', error);
+    }
+
     // Publish Browse ownership only after the derived completion state,
     // anchors, and any active-view repaint have accepted this snapshot. A
     // newer invocation that reads successfully but fails publication must not
@@ -495,15 +507,6 @@ async function syncPracticeRecords(options = {}) {
         }
     }
 
-    console.log(`[System] 已从 AppData 加载 ${records.length} 条练习摘要。`);
-    // 评分只改复盘计划，不改练习摘要。即使摘要签名没有变化，也必须重新读取队列；
-    // 否则其他标签页的评分会让徽标、排序与复盘统计一直停留在旧快照。
-    let reviewQueueChanged = false;
-    try {
-        reviewQueueChanged = await loadPracticeReviewQueue();
-    } catch (error) {
-        console.warn('[Review] 同步复盘队列失败:', error);
-    }
     if (!recordsUnchanged || reviewQueueChanged) {
         updatePracticeView(records, examIndex);
     } else if (typeof flushPracticeInsightsRender === 'function') {
@@ -1985,6 +1988,7 @@ const practiceReviewQueueState = {
     generatedAt: null,
     records: [],
     byRecordId: new Map(),
+    byExamKey: new Map(),
     order: new Map(),
     stats: null,
     signature: null,
@@ -2002,6 +2006,32 @@ function getPracticeReviewQueueSnapshot() {
         order: practiceReviewQueueState.order,
         stats: practiceReviewQueueState.stats
     };
+}
+
+function practiceReviewExamKey(libraryConfigurationId, examId) {
+    let currentExamId = String(examId || '').trim();
+    if (!currentExamId) return '';
+    if (typeof window.resolveReadingExamId === 'function') {
+        try {
+            currentExamId = String(window.resolveReadingExamId(currentExamId) || currentExamId).trim();
+        } catch (_) { /* keep the stored id */ }
+    }
+    const libraryId = libraryConfigurationId == null ? '' : String(libraryConfigurationId).trim();
+    return JSON.stringify([libraryId, currentExamId]);
+}
+
+function getPracticeReviewTaskForExam(exam) {
+    if (!exam) return null;
+    const metadata = exam && typeof exam === 'object' && exam.metadata && typeof exam.metadata === 'object'
+        ? exam.metadata : {};
+    const examId = typeof exam === 'object' ? (exam.id || exam.examId || metadata.examId) : exam;
+    const libraryConfigurationId = typeof exam === 'object'
+        ? (Object.prototype.hasOwnProperty.call(exam, 'libraryConfigurationId')
+            ? exam.libraryConfigurationId
+            : metadata.libraryConfigurationId)
+        : null;
+    const key = practiceReviewExamKey(libraryConfigurationId, examId);
+    return key ? practiceReviewQueueState.byExamKey.get(key) || null : null;
 }
 
 function isPracticeReviewModeEnabled() {
@@ -2035,10 +2065,21 @@ async function loadPracticeReviewQueue() {
     practiceReviewQueueState.records = records;
     practiceReviewQueueState.signature = nextSignature;
     practiceReviewQueueState.byRecordId = new Map();
+    practiceReviewQueueState.byExamKey = new Map();
     records.forEach(record => {
         practiceReviewQueueState.byRecordId.set(String(record.id), record);
         const parentId = String(record.recordId || record.id);
         if (!practiceReviewQueueState.byRecordId.has(parentId)) practiceReviewQueueState.byRecordId.set(parentId, record);
+        const metadata = record && record.metadata && typeof record.metadata === 'object' ? record.metadata : {};
+        const examKey = practiceReviewExamKey(
+            Object.prototype.hasOwnProperty.call(record, 'reviewLibraryConfigurationId')
+                ? record.reviewLibraryConfigurationId
+                : metadata.libraryConfigurationId,
+            record.reviewExamId || record.examId || metadata.examId
+        );
+        if (examKey && !practiceReviewQueueState.byExamKey.has(examKey)) {
+            practiceReviewQueueState.byExamKey.set(examKey, record);
+        }
     });
     practiceReviewQueueState.order = new Map(records.map((record, index) => [String(record.id), index]));
     return changed;
@@ -2095,6 +2136,7 @@ if (typeof window !== 'undefined') {
     window.togglePracticeReviewMode = togglePracticeReviewMode;
     window.isPracticeReviewModeEnabled = isPracticeReviewModeEnabled;
     window.getPracticeReviewQueueSnapshot = getPracticeReviewQueueSnapshot;
+    window.getPracticeReviewTaskForExam = getPracticeReviewTaskForExam;
 }
 
 // Dashboard charts are independent of the history list. Yield a paint before
@@ -3368,6 +3410,15 @@ async function activateBrowseView(options = {}) {
         });
         if (!Array.isArray(examIndex)
             || !isBrowseResultsRequestCurrent(activeRequestId)
+            || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
+            return false;
+        }
+        try {
+            await loadPracticeReviewQueue();
+        } catch (error) {
+            console.warn('[Browse] 读取文章复盘入口失败:', error);
+        }
+        if (!isBrowseResultsRequestCurrent(activeRequestId)
             || !isBrowseForegroundRenderEpochCurrent(foregroundEpoch)) {
             return false;
         }
