@@ -9,12 +9,12 @@
   "meta": {
     "title": "Wood 新西兰木材产业",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "32. P1 - Wood 新西兰木材产业.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/",
     "legacyFilename": "32. P1 - Wood 新西兰木材产业【次】.html",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

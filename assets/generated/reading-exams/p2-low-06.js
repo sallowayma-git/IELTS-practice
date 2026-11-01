@@ -9,12 +9,12 @@
   "meta": {
     "title": "Biomimicry 仿生学",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "103. P2 - Biomimicry 仿生学.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/",
     "legacyFilename": "103. P2 - Biomimicry 仿生学.html",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

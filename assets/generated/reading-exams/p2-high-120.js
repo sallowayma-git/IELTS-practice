@@ -9,12 +9,12 @@
   "meta": {
     "title": "A new look for Talbot Park 奥克兰社区改造",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "33. P2 - A new look for Talbot Park 奥克兰社区改造【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/",
     "legacyFilename": "ai_studio_code (9).html",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

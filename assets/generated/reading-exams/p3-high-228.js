@@ -9,12 +9,12 @@
   "meta": {
     "title": "On art and artists 艺术与艺术家",
     "category": "P3",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "228. P3 - On art and artists 艺术与艺术家.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "228. P3 - On art and artists 艺术与艺术家.pdf",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [
