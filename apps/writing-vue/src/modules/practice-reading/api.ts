@@ -10,7 +10,11 @@ import {
   normalizeReadingSuitePayload
 } from './contracts'
 
-interface CoachOptions { onEvent?: (event: unknown) => void }
+interface CoachOptions {
+  onEvent?: (event: unknown) => void
+  /** Learner-visible answer text as it streams; the query still resolves with the final reply. */
+  onDelta?: (text: string) => void
+}
 
 export const readingLibraryApi = {
   async listAssets() {

@@ -646,3 +646,81 @@ async fn without_any_learner_data_no_profile_message_is_sent() {
     assert!(request.messages.iter().all(|m| !m.content.starts_with("Learner profile")));
     assert!(request.messages[2].content.starts_with("Request controls"));
 }
+
+/// Replays the gateway's incomplete-SSE failure at the application boundary.
+struct IncompleteStreamProvider;
+
+#[async_trait]
+impl LanguageModel for IncompleteStreamProvider {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        panic!("the coach must use the traced streaming path");
+    }
+
+    fn identity(&self) -> (&str, &str) {
+        ("fixture-provider", "configured-alias")
+    }
+
+    async fn complete_with_trace_streaming(
+        &self,
+        _request: CompletionRequest,
+        _on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<(CompletionResponse, u32), ielts_application::AgentModelFailure> {
+        Err(ielts_application::AgentModelFailure::with_trace(
+            ModelError::classed("AI stream ended before the reply completed", true, "stream_error"),
+            Some("served-model".into()),
+            9,
+            Some(ielts_application::TokenUsage {
+                input_tokens: 23,
+                output_tokens: 7,
+                ..Default::default()
+            }),
+            Some("body-id".into()),
+            1,
+        ))
+    }
+}
+
+#[tokio::test]
+async fn incomplete_stream_metadata_survives_the_coach_failure_trace() {
+    let (dir, store, thread) = fixture();
+    let mut visible = String::new();
+    let error = CoachService::run_streaming(
+        &store,
+        command(&thread, None),
+        || Ok(IncompleteStreamProvider),
+        &mut |delta: &str| visible.push_str(delta),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, "coach.provider_failed");
+    assert!(visible.is_empty());
+    drop(store);
+
+    // Reopen the database to verify the persisted receipt, not in-memory state.
+    let conn = open_connection(&DbOpenOptions::create(dir.path().join("coach.db"))).unwrap();
+    let (run_id, model, usage, request_id, response_hash, count):
+        (String, String, String, String, Option<String>, i64) = conn.query_row(
+            "SELECT run_id,model,usage_json,provider_request_id,response_hash,
+                    (SELECT COUNT(*) FROM llm_invocations) FROM llm_invocations",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+        ).unwrap();
+    assert_eq!(count, 1, "the coach failure owns exactly one invocation");
+    assert_eq!(model, "served-model");
+    assert_eq!(request_id, "body-id");
+    assert!(response_hash.is_none(), "an incomplete reply is never recorded as a completed response");
+    assert_eq!(serde_json::from_str::<Value>(&usage).unwrap(), json!({"inputTokens": 23, "outputTokens": 7}));
+
+    let run = load_agent_run(&conn, &run_id).unwrap().unwrap();
+    assert_eq!(run.status, StoredAgentRunStatus::Failed);
+    let receipt = run.result.unwrap();
+    assert_eq!(receipt["actualModel"], "served-model");
+    assert_eq!(receipt["usage"], json!({"inputTokens": 23, "outputTokens": 7}));
+    assert_eq!(receipt["providerRequestId"], "body-id");
+    assert_eq!(receipt["latencyMs"], 9);
+    assert_eq!(receipt["retryCount"], 1);
+    let messages = list_coach_messages(&conn, &thread.id, None, 10).unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[1].status, "failed");
+    assert_eq!(receipt["failureMessageId"], messages[1].id);
+}

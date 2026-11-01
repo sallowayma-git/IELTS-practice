@@ -719,7 +719,8 @@ class WeeklyRetryTests(unittest.TestCase):
         for bad in ("not json at all", "", "{}", '{"digest": null}', '{"digest": []}',
                     '{"digest": {}, "mutations": {}}', '{"digest": {}, "profileEdits": {}}',
                     "[1]", "[]", '{"patterns": []}', {"content": None}, {"nothing": "here"},
-                    {"content": "   "}):
+                    {"content": "   "},
+                    {"content": '{"digest": {"narrative": "cut off', "truncated": True}):
             with self.subTest(bad=bad):
                 result, bridge, sleeps = self._run([bad, bad, _answer()])
                 self.assertIsNone(result.fallback_reason)

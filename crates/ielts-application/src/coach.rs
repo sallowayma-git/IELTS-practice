@@ -7,6 +7,7 @@ use ielts_domain::{estimate_tokens, CONTEXT_HARD_TOKEN_CEILING};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+use crate::coach_stream;
 use crate::teaching_notes::{reject_all_teaching_notes, review_teaching_notes};
 use crate::{
     ApplicationError, ChatMessage, CoachStore, CompletionRequest, LanguageModel, ModelError,
@@ -88,6 +89,38 @@ impl CoachService {
         M: LanguageModel,
         F: FnOnce() -> Result<M, ApplicationError>,
     {
+        Self::run_inner(store, command, load_model, None).await
+    }
+
+    /// Same run as [`CoachService::run`], which also reports the learner-visible
+    /// text of the answer as it streams. `on_visible` receives only the decoded
+    /// `answer` text, never JSON syntax or teaching notes. The result, trace,
+    /// usage and validation are exactly those of `run`.
+    pub async fn run_streaming<S, M, F>(
+        store: &S,
+        command: RunCoachCommand,
+        load_model: F,
+        on_visible: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<CoachRunResult, ApplicationError>
+    where
+        S: CoachStore,
+        M: LanguageModel,
+        F: FnOnce() -> Result<M, ApplicationError>,
+    {
+        Self::run_inner(store, command, load_model, Some(on_visible)).await
+    }
+
+    async fn run_inner<S, M, F>(
+        store: &S,
+        command: RunCoachCommand,
+        load_model: F,
+        on_visible: Option<&mut (dyn for<'a> FnMut(&'a str) + Send)>,
+    ) -> Result<CoachRunResult, ApplicationError>
+    where
+        S: CoachStore,
+        M: LanguageModel,
+        F: FnOnce() -> Result<M, ApplicationError>,
+    {
         if command.content.trim().is_empty() {
             return Err(ApplicationError::new(
                 "enrichment.error",
@@ -135,7 +168,20 @@ impl CoachService {
             }
         };
         let mut trace = CoachTraceGuard { store, run_id, armed: true, pending_error: json!({"code":"coach.interrupted","message":"coach execution dropped before terminal receipt","retryable":true}), pending_response: None };
-        let (response, retry_count) = match model.complete_with_trace(request).await {
+        let reply = match on_visible {
+            None => model.complete_with_trace(request).await,
+            Some(sink) => {
+                let mut visible = coach_stream::AnswerStream::default();
+                let mut forward = |delta: &str| {
+                    let text = visible.push(delta.as_bytes());
+                    if !text.is_empty() {
+                        sink(&text);
+                    }
+                };
+                model.complete_with_trace_streaming(request, &mut forward).await
+            }
+        };
+        let (response, retry_count) = match reply {
             Ok(response) => response,
             Err(failure) => {
                 let metadata = json!({"model":failure.model,"latencyMs":failure.latency_ms,"usage":failure.usage,"providerRequestId":failure.provider_request_id,"retryCount":failure.retry_count});
@@ -374,6 +420,14 @@ fn parse_answer(raw: &str) -> Result<(String, Value), ApplicationError> {
 }
 
 fn provider_failure(error: ModelError) -> ApplicationError {
+    // A cut-off answer and an over-long prompt are not provider outages: the
+    // learner can act on them (ask a narrower question, select less text).
+    if error.truncated {
+        return ApplicationError::new("coach.output_truncated", error.message, false);
+    }
+    if error.context_exceeded {
+        return ApplicationError::new("coach.context_exceeded", error.message, false);
+    }
     ApplicationError::new("coach.provider_failed", error.message, error.retryable)
 }
 
@@ -570,6 +624,66 @@ Why?"));
         assert!(store.state.lock().unwrap().failures.is_empty());
     }
 
+    /// Streams the reply in fixed raw chunks, like a provider's content deltas.
+    struct StreamingFakeModel {
+        chunks: Vec<&'static str>,
+    }
+
+    #[async_trait]
+    impl LanguageModel for StreamingFakeModel {
+        async fn complete(&self, _request: CompletionRequest) -> Result<crate::CompletionResponse, ModelError> {
+            Err(ModelError::new("streaming fake has no plain completion", false))
+        }
+
+        async fn complete_with_trace_streaming(
+            &self,
+            _request: CompletionRequest,
+            on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+        ) -> Result<(crate::CompletionResponse, u32), crate::AgentModelFailure> {
+            for chunk in &self.chunks {
+                on_delta(chunk);
+            }
+            Ok((
+                crate::CompletionResponse {
+                    content: self.chunks.concat(),
+                    model: "fake-model".into(),
+                    latency_ms: 1,
+                    usage: None,
+                    provider_request_id: None,
+                },
+                0,
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn streamed_run_shows_only_the_answer_text_and_persists_the_same_reply() {
+        let chunks = vec![
+            r#"{"teachingNotes":[{"kind":"preference","text":"short","evidence":"Why?"}],"ans"#,
+            r#"wer":"Check the \"qual"#,
+            r#"ifier你好.""#,
+            r#","kind":"hint"}"#,
+        ];
+        let store = FakeCoachStore::default();
+        let mut shown = Vec::new();
+        let model = StreamingFakeModel { chunks: chunks.clone() };
+        let result = CoachService::run_streaming(&store, command("Why?"), || Ok(model), &mut |text: &str| {
+            shown.push(text.to_owned());
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(shown.concat(), "Check the \"qualifier你好.");
+        assert!(shown.len() > 1, "deltas must arrive progressively: {shown:?}");
+        assert_eq!(result.assistant_message.content, shown.concat());
+        // Persisted exactly as the non-streaming path would store it.
+        let state = store.state.lock().unwrap();
+        assert_eq!(state.trace_responses.len(), 1);
+        assert_eq!(state.trace_responses[0]["content"], chunks.concat());
+        assert_eq!(state.messages.len(), 2);
+        assert!(state.failures.is_empty());
+    }
+
     #[tokio::test]
     async fn rejects_empty_question_before_loading_model() {
         let store = FakeCoachStore::default();
@@ -604,6 +718,28 @@ Why?"));
             assert_eq!(state.failures.len(), 1);
             assert!(state.failures[0].preserve_scores);
             assert_eq!(state.messages.len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_and_over_long_answers_get_their_own_codes() {
+        for (error, code) in [
+            (ModelError::output_truncated(), "coach.output_truncated"),
+            (ModelError::prompt_exceeds_context(40_000, 32_768), "coach.context_exceeded"),
+        ] {
+            let store = FakeCoachStore::default();
+            let model = FakeModel {
+                response: Err(error),
+                store_state: store.state.clone(),
+                request: Arc::new(Mutex::new(None)),
+            };
+            let failure = CoachService::run(&store, command("Why?"), || Ok(model))
+                .await
+                .unwrap_err();
+            assert_eq!(failure.code, code);
+            assert!(!failure.retryable);
+            let state = store.state.lock().unwrap();
+            assert_eq!(state.failures.len(), 1);
         }
     }
 
