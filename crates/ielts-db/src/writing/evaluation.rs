@@ -11,7 +11,8 @@ use uuid::Uuid;
 
 use ielts_domain::domain::{AttemptStatus, EvaluationStage, EvaluationStatus, WritingTaskType};
 use ielts_domain::dto::{
-    EvaluationDegradation, WritingEvaluationV4, WritingFeedbackV4, WritingScoreV4,
+    EvaluationDegradation, WritingDiagnosisV4, WritingEvaluationV4, WritingFeedbackV4,
+    WritingScoreV4,
 };
 use ielts_domain::ErrorEnvelope;
 
@@ -21,7 +22,7 @@ use crate::learning_events::{append_learning_event_if_enabled, NewLearningEvent}
 use crate::sqlite::{DbError, DbResult};
 use crate::writing::draft::get_writing_draft;
 use crate::writing::eval_resolve::{
-    resolve_writing_eval_policy, ResolvedWritingEvalPolicy, DEFAULT_SYSTEM_PROMPT,
+    default_system_prompt, resolve_writing_eval_policy, ResolvedWritingEvalPolicy,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,6 +111,9 @@ pub struct PreparedEvaluation {
     pub existing: Option<EvaluationRunResult>,
 }
 
+/// Rubric generation recorded on each evaluation row.
+const RUBRIC_VERSION: &str = "rubric-v2";
+
 /// Provider abstraction: production plugs real HTTP/AI; tests use Fake/Deterministic.
 pub trait WritingProvider: Send + Sync {
     fn id(&self) -> &str;
@@ -125,6 +129,10 @@ pub trait WritingProvider: Send + Sync {
         essay: &str,
         score: &WritingScoreV4,
     ) -> Result<WritingFeedbackV4, ProviderError>;
+    /// Criterion rationale and task analysis that justify the score, if any.
+    fn diagnosis(&self) -> Option<WritingDiagnosisV4> {
+        None
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -252,7 +260,14 @@ pub fn start_evaluation(
         },
         Err(_) => (None, None),
     };
-    finish_evaluation(conn, &prepared, score, feedback, review_error)
+    finish_evaluation(
+        conn,
+        &prepared,
+        score,
+        provider.diagnosis(),
+        feedback,
+        review_error,
+    )
 }
 
 /// Creates the persisted session and returns an owned provider request.
@@ -290,10 +305,10 @@ pub fn prepare_evaluation(
                 essay: String::new(),
                 prompt: None,
                 task_type: None,
-                system_prompt: DEFAULT_SYSTEM_PROMPT.to_string(),
+                system_prompt: default_system_prompt(None),
                 temperature: 0.2,
                 prompt_id: None,
-                prompt_version: "prompt-v1".into(),
+                prompt_version: crate::writing::BUILTIN_PROMPT_VERSION.into(),
                 handle: handle_from_session(&session),
                 existing: Some(EvaluationRunResult {
                     session,
@@ -343,7 +358,7 @@ pub fn prepare_evaluation(
             stage_str(EvaluationStage::Preparing),
             provider_id,
             model,
-            "rubric-v1",
+            RUBRIC_VERSION,
             policy.prompt_version.as_str(),
             initial_result_json,
             now,
@@ -441,6 +456,7 @@ pub fn finish_evaluation(
     conn: &Connection,
     prepared: &PreparedEvaluation,
     score: Result<WritingScoreV4, ProviderError>,
+    diagnosis: Option<WritingDiagnosisV4>,
     feedback: Option<WritingFeedbackV4>,
     review_error: Option<ProviderError>,
 ) -> DbResult<EvaluationRunResult> {
@@ -464,6 +480,7 @@ pub fn finish_evaluation(
     }
     let provider = PreparedProvider {
         score,
+        diagnosis,
         feedback,
         review_error,
     };
@@ -480,6 +497,7 @@ pub fn finish_evaluation(
 
 struct PreparedProvider {
     score: Result<WritingScoreV4, ProviderError>,
+    diagnosis: Option<WritingDiagnosisV4>,
     feedback: Option<WritingFeedbackV4>,
     review_error: Option<ProviderError>,
 }
@@ -511,6 +529,9 @@ impl WritingProvider for PreparedProvider {
             message: "provider returned no feedback".into(),
             retryable: false,
         })
+    }
+    fn diagnosis(&self) -> Option<WritingDiagnosisV4> {
+        self.diagnosis.clone()
     }
 }
 
@@ -591,6 +612,7 @@ fn run_state_machine(
         }
     };
     evaluation.score = Some(score.clone());
+    evaluation.diagnosis = provider.diagnosis();
     revision += 1;
     persist_stage(
         conn,
@@ -1012,6 +1034,13 @@ fn finalize_cancelled_with_partial_in_transaction(
         evaluation,
         events,
     })
+}
+
+/// Whether the learner cancelled this evaluation. Callers check it before
+/// starting further paid model work for a run that is already being discarded.
+pub fn evaluation_cancel_requested(conn: &Connection, evaluation_id: &str) -> DbResult<bool> {
+    Ok(load_session_by_evaluation(conn, evaluation_id)?
+        .is_some_and(|session| session.cancel_requested))
 }
 
 pub fn request_cancel(conn: &Connection, evaluation_id: &str) -> DbResult<bool> {

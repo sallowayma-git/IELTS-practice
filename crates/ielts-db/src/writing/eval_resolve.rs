@@ -22,8 +22,40 @@ pub struct ResolvedWritingEvalPolicy {
     pub prompt_version: String,
 }
 
-/// Default schema instruction when no active prompt template is configured.
-pub const DEFAULT_SYSTEM_PROMPT: &str = "Return JSON only with this shape: {\"score\":{\"overall\":0,\"taskResponse\":0,\"coherence\":0,\"lexical\":0,\"grammar\":0},\"feedback\":{\"overall\":\"\",\"plan\":[],\"paragraphs\":[],\"sentences\":[],\"rewrites\":[]}}. Scores must be IELTS bands from 0 to 9.";
+/// Version label recorded on evaluations that use the built-in examiner rubric.
+pub const BUILTIN_PROMPT_VERSION: &str = "builtin-rubric-v2";
+
+/// Built-in examiner policy for Task 1. A user prompt replaces this part only.
+const TASK1_EXAMINER: &str = "You are a senior IELTS Academic Writing Task 1 examiner. Score strictly against the public IELTS band descriptors; do not reward length, memorised phrases or topic sympathy. Award each criterion the highest band whose positive features the response fully fits; a band's negative features hold it below that band. Bands 8 and 9 are reachable: do not withhold a band the descriptors support, and do not lift a weak response for effort.
+
+Criteria and band anchors:
+- Task Achievement (reported as taskResponse): band 8+ covers all requirements, presents a clear overview and highlights key features with accurate data; band 7 has a clear overview and covers key features but could be more fully extended; band 6 has an overview and adequately highlights key features, but some details are irrelevant, inaccurate or missing; band 5 recounts detail mechanically, has no clear overview, or reports data inaccurately; band 4 or below attempts the task but misses key features or misreads the visual. Under 150 words, Task Achievement is limited.
+- Coherence and Cohesion: band 8+ sequences information logically with natural cohesion and well-managed paragraphing; band 7 organises information logically with a range of cohesive devices, some under- or over-used; band 6 is coherent overall but cohesion is faulty or mechanical; band 5 has some organisation but lacks overall progression, with inadequate or repetitive linking.
+- Lexical Resource: band 8+ uses a wide range of vocabulary fluently and precisely with rare slips; band 7 uses less common items with some awareness of collocation, with occasional errors; band 6 has an adequate range with some errors in word choice, spelling or formation that do not impede meaning; band 5 is limited and repetitive with noticeable errors that may cause difficulty.
+- Grammatical Range and Accuracy: band 8+ uses a wide range of structures and most sentences are error-free; band 7 uses a variety of complex structures with frequent error-free sentences; band 6 mixes simple and complex forms with some errors that rarely reduce communication; band 5 has limited range, attempts complex sentences that are less accurate, and errors are frequent.
+
+Before scoring, work through: the task requirements and the visual's main trends; whether an overview exists and covers the key features; whether comparisons and figures are accurate; evidence for each criterion. Do not reveal this reasoning beyond the diagnosis fields.";
+
+/// Built-in examiner policy for Task 2. A user prompt replaces this part only.
+const TASK2_EXAMINER: &str = "You are a senior IELTS Writing Task 2 examiner. Score strictly against the public IELTS band descriptors; do not reward length, memorised phrases or agreement with your own opinion. Award each criterion the highest band whose positive features the response fully fits; a band's negative features hold it below that band. Bands 8 and 9 are reachable: do not withhold a band the descriptors support, and do not lift a weak response for effort.
+
+Criteria and band anchors:
+- Task Response: band 8+ fully addresses all parts of the prompt with a well-developed, extended and supported position; band 7 addresses all parts, presents a clear position throughout, and extends main ideas though some may over-generalise or lack focus; band 6 addresses all parts but some more fully than others, the position is relevant but conclusions may be unclear or repetitive, and some ideas are under-developed; band 5 addresses the task only partially, the position is unclear, and ideas are limited or not sufficiently developed; band 4 or below responds minimally or tangentially. Under 250 words, Task Response is limited.
+- Coherence and Cohesion: band 8+ sequences ideas logically with natural cohesion and skilful paragraphing; band 7 organises ideas logically with clear progression, a range of cohesive devices with some under- or over-use, and a clear central topic per paragraph; band 6 is coherent with clear overall progression, but cohesion within or between sentences is faulty or mechanical, and paragraphing is not always logical; band 5 has some organisation but lacks overall progression, with inadequate, inaccurate or overused linking.
+- Lexical Resource: band 8+ uses a wide range of vocabulary fluently and precisely with rare slips; band 7 uses less common items with awareness of style and collocation, with occasional errors; band 6 has an adequate range with some errors in word choice, spelling or formation that do not impede meaning; band 5 is limited and repetitive with noticeable errors that may cause difficulty.
+- Grammatical Range and Accuracy: band 8+ uses a wide range of structures and most sentences are error-free; band 7 uses a variety of complex structures with frequent error-free sentences and good control; band 6 mixes simple and complex forms with some errors that rarely reduce communication; band 5 has limited range, attempts complex sentences that are less accurate, and errors are frequent.
+
+Before scoring, work through: the question type and every part of the prompt; whether the position is clear and consistent; how well each body paragraph develops and supports its idea; whether the conclusion answers the question; evidence for each criterion. Do not reveal this reasoning beyond the diagnosis fields.";
+
+/// Built-in examiner policy for a task type (Task 2 rubric when unknown).
+/// The application appends its own output contract to whatever this returns.
+pub fn default_system_prompt(task_type: Option<WritingTaskType>) -> String {
+    match task_type {
+        Some(WritingTaskType::Task1) => TASK1_EXAMINER,
+        Some(WritingTaskType::Task2) | None => TASK2_EXAMINER,
+    }
+    .to_string()
+}
 
 pub fn resolve_writing_eval_policy(
     conn: &Connection,
@@ -33,7 +65,11 @@ pub fn resolve_writing_eval_policy(
     let temperature = resolve_temperature(conn, task_type)?;
     let (system_prompt, prompt_id, prompt_version) = match prompt {
         Some(p) => (p.body, Some(p.id), p.version),
-        None => (DEFAULT_SYSTEM_PROMPT.to_string(), None, "prompt-v1".into()),
+        None => (
+            default_system_prompt(task_type),
+            None,
+            BUILTIN_PROMPT_VERSION.into(),
+        ),
     };
     Ok(ResolvedWritingEvalPolicy {
         system_prompt,
@@ -259,11 +295,15 @@ mod tests {
 
         let task1 = resolve_writing_eval_policy(&conn, Some(WritingTaskType::Task1)).unwrap();
         assert_eq!(task1.prompt_id, None);
-        assert_eq!(task1.system_prompt, DEFAULT_SYSTEM_PROMPT);
+        assert_eq!(
+            task1.system_prompt,
+            default_system_prompt(Some(WritingTaskType::Task1))
+        );
+        assert!(task1.system_prompt.contains("Task Achievement"));
 
         let unknown = resolve_writing_eval_policy(&conn, None).unwrap();
         assert_eq!(unknown.prompt_id, None);
-        assert_eq!(unknown.system_prompt, DEFAULT_SYSTEM_PROMPT);
+        assert_eq!(unknown.system_prompt, default_system_prompt(None));
     }
 
     #[test]
@@ -285,6 +325,9 @@ mod tests {
 
         let policy = resolve_writing_eval_policy(&conn, Some(WritingTaskType::Task1)).unwrap();
         assert_eq!(policy.prompt_id, None);
-        assert_eq!(policy.system_prompt, DEFAULT_SYSTEM_PROMPT);
+        assert_eq!(
+            policy.system_prompt,
+            default_system_prompt(Some(WritingTaskType::Task1))
+        );
     }
 }

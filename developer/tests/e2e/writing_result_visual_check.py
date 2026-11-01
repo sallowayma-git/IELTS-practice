@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from copy import deepcopy
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -147,8 +148,8 @@ HISTORY_DETAIL = {
 }
 
 
-def install_tauri_mock(page):
-    detail_json = json.dumps(HISTORY_DETAIL, ensure_ascii=False)
+def install_tauri_mock(page, detail=None):
+    detail_json = json.dumps(HISTORY_DETAIL if detail is None else detail, ensure_ascii=False)
     script = r"""
     (() => {
       const detail = __DETAIL__;
@@ -500,6 +501,109 @@ def verify_annotated_view(page, name, width):
     return annotated
 
 
+def verify_confidence_messages(browser):
+    cases = (
+        ("legacy", None, None, ()),
+        ("single-survivor", (1, False, 6.0, 6.0), "只有 1 次评分成功", ("分歧", "中位数")),
+        ("agreed", (2, True, 6.0, 6.5), "2 次独立评分基本一致", ("采样不足", "分歧")),
+        ("disagreed", (3, False, 5.0, 7.0), "独立评分出现分歧", ("采样不足",)),
+    )
+    report = []
+    for name, confidence, expected, excluded in cases:
+        detail = deepcopy(HISTORY_DETAIL)
+        if confidence is not None:
+            samples, agreed, low, high = confidence
+            def bands(band):
+                return dict(overall=band, taskResponse=band, coherence=band, lexical=band, grammar=band)
+            detail["evaluation"]["score"] = bands(6.0)
+            detail["summary"]["scoreValue"] = 6.0
+            detail["summary"]["scoreDisplay"] = "6.0"
+            detail["attempt"]["scoreValue"] = 6.0
+            detail["evaluation"]["diagnosis"]["confidence"] = {
+                "samples": samples, "agreed": agreed, "low": bands(low), "high": bands(high),
+            }
+        page = browser.new_page(viewport={"width": 1024, "height": 720})
+        try:
+            install_tauri_mock(page, detail)
+            page.goto(f"{BASE_URL}/#/result/writing-result-visual", wait_until="domcontentloaded")
+            page.wait_for_selector(".result-page .score-total")
+            page.wait_for_function(
+                "score => Number(document.querySelector('.score-total')?.textContent.trim()) === score",
+                arg=7.5 if confidence is None else 6.0,
+            )
+            note = page.locator(".score-confidence")
+            if expected is None:
+                assert note.count() == 0, "legacy results must not show a confidence warning"
+                text = ""
+            else:
+                note.wait_for()
+                text = note.inner_text()
+                assert expected in text, f"{name}: unexpected confidence message: {text}"
+                assert all(word not in text for word in excluded), f"{name}: misleading confidence message: {text}"
+            report.append({"name": name, "message": text})
+        finally:
+            page.close()
+    return report
+
+
+def verify_ceiling_evidence(browser):
+    ceiling = "没有 overview，任务项封顶 5 分（6 分档要求有相关的 overview 尝试）"
+    cases = (
+        ("outlier-ceiling-rejected", 4.0, [], {"overview_quality": "overview present: true"}, "Task band 4"),
+        ("supported-ceiling-retained", 5.0, [ceiling], None,
+         f"本项原始评分为 7.0 分，{ceiling}，最终评分为 5.0 分。"),
+    )
+    report = []
+    for name, task_band, ceilings, task, task_rationale in cases:
+        detail = deepcopy(HISTORY_DETAIL)
+        for section in ("summary", "attempt", "evaluation"):
+            detail[section]["taskType"] = "task1"
+        detail["summary"]["scoreValue"] = 6.5
+        detail["summary"]["scoreDisplay"] = "6.5"
+        detail["attempt"]["scoreValue"] = 6.5
+        detail["evaluation"]["score"] = {
+            "overall": 6.5, "taskResponse": task_band, "coherence": 7.0, "lexical": 7.0, "grammar": 7.0,
+        }
+        detail["evaluation"]["diagnosis"] = {
+            "rationale": {
+                "task_achievement": task_rationale,
+                "coherence_cohesion": "Coherence band 7",
+                "lexical_resource": "Lexical band 7",
+                "grammatical_range": "Grammar band 7",
+            },
+        }
+        # Match V4 serialization: empty ceilings and absent task analysis are omitted.
+        if ceilings:
+            detail["evaluation"]["diagnosis"]["ceilings"] = ceilings
+        if task is not None:
+            detail["evaluation"]["diagnosis"]["task"] = task
+        page = browser.new_page(viewport={"width": 1024, "height": 720})
+        try:
+            install_tauri_mock(page, detail)
+            page.goto(f"{BASE_URL}/#/result/writing-result-visual", wait_until="domcontentloaded")
+            page.wait_for_function(
+                "Number(document.querySelector('.score-total')?.textContent.trim()) === 6.5"
+            )
+            bands = [float(value) for value in page.locator(".criteria-table tbody td.num").all_text_contents()]
+            assert bands == [task_band, 7.0, 7.0, 7.0], f"{name}: incorrect persisted bands: {bands}"
+            shown_ceilings = page.locator(".ceiling-note li").all_text_contents()
+            assert shown_ceilings == ceilings, f"{name}: inconsistent ceiling notices: {shown_ceilings}"
+            score_panel = page.locator('section[aria-labelledby="score-heading"]')
+            assert task_rationale in score_panel.inner_text(), f"{name}: final-band rationale was lost"
+            task_panel = page.locator(".result-section").filter(
+                has=page.get_by_role("heading", name="任务诊断", exact=True)
+            )
+            if task is None:
+                assert task_panel.count() == 0, f"{name}: uncapped task diagnosis must not reappear"
+            else:
+                assert "overview present: true" in task_panel.inner_text()
+                assert "没有 overview" not in page.locator(".right-panel").inner_text()
+            report.append({"name": name, "bands": bands, "ceilings": shown_ceilings})
+        finally:
+            page.close()
+    return report
+
+
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = {"status": "passed", "cases": []}
@@ -534,6 +638,8 @@ def main():
                     {"name": name, "geometry": geometry, "original": original, "annotated": annotated}
                 )
                 page.close()
+            report["confidence"] = verify_confidence_messages(browser)
+            report["ceilingEvidence"] = verify_ceiling_evidence(browser)
         finally:
             browser.close()
     (REPORT_DIR / "writing-result-visual-report.json").write_text(

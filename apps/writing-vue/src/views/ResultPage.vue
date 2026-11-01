@@ -100,6 +100,13 @@
               </tr>
             </tbody>
           </table>
+          <p v-if="confidenceNote" class="section-meta score-confidence" :data-confidence-agreed="scoreConfidence.agreed">{{ confidenceNote }}</p>
+          <div v-if="ceilings.length > 0" class="inline-message inline-message-warning ceiling-note">
+            <h4>已按官方规则封顶</h4>
+            <ul>
+              <li v-for="(item, idx) in ceilings" :key="idx">{{ item }}</li>
+            </ul>
+          </div>
           <dl v-if="rationaleRows.length > 0" class="rationale-list">
             <div v-for="row in rationaleRows" :key="row.key" class="rationale-item">
               <dt>{{ row.label }}</dt>
@@ -159,6 +166,7 @@ import {
   BAND_RATIONALE_LABELS,
   TASK_ANALYSIS_LABELS,
   buildEvaluationView,
+  describeScoreConfidence,
   formatLabeledEntries,
   normalizeMap
 } from '@/utils/evaluation-result.js'
@@ -188,6 +196,8 @@ const taskAnalysis = ref({})
 const bandRationale = ref({})
 const improvementPlan = ref([])
 const reviewBlocks = ref([])
+const scoreConfidence = ref(null)
+const ceilings = ref([])
 const reviewDegraded = ref(false)
 const loadError = ref('')
 
@@ -198,6 +208,8 @@ const ERROR_TYPE_LABELS = {
   sentence_structure: '句式问题',
   coherence: '逻辑连贯'
 }
+
+const confidenceNote = computed(() => describeScoreConfidence(scoreConfidence.value))
 
 const taskAnalysisEntries = computed(() => (
   formatLabeledEntries(taskAnalysis.value, TASK_ANALYSIS_LABELS)
@@ -289,6 +301,8 @@ function applyEvaluationView(view) {
   bandRationale.value = view.bandRationale
   improvementPlan.value = view.improvementPlan
   reviewBlocks.value = view.reviewBlocks
+  scoreConfidence.value = view.scoreConfidence || null
+  ceilings.value = Array.isArray(view.ceilings) ? view.ceilings : []
   reviewDegraded.value = view.reviewDegraded === true
 
   if (!topicText.value && view.topicText) {
@@ -523,6 +537,19 @@ function writeNew() {
   color: var(--anth-ink);
   font-family: var(--anth-font-serif);
   font-size: var(--anth-text-h2-size);
+}
+
+.score-confidence {
+  margin-top: var(--anth-space-3);
+}
+
+.ceiling-note {
+  margin-top: var(--anth-space-3);
+}
+
+.ceiling-note ul {
+  margin: 0;
+  padding-left: 1.2em;
 }
 
 .criteria-table + .rationale-list {

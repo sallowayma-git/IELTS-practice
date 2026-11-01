@@ -66,6 +66,28 @@ pub struct WritingDiagnosisV4 {
     pub task: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rationale: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<WritingScoreConfidenceV4>,
+    /// Band ceilings the application enforced, as learner-facing sentences.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ceilings: Vec<String>,
+}
+
+/// How far independent scoring samples agreed. `low`/`high` hold the
+/// per-criterion extremes across samples, each with its own derived overall.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "ts-export",
+    derive(TS),
+    ts(export, export_to = "../../../apps/writing-vue/src/types/generated/")
+)]
+pub struct WritingScoreConfidenceV4 {
+    pub samples: u32,
+    /// True when at least two samples landed within one band on every criterion.
+    pub agreed: bool,
+    pub low: WritingScoreV4,
+    pub high: WritingScoreV4,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

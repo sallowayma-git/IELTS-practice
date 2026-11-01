@@ -66,6 +66,15 @@ export interface WritingScoreV4 {
 export interface WritingDiagnosisV4 {
   task?: unknown;
   rationale?: unknown;
+  confidence?: WritingScoreConfidenceV4;
+  ceilings?: string[];
+}
+
+export interface WritingScoreConfidenceV4 {
+  samples: number;
+  agreed: boolean;
+  low: WritingScoreV4;
+  high: WritingScoreV4;
 }
 
 export interface ParagraphFeedback {

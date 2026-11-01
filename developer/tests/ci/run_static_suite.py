@@ -434,6 +434,10 @@ def main() -> int:
             "Learner skill label contract",
             ["node", "developer/tests/js/learnerSkillLabels.test.mjs"],
         ),
+        run_command(
+            "Writing score confidence wording",
+            ["node", "developer/tests/js/scoreConfidence.test.mjs"],
+        ),
     ]
     passed = all(check["status"] == "pass" for check in checks)
     report = {
