@@ -9,12 +9,12 @@
   "meta": {
     "title": "Sea Change for Salinity 土地盐碱化",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "162. P3 - Sea Change for Salinity 土地盐碱化.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/",
     "legacyFilename": "162. P3 - Sea Change for Salinity 土地盐碱化.html",
     "questionIntroHtml": "",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

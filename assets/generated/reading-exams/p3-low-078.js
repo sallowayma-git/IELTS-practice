@@ -4,7 +4,8 @@
   "meta": {
     "title": "P3 (ds做出来的) - Music Language We All Speak 音乐语言",
     "category": "P3",
-    "frequency": "low"
+    "frequency": "medium",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

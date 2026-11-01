@@ -9,12 +9,12 @@
   "meta": {
     "title": "Understanding climate change 理解气候变化",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "",
     "legacyPath": "",
     "legacyFilename": "",
     "questionIntroHtml": "<h3>Questions 14–26</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

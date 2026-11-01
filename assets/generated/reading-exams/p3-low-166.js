@@ -9,11 +9,12 @@
   "meta": {
     "title": "Life on Mars_ 火星地球化改造",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "75. P3 - Life on Mars_ 火星地球化改造.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/",
     "legacyFilename": "75. P3 - Life on Mars_ 火星地球化改造.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [
