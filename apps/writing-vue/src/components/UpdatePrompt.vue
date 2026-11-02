@@ -15,11 +15,10 @@
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppUpdates, AUTO_CHECK_KEY } from '@/composables/useAppUpdates.js'
-import { useTauriPreferences } from '@/composables/useTauriPreferences.js'
+import { readPreferenceStrict } from '@/composables/useTauriPreferences.js'
 
 const router = useRouter()
 const updates = useAppUpdates()
-const preferences = useTauriPreferences()
 
 const title = computed(() => {
   const app = updates.state.status?.app
@@ -39,15 +38,12 @@ function openUpdates() {
   router.push({ name: 'Settings', query: { updates: String(Date.now()) } }).catch(() => {})
 }
 
-// The background check runs only after the user's setting is read and on:
-// if the preference cannot be read, stay quiet rather than guess.
-onMounted(async () => {
-  try {
-    await preferences.hydrateStrict()
-  } catch {
-    return
-  }
-  if (preferences.get(AUTO_CHECK_KEY, true) !== false) updates.scheduleStartupCheck()
+// The setting is read when the delayed check fires (not at mount, so page
+// read contracts stay unchanged). If it cannot be read, stay quiet.
+onMounted(() => {
+  updates.scheduleStartupCheck(
+    async () => (await readPreferenceStrict(AUTO_CHECK_KEY, true)) !== false
+  )
 })
 </script>
 

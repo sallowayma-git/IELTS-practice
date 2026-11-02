@@ -38,6 +38,15 @@ async function hydrateStrict() {
   await ensureHydrated()
 }
 
+/**
+ * Read one preference outside a component, without the mount-time hydrate.
+ * Throws when the settings store cannot be read.
+ */
+export async function readPreferenceStrict(key, fallback) {
+  await ensureHydrated()
+  return cache.has(key) ? cache.get(key) : fallback
+}
+
 export function useTauriPreferences() {
   const ready = ref(hydrated)
 

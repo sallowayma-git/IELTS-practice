@@ -166,11 +166,20 @@ function writeLastCheck() {
 
 let startupScheduled = false
 
-/** Quiet background check shortly after launch, at most every six hours. */
-function scheduleStartupCheck() {
+/**
+ * Quiet background check shortly after launch, at most every six hours.
+ * `isEnabled` is read when the timer fires, not at mount, so pages do not
+ * gain an extra settings read on first render.
+ */
+function scheduleStartupCheck(isEnabled = async () => true) {
   if (startupScheduled || !isTauriRuntime()) return
   startupScheduled = true
   window.setTimeout(async () => {
+    try {
+      if (!(await isEnabled())) return
+    } catch {
+      return
+    }
     const forcedLastTime = state.status?.app?.forced
     if (!forcedLastTime && Date.now() - readLastCheck() < STARTUP_INTERVAL_MS) return
     try {
