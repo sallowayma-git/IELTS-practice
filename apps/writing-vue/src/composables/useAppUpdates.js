@@ -12,6 +12,8 @@ import { invokeCommand, isTauriRuntime } from '@/api/tauri-bridge.js'
 const STARTUP_DELAY_MS = 8000
 const STARTUP_INTERVAL_MS = 6 * 60 * 60 * 1000
 const LAST_CHECK_KEY = 'ielts.ota.lastStartupCheck'
+/** frontend-preferences key: false turns the background startup check off. */
+export const AUTO_CHECK_KEY = 'otaAutoCheck'
 
 const state = reactive({
   checking: false,

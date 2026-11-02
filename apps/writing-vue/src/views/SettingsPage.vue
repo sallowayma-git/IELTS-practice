@@ -145,6 +145,18 @@
               <button class="btn btn-secondary" id="check-updates-btn" type="button" data-update-action="open-modal" @click="openUpdateManager">检查更新</button>
             </div>
           </div>
+          <div class="setting-row">
+            <div class="setting-row__copy">
+              <strong>自动检查更新</strong>
+              <span>开启后，启动应用时在后台检查一次（最多每 6 小时一次），有更新才提示；不会自动下载或安装。关闭后只在你点「检查更新」时联网检查。</span>
+            </div>
+            <div class="setting-row__control">
+              <label class="check-label">
+                <input id="ota-auto-check" v-model="otaAutoCheck" type="checkbox" @change="saveOtaAutoCheck" />
+                <span>{{ otaAutoCheck ? '已开启' : '已关闭' }}</span>
+              </label>
+            </div>
+          </div>
         </section>
 
         <section id="settings-info" class="card settings-card system-info-panel" aria-labelledby="settings-info-title">
@@ -904,7 +916,8 @@
 import SoulSettings from '@/modules/notebook/components/SoulSettings.vue'
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAppUpdates } from '@/composables/useAppUpdates.js'
+import { useAppUpdates, AUTO_CHECK_KEY } from '@/composables/useAppUpdates.js'
+import { useTauriPreferences } from '@/composables/useTauriPreferences.js'
 import { settings, essays, configs, prompts, topics } from '@/api/client.js'
 import {
   getHistoryRetentionPolicy,
@@ -995,6 +1008,14 @@ const onboardingOpen = ref(false)
 const onboardingStep = ref(0)
 const updateDialogOpen = ref(false)
 const updates = useAppUpdates()
+const otaPreferences = useTauriPreferences()
+const otaAutoCheck = ref(true)
+otaPreferences.hydrate().then(() => {
+  otaAutoCheck.value = otaPreferences.get(AUTO_CHECK_KEY, true) !== false
+})
+function saveOtaAutoCheck() {
+  otaPreferences.set(AUTO_CHECK_KEY, otaAutoCheck.value)
+}
 const updateBusy = computed(() =>
   updates.state.checking || updates.state.content.installing || updates.state.app.installing || updates.state.app.restarting
 )
