@@ -261,11 +261,11 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   const coachFollowUps = computed(() => coachFollowUpSource.value?.followUps || [])
   const coachReaskableId = computed(() => latestReaskableId(coachTranscriptState.value))
   const canAskCoach = computed(() => Boolean(submission.value && coachQuery.value.trim() && !coachLoading.value))
-  const coachStatusText = computed(() => {
-    if (coachLoading.value) return coachStreamMessage.value || 'AI 教练正在思考...'
-    if (coachError.value) return coachError.value
-    return ''
-  })
+  // Failures land in the transcript as an error message; the status line only
+  // narrates an in-flight request.
+  const coachStatusText = computed(() => (
+    coachLoading.value ? (coachStreamMessage.value || 'AI 教练正在思考...') : ''
+  ))
   const isReadingCoachEnabled = () => {
     if (typeof options.readCoachEnabled === 'function') {
       return Boolean(options.readCoachEnabled())

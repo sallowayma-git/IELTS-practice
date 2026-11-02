@@ -1,9 +1,10 @@
 <template>
-  <!-- Full-screen Options overlay: mirrors #settings-panel of the unified page
-       (non-transparent white page, sticky 78px header, centered 760px column). -->
+  <!-- Full-screen Options overlay: mirrors the rendered #settings-panel of the
+       unified page (sticky 78px header, centered 760px column). The default
+       slot carries host-only sections (coach, suite flow) in the same markup. -->
   <div
     id="settings-panel"
-    class="unified-options-panel is-open"
+    class="is-open"
     role="dialog"
     aria-modal="true"
     aria-labelledby="options-title"
@@ -11,20 +12,21 @@
     @keydown="handleKeydown"
   >
     <header class="options-header">
-      <h2 id="options-title">Options</h2>
+      <h2 id="options-title" tabindex="-1">Options</h2>
       <button
         id="options-close-btn"
+        class="options-close-button"
         type="button"
         aria-label="Close options"
         @click="$emit('close')"
       >
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </header>
     <main class="options-content">
-      <section class="settings-section">
-        <h3>字号</h3>
-        <div class="settings-option-group" role="radiogroup" aria-label="Font size">
+      <div class="settings-section">
+        <h3 class="settings-title">字号调整</h3>
+        <div class="settings-options">
           <button
             v-for="size in fontSizes"
             :key="size.value"
@@ -32,75 +34,74 @@
             class="settings-option"
             :class="{ active: fontSize === size.value }"
             :data-size="size.value"
-            :style="{ fontSize: size.preview }"
             @click="$emit('select-font', size.value)"
-          >A</button>
+          >{{ size.label }}</button>
         </div>
-      </section>
-      <section class="settings-section">
-        <h3>背景颜色</h3>
-        <div class="settings-option-group" role="radiogroup" aria-label="Background colour">
+      </div>
+      <div class="settings-section">
+        <h3 class="settings-title">背景颜色</h3>
+        <div class="settings-options">
+          <button type="button" class="settings-option" :class="{ active: !darkMode }" data-mode="light" @click="$emit('set-dark', false)">浅色</button>
+          <button type="button" class="settings-option" :class="{ active: darkMode }" data-mode="dark" @click="$emit('set-dark', true)">深色</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3 class="settings-title">笔记与标注</h3>
+        <p class="settings-hint">A 答案定位 · N 笔记高亮 · H 普通高亮 · Q 题卡</p>
+        <div id="options-tools">
+          <div id="reading-display-toggle-group" class="reading-display-toggle-group" aria-label="阅读显示控制">
+            <button
+              v-for="toggle in annotationToggles"
+              :key="toggle.key"
+              type="button"
+              class="reading-display-toggle"
+              :class="{ 'is-on': annotations[toggle.key] }"
+              :data-highlight-toggle="toggle.key"
+              :title="toggle.title"
+              :aria-pressed="annotations[toggle.key] ? 'true' : 'false'"
+              @click="$emit('toggle-annotation', toggle.key)"
+            >{{ toggle.label }}</button>
+            <button
+              id="reading-question-nav-toggle"
+              type="button"
+              class="reading-display-toggle"
+              :class="{ 'is-on': !questionNavCollapsed }"
+              data-question-nav-toggle
+              :title="questionNavCollapsed ? '显示题卡' : '隐藏题卡'"
+              :aria-pressed="(!questionNavCollapsed).toString()"
+              @click="$emit('toggle-question-nav')"
+            >Q</button>
+          </div>
+        </div>
+      </div>
+      <slot />
+      <div id="options-clear-answers-section" class="settings-section">
+        <h3 class="settings-title">Actions</h3>
+        <div class="settings-options">
           <button
-            type="button"
+            id="options-clear-answers"
             class="settings-option"
-            :class="{ active: !darkMode }"
-            data-mode="light"
-            @click="$emit('set-dark', false)"
-          ><span class="mode-swatch mode-light" aria-hidden="true"></span>Standard</button>
-          <button
             type="button"
-            class="settings-option"
-            :class="{ active: darkMode }"
-            data-mode="dark"
-            @click="$emit('set-dark', true)"
-          ><span class="mode-swatch mode-dark" aria-hidden="true"></span>Night</button>
+            :disabled="clearDisabled"
+            @click="$emit('clear-answers')"
+          >{{ clearLabel }}</button>
+          <slot name="actions" />
         </div>
-      </section>
-      <section class="settings-section">
-        <h3>笔记与标注</h3>
-        <p class="settings-help">A 答案定位 · N 笔记高亮 · H 普通高亮 · Q 题卡</p>
-        <div class="settings-option-group">
-          <button
-            v-for="toggle in annotationToggles"
-            :key="toggle.key"
-            type="button"
-            class="reading-display-toggle"
-            :class="{ 'is-on': annotations[toggle.key] }"
-            :data-highlight-toggle="toggle.key"
-            :aria-pressed="annotations[toggle.key] ? 'true' : 'false'"
-            @click="$emit('toggle-annotation', toggle.key)"
-          >{{ toggle.label }}</button>
-          <button
-            type="button"
-            class="reading-display-toggle"
-            :class="{ 'is-on': !questionNavCollapsed }"
-            :aria-pressed="(!questionNavCollapsed).toString()"
-            @click="$emit('toggle-question-nav')"
-          >Q</button>
-        </div>
-      </section>
-      <section class="settings-section">
-        <h3>Actions</h3>
-        <button
-          id="options-clear-answers"
-          type="button"
-          :disabled="clearDisabled"
-          @click="$emit('clear-answers')"
-        >清空作答</button>
-      </section>
+      </div>
     </main>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 
 defineProps({
   fontSize: { type: String, required: true },
   darkMode: { type: Boolean, required: true },
   annotations: { type: Object, required: true },
   questionNavCollapsed: { type: Boolean, default: false },
-  clearDisabled: { type: Boolean, default: false }
+  clearDisabled: { type: Boolean, default: false },
+  clearLabel: { type: String, default: 'Clear answers' }
 })
 
 const emit = defineEmits([
@@ -113,18 +114,15 @@ const emit = defineEmits([
 ])
 
 const fontSizes = [
-  { value: 'small', preview: '12px' },
-  { value: 'normal', preview: '14px' },
-  { value: 'large', preview: '16px' },
-  { value: 'xlarge', preview: '18px' }
+  { value: 'small', label: '小' },
+  { value: 'normal', label: '中' },
+  { value: 'large', label: '大' }
 ]
 const annotationToggles = [
-  { key: 'locators', label: 'A' },
-  { key: 'notes', label: 'N' },
-  { key: 'highlights', label: 'H' }
+  { key: 'locators', label: 'A', title: '显示/隐藏答案定位' },
+  { key: 'notes', label: 'N', title: '显示/隐藏笔记高亮' },
+  { key: 'highlights', label: 'H', title: '显示/隐藏普通高亮' }
 ]
-
-const panelRef = ref(null)
 
 function handleKeydown(event) {
   if (event.key === 'Escape') {
@@ -133,8 +131,8 @@ function handleKeydown(event) {
     return
   }
   // Focus circle: keep Tab cycling inside the full-screen overlay like the
-  // original panel does. Note offsetParent is null inside a fixed container,
-  // so visibility is probed via getClientRects instead.
+  // original panel does. offsetParent is null inside a fixed container, so
+  // visibility is probed via getClientRects instead.
   if (event.key !== 'Tab') return
   const panel = document.getElementById('settings-panel')
   if (!panel) return
@@ -155,8 +153,6 @@ function handleKeydown(event) {
 }
 
 onMounted(() => {
-  // Focus circle: the original panel traps Tab inside the overlay.
-  panelRef.value = document.getElementById('settings-panel')
-  panelRef.value?.focus()
+  document.getElementById('options-title')?.focus()
 })
 </script>

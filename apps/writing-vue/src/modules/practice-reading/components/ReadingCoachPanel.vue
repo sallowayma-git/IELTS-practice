@@ -16,7 +16,7 @@
       data-reading-coach-panel
     >
       <header class="reading-coach-panel__header">
-        <span class="reading-coach-panel__title">Reading AI Coach V2</span>
+        <span class="reading-coach-panel__title">AI 教练</span>
         <button
           id="reading-coach-close"
           class="reading-coach-panel__close"
@@ -173,7 +173,6 @@
           {{ coachLoading ? '分析中...' : '询问教练' }}
         </button>
       </div>
-      <p v-if="coachError" class="reading-coach-panel__error">{{ coachError }}</p>
     </section>
   </template>
 </template>
