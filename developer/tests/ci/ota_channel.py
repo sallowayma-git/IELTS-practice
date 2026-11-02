@@ -237,6 +237,17 @@ def stamp_bundled(version: int, slots: dict[str, Path] = BUNDLED_SLOTS) -> None:
         (directory / MARKER_FILE).write_text(json.dumps(marker) + "\n", encoding="utf-8")
 
 
+def previous_pack_file(manifest_path: Path, pack_id: str) -> str:
+    """File name of the published pack for `pack_id`, or '' if none."""
+    if not manifest_path.is_file():
+        return ""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for pack in manifest.get("content") or []:
+        if pack.get("id") == pack_id and SAFE_NAME.match(str(pack.get("file", ""))):
+            return pack["file"]
+    return ""
+
+
 # ------------------------------------------------------------------ cli
 
 def main() -> int:
@@ -268,6 +279,10 @@ def main() -> int:
     stamp = sub.add_parser("stamp-bundled")
     stamp.add_argument("--version", type=int, required=True, help="YYYYMMDDHHMM")
 
+    previous = sub.add_parser("previous-file")
+    previous.add_argument("--manifest", type=Path, required=True)
+    previous.add_argument("--id", required=True)
+
     args = parser.parse_args()
     try:
         if args.command == "pack":
@@ -291,6 +306,8 @@ def main() -> int:
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             print(args.out)
+        elif args.command == "previous-file":
+            print(previous_pack_file(args.manifest, args.id))
         elif args.command == "stamp-bundled":
             stamp_bundled(args.version)
         else:

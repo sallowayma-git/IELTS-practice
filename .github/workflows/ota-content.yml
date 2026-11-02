@@ -73,8 +73,19 @@ jobs:
             extra=()
             [ -n "$MIN_APP_VERSION" ] && extra+=(--min-app-version "$MIN_APP_VERSION")
             [ -n "$NOTES" ] && extra+=(--notes "$NOTES")
+            # Clients compare a new pack with what they have installed: the
+            # last published pack, or (none published yet) the bundled one.
+            baseline="$source"
+            previous_file="$(python developer/tests/ci/ota_channel.py previous-file \
+              --manifest dist/ota/previous/ota.json --id "$slot")"
+            if [ -n "$previous_file" ]; then
+              gh release download "$OTA_TAG" --pattern "$previous_file" --dir dist/ota/previous
+              baseline="dist/ota/baseline-$slot"
+              mkdir -p "$baseline"
+              tar -xzf "dist/ota/previous/$previous_file" -C "$baseline"
+            fi
             python developer/tests/ci/ota_channel.py pack --id "$slot" --source "$source" \
-              --version "$version" --baseline "$source" --out dist/ota "${extra[@]}"
+              --version "$version" --baseline "$baseline" --out dist/ota "${extra[@]}"
             args+=(--pack "dist/ota/content-$slot-$version.json")
           done
           python developer/tests/ci/ota_channel.py manifest \

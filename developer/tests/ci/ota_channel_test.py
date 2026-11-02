@@ -103,6 +103,14 @@ class ManifestTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             ota_channel.compose_manifest(None, app_version="0.2.0", policy={"downloadPages": [{"label": "x", "url": "http://x"}]})
 
+    def test_previous_pack_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ota.json"
+            self.assertEqual(ota_channel.previous_pack_file(path, "reading"), "")
+            path.write_text(json.dumps({"content": [self.pack]}), encoding="utf-8")
+            self.assertEqual(ota_channel.previous_pack_file(path, "reading"), "content-reading-5.tar.gz")
+            self.assertEqual(ota_channel.previous_pack_file(path, "writing-topics"), "")
+
     def test_semver_order(self) -> None:
         self.assertLess(ota_channel.semver_key("0.1.0-beta"), ota_channel.semver_key("0.1.0"))
         self.assertLess(ota_channel.semver_key("0.9.9"), ota_channel.semver_key("0.10.0"))

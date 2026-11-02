@@ -35,8 +35,10 @@ pub struct VerifiedManifest {
     pub source_order: Vec<String>,
 }
 
-/// After the first valid answer, wait this long for slower sources: a stale
-/// mirror must not hide a release that GitHub already has.
+/// Once the canonical (GitHub) probe has finished and some source answered,
+/// wait this long for other slow sources. Until the canonical probe finishes
+/// or times out, keep waiting: a fast stale mirror must not hide a release
+/// that GitHub already has.
 const GRACE: Duration = Duration::from_millis(1500);
 
 pub async fn fetch_manifest(
@@ -47,6 +49,12 @@ pub async fn fetch_manifest(
 ) -> Result<VerifiedManifest, OtaError> {
     let mut tasks = JoinSet::new();
     let file = config.manifest_file.clone();
+    let canonical_id = config
+        .sources
+        .iter()
+        .find(|source| source.template == config.canonical)
+        .map(|source| source.id.clone());
+    let mut canonical_done = canonical_id.is_none();
     for candidate in config.channel_candidates(&file, &[]) {
         let transport = Arc::clone(&transport);
         let pubkey = pubkey.to_string();
@@ -73,12 +81,13 @@ pub async fn fetch_manifest(
         let Ok((source_id, result)) = joined else {
             continue;
         };
+        canonical_done |= canonical_id.as_deref() == Some(source_id.as_str());
         match result {
-            Ok(manifest) => {
-                deadline.get_or_insert_with(|| tokio::time::Instant::now() + GRACE);
-                answers.push((source_id, manifest));
-            }
+            Ok(manifest) => answers.push((source_id, manifest)),
             Err(error) => errors.push(format!("{}: {error}", config.label(&source_id))),
+        }
+        if canonical_done && !answers.is_empty() {
+            deadline.get_or_insert_with(|| tokio::time::Instant::now() + GRACE);
         }
     }
     tasks.abort_all();
@@ -151,6 +160,9 @@ pub async fn download_verified(
 pub(crate) mod tests {
     use super::*;
     use crate::signature::tests::{TEST_MANIFEST, TEST_MANIFEST_SIG, TEST_PUBKEY};
+
+    const TEST_MANIFEST_NEWER: &[u8] = include_bytes!("../tests/fixtures/ota-newer.json");
+    const TEST_MANIFEST_NEWER_SIG: &str = include_str!("../tests/fixtures/ota-newer.json.sig");
     use std::collections::HashMap;
     use std::sync::Mutex;
 
@@ -227,6 +239,28 @@ pub(crate) mod tests {
             verified.source_order,
             vec!["cn".to_string(), "gh".to_string()]
         );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn fast_stale_mirror_cannot_hide_a_slow_github_release() {
+        // cn answers instantly with 0.2.0; GitHub needs 5 s for 0.3.0.
+        let transport = signed(FakeTransport::default(), "https://cn/", 10)
+            .route("https://gh/ota.json", 5000, TEST_MANIFEST_NEWER)
+            .route(
+                "https://gh/ota.json.sig",
+                0,
+                TEST_MANIFEST_NEWER_SIG.as_bytes(),
+            );
+        let verified = fetch_manifest(
+            Arc::new(transport),
+            &config(),
+            TEST_PUBKEY,
+            Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
+        assert_eq!(verified.manifest.app.version, "0.3.0");
+        assert_eq!(verified.source_order, vec!["gh".to_string()]);
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]

@@ -423,14 +423,23 @@ fn install_pack(
     let previous = slot_resource(id)
         .and_then(|resource| bundled_dir(app, resource).ok())
         .map(|bundled| store.resolve(id, &bundled, &app_version(app)).dir);
-    let seeded = previous
-        .ok_or_else(|| format!("未知题库 {id}"))
-        .and_then(|previous| seed_slot(db, id, &dir, Some(&previous)));
-    match seeded {
+    let Some(previous) = previous else {
+        let _ = store.discard(id, version);
+        return Err(format!("未知题库 {id}"));
+    };
+    let activated = seed_slot(db, id, &dir, Some(&previous)).and_then(|summary| {
+        if let Err(error) = store.activate(id, version, sha256) {
+            // The seed already re-pointed rows at `dir`: point them back
+            // before `dir` is discarded, so this run matches the next start.
+            if let Err(reseed) = seed_slot(db, id, &previous, None) {
+                tracing::error!(id, %reseed, "failed to restore previous content pack");
+            }
+            return Err(error.to_string());
+        }
+        Ok(summary)
+    });
+    match activated {
         Ok(summary) => {
-            store
-                .activate(id, version, sha256)
-                .map_err(|error| error.to_string())?;
             let _ = store.prune(id, &[version]);
             tracing::info!(id, version, "content pack activated");
             Ok(summary)
