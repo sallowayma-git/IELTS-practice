@@ -163,6 +163,65 @@ impl ContentStore {
         Ok(())
     }
 
+    /// Make the marker durable before changing the database. If the importer
+    /// fails, its own transaction rolls back and we restore the old marker.
+    /// Callers must retain the candidate directory on error in case restoring
+    /// the marker also fails.
+    pub fn activate_and_apply<T>(
+        &self,
+        id: &str,
+        version: u64,
+        sha256: &str,
+        apply: impl FnOnce() -> Result<T, OtaError>,
+    ) -> Result<T, OtaError> {
+        let active = self.slot(id).join(ACTIVE_FILE);
+        let previous = match fs::read(&active) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error.into()),
+        };
+        self.activate(id, version, sha256)?;
+        match apply() {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                let restored = match previous {
+                    Some(bytes) => {
+                        let tmp = self.slot(id).join(format!("{ACTIVE_FILE}.tmp"));
+                        fs::write(&tmp, bytes).and_then(|()| fs::rename(tmp, &active))
+                    }
+                    None => fs::remove_file(&active),
+                };
+                restored.map_err(|restore| OtaError::Pack(format!(
+                    "{error}; failed to restore the previous activation: {restore}"
+                )))?;
+                Err(error)
+            }
+        }
+    }
+
+    /// Keep every version still referenced by the database, even after its
+    /// active marker was removed or a newer bundle became the default.
+    pub fn prune_unreferenced(
+        &self,
+        id: &str,
+        keep: &[u64],
+        content_refs: &[PathBuf],
+    ) -> Result<usize, OtaError> {
+        let slot = self.slot(id);
+        let mut retained = keep.to_vec();
+        for path in content_refs {
+            if let Ok(relative) = path.strip_prefix(&slot) {
+                if let Some(version) = relative.components().next()
+                    .and_then(|part| part.as_os_str().to_str())
+                    .and_then(|name| name.parse::<u64>().ok())
+                {
+                    retained.push(version);
+                }
+            }
+        }
+        self.prune(id, &retained)
+    }
+
     /// Forget the active download (the app falls back to the bundled pack).
     pub fn deactivate(&self, id: &str) -> Result<(), OtaError> {
         match fs::remove_file(self.slot(id).join(ACTIVE_FILE)) {
@@ -343,6 +402,61 @@ pub(crate) mod tests {
             store.resolve("reading", &bundled_dir, &v("0.1.0")).origin,
             PackOrigin::Bundled
         );
+    }
+
+    #[test]
+    fn activation_failure_never_runs_the_importer() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = ContentStore::new(temp.path());
+        fs::create_dir_all(temp.path().join("reading/active.json.tmp")).unwrap();
+        let ran = std::cell::Cell::new(false);
+        assert!(store.activate_and_apply("reading", 2, "hash", || {
+            ran.set(true);
+            Ok(())
+        }).is_err());
+        assert!(!ran.get());
+        assert_eq!(store.active_version("reading"), None);
+    }
+
+    #[test]
+    fn importer_failure_restores_the_previous_marker() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = ContentStore::new(temp.path());
+        fs::create_dir_all(temp.path().join("reading")).unwrap();
+        store.activate("reading", 1, "old").unwrap();
+        let before = fs::read(temp.path().join("reading/active.json")).unwrap();
+        let result: Result<(), OtaError> = store.activate_and_apply("reading", 2, "new", || {
+            Err(OtaError::Pack("import rejected".into()))
+        });
+        assert!(result.is_err());
+        assert_eq!(store.active_version("reading"), Some(1));
+        assert_eq!(fs::read(temp.path().join("reading/active.json")).unwrap(), before);
+    }
+
+    #[test]
+    fn failed_first_import_removes_its_activation_marker() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = ContentStore::new(temp.path());
+        fs::create_dir_all(temp.path().join("reading")).unwrap();
+        let result: Result<(), OtaError> = store.activate_and_apply("reading", 2, "new", || {
+            Err(OtaError::Pack("import rejected".into()))
+        });
+        assert!(result.is_err());
+        assert_eq!(store.active_version("reading"), None);
+    }
+
+    #[test]
+    fn pruning_retains_inactive_versions_with_live_file_references() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = ContentStore::new(temp.path());
+        for version in [1, 2, 3] {
+            fs::create_dir_all(temp.path().join(format!("reading/{version}"))).unwrap();
+        }
+        let refs = vec![temp.path().join("reading/2/new-exam.json")];
+        assert_eq!(store.prune_unreferenced("reading", &[3], &refs).unwrap(), 1);
+        assert!(temp.path().join("reading/2").is_dir());
+        assert!(temp.path().join("reading/3").is_dir());
+        assert!(!temp.path().join("reading/1").exists());
     }
 
     #[test]

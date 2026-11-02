@@ -405,6 +405,10 @@ def main() -> int:
             [sys.executable, "developer/tests/ci/ota_channel_test.py"],
         ),
         run_command(
+            "OTA frontend policy and failure reporting",
+            ["node", "--test", "developer/tests/js/appUpdates.test.mjs"],
+        ),
+        run_command(
             "OTA client core (manifest, signature, sources, packs)",
             ["cargo", "test", "-p", "ielts-ota", "--locked", "--offline"],
         ),

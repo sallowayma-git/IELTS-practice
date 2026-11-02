@@ -45,7 +45,6 @@ pub struct OtaState {
 struct CachedCheck {
     manifest: OtaManifest,
     source_order: Vec<String>,
-    app: AppDecision,
 }
 
 impl OtaState {
@@ -57,12 +56,6 @@ impl OtaState {
 
     fn cached(&self) -> Option<CachedCheck> {
         self.last_check.lock().ok().and_then(|slot| slot.clone())
-    }
-
-    /// The app updater refuses to install across a reinstall boundary.
-    pub fn blocks_in_place_install(&self) -> bool {
-        self.cached()
-            .is_some_and(|check| check.app.tier == AppTier::Reinstall)
     }
 
     /// Fastest sources first, as measured by the last manifest probe.
@@ -181,6 +174,8 @@ pub struct OtaStatus {
     pub configured: bool,
     pub current_version: String,
     pub app: Option<AppDecision>,
+    #[serde(skip)]
+    pub installer_signatures: Vec<String>,
     pub notes: Option<String>,
     pub download_pages: Vec<DownloadPageView>,
     pub content: Vec<ContentDecision>,
@@ -229,12 +224,22 @@ pub async fn ota_check(
     paths: State<'_, AppPaths>,
     state: State<'_, OtaState>,
 ) -> Result<OtaStatus, String> {
-    let current = app_version(&app);
-    let Some(pubkey) = updater_pubkey(&app) else {
+    check_channel(&app, &paths, &state).await
+}
+
+/// Refresh the signed policy for the operation that is about to consume it.
+pub async fn check_channel(
+    app: &AppHandle,
+    paths: &AppPaths,
+    state: &OtaState,
+) -> Result<OtaStatus, String> {
+    let current = app_version(app);
+    let Some(pubkey) = updater_pubkey(app) else {
         return Ok(OtaStatus {
             configured: false,
             current_version: current.to_string(),
             app: None,
+            installer_signatures: Vec::new(),
             notes: None,
             download_pages: Vec::new(),
             content: Vec::new(),
@@ -242,14 +247,14 @@ pub async fn ota_check(
             message: "此构建未配置签名更新通道。".into(),
         });
     };
-    let config = source_config(&paths);
+    let config = source_config(paths);
     let transport: Arc<dyn Transport> = Arc::new(HttpTransport::new(PROBE_TIMEOUT)?);
     let verified = fetch_manifest(transport, &config, &pubkey, PROBE_TIMEOUT)
         .await
         .map_err(|error| format!("所有更新源都不可用：{error}"))?;
     let manifest = verified.manifest;
     let decision = decide_app(&current, &manifest.app);
-    let installed = installed_versions(&app, &paths);
+    let installed = installed_versions(app, paths);
     let content: Vec<ContentDecision> = manifest
         .content
         .iter()
@@ -270,13 +275,13 @@ pub async fn ota_check(
             .map(|(index, (label, _))| DownloadPageView { index, label })
             .collect(),
         app: Some(decision.clone()),
+        installer_signatures: manifest.app.installer_signatures.clone(),
         content,
         source,
     };
     state.remember(CachedCheck {
         manifest,
         source_order: verified.source_order,
-        app: decision,
     });
     Ok(status)
 }
@@ -405,9 +410,9 @@ pub async fn ota_install_content(
     Ok(results)
 }
 
-/// Install → seed from the final directory → activate. Any failure leaves
-/// the previous pack active and the database untouched (seeds are one
-/// transaction).
+/// Install and validate, persist the activation marker, then seed in one
+/// database transaction. A marker-write failure cannot leave imported rows;
+/// a seed failure restores the previous marker.
 fn install_pack(
     app: &AppHandle,
     store: &ContentStore,
@@ -427,28 +432,32 @@ fn install_pack(
         let _ = store.discard(id, version);
         return Err(format!("未知题库 {id}"));
     };
-    let activated = seed_slot(db, id, &dir, Some(&previous)).and_then(|summary| {
-        if let Err(error) = store.activate(id, version, sha256) {
-            // The seed already re-pointed rows at `dir`: point them back
-            // before `dir` is discarded, so this run matches the next start.
-            if let Err(reseed) = seed_slot(db, id, &previous, None) {
-                tracing::error!(id, %reseed, "failed to restore previous content pack");
-            }
-            return Err(error.to_string());
-        }
-        Ok(summary)
-    });
-    match activated {
-        Ok(summary) => {
-            let _ = store.prune(id, &[version]);
-            tracing::info!(id, version, "content pack activated");
-            Ok(summary)
-        }
-        Err(error) => {
-            let _ = store.discard(id, version);
-            Err(error)
-        }
+    activate_prepared_pack(store, db, id, version, sha256, &dir, &previous)
+}
+
+fn activate_prepared_pack(
+    store: &ContentStore,
+    db: &AppDb,
+    id: &str,
+    version: u64,
+    sha256: &str,
+    dir: &Path,
+    previous: &Path,
+) -> Result<String, String> {
+    // Validate the history superset before making the new marker durable.
+    if id == "reading" {
+        require_reading_superset(previous, dir)?;
     }
+    let summary = store
+        .activate_and_apply(id, version, sha256, || {
+            seed_slot(db, id, dir, None).map_err(ielts_ota::OtaError::Pack)
+        })
+        .map_err(|error| error.to_string())?;
+    // On errors above retain the candidate: its marker may still be active if
+    // restoring the old marker failed. Startup can safely prune it later.
+    let _ = prune_content(store, db, id);
+    tracing::info!(id, version, "content pack activated");
+    Ok(summary)
 }
 
 fn slot_resource(id: &str) -> Option<&'static str> {
@@ -509,6 +518,28 @@ fn require_reading_superset(previous: &Path, next: &Path) -> Result<(), String> 
     Err(format!("新题库缺少已有题目 {missing:?}，拒绝安装。"))
 }
 
+/// Read references and prune under the same database lock so an import
+/// cannot add a file reference between the query and directory removal.
+fn prune_content(store: &ContentStore, db: &AppDb, id: &str) -> Result<(), String> {
+    db.with_conn(|conn| {
+        let keep: Vec<u64> = store.active_version(id).into_iter().collect();
+        let mut refs = Vec::new();
+        if id == "reading" {
+            let mut query = conn.prepare(
+                "SELECT content_ref FROM practice_assets
+                 WHERE activity = 'reading' AND content_ref IS NOT NULL",
+            )?;
+            let rows = query.query_map([], |row| row.get::<_, String>(0))?;
+            for row in rows {
+                refs.push(PathBuf::from(row?));
+            }
+        }
+        store.prune_unreferenced(id, &keep, &refs)
+            .map_err(|error| ielts_db::DbError::Message(error.to_string()))?;
+        Ok(())
+    }).map_err(|error| error.to_string())
+}
+
 // ---------------------------------------------------------------- startup
 
 /// Seed every content slot from the newest valid pack. A broken download is
@@ -523,36 +554,201 @@ pub fn seed_content_at_startup(
     let version = app_version(app);
     for (id, resource) in CONTENT_SLOTS {
         let bundled = bundled_dir(app, resource)?;
-        let resolved = store.resolve(id, &bundled, &version);
-        let seeded = seed_slot(db, id, &resolved.dir, None);
-        match (seeded, resolved.origin) {
-            (Ok(summary), origin) => {
-                tracing::info!(
-                    id,
-                    version = resolved.version,
-                    ?origin,
-                    summary,
-                    "content pack indexed"
-                );
-            }
-            (Err(error), PackOrigin::Downloaded) => {
-                tracing::error!(id, %error, "downloaded content pack failed; using the bundled pack");
-                let _ = store.deactivate(id);
-                seed_slot(db, id, &bundled, None)?;
-            }
-            (Err(error), PackOrigin::Bundled) => return Err(format!("bundled {id} pack: {error}")),
-        }
-        // Keep whatever is active even when the bundle won: reading rows
-        // indexed from it may still point into that directory.
-        let keep: Vec<u64> = store.active_version(id).into_iter().collect();
-        let _ = store.prune(id, &keep);
+        seed_content_slot(&store, db, id, &bundled, &version)?;
     }
+    Ok(())
+}
+
+fn seed_content_slot(
+    store: &ContentStore,
+    db: &AppDb,
+    id: &str,
+    bundled: &Path,
+    version: &Version,
+) -> Result<(), String> {
+    let resolved = store.resolve(id, bundled, version);
+    let seeded = seed_slot(db, id, &resolved.dir, None);
+    match (seeded, resolved.origin) {
+        (Ok(summary), origin) => {
+            tracing::info!(
+                id,
+                version = resolved.version,
+                ?origin,
+                summary,
+                "content pack indexed"
+            );
+        }
+        (Err(error), PackOrigin::Downloaded) => {
+            tracing::error!(id, %error, "downloaded content pack failed; using the bundled pack");
+            let _ = store.deactivate(id);
+            seed_slot(db, id, bundled, None)?;
+        }
+        (Err(error), PackOrigin::Bundled) => return Err(format!("bundled {id} pack: {error}")),
+    }
+    // Fallback only re-indexes bundled exams; downloaded-only exams can
+    // still be referenced by the library and practice history.
+    let _ = prune_content(store, db, id);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn reading_fixture(dir: &Path, version: u64, ids: &[&str]) {
+        use sha2::Digest;
+        std::fs::create_dir_all(dir).unwrap();
+        let entries: Vec<_> = ids.iter().map(|id| {
+            let bytes = serde_json::to_vec(&serde_json::json!({
+                "examId": id, "questionGroups": [], "questionOrder": [], "answerKey": {}
+            })).unwrap();
+            let file = format!("{id}.json");
+            std::fs::write(dir.join(&file), &bytes).unwrap();
+            serde_json::json!({
+                "examId": id, "file": file, "title": id,
+                "sha256": hex::encode(sha2::Sha256::digest(&bytes))
+            })
+        }).collect();
+        std::fs::write(dir.join("manifest.json"), serde_json::json!({
+            "schemaVersion": 1, "packId": "test", "assetCount": entries.len(), "entries": entries
+        }).to_string()).unwrap();
+        std::fs::write(dir.join("ota-pack.json"), serde_json::json!({
+            "id": "reading", "version": version
+        }).to_string()).unwrap();
+    }
+
+    fn reading_rows(db: &AppDb) -> Vec<(String, String)> {
+        db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, content_ref FROM practice_assets WHERE activity = 'reading' ORDER BY id"
+            )?;
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            let values = rows.collect::<Result<Vec<_>, _>>()?;
+            Ok(values)
+        }).unwrap()
+    }
+
+    #[test]
+    fn activation_write_failure_cannot_insert_new_reading_exams() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = crate::app::state::test_support::test_db(temp.path());
+        let store_root = temp.path().join("content");
+        let store = ContentStore::new(&store_root);
+        let old = temp.path().join("bundle");
+        let next = store_root.join("reading/2");
+        reading_fixture(&old, 1, &["a"]);
+        reading_fixture(&next, 2, &["a", "b"]);
+        seed_slot(&db, "reading", &old, None).unwrap();
+        let before = reading_rows(&db);
+        std::fs::create_dir_all(store_root.join("reading/active.json.tmp")).unwrap();
+        assert!(activate_prepared_pack(&store, &db, "reading", 2, "hash", &next, &old).is_err());
+        assert_eq!(reading_rows(&db), before);
+        assert_eq!(store.active_version("reading"), None);
+    }
+
+    #[test]
+    fn failed_reading_import_restores_marker_and_all_database_rows() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = crate::app::state::test_support::test_db(temp.path());
+        let store_root = temp.path().join("content");
+        let store = ContentStore::new(&store_root);
+        let old = store_root.join("reading/1");
+        let next = store_root.join("reading/2");
+        reading_fixture(&old, 1, &["a"]);
+        reading_fixture(&next, 2, &["a", "b"]);
+        seed_slot(&db, "reading", &old, None).unwrap();
+        store.activate("reading", 1, "old").unwrap();
+        let before = reading_rows(&db);
+        std::fs::write(next.join("b.json"), "corrupted").unwrap();
+        assert!(activate_prepared_pack(&store, &db, "reading", 2, "new", &next, &old).is_err());
+        assert_eq!(reading_rows(&db), before);
+        assert_eq!(store.active_version("reading"), Some(1));
+    }
+
+    #[test]
+    fn startup_fallback_retains_downloaded_only_reading_payloads() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = crate::app::state::test_support::test_db(temp.path());
+        let store_root = temp.path().join("content");
+        let store = ContentStore::new(&store_root);
+        let bundled = temp.path().join("bundle");
+        let downloaded = store_root.join("reading/2");
+        reading_fixture(&bundled, 1, &["a"]);
+        reading_fixture(&downloaded, 2, &["a", "b"]);
+        seed_slot(&db, "reading", &downloaded, None).unwrap();
+        store.activate("reading", 2, "download").unwrap();
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO attempts (id, activity, asset_id, mode, status, started_at,
+                 schema_version, created_at, updated_at)
+                 VALUES ('history-b', 'reading', 'b', 'single', 'completed', 't', 2, 't', 't')",
+                [],
+            )?;
+            Ok(())
+        }).unwrap();
+        // A different payload fails validation; b is still valid and referenced.
+        std::fs::write(downloaded.join("a.json"), "corrupted").unwrap();
+        seed_content_slot(&store, &db, "reading", &bundled, &Version::new(1, 0, 0)).unwrap();
+        assert_eq!(store.active_version("reading"), None);
+        let rows = reading_rows(&db);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].1, bundled.join("a.json").display().to_string());
+        assert_eq!(rows[1].1, downloaded.join("b.json").display().to_string());
+        assert!(Path::new(&rows[1].1).is_file());
+        let history_ref: String = db.with_conn(|conn| Ok(conn.query_row(
+            "SELECT pa.content_ref FROM attempts at JOIN practice_assets pa ON pa.id = at.asset_id
+             WHERE at.id = 'history-b'", [], |row| row.get(0),
+        )?)).unwrap();
+        assert!(Path::new(&history_ref).is_file());
+    }
+
+    #[test]
+    fn successful_content_activation_imports_new_exams_and_prunes_unreferenced_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = crate::app::state::test_support::test_db(temp.path());
+        let store_root = temp.path().join("content");
+        let store = ContentStore::new(&store_root);
+        let old = store_root.join("reading/1");
+        let next = store_root.join("reading/2");
+        reading_fixture(&old, 1, &["a"]);
+        reading_fixture(&next, 2, &["a", "b"]);
+        seed_slot(&db, "reading", &old, None).unwrap();
+        store.activate("reading", 1, "old").unwrap();
+        activate_prepared_pack(&store, &db, "reading", 2, "new", &next, &old).unwrap();
+        assert_eq!(store.active_version("reading"), Some(2));
+        assert_eq!(reading_rows(&db).len(), 2);
+        assert!(!old.exists());
+        assert!(next.join("b.json").is_file());
+    }
+
+    #[test]
+    fn activation_write_failure_cannot_insert_new_writing_topics() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = crate::app::state::test_support::test_db(temp.path());
+        let store_root = temp.path().join("content");
+        let store = ContentStore::new(&store_root);
+        let old = temp.path().join("bundle");
+        let next = store_root.join("writing-topics/2");
+        let write = |dir: &Path, ids: &[&str]| {
+            std::fs::create_dir_all(dir).unwrap();
+            let topics: Vec<_> = ids.iter().map(|id| serde_json::json!({
+                "source_id": id, "type": "task2", "prompt": format!("Discuss education: {id}."),
+                "category": "education", "difficulty": 2
+            })).collect();
+            std::fs::write(dir.join(WRITING_CATALOG_FILE), serde_json::json!({
+                "topics": topics
+            }).to_string()).unwrap();
+        };
+        write(&old, &["topic-a"]);
+        write(&next, &["topic-a", "topic-b"]);
+        seed_slot(&db, "writing-topics", &old, None).unwrap();
+        std::fs::create_dir_all(store_root.join("writing-topics/active.json.tmp")).unwrap();
+        assert!(activate_prepared_pack(&store, &db, "writing-topics", 2, "hash", &next, &old).is_err());
+        let count: i64 = db.with_conn(|conn| Ok(conn.query_row(
+            "SELECT COUNT(*) FROM writing_topics", [], |row| row.get(0)
+        )?)).unwrap();
+        assert_eq!(count, 1);
+    }
 
     #[test]
     fn bundled_sources_parse_and_lead_with_github() {

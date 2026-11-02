@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist/ota
-          gh release download "$OTA_TAG" --pattern ota.json --dir dist/ota/previous || true
+          python developer/tests/ci/ota_channel.py fetch-previous --tag "$OTA_TAG" --out dist/ota/previous/ota.json
           # Same clock as the bundled ota-pack.json markers (UTC YYYYMMDDHHMM).
           version="$(date -u +%Y%m%d%H%M)"
           args=()

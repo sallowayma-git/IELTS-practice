@@ -32,8 +32,12 @@ content-<id>-<version>.tar.gz
 
 `ota.json` fields: `app.version`, `app.minOtaVersion` (older installs must
 reinstall), `app.minSupportedVersion` (older installs are told the update is
-required), `app.notes`, `app.downloadPages[]`, `content[]` (`id`, `version`,
-`minAppVersion`, `file`, `sha256`, `size`). Unknown fields are ignored.
+required), `app.installerSignatures[]`, `app.notes`, `app.downloadPages[]`,
+`content[]` (`id`, `version`, `minAppVersion`, `file`, `sha256`, `size`).
+Unknown fields are ignored. Application releases copy installer signatures
+from the verified `latest.json` into the signed policy. Before installation
+the client refreshes that policy and requires both the selected version and
+installer signature to match; absent policy/signatures fail closed.
 
 Pack versions are UTC `YYYYMMDDHHMM`. Release builds stamp the bundled packs'
 `ota-pack.json` with the release commit time, so content bundled in a newer

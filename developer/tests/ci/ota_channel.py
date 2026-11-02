@@ -27,6 +27,8 @@ import io
 import json
 import re
 import sys
+import subprocess
+import tempfile
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -158,6 +160,7 @@ def compose_manifest(
     previous: dict | None,
     *,
     app_version: str | None = None,
+    updater_manifest: dict | None = None,
     notes: str | None = None,
     policy: dict | None = None,
     packs: list[dict] = (),
@@ -173,7 +176,18 @@ def compose_manifest(
         if app.get("version") and semver_key(version) < semver_key(app["version"]):
             raise ValueError(f"app version {version} is older than published {app['version']}")
         policy = policy or {}
-        app = {"version": version}
+        if not updater_manifest or require_semver(updater_manifest.get("version", ""), "updater version") != version:
+            raise ValueError("app release requires --updater-manifest with the same version")
+        platforms = updater_manifest.get("platforms")
+        if not isinstance(platforms, dict) or not platforms:
+            raise ValueError("updater manifest must contain installer platforms")
+        signatures = []
+        for platform in platforms.values():
+            signature = platform.get("signature") if isinstance(platform, dict) else None
+            if not isinstance(signature, str) or not signature.strip():
+                raise ValueError("updater platform is missing its installer signature")
+            signatures.append(signature.strip())
+        app = {"version": version, "installerSignatures": sorted(set(signatures))}
         for key in ("minOtaVersion", "minSupportedVersion"):
             if policy.get(key):
                 floor = require_semver(policy[key], key)
@@ -237,6 +251,35 @@ def stamp_bundled(version: int, slots: dict[str, Path] = BUNDLED_SLOTS) -> None:
         (directory / MARKER_FILE).write_text(json.dumps(marker) + "\n", encoding="utf-8")
 
 
+def download_previous_manifest(tag: str, output: Path) -> None:
+    """Bootstrap only an empty channel; any read failure must stop publishing."""
+    release = subprocess.run(
+        ["gh", "release", "view", tag, "--json", "assets"],
+        check=True, capture_output=True, text=True, encoding="utf-8",
+    )
+    assets = json.loads(release.stdout)["assets"]
+    if not isinstance(assets, list):
+        raise ValueError("channel release returned an invalid asset list")
+    if not any(asset.get("name") == "ota.json" for asset in assets):
+        if assets:
+            raise ValueError("nonempty OTA channel is missing ota.json; refusing to reset it")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("{}\n", encoding="utf-8")
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=output.parent) as temporary:
+        subprocess.run(
+            ["gh", "release", "download", tag, "--pattern", "ota.json", "--dir", temporary],
+            check=True,
+        )
+        downloaded = Path(temporary) / "ota.json"
+        document = json.loads(downloaded.read_text(encoding="utf-8"))
+        if document.get("schemaVersion") != SCHEMA_VERSION or not document.get("app", {}).get("version"):
+            raise ValueError("published OTA channel manifest is invalid")
+        # Do not overwrite a previously fetched copy until download and parsing succeed.
+        downloaded.replace(output)
+
+
 def previous_pack_file(manifest_path: Path, pack_id: str) -> str:
     """File name of the published pack for `pack_id`, or '' if none."""
     if not manifest_path.is_file():
@@ -267,6 +310,7 @@ def main() -> int:
     manifest = sub.add_parser("manifest")
     manifest.add_argument("--previous", type=Path)
     manifest.add_argument("--app-version")
+    manifest.add_argument("--updater-manifest", type=Path)
     manifest.add_argument("--notes-file", type=Path)
     manifest.add_argument("--policy", type=Path, default=POLICY_PATH)
     manifest.add_argument("--pack", type=Path, action="append", default=[])
@@ -278,6 +322,10 @@ def main() -> int:
 
     stamp = sub.add_parser("stamp-bundled")
     stamp.add_argument("--version", type=int, required=True, help="YYYYMMDDHHMM")
+
+    fetch = sub.add_parser("fetch-previous")
+    fetch.add_argument("--tag", default="ota-stable")
+    fetch.add_argument("--out", type=Path, required=True)
 
     previous = sub.add_parser("previous-file")
     previous.add_argument("--manifest", type=Path, required=True)
@@ -294,17 +342,21 @@ def main() -> int:
             print(json.dumps(entry, indent=2))
         elif args.command == "manifest":
             previous = None
-            if args.previous and args.previous.is_file():
+            if args.previous:
                 previous = json.loads(args.previous.read_text(encoding="utf-8"))
             result = compose_manifest(
                 previous,
                 app_version=args.app_version,
+                updater_manifest=json.loads(args.updater_manifest.read_text(encoding="utf-8")) if args.updater_manifest else None,
                 notes=args.notes_file.read_text(encoding="utf-8") if args.notes_file else None,
                 policy=load_policy(args.policy),
                 packs=[json.loads(path.read_text(encoding="utf-8")) for path in args.pack],
             )
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(args.out)
+        elif args.command == "fetch-previous":
+            download_previous_manifest(args.tag, args.out)
             print(args.out)
         elif args.command == "previous-file":
             print(previous_pack_file(args.manifest, args.id))
@@ -313,7 +365,7 @@ def main() -> int:
         else:
             add_mirror_source(args.sources, args.template)
             print(args.sources)
-    except (ValueError, KeyError, OSError) as error:
+    except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         parser.error(str(error))
     return 0
 

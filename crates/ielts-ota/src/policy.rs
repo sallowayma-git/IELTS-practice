@@ -102,6 +102,7 @@ mod tests {
     fn release(version: &str, min_ota: Option<&str>, min_supported: Option<&str>) -> AppRelease {
         AppRelease {
             version: version.into(),
+            installer_signatures: Vec::new(),
             min_ota_version: min_ota.map(Into::into),
             min_supported_version: min_supported.map(Into::into),
             notes: None,

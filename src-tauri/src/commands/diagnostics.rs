@@ -8,7 +8,8 @@ use tauri::{ipc::Channel, State};
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app::state::AppPaths;
-use crate::commands::ota::{source_config, OtaState};
+use crate::commands::ota::{check_channel, source_config, OtaState};
+use ielts_ota::policy::{AppDecision, AppTier};
 
 /// Manifest checks must not hang on a stalled source; installer downloads
 /// get longer. A dead mirror fails fast at connect either way.
@@ -254,6 +255,22 @@ pub async fn check_for_updates(
     }
 }
 
+fn require_install_target(
+    policy: &AppDecision,
+    signatures: &[String],
+    installer_version: &str,
+    installer_signature: &str,
+) -> Result<(), String> {
+    if policy.tier != AppTier::Ota
+        || installer_version != policy.latest_version.as_str()
+        || installer_signature.trim().is_empty()
+        || !signatures.iter().any(|signed| signed.trim() == installer_signature.trim())
+    {
+        return Err("安装包与已验证的更新策略不一致，请重新检查更新。".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn install_update(
     app: tauri::AppHandle,
@@ -265,7 +282,11 @@ pub async fn install_update(
     if !updater_is_configured(&app) {
         return Err("此构建未配置签名更新通道。".into());
     }
-    if ota.blocks_in_place_install() {
+    // Never infer permission to migrate from an absent or stale cached check.
+    let status = check_channel(&app, &paths, &ota).await?;
+    let policy = status.app
+        .ok_or("无法验证此版本的更新策略，请重新检查更新。")?;
+    if policy.tier == AppTier::Reinstall {
         return Err("这个版本需要重新下载安装，不能在当前版本上直接更新。".into());
     }
 
@@ -288,6 +309,9 @@ pub async fn install_update(
         ));
     };
 
+    require_install_target(
+        &policy, &status.installer_signatures, &update.version, &update.signature,
+    )?;
     let latest_version = update.version.clone();
     let body = update.body.clone();
     update.timeout = Some(INSTALLER_TIMEOUT);
@@ -411,8 +435,32 @@ pub fn get_startup_diagnostics(paths: State<'_, AppPaths>) -> StartupDiagnostics
 
 #[cfg(test)]
 mod tests {
-    use super::{finalize_install, updater_config_is_ready, UpdaterRuntimeState};
+    use super::{
+        finalize_install, require_install_target, updater_config_is_ready,
+        AppDecision, AppTier, UpdaterRuntimeState,
+    };
     use serde_json::json;
+
+    #[test]
+    fn installer_must_match_a_signed_ota_decision() {
+        let mut policy = AppDecision {
+            tier: AppTier::Ota,
+            current_version: "0.1.0".into(),
+            latest_version: "0.2.0".into(),
+            forced: false,
+        };
+        let signatures = vec!["signed-package".into()];
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "signed-package").is_ok());
+        assert!(require_install_target(&policy, &[], "0.2.0", "signed-package").is_err());
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "different-package").is_err());
+        assert!(require_install_target(&policy, &signatures, "0.3.0", "signed-package").is_err());
+        assert!(require_install_target(&policy, &signatures, "0.1.5", "signed-package").is_err());
+        policy.tier = AppTier::Reinstall;
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "signed-package").is_err());
+        policy.tier = AppTier::UpToDate;
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "signed-package").is_err());
+    }
+
 
     #[test]
     fn updater_config_requires_https_endpoint_and_pubkey() {

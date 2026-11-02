@@ -52,33 +52,12 @@ async function check() {
     state.status = status
     state.message = status.message || ''
   } catch (error) {
+    state.status = null
     state.message = `更新检查失败：${errorText(error)}`
-    await fallbackAppCheck()
   } finally {
     state.checking = false
   }
   return state.status
-}
-
-/** No channel manifest reachable: still ask the app updater directly. */
-async function fallbackAppCheck() {
-  try {
-    const legacy = await invokeCommand('check_for_updates')
-    if (!legacy?.updateAvailable) return
-    state.status = {
-      configured: true,
-      currentVersion: legacy.currentVersion,
-      app: { tier: 'ota', currentVersion: legacy.currentVersion, latestVersion: legacy.latestVersion, forced: false },
-      notes: legacy.body,
-      downloadPages: [],
-      content: [],
-      source: null,
-      message: legacy.message
-    }
-    state.message = legacy.message
-  } catch {
-    // Keep the original failure message.
-  }
 }
 
 async function installContent() {
@@ -102,6 +81,8 @@ async function installContent() {
       window.dispatchEvent(new CustomEvent('ielts:content-updated', { detail: state.content.results }))
     }
     await check()
+    // Availability is separate from the outcome of the install we just ran.
+    if (failed.length) state.message = failed.map((item) => item.message).join('；')
   } catch (error) {
     state.message = `题库更新失败，已保留当前题库：${errorText(error)}`
   } finally {

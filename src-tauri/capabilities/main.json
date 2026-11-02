@@ -44,7 +44,6 @@
     "allow-annotation-revalidate",
     "allow-annotation-upsert",
     "allow-background-job-status",
-    "allow-check-for-updates",
     "allow-clear-history",
     "allow-coach-ensure-thread",
     "allow-coach-list-feedback",

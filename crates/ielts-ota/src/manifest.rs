@@ -57,6 +57,11 @@ pub struct OtaManifest {
 pub struct AppRelease {
     /// Latest shipped application version.
     pub version: String,
+    /// Installer signatures copied from the verified release's latest.json.
+    /// Binding them into this signed policy prevents stale/mixed metadata
+    /// from selecting a different installer under an allowed version label.
+    #[serde(default)]
+    pub installer_signatures: Vec<String>,
     /// Installs older than this cannot reach `version` in place (the release
     /// restructured something an in-place installer cannot migrate): the
     /// client guides the user to download and reinstall instead.

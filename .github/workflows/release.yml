@@ -322,10 +322,11 @@ jobs:
           set -euo pipefail
           ./developer/tests/ci/ota_channel_release.sh ensure
           mkdir -p dist/ota
-          gh release download ota-stable --pattern ota.json --dir dist/ota/previous || true
+          python developer/tests/ci/ota_channel.py fetch-previous --out dist/ota/previous/ota.json
           gh release view "${{ github.ref_name }}" --json body --jq .body > dist/ota/notes.md
           python developer/tests/ci/ota_channel.py manifest --previous dist/ota/previous/ota.json \
-            --app-version "${{ github.ref_name }}" --notes-file dist/ota/notes.md --out dist/ota/ota.json
+            --app-version "${{ github.ref_name }}" --updater-manifest developer/tests/e2e/reports/latest.json \
+            --notes-file dist/ota/notes.md --out dist/ota/ota.json
           cp developer/tests/e2e/reports/latest.json dist/ota/latest.json
           cat dist/ota/ota.json
       - name: Sign OTA channel manifest
