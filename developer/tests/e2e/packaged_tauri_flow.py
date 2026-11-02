@@ -1521,7 +1521,10 @@ def main() -> int:
                 raise RuntimeError(f"product prompt authority still exposed: {command}: {rejected}")
         checks["promptAuthorityBoundary"] = "passed"
         # Registered but host-only commands are refused by the capability too.
-        for command in ("learning_observations_rebuild", "cognitive_runtime_restart", "delete_secret"):
+        for command in (
+            "learning_observations_rebuild", "cognitive_runtime_restart", "delete_secret",
+            "check_for_updates",
+        ):
             rejected = driver.script("""
                 return window.__TAURI_INTERNALS__.invoke(arguments[0], {})
                   .then(value => ({resolved: true, value}))
@@ -1805,13 +1808,6 @@ def main() -> int:
         if forged_error.get("code") != "backup.path_grant":
             raise RuntimeError(f"forged backup rejection used the wrong boundary: {forged_grant}")
         checks["backupPathBoundary"] = "passed"
-        updater_status = driver.script(
-            "return window.__TAURI_INTERNALS__.invoke('check_for_updates')"
-        )
-        if not isinstance(updater_status, dict):
-            raise RuntimeError(f"check_for_updates returned an invalid status: {updater_status}")
-        if updater_status.get("configured") or updater_status.get("stage") != "unconfigured":
-            raise RuntimeError(f"development updater did not fail closed: {updater_status}")
         restart_without_install = driver.script("""
             return window.__TAURI_INTERNALS__.invoke('restart_after_update')
               .then(value => ({resolved: true, value}))
@@ -1819,6 +1815,10 @@ def main() -> int:
         """)
         if not isinstance(restart_without_install, dict) or restart_without_install.get("resolved"):
             raise RuntimeError(f"restart_after_update bypassed install state: {restart_without_install}")
+        ota_status = driver.script("return window.__TAURI_INTERNALS__.invoke('ota_check')")
+        if (not isinstance(ota_status, dict) or ota_status.get("configured") is not False
+                or ota_status.get("app") is not None or ota_status.get("content") != []):
+            raise RuntimeError(f"development OTA channel did not fail closed: {ota_status}")
         checks["updaterBoundary"] = "passed"
         marker = f"e2e-{int(time.time())}"
         saved = driver.script("return window.__TAURI_INTERNALS__.invoke('upsert_setting', {cmd:{namespace:'frontend-preferences', key:'restartMarker', value:arguments[0]}})", [marker])

@@ -123,8 +123,11 @@ def check_tauri_contract() -> dict[str, Any]:
 
     cargo_toml = (ROOT / "src-tauri/Cargo.toml").read_text(encoding="utf-8")
     rust_shell = (ROOT / "src-tauri/src/lib.rs").read_text(encoding="utf-8")
-    for needle in ("seed_builtin_writing_catalog", "bc-task2-2024-12_2025-01.catalog.json"):
-        if needle not in rust_shell:
+    content_seed = rust_shell + (ROOT / "src-tauri/src/commands/ota.rs").read_text(encoding="utf-8")
+    if "seed_content_at_startup" not in rust_shell:
+        failures.append("native startup does not seed bundled/OTA content packs")
+    for needle in ("seed_builtin_writing_catalog", "seed_builtin_reading_pack", "bc-task2-2024-12_2025-01.catalog.json"):
+        if needle not in content_seed:
             failures.append(f"native startup does not seed the bundled writing catalog ({needle})")
     for plugin in ("tauri-plugin-fs", "tauri-plugin-process"):
         if plugin in cargo_toml:
@@ -396,6 +399,18 @@ def main() -> int:
         run_command(
             "Native reading resource checksums",
             [sys.executable, "developer/tests/ci/verify_reading_resources.py"],
+        ),
+        run_command(
+            "OTA channel tooling contract",
+            [sys.executable, "developer/tests/ci/ota_channel_test.py"],
+        ),
+        run_command(
+            "OTA frontend policy and failure reporting",
+            ["node", "--test", "developer/tests/js/appUpdates.test.mjs"],
+        ),
+        run_command(
+            "OTA client core (manifest, signature, sources, packs)",
+            ["cargo", "test", "-p", "ielts-ota", "--locked", "--offline"],
         ),
         run_command(
             "Reading resource checkout and upgrade compatibility",

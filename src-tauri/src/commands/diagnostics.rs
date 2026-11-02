@@ -8,6 +8,14 @@ use tauri::{ipc::Channel, State};
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app::state::AppPaths;
+use crate::commands::ota::{check_channel, source_config, OtaState};
+use ielts_ota::policy::{AppDecision, AppTier};
+
+/// Manifest checks must not hang on a stalled source; installer downloads
+/// get longer. A dead mirror fails fast at connect either way.
+const CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+const INSTALLER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(900);
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -139,8 +147,72 @@ fn finalize_install(
     Ok(())
 }
 
+/// Updater manifest endpoints: the OTA channel on every source (fastest
+/// probe first), then the endpoints baked into the release config.
+fn updater_endpoints(app: &tauri::AppHandle, paths: &AppPaths, ota: &OtaState) -> Vec<tauri::Url> {
+    let config = source_config(paths);
+    let configured = app
+        .config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|updater| updater.get("endpoints"))
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut endpoints: Vec<tauri::Url> = Vec::new();
+    let channel = config
+        .channel_candidates(&config.updater_file, &ota.source_order())
+        .into_iter()
+        .map(|candidate| candidate.url);
+    let baked = configured.iter().filter_map(|value| value.as_str().map(str::to_owned));
+    for url in channel.chain(baked) {
+        if let Ok(url) = tauri::Url::parse(&url) {
+            if !endpoints.contains(&url) {
+                endpoints.push(url);
+            }
+        }
+    }
+    endpoints
+}
+
+fn mirrored_updater(
+    app: &tauri::AppHandle,
+    paths: &AppPaths,
+    ota: &OtaState,
+) -> Result<tauri_plugin_updater::Updater, String> {
+    app.updater_builder()
+        .endpoints(updater_endpoints(app, paths, ota))
+        .map_err(|error| error.to_string())?
+        .timeout(CHECK_TIMEOUT)
+        .configure_client(|client| client.connect_timeout(CONNECT_TIMEOUT))
+        .build()
+        .map_err(|error| error.to_string())
+}
+
+/// Installer URLs to try: the fastest source first, GitHub and proxies after.
+fn installer_candidates(paths: &AppPaths, ota: &OtaState, canonical: &tauri::Url) -> Vec<tauri::Url> {
+    let canonical_text = canonical.to_string();
+    let Some(file) = ielts_ota::sources::url_file_name(&canonical_text) else {
+        return vec![canonical.clone()];
+    };
+    let mut urls: Vec<tauri::Url> = source_config(paths)
+        .candidates(file, &canonical_text, &ota.source_order())
+        .into_iter()
+        .filter_map(|candidate| tauri::Url::parse(&candidate.url).ok())
+        .collect();
+    if !urls.contains(canonical) {
+        urls.push(canonical.clone());
+    }
+    urls
+}
+
 #[tauri::command]
-pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdaterStatus, String> {
+pub async fn check_for_updates(
+    app: tauri::AppHandle,
+    paths: State<'_, AppPaths>,
+    ota: State<'_, OtaState>,
+) -> Result<UpdaterStatus, String> {
     let configured = updater_is_configured(&app);
     if !configured {
         return Ok(updater_status(
@@ -155,9 +227,7 @@ pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdaterStatus, S
         ));
     }
 
-    let update = app
-        .updater()
-        .map_err(|error| error.to_string())?
+    let update = mirrored_updater(&app, &paths, &ota)?
         .check()
         .await
         .map_err(|error| error.to_string())?;
@@ -185,24 +255,47 @@ pub async fn check_for_updates(app: tauri::AppHandle) -> Result<UpdaterStatus, S
     }
 }
 
+fn require_install_target(
+    policy: &AppDecision,
+    signatures: &[String],
+    installer_version: &str,
+    installer_signature: &str,
+) -> Result<(), String> {
+    if policy.tier != AppTier::Ota
+        || installer_version != policy.latest_version.as_str()
+        || installer_signature.trim().is_empty()
+        || !signatures.iter().any(|signed| signed.trim() == installer_signature.trim())
+    {
+        return Err("安装包与已验证的更新策略不一致，请重新检查更新。".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn install_update(
     app: tauri::AppHandle,
+    paths: State<'_, AppPaths>,
+    ota: State<'_, OtaState>,
     runtime: State<'_, UpdaterRuntimeState>,
     on_event: Channel<UpdaterProgressEvent>,
 ) -> Result<UpdaterStatus, String> {
     if !updater_is_configured(&app) {
         return Err("此构建未配置签名更新通道。".into());
     }
+    // Never infer permission to migrate from an absent or stale cached check.
+    let status = check_channel(&app, &paths, &ota).await?;
+    let policy = status.app
+        .ok_or("无法验证此版本的更新策略，请重新检查更新。")?;
+    if policy.tier == AppTier::Reinstall {
+        return Err("这个版本需要重新下载安装，不能在当前版本上直接更新。".into());
+    }
 
     send_update_event(&on_event, "checking", 0, None, "正在确认最新版本。");
-    let update = app
-        .updater()
-        .map_err(|error| error.to_string())?
+    let update = mirrored_updater(&app, &paths, &ota)?
         .check()
         .await
         .map_err(|error| error.to_string())?;
-    let Some(update) = update else {
+    let Some(mut update) = update else {
         send_update_event(&on_event, "upToDate", 0, None, "当前已是最新版本。");
         return Ok(updater_status(
             &app,
@@ -216,47 +309,63 @@ pub async fn install_update(
         ));
     };
 
+    require_install_target(
+        &policy, &status.installer_signatures, &update.version, &update.signature,
+    )?;
     let latest_version = update.version.clone();
     let body = update.body.clone();
-    send_update_event(
-        &on_event,
-        "downloading",
-        0,
-        None,
-        "正在下载并验证更新签名。",
-    );
-
+    update.timeout = Some(INSTALLER_TIMEOUT);
     let downloaded = Arc::new(AtomicU64::new(0));
-    let chunk_downloaded = Arc::clone(&downloaded);
-    let finish_downloaded = Arc::clone(&downloaded);
-    let chunk_channel = on_event.clone();
-    let finish_channel = on_event.clone();
-    let install_result = update
-        .download_and_install(
-            move |chunk_size, content_length| {
-                let total = chunk_downloaded.fetch_add(chunk_size as u64, Ordering::AcqRel)
-                    + chunk_size as u64;
-                send_update_event(
-                    &chunk_channel,
-                    "downloading",
-                    total,
-                    content_length,
-                    "正在下载并验证更新签名。",
-                );
-            },
-            move || {
-                send_update_event(
-                    &finish_channel,
-                    "installing",
-                    finish_downloaded.load(Ordering::Acquire),
-                    None,
-                    "签名验证通过，正在安装更新。",
-                );
-            },
-        )
-        .await;
+    let mut errors = Vec::new();
+    let mut bytes = None;
+    // Same signed bytes from any source: `download` verifies the minisign
+    // signature from the updater manifest before returning.
+    for url in installer_candidates(&paths, &ota, &update.download_url.clone()) {
+        let host = url.host_str().unwrap_or_default().to_string();
+        update.download_url = url;
+        downloaded.store(0, Ordering::Release);
+        send_update_event(&on_event, "downloading", 0, None, &format!("正在从 {host} 下载并验证更新签名。"));
+        let chunk_downloaded = Arc::clone(&downloaded);
+        let chunk_channel = on_event.clone();
+        let result = update
+            .download(
+                move |chunk_size, content_length| {
+                    let total = chunk_downloaded.fetch_add(chunk_size as u64, Ordering::AcqRel)
+                        + chunk_size as u64;
+                    send_update_event(
+                        &chunk_channel,
+                        "downloading",
+                        total,
+                        content_length,
+                        "正在下载并验证更新签名。",
+                    );
+                },
+                || {},
+            )
+            .await;
+        match result {
+            Ok(data) => {
+                bytes = Some(data);
+                break;
+            }
+            Err(error) => errors.push(format!("{host}: {error}")),
+        }
+    }
+    let install_result = match bytes {
+        Some(bytes) => {
+            send_update_event(
+                &on_event,
+                "installing",
+                downloaded.load(Ordering::Acquire),
+                None,
+                "签名验证通过，正在安装更新。",
+            );
+            update.install(bytes).map_err(|error| error.to_string())
+        }
+        None => Err(format!("所有下载源都失败了：{}", errors.join("; "))),
+    };
     if let Err(error) =
-        finalize_install(&runtime, install_result.map_err(|error| error.to_string()))
+        finalize_install(&runtime, install_result)
     {
         send_update_event(
             &on_event,
@@ -326,8 +435,32 @@ pub fn get_startup_diagnostics(paths: State<'_, AppPaths>) -> StartupDiagnostics
 
 #[cfg(test)]
 mod tests {
-    use super::{finalize_install, updater_config_is_ready, UpdaterRuntimeState};
+    use super::{
+        finalize_install, require_install_target, updater_config_is_ready,
+        AppDecision, AppTier, UpdaterRuntimeState,
+    };
     use serde_json::json;
+
+    #[test]
+    fn installer_must_match_a_signed_ota_decision() {
+        let mut policy = AppDecision {
+            tier: AppTier::Ota,
+            current_version: "0.1.0".into(),
+            latest_version: "0.2.0".into(),
+            forced: false,
+        };
+        let signatures = vec!["signed-package".into()];
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "signed-package").is_ok());
+        assert!(require_install_target(&policy, &[], "0.2.0", "signed-package").is_err());
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "different-package").is_err());
+        assert!(require_install_target(&policy, &signatures, "0.3.0", "signed-package").is_err());
+        assert!(require_install_target(&policy, &signatures, "0.1.5", "signed-package").is_err());
+        policy.tier = AppTier::Reinstall;
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "signed-package").is_err());
+        policy.tier = AppTier::UpToDate;
+        assert!(require_install_target(&policy, &signatures, "0.2.0", "signed-package").is_err());
+    }
+
 
     #[test]
     fn updater_config_requires_https_endpoint_and_pubkey() {

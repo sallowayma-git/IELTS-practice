@@ -94,6 +94,7 @@ pub fn run() {
         .manage(commands::backup::BackupImportGrants::default())
         .manage(commands::history::ClearHistoryTokens::default())
         .manage(commands::diagnostics::UpdaterRuntimeState::default())
+        .manage(commands::ota::OtaState::default())
         .manage(cognitive_runtime::RuntimeManager::default())
         .invoke_handler(tauri::generate_handler![
             commands::ai::ai_test_provider,
@@ -140,6 +141,9 @@ pub fn run() {
             commands::diagnostics::check_for_updates,
             commands::diagnostics::install_update,
             commands::diagnostics::restart_after_update,
+            commands::ota::ota_check,
+            commands::ota::ota_install_content,
+            commands::ota::ota_open_download_page,
             commands::diagnostics::get_startup_diagnostics,
             commands::diagnostics::get_performance_budgets,
             commands::diagnostics::get_query_plan_baselines,
@@ -327,29 +331,8 @@ pub fn run() {
             });
             let paths = app.state::<app::state::AppPaths>();
             let db = app.state::<app::state::AppDb>();
-            let writing_catalog = app
-                .path()
-                .resource_dir()?
-                .join("writing-topics")
-                .join("bc-task2-2024-12_2025-01.catalog.json");
-            let writing_seed = db
-                .with_conn(|conn| ielts_db::seed_builtin_writing_catalog(conn, &writing_catalog))?;
-            tracing::info!(
-                declared = writing_seed.declared,
-                created = writing_seed.created,
-                updated = writing_seed.updated,
-                unchanged = writing_seed.unchanged,
-                preserved = writing_seed.preserved,
-                "validated and indexed bundled writing catalog"
-            );
-            let reading_pack = app.path().resource_dir()?.join("reading");
-            let seed_report =
-                db.with_conn(|conn| ielts_db::seed_builtin_reading_pack(conn, &reading_pack))?;
-            tracing::info!(
-                pack_id = %seed_report.pack_id,
-                assets = seed_report.imported,
-                "validated and indexed bundled reading resources"
-            );
+            // Bundled packs, or a newer signed content pack installed by OTA.
+            commands::ota::seed_content_at_startup(app.handle(), &paths, &db)?;
             match db.with_conn(|conn| ielts_db::recover_interrupted_sessions(conn)) {
                 Ok(n) if n > 0 => {
                     tracing::warn!(count = n, "marked interrupted evaluation sessions")

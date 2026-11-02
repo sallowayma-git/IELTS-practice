@@ -1,0 +1,22 @@
+{
+  "canonical": "https://github.com/sallowayma-git/IELTS-practice/releases/download/ota-stable/{file}",
+  "manifestFile": "ota.json",
+  "updaterFile": "latest.json",
+  "sources": [
+    {
+      "id": "github",
+      "label": "GitHub",
+      "template": "https://github.com/sallowayma-git/IELTS-practice/releases/download/ota-stable/{file}"
+    },
+    {
+      "id": "ghfast",
+      "label": "GitHub 加速（ghfast）",
+      "template": "https://ghfast.top/{url}"
+    },
+    {
+      "id": "gh-proxy",
+      "label": "GitHub 加速（gh-proxy）",
+      "template": "https://gh-proxy.com/{url}"
+    }
+  ]
+}

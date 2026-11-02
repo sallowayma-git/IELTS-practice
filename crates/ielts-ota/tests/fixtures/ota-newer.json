@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "channel": "stable",
+  "publishedAt": "2026-11-01T00:00:00Z",
+  "app": {
+    "version": "0.3.0",
+    "minOtaVersion": "0.1.0",
+    "minSupportedVersion": "0.0.9",
+    "notes": "fixture",
+    "downloadPages": [{"label": "GitHub", "url": "https://github.com/sallowayma-git/IELTS-practice/releases/latest"}]
+  },
+  "content": []
+}

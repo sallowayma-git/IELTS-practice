@@ -33,6 +33,7 @@ def install_tauri_mock(page):
           if (command === 'get_app_info') return { name: 'ielts-practice', version: '0.1.0', tauriVersion: '2', productName: 'IELTS Practice', host: 'tauri' };
           if (command === 'get_app_data_paths') return { appData: 'C:/atlas/data', logs: 'C:/atlas/logs', backups: 'C:/atlas/backups', imports: 'C:/atlas/imports', exports: 'C:/atlas/exports', diagnostics: 'C:/atlas/diagnostics', dbDir: 'C:/atlas/data/db' };
           if (command === 'list_backups') return { ok: true, data: [] };
+          if (command === 'ota_check') return { configured: false, currentVersion: '0.1.0', app: null, notes: null, downloadPages: [], content: [], source: null, message: '此构建未配置签名更新通道。' };
           if (command === 'check_for_updates') return { configured: false, updateAvailable: false, installed: false, requiresRestart: false, currentVersion: '0.1.0', latestVersion: null, body: null, stage: 'unconfigured', message: '此构建未配置签名更新通道。' };
           return { ok: true, data: null };
         }

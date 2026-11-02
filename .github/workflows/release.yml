@@ -219,6 +219,15 @@ jobs:
           name: release-sidecar-${{ matrix.target }}
           path: target/agent-runtime-sidecar/smoke-report.json
           if-no-files-found: error
+      - name: Stamp bundled content packs with the release commit time
+        shell: bash
+        env:
+          TZ: UTC
+        run: python developer/tests/ci/ota_channel.py stamp-bundled --version "$(git log -1 --format=%cd --date=format-local:%Y%m%d%H%M)"
+      - name: Bake the mainland mirror into the OTA source list
+        if: vars.OTA_MIRROR_TEMPLATE != ''
+        shell: bash
+        run: python developer/tests/ci/ota_channel.py add-mirror --template "${{ vars.OTA_MIRROR_TEMPLATE }}"
       - name: Generate fail-closed release config
         run: python developer/tests/ci/prepare_tauri_release.py --require-signing-key --platform ${{ matrix.platformKey }} --tag "${{ github.ref_name }}" --output developer/tests/e2e/reports/tauri.release.generated.json
         env:
@@ -277,6 +286,10 @@ jobs:
   publish-release:
     needs: tauri-release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # Shares the lock with ota-content.yml: both read-merge-write ota.json.
+    concurrency:
+      group: ota-channel
+      cancel-in-progress: false
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -292,3 +305,56 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "${{ github.ref_name }}" --draft=false
+      # OTA channel: the signed ota.json (app tier + reinstall policy) and a
+      # copy of latest.json, on GitHub and on the optional mainland mirror.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install pinned Tauri CLI (signer)
+        run: npm install --global @tauri-apps/cli@${{ env.TAURI_CLI_VERSION }} --no-fund --no-audit
+      - name: Compose OTA channel manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ./developer/tests/ci/ota_channel_release.sh ensure
+          mkdir -p dist/ota
+          python developer/tests/ci/ota_channel.py fetch-previous --out dist/ota/previous/ota.json
+          gh release view "${{ github.ref_name }}" --json body --jq .body > dist/ota/notes.md
+          python developer/tests/ci/ota_channel.py manifest --previous dist/ota/previous/ota.json \
+            --app-version "${{ github.ref_name }}" --updater-manifest developer/tests/e2e/reports/latest.json \
+            --notes-file dist/ota/notes.md --out dist/ota/ota.json
+          cp developer/tests/e2e/reports/latest.json dist/ota/latest.json
+          cat dist/ota/ota.json
+      - name: Sign OTA channel manifest
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: tauri signer sign dist/ota/ota.json
+      - name: Mirror release installers
+        if: vars.OTA_MIRROR_BUCKET != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OTA_MIRROR_BUCKET: ${{ vars.OTA_MIRROR_BUCKET }}
+          OTA_MIRROR_PREFIX: ${{ vars.OTA_MIRROR_PREFIX }}
+          OTA_MIRROR_ENDPOINT: ${{ vars.OTA_MIRROR_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OTA_MIRROR_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OTA_MIRROR_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.OTA_MIRROR_REGION || 'auto' }}
+        run: |
+          set -euo pipefail
+          gh release download "${{ github.ref_name }}" --dir dist/release
+          ./developer/tests/ci/ota_channel_release.sh mirror dist/release/*
+      - name: Publish OTA channel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OTA_MIRROR_BUCKET: ${{ vars.OTA_MIRROR_BUCKET }}
+          OTA_MIRROR_PREFIX: ${{ vars.OTA_MIRROR_PREFIX }}
+          OTA_MIRROR_ENDPOINT: ${{ vars.OTA_MIRROR_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OTA_MIRROR_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OTA_MIRROR_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.OTA_MIRROR_REGION || 'auto' }}
+        run: ./developer/tests/ci/ota_channel_release.sh publish dist/ota/latest.json

@@ -1,0 +1,108 @@
+# Publish question-bank updates to the OTA channel without an app release.
+# Clients pick them up from "检查更新" and apply them live (no restart).
+
+name: OTA content
+
+on:
+  workflow_dispatch:
+    inputs:
+      packs:
+        description: 'Content slots to publish (comma separated: reading, writing-topics)'
+        required: true
+        default: 'reading'
+      min_app_version:
+        description: 'Lowest app version that can load these packs (optional)'
+        required: false
+        default: ''
+      notes:
+        description: 'Short note shown in the update dialog (optional)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ota-channel
+  cancel-in-progress: false
+
+env:
+  TAURI_CLI_VERSION: 2.11.4
+  OTA_TAG: ota-stable
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install pinned Tauri CLI (signer)
+        run: npm install --global @tauri-apps/cli@${{ env.TAURI_CLI_VERSION }} --no-fund --no-audit
+      - name: OTA tooling contract
+        run: python developer/tests/ci/ota_channel_test.py
+      - name: Ensure the channel release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./developer/tests/ci/ota_channel_release.sh ensure
+      - name: Build content packs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKS: ${{ inputs.packs }}
+          MIN_APP_VERSION: ${{ inputs.min_app_version }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/ota
+          python developer/tests/ci/ota_channel.py fetch-previous --tag "$OTA_TAG" --out dist/ota/previous/ota.json
+          # Same clock as the bundled ota-pack.json markers (UTC YYYYMMDDHHMM).
+          version="$(date -u +%Y%m%d%H%M)"
+          args=()
+          IFS=',' read -ra slots <<< "$PACKS"
+          for raw in "${slots[@]}"; do
+            slot="$(echo "$raw" | xargs)"
+            case "$slot" in
+              reading) source=assets/resource-pack/reading ;;
+              writing-topics) source=assets/generated/writing-topics ;;
+              *) echo "unknown content slot: $slot" >&2; exit 1 ;;
+            esac
+            extra=()
+            [ -n "$MIN_APP_VERSION" ] && extra+=(--min-app-version "$MIN_APP_VERSION")
+            [ -n "$NOTES" ] && extra+=(--notes "$NOTES")
+            # Clients compare a new pack with what they have installed: the
+            # last published pack, or (none published yet) the bundled one.
+            baseline="$source"
+            previous_file="$(python developer/tests/ci/ota_channel.py previous-file \
+              --manifest dist/ota/previous/ota.json --id "$slot")"
+            if [ -n "$previous_file" ]; then
+              gh release download "$OTA_TAG" --pattern "$previous_file" --dir dist/ota/previous
+              baseline="dist/ota/baseline-$slot"
+              mkdir -p "$baseline"
+              tar -xzf "dist/ota/previous/$previous_file" -C "$baseline"
+            fi
+            python developer/tests/ci/ota_channel.py pack --id "$slot" --source "$source" \
+              --version "$version" --baseline "$baseline" --out dist/ota "${extra[@]}"
+            args+=(--pack "dist/ota/content-$slot-$version.json")
+          done
+          python developer/tests/ci/ota_channel.py manifest \
+            --previous dist/ota/previous/ota.json "${args[@]}" --out dist/ota/ota.json
+          cat dist/ota/ota.json
+      - name: Sign the channel manifest
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: tauri signer sign dist/ota/ota.json
+      - name: Publish to GitHub and mirror
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OTA_MIRROR_BUCKET: ${{ vars.OTA_MIRROR_BUCKET }}
+          OTA_MIRROR_PREFIX: ${{ vars.OTA_MIRROR_PREFIX }}
+          OTA_MIRROR_ENDPOINT: ${{ vars.OTA_MIRROR_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.OTA_MIRROR_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OTA_MIRROR_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.OTA_MIRROR_REGION || 'auto' }}
+        run: ./developer/tests/ci/ota_channel_release.sh publish dist/ota/content-*.tar.gz
