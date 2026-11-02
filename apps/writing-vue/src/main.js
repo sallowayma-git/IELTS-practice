@@ -64,12 +64,10 @@ const router = createRouter({
             props: true
         },
         {
-            // Isolated unified reading page: mirrors the opensource
-            // reading-practice-unified.html visual, reusing the same data layer.
+            // Former isolated preview of the unified page; the exam route now
+            // renders the same skin, so old links land on it.
             path: '/reading-unified/:assetId',
-            name: 'ReadingUnified',
-            component: () => import('./views/ReadingUnifiedPage.vue'),
-            props: true
+            redirect: (to) => ({ name: 'PracticeReading', params: { assetId: to.params.assetId } })
         },
         {
             path: '/reading-suite/:sessionId',

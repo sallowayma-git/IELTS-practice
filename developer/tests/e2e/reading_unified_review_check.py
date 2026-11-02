@@ -46,7 +46,9 @@ MOCK = r"""
           correctAnswer: payload.answerKey[questionId], isCorrect: false, weight: 1, matchMode: 'single'}))};
       const drafts = read('drafts', {}); delete drafts[cmd.assetId]; write('drafts', drafts);
     }
-    if (command === 'annotation_list') data = read('annotations', []).filter(item =>
+    // The exam page revalidates passage annotations against the rendered text;
+    // an unchanged passage returns the stored rows as-is.
+    if (command === 'annotation_list' || command === 'annotation_revalidate') data = read('annotations', []).filter(item =>
       item.assetId === args.assetId && item.attemptId === args.attemptId);
     if (command === 'annotation_upsert') {
       data = {...cmd, id: cmd.id || `note-${Date.now()}`};
@@ -238,7 +240,11 @@ def run(browser, base):
         page.reload()
         page.locator('#notes-drawer-btn').click()
         expect(page.locator('.reading-note-row')).to_have_count(1)
-        assert all(call['attemptId'] == 'note-draft' for call in calls(page, 'annotation_list'))
+        # Passage highlights stay on the draft attempt; the free-text note pad is
+        # asset-level by design (attemptId null).
+        reads = calls(page, 'annotation_list') + calls(page, 'annotation_revalidate')
+        assert all(call['attemptId'] in ('note-draft', None) for call in reads)
+        assert any(call['attemptId'] == 'note-draft' for call in reads)
         page.evaluate("location.hash = '#/reading-unified/p1-low-11'")
         expect(page.locator('#subfam-B')).to_be_visible()
         expect(page.locator('.reading-note-row')).to_have_count(0)

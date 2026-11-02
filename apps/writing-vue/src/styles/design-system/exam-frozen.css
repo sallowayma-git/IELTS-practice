@@ -13,7 +13,7 @@
  *
  * Do not edit to restyle the app. Edit only to fix an exam bug, and verify with
  *   python developer/tests/e2e/exam_freeze_visual_check.py
- * The exam's own visual language lives in exam-theme.css.
+ * The reading exam routes themselves run under .atlas-unified (unified.css).
  */
 
 .atlas-exam {
@@ -615,15 +615,9 @@
   color: var(--anth-ink-faint);
 }
 
-/* Reading page / suite */
-.atlas-exam .reading-page,
+/* Reading suite hub */
 .atlas-exam .reading-suite-page {
   color: var(--anth-ink);
-}
-
-.atlas-exam :is(.reading-header, .reading-floating-panel) {
-  background: var(--anth-surface);
-  border: 1px solid var(--anth-border);
 }
 
 .atlas-exam :is(.practice-left, .compose-editor) {

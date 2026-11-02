@@ -199,8 +199,8 @@
 .runified #float-next-btn:not(:disabled) { background: #000; }
 .runified .float-nav-btn:disabled { background: #ddd; color: #fff; cursor: not-allowed; }
 .runified #floating-passage-nav { display: none !important; }
-.runified body[data-suite-mode="true"] #floating-passage-nav { display: flex !important; }
-.runified body[data-suite-mode="true"] #right { padding-bottom: 220px; }
+.runified[data-suite-mode="true"] #floating-passage-nav { display: flex !important; }
+.runified[data-suite-mode="true"] #right { padding-bottom: 220px; }
 .runified #selbar { position: fixed; z-index: 3600; max-width: calc(100vw - 16px); display: none; gap: 0; overflow: visible; padding: 0; border: 1px solid #737373; border-radius: 4px; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
 .runified #selbar::before { position: absolute; top: -5px; right: 0; left: 0; width: 7px; height: 7px; margin: 0 auto; border-right: 1px solid #737373; border-bottom: 1px solid #737373; background: #fff; content: ""; transform: rotate(-135deg); transform-origin: 4px 4px; pointer-events: none; }
 .runified #selbar.is-above::before { top: auto; bottom: -5px; transform: rotate(45deg); transform-origin: 4px 4px; }

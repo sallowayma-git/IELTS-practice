@@ -73,7 +73,7 @@ function prefixSelector(raw) {
   if (sel === ':root' || sel === 'html') return '.runified'
   if (sel === 'body') return '.runified'
   if (/^html[.\s>+~]/.test(sel)) return sel.replace(/^html/, '.runified')
-  if (/^body[.\s>+~]/.test(sel)) return sel.replace(/^body/, '.runified')
+  if (/^body[.\s>+~[]/.test(sel)) return sel.replace(/^body/, '.runified')
   if (sel === '*') return ['RUNIFIED_SELF', '.runified *']
   return '.runified ' + sel
 }

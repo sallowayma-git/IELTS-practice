@@ -45,7 +45,6 @@ export interface ReadingModeFlowOptions {
   reviewMode: MaybeRefOrGetter<boolean>
   canSubmit: MaybeRefOrGetter<boolean>
   canRecycleSubmittedAttempt: MaybeRefOrGetter<boolean>
-  readingCoachEnabled: MaybeRefOrGetter<boolean>
   suiteAutoAdvance: MaybeRefOrGetter<boolean>
   suiteSequence: MaybeRefOrGetter<any[]>
   currentSuitePassageIndex: MaybeRefOrGetter<number>
@@ -394,7 +393,8 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
         throw new Error('reading submission requires the Tauri runtime')
       }
       options.submission.value = result?.submission || null
-      options.setReadingCoachOpen(Boolean(options.submission.value && resolveSource(options.readingCoachEnabled)))
+      // The coach stays a button after submit so the results table is not covered.
+      options.setReadingCoachOpen(false)
       options.suiteSession.value = result?.suiteSession || options.suiteSession.value
       if (options.submission.value?.answers) {
         Object.entries(options.submission.value.answers).forEach(([questionId, value]) => {

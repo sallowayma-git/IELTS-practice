@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const appRequire = createRequire(new URL('../../../apps/writing-vue/package.json', import.meta.url))
@@ -20,35 +20,21 @@ const idsCompiled = ts.transpileModule(idsSource, { compilerOptions: { module: t
 new Function('exports', idsCompiled)(idsModule.exports)
 const { expandQuestionSequence, resolveAnswerAliases } = idsModule.exports
 
-// The pure checkbox core lives inside ReadingUnifiedPage.vue between slice
-// markers and is evaluated here directly (the page script is plain JS).
-const pagePath = path.join(root, 'apps/writing-vue/src/views/ReadingUnifiedPage.vue')
-const page = fs.readFileSync(pagePath, 'utf8')
-const coreStart = page.indexOf('// --- unified checkbox core')
-const coreEnd = page.indexOf('// --- end unified checkbox core')
-assert.ok(coreStart >= 0 && coreEnd > coreStart, 'unified checkbox core must stay extractable from ReadingUnifiedPage.vue')
-const { planCheckboxAnswerWrites, collectCheckboxGroupTicks } = new Function(`
-${page.slice(coreStart, coreEnd)}
-return { planCheckboxAnswerWrites, collectCheckboxGroupTicks }
-`)()
+// The pure checkbox core is a dependency-free module; import it as shipped.
+const core = await import(pathToFileURL(
+  path.join(root, 'apps/writing-vue/src/modules/reading-unified/checkboxCore.js')
+).href)
+const { planCheckboxAnswerWrites, collectCheckboxGroupTicks } = core
 
 // Exercise the page's actual ownership resolver too; expanding names alone
 // misses mixed logical/display numbering in shipping payloads.
-const resolverSource = page.slice(
-  page.indexOf('function resolveNativeQuestionIds('),
-  page.indexOf('function applyResultsToQuestionArea(')
-)
 function createNativeResolver(source) {
-  return new Function('payload', 'questionGroups', 'expandQuestionSequence', 'getInteraction', 'resolveAnswerAliasesFromIds', `
-${resolverSource}
-return resolveNativeQuestionIds
-`)(
-    { value: source },
-    { value: source.questionGroups || [] },
+  return (input) => core.resolveNativeQuestionIds(input, {
+    payload: source,
     expandQuestionSequence,
-    (id) => source.interactionModel?.[id],
-    resolveAnswerAliases
-  )
+    resolveAnswerAliases,
+    getInteraction: (id) => source.interactionModel?.[id]
+  })
 }
 
 function checkboxBox(name, value, groupId) {
@@ -276,32 +262,22 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
   assert.deepEqual(harness.checkedValues('q9_10'), ['A'])
 }
 
-// Page wiring guards: the extracted core must actually be what the page uses,
-// and the sibling review fixes (R5/R7/R8) must stay in place.
+// Wiring guards: the controls composable must route through the core, and
+// the exam page must use that composable rather than its own copies.
 {
-  const syncBody = page.slice(page.indexOf('function syncNativeControl'), page.indexOf('function scheduleDraftAutosave'))
+  const controls = fs.readFileSync(path.join(root,
+    'apps/writing-vue/src/modules/reading-unified/composables/useNativeAnswerControls.js'), 'utf8')
+  const page = fs.readFileSync(path.join(root, 'apps/writing-vue/src/views/PracticeReadingPage.vue'), 'utf8')
+  const syncBody = controls.slice(controls.indexOf('function syncNativeControl'), controls.indexOf('function syncDomAnswers'))
   assert.ok(!syncBody.includes('checkbox"][name='),
     'syncNativeControl must not query checkboxes through per-alias names')
-  const collectBody = page.slice(page.indexOf('function collectCheckboxGroup(input)'), page.indexOf('function syncNativeControl'))
-  assert.ok(collectBody.includes('planCheckboxAnswerWrites(questionIds, checkedValues)'),
-    'collectCheckboxGroup must write answers through planCheckboxAnswerWrites')
-  assert.ok(collectBody.includes('collectCheckboxGroupTicks(resolveNativeQuestionIds(input), getRawAnswer)'),
+  assert.ok(controls.includes('planCheckboxAnswerWrites(questionIds, checkedValues)'),
+    'checkbox input must write answers through planCheckboxAnswerWrites')
+  assert.ok(controls.includes('collectCheckboxGroupTicks(resolveNativeQuestionIds(input), getRawAnswer)'),
     'DOM synchronization must collect the union of each native checkbox group')
-
-  // R5: drag mutations autosave via onMutate, hydration excluded.
-  assert.ok(page.includes('metadata.changed && metadata.options.track'),
-    'onMutate must autosave user mutations')
-  assert.ok(page.includes('hydratingAsset = true'),
-    'loadAsset must mark the hydration window')
-
-  // R7: every passage note is rendered, not just passageNotes[blockIndex].
-  assert.ok(page.includes('v-for="(note, noteIndex) in passageNotes"'),
-    'passage notes must render as their own list')
-  assert.ok(!page.includes('passageNotes[index]'),
-    'passage notes must not be indexed by passage block')
-
-  // R8: the timer click binding resolves.
-  assert.ok(page.includes('@click="toggleTimer"'))
+  assert.ok(page.includes('useNativeAnswerControls({'), 'exam page binds native controls through the composable')
+  assert.ok(!page.includes('function collectCheckboxGroup('), 'exam page keeps no private checkbox copy')
+  assert.ok(page.includes('@toggle-timer="toggleTimer"'))
   assert.ok(page.includes('function toggleTimer()'),
     'toggleTimer must resolve to a wrapper that persists the timer state')
 }
