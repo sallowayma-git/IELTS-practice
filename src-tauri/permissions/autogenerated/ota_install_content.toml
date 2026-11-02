@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ota-install-content"
+description = "Enables the ota_install_content command without any pre-configured scope."
+commands.allow = ["ota_install_content"]
+
+[[permission]]
+identifier = "deny-ota-install-content"
+description = "Denies the ota_install_content command without any pre-configured scope."
+commands.deny = ["ota_install_content"]

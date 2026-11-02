@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ota-open-download-page"
+description = "Enables the ota_open_download_page command without any pre-configured scope."
+commands.allow = ["ota_open_download_page"]
+
+[[permission]]
+identifier = "deny-ota-open-download-page"
+description = "Denies the ota_open_download_page command without any pre-configured scope."
+commands.deny = ["ota_open_download_page"]

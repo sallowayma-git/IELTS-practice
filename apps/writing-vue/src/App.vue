@@ -17,6 +17,7 @@
         <component v-else :is="Component" :key="routeViewKey" />
       </router-view>
     </main>
+    <UpdatePrompt v-if="showShellNav" />
   </div>
 </template>
 
@@ -25,6 +26,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import NavBar from './components/NavBar.vue'
 import ShuiBackground from './components/ShuiBackground.vue'
+import UpdatePrompt from './components/UpdatePrompt.vue'
 import CrayonDefs from './modules/notebook/components/CrayonDefs.vue'
 
 const route = useRoute()

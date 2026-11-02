@@ -139,7 +139,7 @@
           <div class="setting-row">
             <div class="setting-row__copy">
               <strong>应用更新</strong>
-              <span>检查原生更新通道</span>
+              <span>题库热更新、应用 OTA 与重新安装提示</span>
             </div>
             <div class="setting-row__control">
               <button class="btn btn-secondary" id="check-updates-btn" type="button" data-update-action="open-modal" @click="openUpdateManager">检查更新</button>
@@ -773,43 +773,95 @@
       </div>
     </div>
 
-    <div v-if="updateDialogOpen" class="dialog-overlay" role="dialog" aria-modal="true" @click.self="closeUpdateDialog">
-      <div class="dialog dialog-sm">
-        <h3>应用更新</h3>
-        <p aria-live="polite">{{ updateStatus.message }}</p>
-        <p>当前版本：{{ updateStatus.currentVersion || appVersion }}</p>
-        <p v-if="updateStatus.latestVersion">最新版本：{{ updateStatus.latestVersion }}</p>
-        <p v-if="updateStatus.body">{{ updateStatus.body }}</p>
-        <progress
-          v-if="updateInstalling"
-          class="update-progress"
-          :value="updateProgressPercent ?? undefined"
-          :max="updateProgressPercent == null ? undefined : 100"
-          aria-label="更新下载进度"
-        />
-        <p v-if="updateInstalling && updateProgressPercent != null">{{ updateProgressPercent }}%</p>
+    <div v-if="updateDialogOpen" class="dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="update-dialog-title" @click.self="closeUpdateDialog">
+      <div class="dialog dialog-sm update-dialog">
+        <h3 id="update-dialog-title">应用更新</h3>
+        <p aria-live="polite">{{ updates.state.message }}</p>
+        <p class="update-meta">
+          当前版本 {{ updates.state.status?.currentVersion || appVersion }}
+          <template v-if="updates.state.status?.source"> · 线路：{{ updates.state.status.source }}</template>
+        </p>
+
+        <section v-if="updates.availableContent.value.length" class="update-tier" data-update-tier="content">
+          <h4>题库更新 <span class="tag tag-neutral">无需重启</span></h4>
+          <ul class="update-list">
+            <li v-for="item in updates.availableContent.value" :key="item.id">
+              {{ item.title || contentLabel(item.id) }} · {{ formatBytes(item.size) }}
+              <span v-if="item.notes" class="update-notes">{{ item.notes }}</span>
+            </li>
+          </ul>
+          <progress
+            v-if="updates.state.content.installing"
+            class="update-progress"
+            :value="updates.contentProgressPercent.value ?? undefined"
+            :max="updates.contentProgressPercent.value == null ? undefined : 100"
+            aria-label="题库下载进度"
+          />
+          <button class="btn btn-primary" type="button" :disabled="updateBusy" @click="updates.installContent()">
+            {{ updates.state.content.installing ? '更新中...' : '立即更新题库' }}
+          </button>
+        </section>
+
+        <section v-if="updates.appTier.value === 'ota'" class="update-tier" data-update-tier="app">
+          <h4>
+            新版本 {{ updates.state.status?.app?.latestVersion }}
+            <span class="tag tag-neutral">下载后重启生效</span>
+            <span v-if="updates.state.status?.app?.forced" class="tag tag-warning">必须更新</span>
+          </h4>
+          <p v-if="updates.state.status?.notes" class="update-notes">{{ updates.state.status.notes }}</p>
+          <progress
+            v-if="updates.state.app.installing"
+            class="update-progress"
+            :value="updates.appProgressPercent.value ?? undefined"
+            :max="updates.appProgressPercent.value == null ? undefined : 100"
+            aria-label="更新下载进度"
+          />
+          <p v-if="updates.state.app.installing && updates.appProgressPercent.value != null">{{ updates.appProgressPercent.value }}%</p>
+          <button
+            v-if="!updates.state.app.restartReady"
+            class="btn btn-primary"
+            type="button"
+            :disabled="updateBusy"
+            @click="updates.installApp()"
+          >
+            {{ updates.state.app.installing ? '下载中...' : '下载并安装' }}
+          </button>
+          <button
+            v-else
+            class="btn btn-primary"
+            type="button"
+            :disabled="updates.state.app.restarting"
+            @click="updates.restart()"
+          >
+            {{ updates.state.app.restarting ? '正在重启...' : '重启完成更新' }}
+          </button>
+        </section>
+
+        <section v-if="updates.appTier.value === 'reinstall'" class="update-tier" data-update-tier="reinstall">
+          <h4>
+            新版本 {{ updates.state.status?.app?.latestVersion }}
+            <span class="tag tag-neutral">需要重新安装</span>
+            <span v-if="updates.state.status?.app?.forced" class="tag tag-warning">必须更新</span>
+          </h4>
+          <p class="update-notes">这次更新改动了应用结构，不能在当前版本上直接升级。请下载新安装包覆盖安装，练习记录和设置会保留。</p>
+          <p v-if="updates.state.status?.notes" class="update-notes">{{ updates.state.status.notes }}</p>
+          <div class="update-links">
+            <button
+              v-for="page in updates.state.status?.downloadPages || []"
+              :key="page.index"
+              class="btn btn-primary"
+              type="button"
+              @click="updates.openDownloadPage(page.index)"
+            >
+              从 {{ page.label }} 下载
+            </button>
+          </div>
+        </section>
+
         <div class="dialog-actions">
-          <button class="btn btn-secondary btn-warm-sand" type="button" :disabled="updateInstalling || updateRestarting" @click="closeUpdateDialog">关闭</button>
-          <button class="btn btn-primary" type="button" :disabled="updateChecking || updateInstalling || updateRestarting" @click="checkUpdates">
-            {{ updateChecking ? '检查中...' : '重新检查' }}
-          </button>
-          <button
-            v-if="updateStatus.updateAvailable && !updateStatus.requiresRestart"
-            class="btn btn-primary"
-            type="button"
-            :disabled="updateChecking || updateInstalling"
-            @click="installAvailableUpdate"
-          >
-            {{ updateInstalling ? '安装中...' : '下载并安装' }}
-          </button>
-          <button
-            v-if="updateStatus.requiresRestart"
-            class="btn btn-primary"
-            type="button"
-            :disabled="updateRestarting"
-            @click="restartAfterUpdate"
-          >
-            {{ updateRestarting ? '正在重启...' : '重启完成更新' }}
+          <button class="btn btn-secondary btn-warm-sand" type="button" :disabled="updateBusy" @click="closeUpdateDialog">关闭</button>
+          <button class="btn btn-secondary" type="button" :disabled="updateBusy" @click="updates.check()">
+            {{ updates.state.checking ? '检查中...' : '重新检查' }}
           </button>
         </div>
       </div>
@@ -852,7 +904,7 @@
 import SoulSettings from '@/modules/notebook/components/SoulSettings.vue'
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Channel } from '@tauri-apps/api/core'
+import { useAppUpdates } from '@/composables/useAppUpdates.js'
 import { settings, essays, configs, prompts, topics } from '@/api/client.js'
 import {
   getHistoryRetentionPolicy,
@@ -942,25 +994,10 @@ const promptLoading = ref(false)
 const onboardingOpen = ref(false)
 const onboardingStep = ref(0)
 const updateDialogOpen = ref(false)
-const updateChecking = ref(false)
-const updateInstalling = ref(false)
-const updateRestarting = ref(false)
-const updateProgress = reactive({ downloadedBytes: 0, contentLength: null, stage: 'idle' })
-const updateProgressPercent = computed(() => {
-  if (!updateProgress.contentLength) return null
-  return Math.min(100, Math.round((updateProgress.downloadedBytes / updateProgress.contentLength) * 100))
-})
-const updateStatus = reactive({
-  configured: false,
-  updateAvailable: false,
-  installed: false,
-  requiresRestart: false,
-  currentVersion: '',
-  latestVersion: null,
-  body: null,
-  stage: 'idle',
-  message: '尚未检查更新。'
-})
+const updates = useAppUpdates()
+const updateBusy = computed(() =>
+  updates.state.checking || updates.state.content.installing || updates.state.app.installing || updates.state.app.restarting
+)
 const onboardingSteps = [
   { title: '选择练习', body: '从阅读或写作题库开始练习，进度统一保存在本机 SQLite。' },
   { title: '配置 AI', body: '在 API 配置中添加供应商密钥；密钥由系统安全存储保管。' },
@@ -1751,55 +1788,18 @@ async function openUpdateManager(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   updateDialogOpen.value = true
-  await checkUpdates()
-}
-
-async function checkUpdates() {
-  updateChecking.value = true
-  try {
-    Object.assign(updateStatus, await invokeCommand('check_for_updates'))
-  } catch (error) {
-    updateStatus.message = `更新检查失败：${error?.message || error}`
-  } finally {
-    updateChecking.value = false
-  }
+  updates.dismissPrompt()
+  await updates.check()
 }
 
 function closeUpdateDialog() {
-  if (updateInstalling.value || updateRestarting.value) return
+  if (updateBusy.value) return
   updateDialogOpen.value = false
 }
 
-async function installAvailableUpdate() {
-  updateInstalling.value = true
-  updateProgress.downloadedBytes = 0
-  updateProgress.contentLength = null
-  updateProgress.stage = 'checking'
-  const onEvent = new Channel()
-  onEvent.onmessage = (event) => {
-    updateProgress.downloadedBytes = Number(event?.downloadedBytes || 0)
-    updateProgress.contentLength = event?.contentLength == null ? null : Number(event.contentLength)
-    updateProgress.stage = String(event?.stage || 'downloading')
-    if (event?.message) updateStatus.message = event.message
-  }
-  try {
-    Object.assign(updateStatus, await invokeCommand('install_update', { onEvent }))
-  } catch (error) {
-    updateStatus.stage = 'failed'
-    updateStatus.message = `更新安装失败，当前版本保持不变：${error?.message || error}`
-  } finally {
-    updateInstalling.value = false
-  }
-}
-
-async function restartAfterUpdate() {
-  updateRestarting.value = true
-  try {
-    await invokeCommand('restart_after_update')
-  } catch (error) {
-    updateStatus.message = `重启失败：${error?.message || error}`
-    updateRestarting.value = false
-  }
+const CONTENT_LABELS = { reading: '阅读题库', 'writing-topics': '写作题库' }
+function contentLabel(id) {
+  return CONTENT_LABELS[id] || id
 }
 
 function openWritingTopicLibrary() {
@@ -1997,6 +1997,12 @@ onMounted(async () => {
   document.addEventListener('keydown', handleSettingsKeydown)
   // Deep links such as the library's 管理 button land on their section.
   if (route.hash) jumpToSection(route.hash.slice(1))
+  // The startup update prompt links here with ?updates=1.
+  if (route.query.updates) openUpdateManager()
+})
+
+watch(() => route.query.updates, (value) => {
+  if (value && !updateDialogOpen.value) openUpdateManager()
 })
 
 onBeforeUnmount(() => {
@@ -2278,6 +2284,48 @@ function jumpToSection(id) {
   height: 4px;
   margin: var(--anth-space-2) 0;
   accent-color: var(--anth-accent);
+}
+
+.settings-page .update-meta,
+.settings-page .update-notes {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.settings-page .update-tier {
+  display: grid;
+  gap: var(--anth-space-2);
+  margin-top: var(--anth-space-3);
+  padding-top: var(--anth-space-3);
+  border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.settings-page .update-tier h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--anth-space-2);
+  margin: 0;
+}
+
+.settings-page .update-tier > .btn {
+  justify-self: start;
+}
+
+.settings-page .update-list {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.settings-page .update-notes {
+  display: block;
+  white-space: pre-line;
+}
+
+.settings-page .update-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--anth-space-2);
 }
 
 @media (max-width: 900px) {

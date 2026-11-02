@@ -1896,6 +1896,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ielts-ota"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "flate2",
+ "hex",
+ "minisign-verify",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "ielts-practice-tauri"
 version = "0.1.0"
 dependencies = [
@@ -1905,8 +1924,10 @@ dependencies = [
  "ielts-application",
  "ielts-db",
  "ielts-domain",
+ "ielts-ota",
  "reqwest",
  "rusqlite",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

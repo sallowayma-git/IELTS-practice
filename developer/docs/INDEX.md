@@ -34,6 +34,7 @@
 | M10 Teaching Strategy | [ADR-M10](ADR-M10-Teaching-Strategy-Evolution.md) | [M10 gate](M10_STAGE_GATE_REPORT.md) | `0020_teaching_strategy_evolution.sql` | Rust 实现已删除（无产品调用方）；迁移文件保留 |
 | M11 Prompt + Skill Eval | [ADR-M11](ADR-M11-Prompt-Skill-Eval-Evolution.md) | [M11 gate](M11_STAGE_GATE_REPORT.md) | `0021_prompt_skill_evolution.sql` | Rust 实现已删除（无产品调用方）；迁移文件保留 |
 | M12 Threads + Planner | [ADR-M12](ADR-M12-Agent-Threads-Planner-Controlled-Actions.md) | [M12 gate](M12_STAGE_GATE_REPORT.md) | `0022_agent_threads_planner.sql` | `crates/ielts-db/src/agent_threads.rs`, `src-tauri/src/commands/agent_thread.rs` |
+| OTA 分级更新 | [ADR-OTA](ADR-OTA-Tiered-Updates.md) | `ielts-ota` 单测 + `ota_channel_test.py` | — | `crates/ielts-ota/`, `src-tauri/src/commands/ota.rs`, `developer/tests/ci/ota_channel.py` |
 
 ## Gate and audit evidence
 

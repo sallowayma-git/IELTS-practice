@@ -4,5 +4,6 @@ members = [
   "crates/ielts-domain",
   "crates/ielts-db",
   "crates/ielts-application",
+  "crates/ielts-ota",
   "src-tauri",
 ]

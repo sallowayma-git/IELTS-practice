@@ -1819,6 +1819,9 @@ def main() -> int:
         """)
         if not isinstance(restart_without_install, dict) or restart_without_install.get("resolved"):
             raise RuntimeError(f"restart_after_update bypassed install state: {restart_without_install}")
+        ota_status = driver.script("return window.__TAURI_INTERNALS__.invoke('ota_check')")
+        if not isinstance(ota_status, dict) or ota_status.get("configured") is not False:
+            raise RuntimeError(f"development OTA channel did not fail closed: {ota_status}")
         checks["updaterBoundary"] = "passed"
         marker = f"e2e-{int(time.time())}"
         saved = driver.script("return window.__TAURI_INTERNALS__.invoke('upsert_setting', {cmd:{namespace:'frontend-preferences', key:'restartMarker', value:arguments[0]}})", [marker])

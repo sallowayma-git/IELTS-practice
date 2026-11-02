@@ -1,0 +1,25 @@
+[package]
+name = "ielts-ota"
+version = "0.1.0"
+edition = "2021"
+description = "Tiered OTA updates: signed channel manifest, multi-source download fallback, content packs"
+license = "UNLICENSED"
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+base64 = "0.22"
+flate2 = "1"
+hex = "0.4"
+minisign-verify = "0.2"
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tar = "0.4"
+thiserror = "2"
+tokio = { version = "1", features = ["rt", "time", "sync", "macros"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["rt", "time", "sync", "macros", "test-util"] }

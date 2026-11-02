@@ -987,6 +987,24 @@
           "markdownDescription": "Enables the memory_record_feedback command without any pre-configured scope."
         },
         {
+          "description": "Enables the ota_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ota-check",
+          "markdownDescription": "Enables the ota_check command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ota_install_content command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ota-install-content",
+          "markdownDescription": "Enables the ota_install_content command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ota_open_download_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ota-open-download-page",
+          "markdownDescription": "Enables the ota_open_download_page command without any pre-configured scope."
+        },
+        {
           "description": "Enables the pick_backup_import_path command without any pre-configured scope.",
           "type": "string",
           "const": "allow-pick-backup-import-path",
@@ -1063,6 +1081,24 @@
           "type": "string",
           "const": "allow-set-secret",
           "markdownDescription": "Enables the set_secret command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the soul_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-soul-get",
+          "markdownDescription": "Enables the soul_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the soul_undo command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-soul-undo",
+          "markdownDescription": "Enables the soul_undo command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the soul_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-soul-update",
+          "markdownDescription": "Enables the soul_update command without any pre-configured scope."
         },
         {
           "description": "Enables the study_plan_create command without any pre-configured scope.",
@@ -1165,6 +1201,12 @@
           "type": "string",
           "const": "allow-vocab-upsert",
           "markdownDescription": "Enables the vocab_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the weekly_history_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-weekly-history-list",
+          "markdownDescription": "Enables the weekly_history_list command without any pre-configured scope."
         },
         {
           "description": "Enables the weekly_report_current command without any pre-configured scope.",
@@ -1899,6 +1941,24 @@
           "markdownDescription": "Denies the memory_record_feedback command without any pre-configured scope."
         },
         {
+          "description": "Denies the ota_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ota-check",
+          "markdownDescription": "Denies the ota_check command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ota_install_content command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ota-install-content",
+          "markdownDescription": "Denies the ota_install_content command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ota_open_download_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ota-open-download-page",
+          "markdownDescription": "Denies the ota_open_download_page command without any pre-configured scope."
+        },
+        {
           "description": "Denies the pick_backup_import_path command without any pre-configured scope.",
           "type": "string",
           "const": "deny-pick-backup-import-path",
@@ -1975,6 +2035,24 @@
           "type": "string",
           "const": "deny-set-secret",
           "markdownDescription": "Denies the set_secret command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the soul_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-soul-get",
+          "markdownDescription": "Denies the soul_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the soul_undo command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-soul-undo",
+          "markdownDescription": "Denies the soul_undo command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the soul_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-soul-update",
+          "markdownDescription": "Denies the soul_update command without any pre-configured scope."
         },
         {
           "description": "Denies the study_plan_create command without any pre-configured scope.",
@@ -2077,6 +2155,12 @@
           "type": "string",
           "const": "deny-vocab-upsert",
           "markdownDescription": "Denies the vocab_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the weekly_history_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-weekly-history-list",
+          "markdownDescription": "Denies the weekly_history_list command without any pre-configured scope."
         },
         {
           "description": "Denies the weekly_report_current command without any pre-configured scope.",

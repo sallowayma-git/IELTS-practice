@@ -987,6 +987,24 @@
           "markdownDescription": "Enables the memory_record_feedback command without any pre-configured scope."
         },
         {
+          "description": "Enables the ota_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ota-check",
+          "markdownDescription": "Enables the ota_check command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ota_install_content command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ota-install-content",
+          "markdownDescription": "Enables the ota_install_content command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ota_open_download_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ota-open-download-page",
+          "markdownDescription": "Enables the ota_open_download_page command without any pre-configured scope."
+        },
+        {
           "description": "Enables the pick_backup_import_path command without any pre-configured scope.",
           "type": "string",
           "const": "allow-pick-backup-import-path",
@@ -1921,6 +1939,24 @@
           "type": "string",
           "const": "deny-memory-record-feedback",
           "markdownDescription": "Denies the memory_record_feedback command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ota_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ota-check",
+          "markdownDescription": "Denies the ota_check command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ota_install_content command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ota-install-content",
+          "markdownDescription": "Denies the ota_install_content command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ota_open_download_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ota-open-download-page",
+          "markdownDescription": "Denies the ota_open_download_page command without any pre-configured scope."
         },
         {
           "description": "Denies the pick_backup_import_path command without any pre-configured scope.",
