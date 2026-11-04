@@ -104,21 +104,6 @@ jobs:
         run: python -m unittest discover -s developer/tests/e2e -p visual_test_support_test.py -v
       - name: Run visual regression matrix
         run: python developer/tests/e2e/run_visual_regressions.py
-      # TEMP (PR #264): the exam-freeze baseline must be captured on this runner
-      # (local renders differ, see #247). This PR intentionally changes the review
-      # exam surface (the closed coach panel's hidden notice nodes, restored question
-      # flags), so capture the new baseline here and commit it from the artifact.
-      # Remove both steps once the baseline has landed.
-      - name: TEMP capture exam-freeze baseline on this runner
-        if: always()
-        run: python developer/tests/e2e/exam_freeze_visual_check.py --update-baseline
-      - name: TEMP upload captured exam-freeze baseline
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: exam-freeze-baseline-capture
-          path: developer/tests/e2e/baselines/exam-freeze
-          if-no-files-found: error
       - name: Upload visual regression evidence
         if: always()
         uses: actions/upload-artifact@v4
