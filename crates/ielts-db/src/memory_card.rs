@@ -41,8 +41,8 @@ pub fn memory_card_key(message_id: &str, note_index: usize) -> String {
 }
 
 /// The card under note `note_index` of an assistant message; `None` when there is
-/// no such completed assistant message, it has no such note, or its `memoryCard`
-/// belongs to another note.
+/// no such completed assistant message, it has no such note, it has no `memoryCard`,
+/// or its `memoryCard` belongs to another note.
 pub fn load_memory_card(conn: &Connection, user_id: &str, message_id: &str, note_index: usize) -> DbResult<Option<MemoryCardSource>> {
     let payload: Option<Option<String>> = conn
         .query_row(
@@ -53,8 +53,11 @@ pub fn load_memory_card(conn: &Connection, user_id: &str, message_id: &str, note
         .optional()?;
     let payload: Value = payload.flatten().and_then(|raw| serde_json::from_str(&raw).ok()).unwrap_or(Value::Null);
     let has_note = payload["teachingNotes"].as_array().is_some_and(|notes| note_index < notes.len());
+    // Only a card the host actually issued for this note can be confirmed: a message
+    // that merely carries a note, or a card for another note, is not a request the
+    // learner was ever shown.
     let card_note = payload["memoryCard"]["noteIndex"].as_u64();
-    if !has_note || card_note.is_some_and(|index| index != note_index as u64) {
+    if !has_note || card_note != Some(note_index as u64) {
         return Ok(None);
     }
     ensure_observations_fresh(conn)?;

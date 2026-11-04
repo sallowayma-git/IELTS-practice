@@ -326,6 +326,19 @@ fn a_card_that_does_not_exist_or_has_no_citable_question_is_refused() {
     assert_eq!(error_code(fx.cards().confirm("local", &fx.user_message, 0, "先给例子")), "memory_card.not_found");
     assert_eq!(error_code(fx.cards().dismiss("local", "no-such-message", 0)), "memory_card.not_found");
 
+    // A note the host never turned into a card cannot be confirmed (or dismissed) by hand-made IPC:
+    // the learner was never shown it, and the eligibility checks run when the card is issued.
+    let uncarded = say(
+        fx.conn(),
+        "t1",
+        "assistant",
+        json!({"answer": "先看证据句。", "teachingNotes": [{"kind": "preference", "text": "先给例子"}]}),
+    );
+    assert_eq!(error_code(fx.cards().confirm("local", &uncarded, 0, "任意文本")), "memory_card.not_found");
+    assert_eq!(error_code(fx.cards().dismiss("local", &uncarded, 0)), "memory_card.not_found");
+    // ...and a card issued for note 0 cannot be redirected to another note.
+    assert_eq!(error_code(fx.cards().confirm("local", &fx.answer, 1, "先给例子")), "memory_card.not_found");
+
     // An answer that replied to nothing has no learner message to cite.
     fx.conn()
         .execute("INSERT INTO coach_threads (id, attempt_id, asset_id, status, created_at, updated_at) VALUES ('t2', 'a1', 'P1', 'open', '2026-10-05T10:00:00Z', '2026-10-05T10:00:00Z')", [])

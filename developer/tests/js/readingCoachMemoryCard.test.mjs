@@ -11,7 +11,8 @@ import { createRequire } from 'node:module'
 
 const appRequire = createRequire(new URL('../../../apps/writing-vue/package.json', import.meta.url))
 const ts = appRequire('typescript')
-const readRepo = (path) => readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8')
+// The Windows runner checks sources out with CRLF; the markup assertions below are written with LF.
+const readRepo = (path) => readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const readApp = (path) => readRepo(`apps/writing-vue/src/${path}`)
 
 const compiled = ts.transpileModule(readApp('modules/practice-reading/useReadingCoach.ts'), {
