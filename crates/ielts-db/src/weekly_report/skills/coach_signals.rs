@@ -9,11 +9,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use ielts_domain::{BlockExample, BlockKind, PracticeLink, ReportBlock};
 use serde_json::{json, Value};
 
-use crate::weekly_report::facts::{AskedQuestion, CoachFact, NoteVerdict, RedoQuestion, WeekFacts};
+use crate::weekly_report::coach_facts::strategy_key;
+use crate::weekly_report::facts::{AskedQuestion, CoachFact, NoteVerdict, RedoQuestion, StrategyFeedback, WeekFacts};
 use crate::weekly_report::SkillContext;
 
 const MAX_EXAMPLES: usize = 3;
 const MAX_STRATEGIES: usize = 3;
+const MAX_STRATEGY_FEEDBACK: usize = 3;
 
 pub fn build(context: &SkillContext<'_>) -> Option<ReportBlock> {
     let facts = context.current;
@@ -31,6 +33,7 @@ pub fn build(context: &SkillContext<'_>) -> Option<ReportBlock> {
     let optional = [
         ("teachingNotes", teaching_notes(&facts.coach)),
         ("strategies", strategies(&facts.coach)),
+        ("strategyFeedback", strategy_feedback(&facts.coach_strategies)),
         ("repeatedAsks", repeated_asks(&facts.coach_questions)),
         ("afterCoach", after_coach(&facts.coach_redos)),
     ];
@@ -86,18 +89,22 @@ fn feedback_rows(coach: &[CoachFact]) -> Vec<Value> {
         .collect()
 }
 
-/// How the learner asked to be taught: wishes, and strategies that did or did not help.
+/// What the coach recorded: wishes about how to be taught, strategies that did or
+/// did not help and, only when there are any, difficulties that kept coming back.
 fn teaching_notes(coach: &[CoachFact]) -> Option<Value> {
     let count = |verdict: NoteVerdict| -> usize {
         coach.iter().flat_map(|fact| &fact.notes).filter(|note| note.verdict == verdict).count()
     };
     let (wished, helped, not_helped) = (count(NoteVerdict::Wished), count(NoteVerdict::Helped), count(NoteVerdict::NotHelped));
-    (wished + helped + not_helped > 0).then(|| json!({"wished": wished, "helped": helped, "notHelped": not_helped}))
-}
-
-/// What a strategy's name is, ignoring case, hyphens, underscores and spacing.
-fn strategy_key(label: &str) -> String {
-    label.to_lowercase().replace(['-', '_'], " ").split_whitespace().collect::<Vec<_>>().join(" ")
+    let difficulty = count(NoteVerdict::Difficulty);
+    if wished + helped + not_helped + difficulty == 0 {
+        return None;
+    }
+    let mut notes = json!({"wished": wished, "helped": helped, "notHelped": not_helped});
+    if difficulty > 0 {
+        notes["difficulty"] = json!(difficulty);
+    }
+    Some(notes)
 }
 
 /// Per strategy the learner reported on: most reported first, ties by name.
@@ -110,7 +117,7 @@ fn strategies(coach: &[CoachFact]) -> Option<Value> {
         match note.verdict {
             NoteVerdict::Helped => row.1 += 1,
             NoteVerdict::NotHelped => row.2 += 1,
-            NoteVerdict::Wished => {}
+            NoteVerdict::Wished | NoteVerdict::Difficulty => {}
         }
     }
     let mut ranked: Vec<(String, (&str, u32, u32))> = rows.into_iter().collect();
@@ -119,6 +126,56 @@ fn strategies(coach: &[CoachFact]) -> Option<Value> {
         .into_iter()
         .take(MAX_STRATEGIES)
         .map(|(_, (label, helped, not_helped))| json!({"strategy": label, "helped": helped, "notHelped": not_helped}))
+        .collect();
+    (!rows.is_empty()).then(|| Value::Array(rows))
+}
+
+/// Chinese name of a teaching strategy in the fixed catalog.
+fn strategy_label(strategy: &str) -> &'static str {
+    match strategy {
+        "evidence_first_v1" => "先讲证据",
+        "example_first_v1" => "先给例子",
+        "step_by_step_v1" => "分步讲解",
+        "contrastive_v1" => "对比辨析",
+        "socratic_prompt_v1" => "提问引导",
+        "concise_direct_v1" => "简洁直给",
+        _ => "其他讲法",
+    }
+}
+
+/// Chinese label of one signal: a feedback kind, or a learner's report on a strategy.
+fn signal_label(kind: &str) -> &'static str {
+    match kind {
+        "helped" => "学习者说有帮助",
+        "not_helped" => "学习者说没帮助",
+        other => feedback_label(other),
+    }
+}
+
+/// Per catalog strategy: every signal given on its answers, with the passages
+/// each came from, so "the same direction on two different passages" is a
+/// lookup. The busiest strategies first (ties by id); counts, not causes.
+fn strategy_feedback(strategies: &[StrategyFeedback]) -> Option<Value> {
+    let mut ranked: Vec<&StrategyFeedback> = strategies.iter().filter(|row| row.total() > 0).collect();
+    ranked.sort_by(|left, right| right.total().cmp(&left.total()).then(left.strategy.cmp(&right.strategy)));
+    let rows: Vec<Value> = ranked
+        .into_iter()
+        .take(MAX_STRATEGY_FEEDBACK)
+        .map(|row| {
+            let mut signals: Vec<_> = row.signals.iter().collect();
+            signals.sort_by(|left, right| right.1.count.cmp(&left.1.count).then(left.0.cmp(right.0)));
+            json!({
+                "strategy": row.strategy,
+                "label": strategy_label(&row.strategy),
+                "total": row.total(),
+                "articles": row.articles().len(),
+                "assetIds": row.articles(),
+                "signals": signals
+                    .into_iter()
+                    .map(|(kind, tally)| json!({"kind": kind, "label": signal_label(kind), "count": tally.count, "assetIds": tally.assets}))
+                    .collect::<Vec<_>>(),
+            })
+        })
         .collect();
     (!rows.is_empty()).then(|| Value::Array(rows))
 }

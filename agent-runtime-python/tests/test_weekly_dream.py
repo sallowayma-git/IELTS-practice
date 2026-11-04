@@ -337,9 +337,10 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         _run(bridge)
         system = bridge.calls[1][1]["request"]["messages"][0]["content"]
         for needed in (
-            "learner asked:",
+            "coach note, preference:",
+            "coach note, difficulty",
             "did not help",
-            "Their first id is the learner's message",
+            "A coach line's first ids are the learner messages its notes answered",
             "namespace preference",
             "namespace strategy",
             "at least two DIFFERENT assets",
@@ -349,12 +350,70 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
             self.assertIn(needed, system)
         # Coach feedback is an interaction fact: it is never offered as a way to write a preference.
         self.assertIn("never preferences by themselves", system)
+        # A coach note is the coach's reading of a session, not the learner's quote.
+        self.assertIn("not the learner's quote and not yet a fact", system)
+        self.assertNotIn("learner asked:", system)
+        self.assertNotIn("worded as what the learner asked for", system)
+
+    def test_the_prompt_asks_for_general_rules_and_a_confidence_ladder(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "GENERAL rule about this learner",
+            "该学习者对〈题型或技能〉……需要……",
+            "never the retelling of one question",
+            "only the EVIDENCE for the rule",
+            "at most one low-confidence ADD",
+            "is a REINFORCE of the memory",
+            "distinct assetIds, never repeated attempts of one asset",
+            "is a SUPERSEDE",
+            "A one-off remark is never generalised into a lasting trait",
+            "Prefer no mutation to an uncertain claim",
+        ):
+            self.assertIn(needed, system)
+        self.assertNotIn("original wording", system)
+
+    def test_the_prompt_protects_the_memories_the_learner_confirmed(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "pack.confirmed",
+            "user_explicit",
+            "carry no memoryId and are final",
+            "Never rewrite, supersede, archive, repeat or contradict them",
+            "complements them",
+            "Memory mutations must never contradict explicit preferences",
+        ):
+            self.assertIn(needed, system)
+
+    def test_the_prompt_maps_feedback_kinds_to_strategies_and_demands_two_assets(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "coach.strategy.<strategy>.<signal>",
+            "evidence_first_v1, example_first_v1, step_by_step_v1",
+            "contrastive_v1, socratic_prompt_v1, concise_direct_v1",
+            "need_example points to example_first_v1",
+            "need_step_by_step to step_by_step_v1",
+            "too_abstract to example_first_v1 or step_by_step_v1",
+            "too_long to concise_direct_v1",
+            "thumbs_down only says the learner was not satisfied",
+            "points at no particular preference",
+            "counts, never causes",
+            "at least two DIFFERENT assets",
+            "One asset is never enough",
+            "strategy-namespace memory",
+        ):
+            self.assertIn(needed, system)
 
     def test_a_mutation_may_cite_the_learner_message_id_a_coach_line_leads_with(self) -> None:
         pack = _pack()
         pack["lines"][3] = {
             "ids": ["obs-msg1", "obs-a1"], "date": "2026-10-08", "kind": "coach",
-            "text": 'coach on P1 "Passage P1": learner asked: "use short examples first"',
+            "text": 'coach on P1 "Passage P1": coach note, preference: 判断题上需要先给例子再讲证据',
         }
         mutation = _add(
             namespace="preference",
@@ -537,6 +596,30 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         _run(bridge)
         self.assertEqual([m["action"] for m in bridge.submitted()["mutations"]], ["REINFORCE"])
         self.assertEqual(bridge.submitted()["droppedMutations"], 5)
+
+    def test_a_mutation_may_not_take_the_place_of_a_memory_the_learner_confirmed(self) -> None:
+        pack = _pack()
+        pack["confirmed"] = [
+            {"namespace": "preference", "scope": "activity:reading",
+             "canonicalKey": "preference.reading.card_ab12", "statement": "判断题上先给例子再讲证据。"},
+            "not a memory",
+        ]
+        mutations = [
+            # The same identity as the confirmed memory: refused whatever the wording.
+            _add(namespace="preference", canonicalKey="preference.reading.card_ab12", statement="换一种说法。"),
+            # A broader inferred memory beside it is welcome.
+            _add(namespace="preference", canonicalKey="preference.reading.examples_for_tfng"),
+            # The same key in the other activity is another identity.
+            _add(namespace="preference", canonicalKey="preference.writing.card_ab12",
+                 scope={"type": "activity", "key": "writing"}),
+        ]
+        bridge = FakeHostBridge(pack=pack, content=_answer(mutations=mutations))
+        _run(bridge)
+        kept = [m["canonicalKey"] for m in bridge.submitted()["mutations"]]
+        self.assertEqual(kept, ["preference.reading.examples_for_tfng", "preference.writing.card_ab12"])
+        self.assertEqual(bridge.submitted()["droppedMutations"], 1)
+        # A confirmed memory has no id in the pack, so no mutation can target it.
+        self.assertEqual(weekly_module._memory_ids(pack["confirmed"]), [])
 
     def test_a_mutation_may_only_target_memories_of_the_pack(self) -> None:
         mutations = [

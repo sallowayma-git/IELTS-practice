@@ -57,6 +57,17 @@ assert.equal(repeated.id, saved.id, 'one durable verdict per answer')
 assert.deepEqual(handlers.coach_list_feedback({ threadId: thread.id }), [saved])
 assert.deepEqual(handlers.coach_list_feedback({ threadId: 'other-thread' }), [])
 
+// Preference cards: one memory per (message, note), a refusal carries its code, a confirmed card stays confirmed.
+const card = { messageId: 'answer-1', noteIndex: 0, text: '判断题上先给例子再讲证据' }
+assert.throws(() => handlers.coach_confirm_memory_card({ ...card, text: '   ' }), (error) => error.envelope.code === 'memory_card.invalid_text')
+const remembered = handlers.coach_confirm_memory_card(card)
+assert.match(remembered.memoryId, /^mem-/)
+assert.deepEqual(handlers.coach_confirm_memory_card({ ...card, text: '换一句话' }), remembered, 'confirming again returns the same memory')
+const entry = handlers.memory_catalog_list({}).entries.find((row) => row.id === remembered.memoryId)
+assert.deepEqual([entry.sourceClass, entry.namespace, entry.scope, entry.statement], ['user_explicit', 'preference', 'activity:reading', card.text])
+assert.throws(() => handlers.coach_dismiss_memory_card({ messageId: card.messageId, noteIndex: 0 }), (error) => error.envelope.code === 'memory_card.already_confirmed')
+assert.equal(handlers.coach_dismiss_memory_card({ messageId: 'answer-2', noteIndex: 0 }), null)
+
 const history = legacyWeeklyEntry({ runId: 'old', window: '2026-W41', digest: {
   title: '旧周记', body: ['练了 {{f:count}} 次', '<img src=x onerror=alert(1)>', '{{f:missing}}'],
   facts: { count: { value: 3 } }, nextSteps: [{ text: '换一篇文章' }]

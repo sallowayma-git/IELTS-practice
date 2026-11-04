@@ -452,6 +452,89 @@ pub fn promote_memory_candidate(
     })
 }
 
+/// Write a memory the learner wrote or confirmed themselves (`user_explicit`).
+///
+/// The candidate pipeline is for what the model proposes (its tables hold only
+/// cognitive source classes), so this is the learner's counterpart: the caller has
+/// run the same validator over a single `ADD` (trusted origin, `user_explicit`), and
+/// this inserts the memory with its evidence and its audit row in ONE transaction,
+/// through the same insert and the same capacity rule as every promotion. It can only
+/// create; it never touches another memory. Learner memories are never evicted.
+pub fn create_learner_memory(
+    conn: &Connection,
+    input: &MemoryCandidatePersistenceInput,
+    actor_id: &str,
+    reason: &str,
+) -> DbResult<MemoryMutationReceipt> {
+    require_text(actor_id, "actorId")?;
+    require_text(reason, "reason")?;
+    let [proposal @ MemoryMutationProposal::Add { namespace, canonical_key, scope, statement, .. }] =
+        input.batch.proposals.as_slice()
+    else {
+        return Err(DbError::Validation("a learner memory is exactly one ADD".into()));
+    };
+    let accepted = matches!(
+        input.validation.decisions.as_slice(),
+        [decision] if decision.disposition == MemoryProposalDisposition::Pending
+            && decision.source_class == Some(MemorySourceClass::UserExplicit)
+    );
+    if input.source_class != MemorySourceClass::UserExplicit || !accepted || input.snapshot.user_id != input.user_id {
+        return Err(DbError::Validation("the validator did not accept this learner memory".into()));
+    }
+    let tx = conn.unchecked_transaction()?;
+    verify_snapshot_in_transaction(&tx, &input.snapshot)?;
+    let held: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM memory_items
+           WHERE user_id=?1 AND namespace=?2 AND canonical_key=?3 AND scope=?4 AND status='active')",
+        params![input.user_id, namespace.as_str(), canonical_key, scope.storage_key()],
+        |row| row.get(0),
+    )?;
+    if held {
+        return Err(DbError::Validation("an active memory already has this identity".into()));
+    }
+    let observations = input.snapshot.observations.iter().map(|item| (item.id.as_str(), item)).collect::<BTreeMap<_, _>>();
+    let evidence = proposal
+        .evidence_observation_ids()
+        .iter()
+        .filter_map(|id| observations.get(id.as_str()).copied())
+        .map(evidence_snapshot_json)
+        .collect::<Vec<_>>();
+    let now = chrono::Utc::now().to_rfc3339();
+    let candidate = PendingCandidate {
+        user_id: input.user_id.clone(),
+        source_class: MemorySourceClass::UserExplicit,
+        proposal_json: String::new(),
+        evidence_snapshot: evidence,
+        expected_target_version: None,
+        version: 1,
+    };
+    // There is no candidate row: the empty id protects no sibling from eviction.
+    let command = MemoryPromotionCommand {
+        candidate_id: String::new(),
+        expected_candidate_version: 1,
+        actor_type: "user".into(),
+        actor_id: Some(actor_id.to_owned()),
+        reason: reason.to_owned(),
+    };
+    let (memory_id, status, version, _, after) =
+        insert_active_memory(&tx, &candidate, &command, *namespace, canonical_key, *scope, statement, None, &now)?;
+    attach_evidence(&tx, &memory_id, proposal, &candidate.evidence_snapshot, &[], &now)?;
+    tx.execute(
+        "INSERT INTO memory_mutations (
+           id,memory_id,operation,actor_type,actor_id,after_json,reason,created_at
+         ) VALUES (?1,?2,'create','user',?3,?4,?5,?6)",
+        params![format!("mmut-{}", Uuid::new_v4()), memory_id, actor_id, after, reason, now],
+    )?;
+    tx.commit()?;
+    Ok(MemoryMutationReceipt {
+        candidate_id: String::new(),
+        memory_id: Some(memory_id),
+        action: "ADD".into(),
+        memory_status: Some(status),
+        memory_version: Some(version),
+    })
+}
+
 /// A validated candidate that could not be promoted (its target moved, or the
 /// scope has nothing evictable) must not stay `pending`: pending candidates are
 /// shown to the coach as unverified context. No-op unless the candidate is still
@@ -1237,6 +1320,7 @@ fn apply_proposal(
     command: &MemoryPromotionCommand,
     now: &str,
 ) -> DbResult<(String, MemoryStatus, u64, Option<String>, String)> {
+    refuse_protected_target(tx, proposal, candidate)?;
     match proposal {
         MemoryMutationProposal::Add {
             namespace,
@@ -1290,6 +1374,33 @@ fn apply_proposal(
         }
         _ => update_target_memory(tx, proposal, candidate, now),
     }
+}
+
+/// A memory the learner confirmed (or the policy owns) is theirs: no inferred
+/// proposal rewrites, supersedes, archives or reinforces it. The weekly pack never
+/// offers its id, so this only fires on an id the model could not have been shown.
+fn refuse_protected_target(
+    tx: &Transaction<'_>,
+    proposal: &MemoryMutationProposal,
+    candidate: &PendingCandidate,
+) -> DbResult<()> {
+    let Some(target) = proposal.target_memory_id() else { return Ok(()) };
+    if matches!(candidate.source_class, MemorySourceClass::UserExplicit | MemorySourceClass::SystemPolicy) {
+        return Ok(());
+    }
+    let protected: Option<bool> = tx
+        .query_row(
+            "SELECT source_class IN ('user_explicit','system_policy') FROM memory_items WHERE id=?1",
+            [target],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if protected == Some(true) {
+        return Err(DbError::Validation(
+            "a learner-confirmed memory cannot be changed by an inferred proposal".into(),
+        ));
+    }
+    Ok(())
 }
 
 fn insert_active_memory(
@@ -1385,8 +1496,13 @@ fn make_room_for_insert(
     if active_count < MAX_ACTIVE_MEMORY_PER_SCOPE as i64 {
         return Ok(());
     }
-    evict_least_valuable(tx, command, user_id, scope, now, OTHER_NAMESPACES)?
-        .ok_or_else(|| DbError::Validation("active memory capacity reached".into()))?;
+    // The learner's own memory outranks the model's: when nothing else can make room,
+    // it displaces the least valuable inferred preference rather than being refused.
+    let mut victim = evict_least_valuable(tx, command, user_id, scope, now, OTHER_NAMESPACES)?;
+    if victim.is_none() && candidate.source_class == MemorySourceClass::UserExplicit {
+        victim = evict_least_valuable(tx, command, user_id, scope, now, DERIVED_PREFERENCES)?;
+    }
+    victim.ok_or_else(|| DbError::Validation("active memory capacity reached".into()))?;
     Ok(())
 }
 

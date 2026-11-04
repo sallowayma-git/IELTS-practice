@@ -162,7 +162,7 @@ fn a_teaching_note_reaches_a_memory_that_can_name_its_message_and_returns_to_the
 
     // 1. The coach line carries the learner message's observation, then the attempt score.
     let coach = pack.lines.iter().find(|line| line.kind == "coach").expect("a coach line");
-    assert!(coach.text.contains("learner asked: \"use short examples first\""), "{}", coach.text);
+    assert!(coach.text.contains("coach note, preference: short examples first"), "{}", coach.text);
     assert_eq!(coach.ids.len(), 2, "{:?}", coach.ids);
     assert_eq!(observation_type(&conn, &coach.ids[0]), "coach.question.asked");
     assert_eq!(observation_type(&conn, &coach.ids[1]), "reading.attempt.score");
@@ -193,18 +193,31 @@ fn a_teaching_note_reaches_a_memory_that_can_name_its_message_and_returns_to_the
 }
 
 #[test]
-fn a_quote_that_is_not_in_the_preceding_learner_message_gets_no_message_provenance() {
+fn a_current_format_note_needs_no_quote_to_be_traced_to_the_message_it_answered() {
     let (_dir, conn) = fixture();
-    turn(
+    let (user, answer) = turn(
         &conn,
         "t1",
         "Please explain question 14 again.",
-        json!([{"kind": "preference", "text": "short examples", "evidence": "short examples first please"}]),
+        json!([
+            {"kind": "difficulty", "text": "判断题里 NOT GIVEN 与 FALSE 经常混淆", "skillKey": "reading.tfng"},
+            {"kind": "strategy_outcome", "text": "先给例子再讲证据对该学习者更有效", "strategy": "example_first_v1", "outcome": "helped"},
+        ]),
     );
     let pack = the_pack(&conn);
-    let coach = pack.lines.iter().find(|line| line.kind == "coach").expect("the phrase is still read");
-    assert_eq!(coach.ids.len(), 1, "only the attempt score: nothing proves the learner wrote the quote");
-    assert_eq!(observation_type(&conn, &coach.ids[0]), "reading.attempt.score");
+    let coach = pack.lines.iter().find(|line| line.kind == "coach").expect("a coach line");
+    assert!(coach.text.contains("coach note, difficulty [reading.tfng]: 判断题里 NOT GIVEN 与 FALSE 经常混淆"), "{}", coach.text);
+    assert!(coach.text.contains("coach note, example_first_v1 helped: 先给例子再讲证据对该学习者更有效"), "{}", coach.text);
+    assert_eq!(coach.ids.len(), 2, "the learner message once, then the attempt score: {:?}", coach.ids);
+    assert_eq!(observation_type(&conn, &coach.ids[0]), "coach.question.asked");
+
+    // A memory built on the line still leads back to the original message.
+    let memory = weekly_add(&conn, "preference.reading.tfng_examples", "该学习者在判断题上需要先给例子的讲法。", coach.ids.clone());
+    let sources = memory_coach_sources(&conn, "local", &memory).unwrap();
+    assert_eq!(sources.len(), 1, "{sources:?}");
+    assert_eq!(sources[0].learner_message_id, user.id);
+    assert_eq!(sources[0].answer_message_id.as_deref(), Some(answer.id.as_str()));
+    assert!(sources[0].quotes.is_empty(), "there is no quote to check any more");
 }
 
 #[test]

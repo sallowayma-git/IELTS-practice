@@ -275,6 +275,7 @@ export function createHandlers(state, host) {
   const preferences = []
   const reports = weeklyReports()
   const coachFeedback = []
+  const memoryCards = Object.create(null)
   let coachThreadId = 'coach-thread'
 
   const sessionStub = (kind) => (args) => ({ id: `${kind}-mock`, kind, status: 'active', ...args?.cmd, startedAt: new Date().toISOString() })
@@ -652,6 +653,31 @@ export function createHandlers(state, host) {
       return clone(record)
     },
     coach_list_feedback: ({ threadId }) => clone(coachFeedback.filter((row) => row.threadId === threadId).map((row) => row.record)),
+    // Preference cards: confirm writes one user_explicit preference (idempotent per message and note) and the
+    // decision sticks; dismiss only records the decision and cannot undo a confirmed card.
+    coach_confirm_memory_card: ({ messageId, noteIndex, text }) => {
+      const clean = String(text ?? '').split(/\s+/).filter(Boolean).join(' ')
+      if (!clean) throw fail('memory_card.invalid_text', '请先写下要记住的偏好。')
+      if ([...clean].length > 300) throw fail('memory_card.invalid_text', '这条偏好太长了，请控制在 300 个字以内。')
+      const key = `${messageId}:${noteIndex}`
+      const card = ownOf(memoryCards, key) || {}
+      if (!card.memoryId) {
+        card.memoryId = idFrom('mem')
+        const at = new Date().toISOString()
+        notebook.catalog.unshift({ id: card.memoryId, canonicalKey: `preference.reading.card_${notebook.catalog.length}`, statement: clean,
+          sourceClass: 'user_explicit', namespace: 'preference', status: 'active', version: 1, scope: 'activity:reading', confidenceBand: 'high',
+          supportCount: 1, contradictionCount: 0, firstSeen: at, pendingVerification: false, evidenceObservationIds: [], lastSeen: at })
+      }
+      memoryCards[key] = { ...card, state: 'confirmed' }
+      return { memoryId: card.memoryId }
+    },
+    coach_dismiss_memory_card: ({ messageId, noteIndex }) => {
+      const key = `${messageId}:${noteIndex}`
+      const card = ownOf(memoryCards, key) || {}
+      if (card.state === 'confirmed') throw fail('memory_card.already_confirmed', '这条偏好已经记住了。要改动它，请到记忆中心操作。')
+      memoryCards[key] = { ...card, state: 'dismissed' }
+      return null
+    },
     coach_record_reask_link: () => null,
     coach_record_strategy_assignment: () => null,
     coach_link_outcome: () => null,

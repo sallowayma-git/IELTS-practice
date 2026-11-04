@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-dismiss-memory-card"
+description = "Enables the coach_dismiss_memory_card command without any pre-configured scope."
+commands.allow = ["coach_dismiss_memory_card"]
+
+[[permission]]
+identifier = "deny-coach-dismiss-memory-card"
+description = "Denies the coach_dismiss_memory_card command without any pre-configured scope."
+commands.deny = ["coach_dismiss_memory_card"]

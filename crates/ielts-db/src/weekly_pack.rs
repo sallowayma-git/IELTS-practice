@@ -10,19 +10,26 @@
 //! every id it cites is an id in this pack.
 //!
 //! Size is bounded by `WEEKLY_PACK_TOKEN_CAP`. Preferences and memories share
-//! at most `WEEKLY_CONTEXT_TOKEN_BUDGET` of it (preferences first, then the most
-//! recently observed memories), so practice lines always keep the rest. When the
+//! at most `WEEKLY_CONTEXT_TOKEN_BUDGET` of it (preferences first, then the
+//! memories the learner confirmed, then the most recently observed memories), so
+//! practice lines always keep the rest. Confirmed memories are shown so the
+//! model can complement them, and carry no id: they can never be a target. The
+//! coach lines, notes included, share one `WEEKLY_COACH_TOKEN_BUDGET`, newest
+//! day first, so a talkative week cannot crowd out scores and misses. When the
 //! lines do not fit, every line of a question type missed in two or more
 //! different passages is kept, then the most recent lines, and the rest is
 //! replaced by one "omitted" note.
+//!
+//! Coach notes are the essence of a coaching session in the coach's own words
+//! (`coach_facts::read_notes` is the one rule for what a readable note is). They
+//! are data, never instructions: each note's text passes the prompt guards and
+//! is clipped, and the line cites the observation of the learner message the
+//! answer belonged to, so a memory built on it can always be traced back.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use ielts_domain::{
-    contains_security_marker, estimate_tokens, is_safe_for_prompt, REDACTED_UNTRUSTED_TEXT,
-    TEACHING_NOTE_EVIDENCE_CHARS, TEACHING_NOTE_STRATEGY_CHARS,
-};
+use ielts_domain::{contains_security_marker, estimate_tokens, is_safe_for_prompt, REDACTED_UNTRUSTED_TEXT};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -34,6 +41,7 @@ use crate::learning_observations::{
 use crate::learner::canonical_reading_skill_key;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
+use crate::weekly_report::coach_facts::{read_notes, NoteVerdict, ReadNote};
 
 pub const WEEKLY_PACK_SCHEMA_VERSION: u32 = 3;
 /// Upper bound of the whole serialized pack, in `estimate_tokens` units.
@@ -41,16 +49,18 @@ pub const WEEKLY_PACK_TOKEN_CAP: u32 = 6_000;
 /// The most the carried-along preferences and memories may spend of the cap:
 /// whatever their size, practice lines keep the remaining share.
 pub const WEEKLY_CONTEXT_TOKEN_BUDGET: u32 = WEEKLY_PACK_TOKEN_CAP * 2 / 5;
+/// What all coach lines together may spend of the cap. Scores and misses are the
+/// main evidence; however much the learner chatted, they keep the rest.
+pub const WEEKLY_COACH_TOKEN_BUDGET: u32 = WEEKLY_PACK_TOKEN_CAP / 5;
 /// Fewer scored observations than this in a window is not worth a model call.
 pub const WEEKLY_MIN_OBSERVATIONS: usize = 8;
 
 const MAX_MEMORIES: usize = 30;
 const MAX_PREFERENCES: usize = 20;
-const MAX_COACH_LINES: usize = 20;
-/// Teaching notes shown per coach line, and the longest a coach line may grow
-/// with them. A note that would overflow is skipped whole, never cut.
-const MAX_COACH_NOTES: usize = 2;
-const COACH_LINE_CHARS: usize = 320;
+const MAX_CONFIRMED: usize = 20;
+/// Distinct learner messages one coach line may cite besides the attempt score;
+/// a note whose message would not fit is left out, so every kept note is traceable.
+const MAX_COACH_SOURCES: usize = 7;
 const MEMORY_CHARS: usize = 160;
 const PREFERENCE_CHARS: usize = 200;
 const ANSWER_CHARS: usize = 40;
@@ -97,6 +107,17 @@ pub struct PackMemory {
     pub last_observed: String,
 }
 
+/// A memory the learner confirmed (`user_explicit`). Read-only context: no id, so
+/// no mutation can name it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackConfirmed {
+    pub namespace: String,
+    pub scope: String,
+    pub canonical_key: String,
+    pub statement: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PackPreference {
     pub key: String,
@@ -114,6 +135,7 @@ pub struct WeeklyPack {
     pub lines: Vec<WeeklyLine>,
     pub omitted: usize,
     pub memories: Vec<PackMemory>,
+    pub confirmed: Vec<PackConfirmed>,
     pub preferences: Vec<PackPreference>,
 }
 
@@ -126,6 +148,7 @@ impl WeeklyPack {
             "header": self.header,
             "lines": self.lines,
             "memories": self.memories,
+            "confirmed": self.confirmed,
             "preferences": self.preferences,
         });
         if self.omitted > 0 {
@@ -506,7 +529,7 @@ struct CoachDay {
     kinds: BTreeMap<String, u32>,
     reasks: u32,
     /// Each note's phrase and, when it could be traced, the observation of the
-    /// learner message that carries its quote.
+    /// learner message the note's assistant message answered.
     notes: Vec<(String, Option<String>)>,
 }
 
@@ -517,6 +540,49 @@ impl CoachDay {
             (self.asset, self.at) = (asset, at);
         }
     }
+
+    /// Feedback and re-asks, then the first `notes` notes.
+    fn parts(&self, notes: usize) -> Vec<String> {
+        let kinds: Vec<String> = self
+            .kinds
+            .iter()
+            .map(|(kind, count)| if *count > 1 { format!("{kind} x{count}") } else { kind.clone() })
+            .collect();
+        let mut parts = Vec::new();
+        if !kinds.is_empty() {
+            parts.push(format!("feedback {}", kinds.join(", ")));
+        }
+        if self.reasks > 0 {
+            parts.push(format!("re-asked {}x", self.reasks));
+        }
+        parts.extend(self.notes[..notes].iter().map(|(phrase, _)| phrase.clone()));
+        parts
+    }
+
+    /// The learner messages behind the first `notes` notes, each once, in order.
+    fn sources(&self, notes: usize) -> Vec<String> {
+        let mut sources: Vec<String> = Vec::new();
+        for source in self.notes[..notes].iter().filter_map(|(_, source)| source.as_ref()) {
+            if !sources.contains(source) {
+                sources.push(source.clone());
+            }
+        }
+        sources
+    }
+
+    /// The day as a line carrying its first `notes` notes. The learner messages
+    /// behind the notes come first, then the attempt score: a memory that cites
+    /// this line can be traced back to the words that produced it.
+    fn line(&self, title: &str, score: Option<&String>, notes: usize) -> Option<WeeklyLine> {
+        let parts = self.parts(notes);
+        if parts.is_empty() {
+            return None;
+        }
+        let mut ids = self.sources(notes);
+        ids.extend(score.cloned());
+        let facet = Facet::Coach { kinds: self.kinds.clone(), reasks: self.reasks };
+        Some(line(ids, &self.at, "coach", format!("coach on {title}: {}", parts.join("; ")), facet))
+    }
 }
 
 /// A stored timestamp as an instant, so differently formatted offsets still order by real time.
@@ -524,8 +590,74 @@ fn moment(at: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(at).ok().map(|value| value.with_timezone(&Utc))
 }
 
-fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &mut AssetBook<'_>) -> DbResult<Vec<WeeklyLine>> {
-    let mut days: BTreeMap<(String, String), CoachDay> = BTreeMap::new();
+type CoachDays = BTreeMap<(String, String), CoachDay>;
+
+/// The coach lines of the window, newest day first, within `WEEKLY_COACH_TOKEN_BUDGET`,
+/// and how many items (lines and notes) the budget left out.
+fn coach_lines(
+    conn: &Connection,
+    user_id: &str,
+    from: &str,
+    to: &str,
+    assets: &mut AssetBook<'_>,
+) -> DbResult<(Vec<WeeklyLine>, usize)> {
+    let mut days: Vec<((String, String), CoachDay)> = coach_days(conn, user_id, from, to)?.into_iter().collect();
+    // Newest day first, by real time, with the attempt id only as a tiebreak.
+    days.sort_by(|(left_key, left), (right_key, right)| {
+        moment(&right.at).cmp(&moment(&left.at)).then_with(|| left_key.cmp(right_key))
+    });
+    let (mut lines, mut left, mut full, mut omitted) = (Vec::new(), WEEKLY_COACH_TOKEN_BUDGET, false, 0);
+    for ((attempt, _), entry) in days {
+        let title = if entry.asset.is_empty() { "an attempt".to_owned() } else { format!("{} \"{}\"", entry.asset, assets.title(&entry.asset)) };
+        let score = attempt_score_id(conn, user_id, &attempt);
+        let fitted = if full { None } else { fit_day(&entry, &title, score.as_ref(), left) };
+        let Some(fit) = fitted else { omitted += 1 + entry.notes.len(); continue };
+        omitted += entry.notes.len() - fit.notes;
+        full = fit.full;
+        if let Some((line, cost)) = fit.line {
+            left -= cost;
+            lines.push(line);
+        }
+    }
+    Ok((lines, omitted))
+}
+
+struct DayFit {
+    line: Option<(WeeklyLine, u32)>,
+    /// Notes the line carries.
+    notes: usize,
+    /// The budget ran out inside this day: older days get nothing.
+    full: bool,
+}
+
+/// The day's line with as many of its notes, in order, as `budget` tokens allow.
+/// A note is kept whole or not at all. `None` when the day is empty.
+fn fit_day(entry: &CoachDay, title: &str, score: Option<&String>, budget: u32) -> Option<DayFit> {
+    let mut fit = DayFit { line: None, notes: 0, full: false };
+    for notes in 0..=entry.notes.len() {
+        if entry.sources(notes).len() > MAX_COACH_SOURCES {
+            break;
+        }
+        let Some(line) = entry.line(title, score, notes) else { continue };
+        let cost = line_tokens(&line);
+        if cost > budget {
+            fit.full = true;
+            break;
+        }
+        (fit.line, fit.notes) = (Some((line, cost)), notes);
+    }
+    (fit.line.is_some() || fit.full).then_some(fit)
+}
+
+fn coach_days(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<CoachDays> {
+    let mut days = CoachDays::new();
+    add_feedback_days(conn, user_id, from, to, &mut days)?;
+    add_reask_days(conn, from, to, &mut days)?;
+    add_note_days(conn, user_id, from, to, &mut days)?;
+    Ok(days)
+}
+
+fn add_feedback_days(conn: &Connection, user_id: &str, from: &str, to: &str, days: &mut CoachDays) -> DbResult<()> {
     let mut feedback = conn.prepare(
         "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), f.feedback_kind, f.created_at
            FROM coach_feedback f
@@ -545,6 +677,10 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         entry.seen(asset, at);
         *entry.kinds.entry(kind).or_default() += 1;
     }
+    Ok(())
+}
+
+fn add_reask_days(conn: &Connection, from: &str, to: &str, days: &mut CoachDays) -> DbResult<()> {
     let mut reasks = conn.prepare(
         "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), r.created_at
            FROM coach_reask_links r
@@ -563,6 +699,10 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         entry.seen(asset, at);
         entry.reasks += 1;
     }
+    Ok(())
+}
+
+fn add_note_days(conn: &Connection, user_id: &str, from: &str, to: &str, days: &mut CoachDays) -> DbResult<()> {
     let mut notes = conn.prepare(
         "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.structured_payload, m.created_at, m.id
            FROM coach_messages m
@@ -584,93 +724,30 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
     })?;
     for row in rows {
         let (attempt, asset, payload, at, message) = row?;
-        // A message whose notes all fail the prompt-safety check adds no day at all.
-        let payload = serde_json::from_str(&payload).unwrap_or(Value::Null);
-        let notes = teaching_notes(&payload);
-        if notes.is_empty() {
+        // A message none of whose notes is readable adds no day at all.
+        let read = read_notes(&serde_json::from_str(&payload).unwrap_or(Value::Null));
+        if read.is_empty() {
             continue;
         }
-        let learner = answered_learner_message(conn, user_id, &message);
+        let source = answered_learner_observation(conn, user_id, &message);
         let entry = days.entry((attempt, day(&at))).or_default();
         entry.seen(asset, at);
-        for (phrase, quote) in notes {
-            if entry.notes.iter().any(|(earlier, _)| *earlier == phrase) {
-                continue;
-            }
-            let source = learner
-                .as_ref()
-                .filter(|(content, _)| content.contains(quote.as_str()))
-                .map(|(_, id)| id.clone());
-            entry.notes.push((phrase, source));
-        }
-    }
-    // Keep the most recent days, by real time, with the attempt id only as a tiebreak.
-    let mut days: Vec<((String, String), CoachDay)> = days.into_iter().collect();
-    days.sort_by(|(left_key, left), (right_key, right)| {
-        moment(&right.at).cmp(&moment(&left.at)).then_with(|| left_key.cmp(right_key))
-    });
-    let mut lines = Vec::new();
-    for ((attempt, _), entry) in days {
-        if lines.len() == MAX_COACH_LINES {
-            break;
-        }
-        let kinds: Vec<String> = entry
-            .kinds
-            .iter()
-            .map(|(kind, count)| if *count > 1 { format!("{kind} x{count}") } else { kind.clone() })
-            .collect();
-        let mut parts = Vec::new();
-        if !kinds.is_empty() {
-            parts.push(format!("feedback {}", kinds.join(", ")));
-        }
-        if entry.reasks > 0 {
-            parts.push(format!("re-asked {}x", entry.reasks));
-        }
-        let title = if entry.asset.is_empty() { "an attempt".to_owned() } else { format!("{} \"{}\"", entry.asset, assets.title(&entry.asset)) };
-        let (parts, sources) = with_notes(parts, &title, &entry.notes);
-        if parts.is_empty() {
-            continue;
-        }
-        // The learner messages behind the notes come first: a memory that cites
-        // this line can then be traced back to the words that produced it.
-        let mut ids = sources;
-        ids.extend(attempt_score_id(conn, user_id, &attempt));
-        ids.truncate(MAX_LINE_IDS);
-        let facet = Facet::Coach { kinds: entry.kinds, reasks: entry.reasks };
-        lines.push(line(ids, &entry.at, "coach", format!("coach on {title}: {}", parts.join("; ")), facet));
-    }
-    Ok(lines)
-}
-
-/// Adds the day's notes in order, up to `MAX_COACH_NOTES`, skipping any that would
-/// push the line past `COACH_LINE_CHARS`. Returns the parts and the observation
-/// ids of the learner messages behind the notes that were kept.
-fn with_notes(mut parts: Vec<String>, title: &str, notes: &[(String, Option<String>)]) -> (Vec<String>, Vec<String>) {
-    let mut sources: Vec<String> = Vec::new();
-    let mut kept = 0;
-    for (note, source) in notes {
-        if kept == MAX_COACH_NOTES {
-            break;
-        }
-        parts.push(note.clone());
-        if format!("coach on {title}: {}", parts.join("; ")).chars().count() > COACH_LINE_CHARS {
-            parts.pop();
-        } else {
-            kept += 1;
-            if let Some(source) = source.as_ref().filter(|source| !sources.contains(source)) {
-                sources.push(source.clone());
+        for phrase in read.iter().map(note_phrase) {
+            if !entry.notes.iter().any(|(earlier, _)| *earlier == phrase) {
+                entry.notes.push((phrase, source.clone()));
             }
         }
     }
-    (parts, sources)
+    Ok(())
 }
 
-/// The learner message an assistant message answered (the closest user message
-/// before it in the thread) with its projected `coach.question.asked`
-/// observation: the citable form of "what the learner actually wrote".
-fn answered_learner_message(conn: &Connection, user_id: &str, assistant_message: &str) -> Option<(String, String)> {
+/// The `coach.question.asked` observation of the learner message an assistant
+/// message answered (the closest user message before it in the thread): the
+/// citable form of "what the learner actually wrote". It is the pairing that
+/// matters, not what the note quotes, so a note needs no verbatim evidence.
+pub(crate) fn answered_learner_observation(conn: &Connection, user_id: &str, assistant_message: &str) -> Option<String> {
     conn.query_row(
-        "SELECT u.content, o.id
+        "SELECT o.id
            FROM coach_messages a
            JOIN coach_messages u ON u.thread_id = a.thread_id AND u.role = 'user'
             AND u.sequence = (SELECT MAX(sequence) FROM coach_messages
@@ -681,40 +758,23 @@ fn answered_learner_message(conn: &Connection, user_id: &str, assistant_message:
           WHERE a.id = ?1
           ORDER BY o.id LIMIT 1",
         params![assistant_message, user_id, LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION],
-        |row| Ok((row.get::<_, String>(0)?.trim().to_owned(), row.get::<_, String>(1)?)),
+        |row| row.get(0),
     )
     .ok()
 }
 
-/// The phrases for one assistant message's stored notes. The host validated them
-/// at write time; they are checked again here because they are read into the prompt.
-fn teaching_notes(payload: &Value) -> Vec<(String, String)> {
-    payload["teachingNotes"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|note| teaching_note_phrase(note).map(|phrase| (phrase, field(note, "evidence").to_owned())))
-        .collect()
-}
-
-/// One phrase per stored teaching note. Only the learner's verified quote and the
-/// coach's strategy label reach the prompt: the model's own `text` never does, so
-/// it cannot pass as the learner's words or steer the weekly pass.
-pub(crate) fn teaching_note_phrase(note: &Value) -> Option<String> {
-    let evidence = note_field(field(note, "evidence"), TEACHING_NOTE_EVIDENCE_CHARS)?;
-    match field(note, "kind") {
-        "preference" => Some(format!("learner asked: \"{evidence}\"")),
-        "strategy_outcome" => {
-            let strategy = note_field(field(note, "strategy"), TEACHING_NOTE_STRATEGY_CHARS)?;
-            let verdict = match field(note, "outcome") {
-                "helped" => "helped",
-                "not_helped" => "did not help",
-                _ => return None,
-            };
-            Some(format!("coach tried \"{strategy}\": {verdict} (learner: \"{evidence}\")"))
-        }
-        _ => None,
-    }
+/// One note as a part of a coach line. The coach's own words, so it says whose
+/// they are; the strategy and skill are already sanitized by `read_notes`.
+fn note_phrase(note: &ReadNote) -> String {
+    let strategy = note.fact.strategy.as_deref().unwrap_or("strategy");
+    let head = match note.fact.verdict {
+        NoteVerdict::Wished => "preference".to_owned(),
+        NoteVerdict::Difficulty => "difficulty".to_owned(),
+        NoteVerdict::Helped => format!("{strategy} helped"),
+        NoteVerdict::NotHelped => format!("{strategy} did not help"),
+    };
+    let skill = note.skill.as_ref().map(|skill| format!(" [{skill}]")).unwrap_or_default();
+    format!("coach note, {head}{skill}: {}", note.text)
 }
 
 /// A stored field on its way into the prompt. Typographic quotes, colons,
@@ -724,6 +784,16 @@ pub(crate) fn teaching_note_phrase(note: &Value) -> Option<String> {
 /// is flattened, and any token containing an `obs-`/`mem-` id is dropped. A value
 /// still over `max` characters is skipped whole, never cut mid-word.
 pub(crate) fn note_field(raw: &str, max: usize) -> Option<String> {
+    sanitized(raw).filter(|text| text.chars().count() <= max)
+}
+
+/// Free text from the coach, sanitized as `note_field` does and checked whole
+/// (so a marker cannot hide past the cut), then clipped to `max` characters.
+pub(crate) fn note_text(raw: &str, max: usize) -> Option<String> {
+    sanitized(raw).map(|text| clip(&text, max))
+}
+
+fn sanitized(raw: &str) -> Option<String> {
     let separated: String = raw
         .chars()
         .map(ascii_punctuation)
@@ -734,7 +804,7 @@ pub(crate) fn note_field(raw: &str, max: usize) -> Option<String> {
         .filter(|token| !is_id_token(token))
         .collect::<Vec<_>>()
         .join(" ");
-    (!text.is_empty() && text.chars().count() <= max && is_safe_for_prompt(&text)).then_some(text)
+    (!text.is_empty() && is_safe_for_prompt(&text)).then_some(text)
 }
 
 /// The ASCII form of the typographic look-alikes this sanitizer cares about.
@@ -924,6 +994,30 @@ pub(crate) fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<
     Ok(memories.into_iter().flatten().collect())
 }
 
+/// The memories the learner confirmed, newest first. A stored statement that fails
+/// today's guards is left out, like any other memory.
+fn confirmed_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackConfirmed>> {
+    let mut statement = conn.prepare(
+        "SELECT namespace, scope, canonical_key, content
+           FROM memory_items
+          WHERE user_id = ?1 AND status = 'active' AND sensitivity = 'normal' AND source_class = 'user_explicit'
+            AND scope IN ('activity:reading','activity:writing') AND trim(content) != ''
+          ORDER BY julianday(COALESCE(last_observed_at, updated_at)) DESC, id
+          LIMIT ?2",
+    )?;
+    let rows = statement.query_map(params![user_id, MAX_CONFIRMED as i64], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+    })?;
+    let mut confirmed = Vec::new();
+    for row in rows {
+        let (namespace, scope, canonical_key, content) = row?;
+        if is_safe_for_prompt(&content) {
+            confirmed.push(PackConfirmed { namespace, scope, canonical_key, statement: clip(&content, PREFERENCE_CHARS) });
+        }
+    }
+    Ok(confirmed)
+}
+
 fn explicit_preferences(conn: &Connection, user_id: &str) -> DbResult<Vec<PackPreference>> {
     let mut statement = conn.prepare(
         "SELECT preference_key, scope, value_json FROM explicit_user_preferences
@@ -949,7 +1043,8 @@ pub fn weekly_pack(conn: &Connection, user_id: &str, start: DateTime<Utc>, end: 
     let mut lines = reading_lines(conn, &window, &mut assets);
     lines.extend(redo_lines(&window, &mut assets));
     lines.extend(writing_lines(&window));
-    lines.extend(coach_lines(conn, user_id, &from, &to, &mut assets)?);
+    let (coach, coach_omitted) = coach_lines(conn, user_id, &from, &to, &mut assets)?;
+    lines.extend(coach);
     lines.extend(review_lines(conn, user_id, &from, &to, &mut assets)?);
     lines.sort_by(|left, right| line_order(left).cmp(&line_order(right)));
 
@@ -961,14 +1056,20 @@ pub fn weekly_pack(conn: &Connection, user_id: &str, start: DateTime<Utc>, end: 
         lines: Vec::new(),
         omitted: 0,
         memories: Vec::new(),
+        confirmed: Vec::new(),
         preferences: Vec::new(),
     };
-    (pack.preferences, pack.memories) =
-        fit_context(explicit_preferences(conn, user_id)?, active_memories(conn, user_id)?, WEEKLY_CONTEXT_TOKEN_BUDGET);
+    (pack.preferences, pack.confirmed, pack.memories) = fit_context(
+        explicit_preferences(conn, user_id)?,
+        confirmed_memories(conn, user_id)?,
+        active_memories(conn, user_id)?,
+        WEEKLY_CONTEXT_TOKEN_BUDGET,
+    );
     // The omitted note is part of what must fit, so reserve for it up front.
-    pack.omitted = lines.len();
+    pack.omitted = lines.len() + coach_omitted;
     let budget = WEEKLY_PACK_TOKEN_CAP.saturating_sub(pack.estimated_tokens());
     (pack.lines, pack.omitted) = cap_lines(lines, budget);
+    pack.omitted += coach_omitted;
     enforce_cap(&mut pack);
     Ok(pack)
 }
@@ -995,26 +1096,29 @@ fn take_fitting<T: Serialize>(items: Vec<T>, budget: u32) -> (Vec<T>, u32) {
 }
 
 /// Bound the carried-along context: explicit preferences first (the learner said
-/// them), then memories in recency order, until `budget` is spent.
+/// them), then the memories the learner confirmed, then memories in recency order,
+/// until `budget` is spent.
 fn fit_context(
     preferences: Vec<PackPreference>,
+    confirmed: Vec<PackConfirmed>,
     memories: Vec<PackMemory>,
     budget: u32,
-) -> (Vec<PackPreference>, Vec<PackMemory>) {
+) -> (Vec<PackPreference>, Vec<PackConfirmed>, Vec<PackMemory>) {
     let (preferences, left) = take_fitting(preferences, budget);
+    let (confirmed, left) = take_fitting(confirmed, left);
     let (memories, _) = take_fitting(memories, left);
-    (preferences, memories)
+    (preferences, confirmed, memories)
 }
 
 /// Last line of defence for the cap: the per-item estimates above already sum to
 /// at least the whole, so this only trims if that ever stops being true. Oldest
-/// lines go first, then the least recent memories, then preferences.
+/// lines go first, then the least recent memories, then confirmed memories, then preferences.
 fn enforce_cap(pack: &mut WeeklyPack) {
     while pack.estimated_tokens() > WEEKLY_PACK_TOKEN_CAP {
         if !pack.lines.is_empty() {
             pack.lines.remove(0);
             pack.omitted += 1;
-        } else if pack.memories.pop().is_none() && pack.preferences.pop().is_none() {
+        } else if pack.memories.pop().is_none() && pack.confirmed.pop().is_none() && pack.preferences.pop().is_none() {
             break;
         }
     }
