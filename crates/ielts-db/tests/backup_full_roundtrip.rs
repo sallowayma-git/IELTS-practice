@@ -29,7 +29,6 @@ const COACH_FEEDBACK_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
 ];
 
 const M7_TABLES: &[&str] = &[

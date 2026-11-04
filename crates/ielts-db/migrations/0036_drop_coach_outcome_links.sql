@@ -1,0 +1,17 @@
+-- Version 36: drop coach_outcome_links_v0.
+--
+-- The table linked a coach strategy assignment to a later learner observation,
+-- as a satisfaction row or a learning row. Nothing ever wrote it: the only
+-- writer, `coach_link_outcome`, failed closed (no trusted provenance to attribute
+-- a later observation to a coach reply) and was never allowed in the webview
+-- capability. Only readers remained. Satisfaction per strategy is a join of
+-- coach_strategy_assignments_v0.coach_message_id with coach_feedback.coach_message_id,
+-- so no replacement table is needed.
+--
+-- It is a child table only (it references coach_strategy_assignments_v0 and
+-- learner_observations; no table, view or trigger references it), so the
+-- implicit DELETE of DROP TABLE cannot cascade into anything live. Its two
+-- indexes go with it. The pre-migration snapshot (backups/pre-migrate-*.db)
+-- keeps its rows, and backup packages that still carry it restore with the
+-- table ignored (see DROPPED_TABLES in backup/mod.rs).
+DROP TABLE IF EXISTS coach_outcome_links_v0;

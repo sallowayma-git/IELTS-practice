@@ -35,8 +35,10 @@ const WEEKLY_DIGESTS_SCHEMA_VERSION: u32 = 18;
 const CONTEXT_SNAPSHOTS_SCHEMA_VERSION: u32 = 19;
 const CONTEXT_SNAPSHOT_TABLES: &[&str] = &["agent_context_snapshots", "agent_context_items"];
 const LEGACY_BACKUP_SCHEMA_VERSION: u32 = 1;
-/// Tables migration 0033 dropped. Packages before format 20 carry them; a
+/// Tables migrations 0033 and 0036 dropped. Older packages carry them; a
 /// restore accepts and ignores them, and no package requires them.
+/// `coach_outcome_links_v0` (dropped by 0036) is carried by every package up to
+/// and including format 22.
 const DROPPED_TABLES: &[&str] = &[
     "prompt_skill_release_heads",
     "prompt_skill_releases",
@@ -59,6 +61,7 @@ const DROPPED_TABLES: &[&str] = &[
     "retrieval_runs",
     "retrieval_index_registry",
     "dream_candidates",
+    "coach_outcome_links_v0",
 ];
 
 // Parent tables precede their children. Restore inserts in this order and
@@ -89,7 +92,6 @@ const CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     // coach_strategy_assignments_v0.context_snapshot_id points here; without them a restore on a fresh
@@ -152,7 +154,6 @@ const V16_CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     "learning_events",
@@ -227,7 +228,6 @@ const V15_CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     "learning_events",
@@ -300,7 +300,6 @@ const V13_CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     "learning_events",
@@ -359,7 +358,6 @@ const V12_CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     "learning_events",
@@ -411,7 +409,6 @@ const V11_CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     "learning_events",
@@ -460,7 +457,6 @@ const V10_CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     "learning_events",
@@ -723,7 +719,6 @@ const V14_CANONICAL_TABLES: &[&str] = &[
     "coach_feedback",
     "coach_reask_links",
     "coach_strategy_assignments_v0",
-    "coach_outcome_links_v0",
     "agent_runs",
     "agent_tool_calls",
     "learning_events",
@@ -1229,24 +1224,9 @@ fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResul
 }
 
 fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<()> {
-    // Defer foreign keys for the duration of this restore.
-    //
-    // The snapshot carries `coach_outcome_links_v0`, whose `future_observation_id`
-    // references `learner_observations` (0017:112) -- a DERIVED projection table
-    // deliberately excluded from the snapshot because it is rebuilt on the target
-    // (see the note in `validate_referential_integrity`). But SQLite enforces a
-    // foreign key on INSERT, not only on delete, so restoring the link before its
-    // parent exists aborted the whole restore with a bare
-    // "FOREIGN KEY constraint failed". Any user who had ever recorded a coach
-    // learning outcome therefore held a backup that could not be restored at all.
-    //
-    // Deferring is sound here because the rebuild below recreates the exact
-    // parent rows: an observation id is `format!("obs-{source_fingerprint}")`
-    // (crates/ielts-db/src/learning_observations.rs:908), a pure function of the
-    // restored `learning_events`, so the ids the links point at come back
-    // identical. `assert_no_foreign_key_violations` at the end still runs, so
-    // nothing is weakened -- the check simply happens once the transaction is
-    // internally consistent instead of mid-load.
+    // Defer foreign keys for the duration of this restore: the check happens
+    // once, in `assert_no_foreign_key_violations` at the end, when the
+    // transaction is internally consistent, instead of mid-load.
     //
     // `defer_foreign_keys` is used rather than `foreign_keys` because the latter
     // is a documented no-op inside a transaction. SQLite also resets this flag
@@ -1341,10 +1321,9 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
         crate::writing::migrate_legacy_writing_prompts_in_transaction(tx)?;
     }
     // Rebuild the derived learning-observation projection before validating.
-    // It is the parent of the restored `coach_outcome_links_v0` rows, and it is
-    // intentionally not carried in the snapshot, so it must be regenerated from
-    // the restored `learning_events` while this transaction is still open --
-    // after commit would be too late for the deferred check below.
+    // It is intentionally not carried in the snapshot, so it must be
+    // regenerated from the restored `learning_events` while this transaction is
+    // still open -- after commit would be too late for the deferred check below.
     crate::learning_observations::learning_observations_rebuild_in_transaction(tx)?;
     if tables.get("practice_assets").is_some_and(|table| !table.columns.iter().any(|column| column == "question_kinds_json")) {
         crate::reading::assets::backfill_question_kinds_in_transaction(tx)?;
@@ -1766,16 +1745,9 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
         require_refs(reask, "parent_assistant_message_id", &message_ids)?;
         require_refs(reask, "new_user_message_id", &message_ids)?;
     }
-    if let (Some(assignments), Some(outcome_links)) = (
-        tables.get("coach_strategy_assignments_v0"),
-        tables.get("coach_outcome_links_v0"),
-    ) {
+    if let Some(assignments) = tables.get("coach_strategy_assignments_v0") {
         let message_ids = text_set(tables["coach_messages"], "id")?;
         require_refs(assignments, "coach_message_id", &message_ids)?;
-        let assignment_ids = text_set(assignments, "id")?;
-        require_refs(outcome_links, "strategy_assignment_id", &assignment_ids)?;
-        // future_observation_id references the derived learner_observations
-        // projection, which is rebuilt on the target during restore.
         // context_snapshot_id references agent_context_snapshots, carried
         // since format 19; older packages lack it and restore resolves those
         // dangling pointers with the column's ON DELETE SET NULL action.

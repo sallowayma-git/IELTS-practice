@@ -151,8 +151,7 @@ fn every_snapshot_schema_before_release_history_remains_restorable() {
                 | "memory_mutations"
                 | "coach_feedback"
                 | "coach_reask_links"
-                | "coach_strategy_assignments_v0"
-                | "coach_outcome_links_v0" => 9,
+                | "coach_strategy_assignments_v0" => 9,
                 "daily_journals"
                 | "daily_journal_sources"
                 | "background_jobs"
@@ -240,4 +239,110 @@ fn format_19_package_with_tables_migration_0033_dropped_still_restores() {
         )
         .unwrap();
     assert_eq!(dropped, 0);
+}
+
+const OUTCOME_LINKS: &str = "coach_outcome_links_v0";
+
+/// A source database holding one coach strategy assignment, and the table
+/// migration 0036 dropped as a pre-0036 export carried it: four columns, one
+/// satisfaction row and one learning row. The observation id is not in the
+/// package, exactly as in a real export (learner_observations is derived).
+fn package_with_outcome_links(
+    dir: &tempfile::TempDir,
+    format: u32,
+    database_schema: u32,
+) -> BackupPackage {
+    use ielts_domain::dto::{BackupSqlValue, BackupTable};
+
+    let source = open_db(dir.path().join(format!("outcome-source-{format}.db")));
+    source
+        .execute_batch(
+            "INSERT INTO coach_threads (id, status, created_at, updated_at)
+               VALUES ('thread-1', 'active', '2026-08-16T00:00:00Z', '2026-08-16T00:00:00Z');
+             INSERT INTO coach_messages (id, thread_id, role, content, status, created_at, sequence)
+               VALUES ('cmsg-1', 'thread-1', 'assistant', 'body', 'completed', '2026-08-16T00:00:01Z', 1);
+             INSERT INTO coach_strategy_assignments_v0
+               (id, user_id, coach_message_id, strategy_id, skills_addressed_json,
+                memory_ids_used_json, context_snapshot_id, followup_type, created_at)
+               VALUES ('csa-1', 'local', 'cmsg-1', 'evidence_first_v1', '[]', '[]', NULL,
+                       'explain', '2026-08-16T00:00:02Z');",
+        )
+        .unwrap();
+    let mut package = create_backup_package(&source, "outcome-links").unwrap();
+    assert!(
+        package.database.iter().all(|table| table.name != OUTCOME_LINKS),
+        "a package written by this build must not carry the dropped table"
+    );
+    package.manifest.schema_version = format;
+    package.manifest.database_schema_version = database_schema;
+    let text = |value: &str| BackupSqlValue::Text(value.into());
+    package.database.push(BackupTable {
+        name: OUTCOME_LINKS.into(),
+        columns: ["strategy_assignment_id", "future_observation_id", "outcome_kind", "created_at"]
+            .map(String::from)
+            .to_vec(),
+        rows: vec![
+            vec![text("csa-1"), text("obs-gone"), text("satisfaction"), text("2026-08-17T00:00:00Z")],
+            vec![text("csa-1"), text("obs-gone"), text("learning"), text("2026-08-17T00:00:00Z")],
+        ],
+    });
+    rechecksum(&mut package);
+    package
+}
+
+fn table_exists(conn: &Connection, name: &str) -> bool {
+    conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        [name],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap()
+        > 0
+}
+
+#[test]
+fn backups_exported_before_migration_0036_restore_without_the_outcome_link_table() {
+    let dir = tempdir().unwrap();
+    // Format 22 is the newest format that carried the table (schema 35); 21 is
+    // an older one that did too.
+    for (format, database_schema) in [(22, 35), (21, 35)] {
+        let package = package_with_outcome_links(&dir, format, database_schema);
+        validate_backup(&package).unwrap_or_else(|error| panic!("format {format}: {error}"));
+
+        let target = open_db(dir.path().join(format!("outcome-target-{format}.db")));
+        assert!(!table_exists(&target, OUTCOME_LINKS));
+        for dry_run in [true, false] {
+            let report = import_backup(&target, &package, dry_run).unwrap();
+            assert!(report.ok, "format {format}, dry={dry_run}: {:?}", report.errors);
+        }
+        // The rest of the coach data restored; the dropped table was ignored,
+        // not recreated, and foreign keys are still enforced afterwards.
+        let assignments: i64 = target
+            .query_row("SELECT COUNT(*) FROM coach_strategy_assignments_v0", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(assignments, 1, "format {format}");
+        assert!(!table_exists(&target, OUTCOME_LINKS), "format {format}");
+        assert_fk_enabled(&target);
+    }
+}
+
+#[test]
+fn the_ignored_outcome_link_table_is_not_validated_against_the_current_schema() {
+    // A shape that does not match any schema (different columns, rows that
+    // point nowhere) must not turn a restore into an error.
+    use ielts_domain::dto::{BackupSqlValue, BackupTable};
+
+    let dir = tempdir().unwrap();
+    let mut package = package_with_outcome_links(&dir, 22, 35);
+    let links = package.database.iter_mut().find(|table| table.name == OUTCOME_LINKS).unwrap();
+    *links = BackupTable {
+        name: OUTCOME_LINKS.into(),
+        columns: vec!["legacy_id".into()],
+        rows: vec![vec![BackupSqlValue::Text("anything".into())]],
+    };
+    rechecksum(&mut package);
+    let target = open_db(dir.path().join("target.db"));
+    let report = import_backup(&target, &package, false).unwrap();
+    assert!(report.ok, "{:?}", report.errors);
+    assert!(!table_exists(&target, OUTCOME_LINKS));
 }
