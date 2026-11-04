@@ -9,11 +9,16 @@
 //! counting this one. Either way a card is never offered when the same text is
 //! already an active memory, or when the answer's card was already confirmed or
 //! dismissed (`memoryCardState` on the message payload, written elsewhere).
+//!
+//! A note whose `scope` is `question` is about one question, not about the
+//! learner: it earns no card and does not count toward a skill's tally.
 
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use ielts_domain::TeachingNoteScope;
 
 use crate::sqlite::DbResult;
 
@@ -73,6 +78,9 @@ pub fn evaluate_coach_memory_card(
     };
     let since = (now - Duration::days(CARD_WINDOW_DAYS)).to_rfc3339();
     for (note_index, note) in notes.iter().enumerate() {
+        if TeachingNoteScope::of_note(note) == TeachingNoteScope::Question {
+            continue;
+        }
         let Some(text) = note["text"].as_str().map(str::trim).filter(|text| !text.is_empty()) else {
             continue;
         };
@@ -120,6 +128,7 @@ fn earlier_difficulties(conn: &Connection, skill: &str, message_id: Option<&str>
            AND (?2 IS NULL OR m.id != ?2)
            AND n.type = 'object'
            AND CASE WHEN n.type = 'object' THEN json_extract(n.value, '$.kind') END = 'difficulty'
+           AND CASE WHEN n.type = 'object' THEN COALESCE(json_extract(n.value, '$.scope'), 'profile') END != 'question'
            AND CASE WHEN n.type = 'object' THEN trim(json_extract(n.value, '$.skillKey')) END = ?3",
         params![since, message_id, skill],
         |row| row.get(0),

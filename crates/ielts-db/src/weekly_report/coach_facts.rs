@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
-use ielts_domain::{CoachStrategyId, TEACHING_NOTE_STRATEGY_CHARS};
+use ielts_domain::{CoachStrategyId, TeachingNoteScope, TEACHING_NOTE_STRATEGY_CHARS};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
@@ -66,7 +66,10 @@ pub(crate) const NOTE_TEXT_CHARS: usize = 200;
 const NOTE_SKILL_CHARS: usize = 80;
 
 /// Every readable note of one assistant message. A payload without a notes
-/// array, or a note that is malformed, unsafe or empty, adds nothing.
+/// array, or a note that is malformed, unsafe or empty, adds nothing. Neither
+/// does a note whose `scope` is `question`: it is about one question, not about
+/// the learner, so the pack and the report never see it. A note with no scope
+/// (every note stored before the field existed) is a profile note.
 ///
 /// Old messages (a `preference` or `strategy_outcome` with a verified
 /// `evidence` quote) and current ones (any of the three kinds, `evidence`
@@ -77,6 +80,9 @@ pub(crate) fn read_notes(payload: &Value) -> Vec<ReadNote> {
 }
 
 fn read_note(note: &Value) -> Option<ReadNote> {
+    if TeachingNoteScope::of_note(note) == TeachingNoteScope::Question {
+        return None;
+    }
     let text = note_text(field(note, "text"), NOTE_TEXT_CHARS)?;
     let verdict = match (field(note, "kind"), field(note, "outcome")) {
         ("preference", _) => NoteVerdict::Wished,

@@ -176,6 +176,27 @@ fn teaching_notes_are_tallied_by_verdict_and_by_strategy_ignoring_spelling() {
 }
 
 #[test]
+fn question_scoped_notes_are_not_counted_and_a_message_of_only_such_notes_adds_nothing() {
+    let (_dir, conn) = fixture();
+    submit(&conn, "a1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "A"}), "2026-10-05T09:00:00Z");
+    let t = thread(&conn, "a1");
+    ask(&conn, &t, &["q1"], "2026-10-05T10:00:00Z");
+    let notes = json!([
+        {"kind": "difficulty", "text": "第三段 however 没看懂", "scope": "question"},
+        {"kind": "preference", "text": "这题请讲慢一点", "scope": "question", "horizon": "session"},
+        {"kind": "preference", "text": "short examples", "scope": "profile"},
+    ]);
+    say(&conn, &t, "assistant", json!({"answer": "x", "teachingNotes": notes}), "2026-10-05T10:01:00Z");
+    ask(&conn, &t, &["q2"], "2026-10-06T10:00:00Z");
+    let only_question = json!([{"kind": "strategy_outcome", "text": "t", "strategy": "step_by_step_v1", "outcome": "helped", "scope": "question"}]);
+    say(&conn, &t, "assistant", json!({"answer": "x", "teachingNotes": only_question}), "2026-10-06T10:01:00Z");
+
+    let block = block(&conn).unwrap();
+    assert_eq!(block.data["teachingNotes"], json!({"wished": 1, "helped": 0, "notHelped": 0}));
+    assert!(block.data.get("strategies").is_none() || block.data["strategies"] == json!([]));
+}
+
+#[test]
 fn a_miss_the_coach_was_asked_about_is_counted_apart_from_one_it_was_not() {
     let (_dir, conn) = fixture();
     submit(&conn, "a1", json!({"q1": "FALSE", "q2": "TRUE", "q3": "B"}), "2026-10-04T09:00:00Z");

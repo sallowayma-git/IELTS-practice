@@ -208,6 +208,35 @@ fn notes_in_the_old_format_and_odd_stored_payloads_neither_earn_cards_nor_break_
     assert_eq!(evaluate_coach_memory_card(&conn, &json!({"teachingNotes": "x"}), None, now()).unwrap(), None);
 }
 
+fn scoped(mut note: Value, scope: &str) -> Value {
+    note["scope"] = json!(scope);
+    note
+}
+
+#[test]
+fn a_question_scoped_note_earns_no_card_even_when_remembered() {
+    let (_dir, conn, _) = fixture();
+    let about_the_question = scoped(preference("这一段的 however 我没看懂", true), "question");
+    assert_eq!(card(&conn, json!([about_the_question.clone()])), None);
+    // The next profile note of the same answer still earns its card, at its own index.
+    let got = card(&conn, json!([about_the_question, scoped(preference("以后先讲结论", true), "profile")])).unwrap();
+    assert_eq!((got.note_index, got.text.as_str()), (1, "以后先讲结论"));
+}
+
+#[test]
+fn question_scoped_difficulties_do_not_count_toward_a_skills_tally() {
+    let (_dir, conn, thread) = fixture();
+    let this_paragraph = |text: &str| scoped(difficulty(Some(SKILL), text), "question");
+    // An earlier answer whose only note was about that one question: not a first difficulty.
+    stored(&conn, &thread, json!([this_paragraph("第三段看不懂")]), "2026-10-20T09:00:00Z");
+    assert_eq!(card(&conn, json!([difficulty(Some(SKILL), "该学习者对判断题容易困惑")])), None);
+    // A question-scoped difficulty now does not earn a card from an earlier profile one either.
+    stored(&conn, &thread, json!([scoped(difficulty(Some(SKILL), "该学习者对判断题容易困惑"), "profile")]), "2026-10-21T09:00:00Z");
+    assert_eq!(card(&conn, json!([this_paragraph("这题第三段看不懂")])), None);
+    // Two profile difficulties still earn it, whether the scope is written or absent.
+    assert!(card(&conn, json!([difficulty(Some(SKILL), "该学习者对判断题容易困惑")])).is_some());
+}
+
 #[test]
 fn completing_a_run_attaches_the_card_and_ignores_a_forged_one() {
     let (_dir, conn, thread) = fixture();

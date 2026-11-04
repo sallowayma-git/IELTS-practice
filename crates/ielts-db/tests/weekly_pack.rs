@@ -180,6 +180,31 @@ fn coach_feedback_reasks_and_reviews_become_lines_tied_to_the_attempt() {
 }
 
 #[test]
+fn question_scoped_notes_never_reach_the_pack_and_notes_without_a_scope_still_do() {
+    let (_dir, conn) = fixture();
+    submit(&conn, "a1", "P1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+    coach_feedback(&conn, "a1", "P1", "2026-10-05T10:00:00Z", &["too_long"], 0);
+    note_message(&conn, "a1", "2026-10-05T10:00:00Z", "mixed", json!([
+        {"kind": "preference", "text": "这一段 however 我没看懂", "scope": "question"},
+        {"kind": "preference", "text": "短例子优先", "scope": "profile", "horizon": "durable"},
+        {"kind": "difficulty", "text": "判断题总在 NOT GIVEN 与 FALSE 之间摇摆"},
+        {"kind": "preference", "text": "写错了取值但仍是画像笔记", "scope": "nonsense"},
+    ]));
+    let pack = pack(&conn, "2026-10-03T00:00:00Z", "2026-10-10T00:00:00Z");
+    assert_eq!(
+        texts(&pack, "coach"),
+        vec![concat!(
+            "coach on P1 \"Passage P1\": feedback too_long; ",
+            "coach note, preference: 短例子优先; ",
+            "coach note, difficulty: 判断题总在 NOT GIVEN 与 FALSE 之间摇摆; ",
+            "coach note, preference: 写错了取值但仍是画像笔记"
+        )
+        .to_string()]
+    );
+    assert!(!pack.to_value().to_string().contains("however"));
+}
+
+#[test]
 fn teaching_notes_join_the_coach_line_of_their_attempt_day_without_a_per_line_limit() {
     let (_dir, conn) = fixture();
     submit(&conn, "a1", "P1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
