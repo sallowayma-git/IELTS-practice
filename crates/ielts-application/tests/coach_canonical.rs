@@ -725,6 +725,54 @@ async fn incomplete_stream_metadata_survives_the_coach_failure_trace() {
     assert_eq!(receipt["failureMessageId"], messages[1].id);
 }
 
+#[tokio::test]
+async fn two_submissions_of_the_same_passage_never_share_a_thread_history_or_evidence() {
+    let (_dir, store, first) = fixture();
+    {
+        let conn = store.0.lock().unwrap();
+        submit_reading_attempt(
+            &conn,
+            &ReadingSubmitCommand {
+                attempt_id: "att-p2-again".into(),
+                asset_id: "asset-p2".into(),
+                asset_revision: None,
+                asset_fingerprint: None,
+                answers: json!({"q1": "TRUE", "q2": "FALSE"}),
+                marked_questions: vec![],
+                question_timeline: vec![],
+                duration_ms: Some(1000),
+                title_snapshot: None,
+                idempotency_key: "submit-p2-again".into(),
+            },
+        )
+        .unwrap();
+    }
+    let ensure = |attempt: &str| {
+        ensure_coach_thread(
+            &store.0.lock().unwrap(),
+            &EnsureCoachThreadCommand { thread_id: None, attempt_id: Some(attempt.into()), asset_id: None, kind: "practice".into() },
+        )
+        .unwrap()
+    };
+    let second = ensure("att-p2-again");
+    assert_ne!(first.id, second.id, "a new submission gets its own thread");
+    assert_eq!(ensure("att-p2").id, first.id, "and reopening the old one finds the old thread");
+
+    let (_, _) = run_turn(&store, &first, "FIRST_ATTEMPT_PRIVATE_QUESTION").await;
+    let (request, _) = run_turn(&store, &second, "What about this attempt?").await;
+    let sent = serde_json::to_string(&request).unwrap();
+    assert!(!sent.contains("FIRST_ATTEMPT_PRIVATE_QUESTION"), "history of another submission leaked");
+    assert!(sent.contains("att-p2-again") && !sent.contains("\\\"attemptId\\\":\\\"att-p2\\\""));
+    assert_eq!(request.messages.iter().filter(|m| m.role == "user").count(), 2, "evidence + this question only");
+    // Nor can a request name the other attempt's thread for this one.
+    let conn = store.0.lock().unwrap();
+    let rebind = ensure_coach_thread(
+        &conn,
+        &EnsureCoachThreadCommand { thread_id: Some(first.id.clone()), attempt_id: Some("att-p2-again".into()), asset_id: None, kind: "practice".into() },
+    );
+    assert!(rebind.unwrap_err().to_string().contains("coach.thread_scope_conflict"));
+}
+
 /// Answers with provider usage that reports a prompt-cache hit.
 struct CacheHit {
     store: Store,
