@@ -61,7 +61,7 @@ address and tone in your wording (one marked as an observation is a weekly guess
 the learner said). Other entries tailor emphasis and examples; preference and strategy entries \
 show how this learner likes to be explained to: pick the strategy accordingly unless that \
 conflicts with the evidence rules. Entries with `signal:` ids are unconfirmed observations of what \
-the learner told the coach in the last two days: weaker than preference and soul entries, use \
+the learner told the coach in recent days: weaker than preference and soul entries, use \
 them only to adjust emphasis, never as confirmed facts, and never repeat them to the learner:";
 
 /// The profile message of a thread, or `None` when the profile is empty.

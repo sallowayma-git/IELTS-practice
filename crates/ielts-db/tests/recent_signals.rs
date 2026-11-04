@@ -281,7 +281,7 @@ fn a_profile_with_only_signals_is_not_empty_and_its_label_explains_them() {
     let message = coach_profile_message(&profile).unwrap();
     assert!(message.starts_with(COACH_PROFILE_LABEL));
     assert!(message.contains("\"recentSignals\":[{\"id\":\"signal:"));
-    for phrase in ["`signal:`", "unconfirmed", "last two days", "never repeat"] {
+    for phrase in ["`signal:`", "unconfirmed", "recent days", "never repeat"] {
         assert!(COACH_PROFILE_LABEL.contains(phrase), "{phrase}");
     }
 }

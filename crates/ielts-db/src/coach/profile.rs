@@ -30,7 +30,7 @@ pub struct LearnerProfileSnapshot {
     pub memories: Vec<ProfileStatement>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub weak_skills: Vec<WeakSkill>,
-    /// Unconfirmed observations from the last two days of teaching notes, ids
+    /// Unconfirmed observations from recent days of teaching notes, ids
     /// `signal:<messageId>:<noteIndex>`. Absent from every profile frozen before
     /// this field existed, and from the bytes of any profile that has none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
