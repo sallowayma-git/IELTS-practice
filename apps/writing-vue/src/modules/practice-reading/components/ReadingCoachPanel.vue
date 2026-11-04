@@ -289,7 +289,6 @@ const fab = ref(null)
 const panel = ref(null)
 const log = ref(null)
 const input = ref(null)
-const following = ref(true)
 const showJump = ref(false)
 
 // The failure note is only actionable while it is still the newest row.
@@ -359,28 +358,32 @@ function onPanelEscape(event) {
   collapse()
 }
 
-function onLogScroll() {
+function isAtEnd() {
   const el = log.value
-  if (!el) return
-  following.value = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD_PX
-  if (following.value) showJump.value = false
+  return !el || el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD_PX
+}
+
+function onLogScroll() {
+  if (isAtEnd()) showJump.value = false
 }
 
 function scrollToLatest() {
   const el = log.value
   if (!el) return
   el.scrollTop = el.scrollHeight
-  following.value = true
   showJump.value = false
 }
 
 // New text follows the reader only while they are at the end; scrolled up
 // they keep their place and get a way back. Their own question always scrolls.
-watch(tail, (next, previous) => {
-  const own = next.role === 'user' && next.id !== previous.id
-  if (own || following.value) scrollToLatest()
+// "At the end" is measured from the DOM just before it grows, not from the
+// last scroll event, which may not have fired yet.
+watch(tail, async (next, previous) => {
+  const follow = isAtEnd() || (next.role === 'user' && next.id !== previous.id)
+  await nextTick()
+  if (follow) scrollToLatest()
   else showJump.value = true
-}, { flush: 'post' })
+}, { flush: 'pre' })
 
 watch(() => props.readingCoachOpen, async (open) => {
   if (!open) return
