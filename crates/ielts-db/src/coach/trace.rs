@@ -64,9 +64,33 @@ pub fn begin_coach_trace(
     tx.execute("INSERT INTO llm_invocations (id,run_id,kind,provider,model,request_hash,created_at) VALUES (?1,?2,'completion',?3,?4,?5,?6)",
         params![invocation,id,provider,model,hash,now])?;
     tx.execute("UPDATE agent_runs SET result_json=?1 WHERE id=?2",
-        params![json!({"runKind":"coach","threadId":thread_id,"userMessageId":user_message_id,"snapshotId":snapshot,"invocationId":invocation,"strategyId":HOST_COACH_STRATEGY,"memoryIdsUsed":memory_ids}).to_string(),id])?;
+        params![json!({"runKind":"coach","threadId":thread_id,"userMessageId":user_message_id,"snapshotId":snapshot,"invocationId":invocation,"strategyId":HOST_COACH_STRATEGY,"memoryIdsUsed":memory_ids,"promptLayout":prompt_layout(request)}).to_string(),id])?;
     tx.commit()?;
     Ok(id)
+}
+
+/// Most messages whose hashes the receipt lists. A thread's history is capped
+/// well below this; the bound only protects the row from a malformed request.
+const MAX_LAYOUT_MESSAGES: usize = 256;
+
+/// The shape of the prompt that was sent, for judging prompt-cache behaviour
+/// after the fact: the routing key and a short hash per message. Two runs of one
+/// thread share their cacheable prefix exactly as far as their hash lists agree
+/// from the front; the first index that differs is where a provider's prefix
+/// cache stopped matching. Hashes of text the snapshot already holds in full.
+fn prompt_layout(request: &Value) -> Value {
+    let messages = request.get("messages").and_then(Value::as_array);
+    let hashes: Vec<String> = messages
+        .into_iter()
+        .flatten()
+        .take(MAX_LAYOUT_MESSAGES)
+        .map(|message| rendered_hash(&message.to_string())[..8].to_owned())
+        .collect();
+    json!({
+        "messages": messages.map_or(0, Vec::len),
+        "cacheKey": request.get("cacheKey").cloned().unwrap_or(Value::Null),
+        "messageHashes": hashes,
+    })
 }
 
 /// Success message + invocation + run terminal receipt commit together.

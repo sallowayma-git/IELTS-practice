@@ -1,6 +1,6 @@
 use std::future::Future;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -81,10 +81,17 @@ pub(crate) struct AiRuntime {
     client: reqwest::Client,
     transport_retries: u32,
     ledger: Option<LedgerSink>,
-    /// Set once this endpoint refused a streamed request: later calls on this
-    /// runtime go straight to the plain request.
-    stream_unsupported: AtomicBool,
 }
+
+/// How long an endpoint that refused a streamed request is sent plain requests
+/// without asking again.
+const STREAM_REFUSAL_TTL: Duration = Duration::from_secs(30 * 60);
+
+/// Endpoints (`base_url|model`) that refused a streamed request, and when. The
+/// runtime itself is built per coach run, so a flag on it forgot the refusal
+/// before the next question and every turn paid one rejected request first.
+static STREAM_REFUSALS: LazyLock<std::sync::Mutex<HashMap<String, Instant>>> =
+    LazyLock::new(Default::default);
 
 impl AiRuntime {
     pub(crate) fn new(
@@ -103,7 +110,6 @@ impl AiRuntime {
             client,
             transport_retries: MAX_RETRIES,
             ledger: None,
-            stream_unsupported: AtomicBool::new(false),
         })
     }
 
@@ -620,12 +626,57 @@ impl AiRuntime {
         body: &Value,
         invalid_envelope: &str,
     ) -> Result<(T, u64, u32, Option<String>), ChatCompletionFailure> {
-        let endpoint = format!(
-            "{}/chat/completions",
-            self.config.base_url.trim_end_matches('/')
-        );
         let started = Instant::now();
+        let (response, attempt) = self
+            .send_with_retries(body, started)
+            .await
+            .map_err(|rejected| rejected.failure)?;
+        let provider_request_id = provider_request_id_from_headers(response.headers());
+        let value = response.json::<Value>().await.map_err(|error| {
+            ChatCompletionFailure::new(
+                invalid_response(format!("{invalid_envelope}: {error}")),
+                elapsed_ms(started),
+                attempt,
+                provider_request_id.clone(),
+            )
+        })?;
+        let model = value.get("model").and_then(Value::as_str).map(str::to_string);
+        let usage = value.get("usage")
+            .and_then(|usage| serde_json::from_value::<ChatUsage>(usage.clone()).ok())
+            .map(token_usage);
+        let body_request_id = value.get("id").and_then(Value::as_str).map(str::to_string);
+        let envelope = serde_json::from_value::<T>(value).map_err(|_| {
+            // Serde errors can quote invalid string values. Keep only metadata,
+            // never response content, in the failure sent to persistence/UI.
+            ChatCompletionFailure {
+                error: invalid_response(invalid_envelope),
+                model,
+                usage,
+                latency_ms: elapsed_ms(started),
+                retry_count: attempt,
+                provider_request_id: prefer_provider_request_id(
+                    provider_request_id.clone(), body_request_id,
+                ),
+            }
+        })?;
+        Ok((envelope, elapsed_ms(started), attempt, provider_request_id))
+    }
+
+    /// The one transport policy of every chat request, plain or streamed: POST
+    /// `body`, retrying a 5xx, a 429 that is not an exhausted quota, and a
+    /// connect or timeout failure, at most `transport_retries` times with
+    /// backoff (or the provider's own `Retry-After`). All attempts share one
+    /// timeout budget: a call that already waited the full timeout is not
+    /// started again. Any other status is returned as the typed error, with the
+    /// raw status and body for the caller that needs to read them.
+    async fn send_with_retries(
+        &self,
+        body: &Value,
+        started: Instant,
+    ) -> Result<(reqwest::Response, u32), Rejected> {
+        let endpoint = format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'));
         for attempt in 0..=self.transport_retries {
+            let may_retry = attempt < self.transport_retries && started.elapsed() < self.config.timeout;
             let response = self
                 .client
                 .post(&endpoint)
@@ -633,46 +684,12 @@ impl AiRuntime {
                 .json(body)
                 .send()
                 .await;
-            match response {
-                Ok(response) if response.status().is_success() => {
-                    let provider_request_id = provider_request_id_from_headers(response.headers());
-                    let value = response.json::<Value>().await.map_err(|error| {
-                        ChatCompletionFailure::new(
-                            invalid_response(format!("{invalid_envelope}: {error}")),
-                            elapsed_ms(started),
-                            attempt,
-                            provider_request_id.clone(),
-                        )
-                    })?;
-                    let model = value.get("model").and_then(Value::as_str).map(str::to_string);
-                    let usage = value.get("usage")
-                        .and_then(|usage| serde_json::from_value::<ChatUsage>(usage.clone()).ok())
-                        .map(token_usage);
-                    let body_request_id = value.get("id").and_then(Value::as_str).map(str::to_string);
-                    let envelope = serde_json::from_value::<T>(value).map_err(|_| {
-                        // Serde errors can quote invalid string values. Keep only metadata,
-                        // never response content, in the failure sent to persistence/UI.
-                        ChatCompletionFailure {
-                            error: invalid_response(invalid_envelope),
-                            model,
-                            usage,
-                            latency_ms: elapsed_ms(started),
-                            retry_count: attempt,
-                            provider_request_id: prefer_provider_request_id(
-                                provider_request_id.clone(), body_request_id,
-                            ),
-                        }
-                    })?;
-                    return Ok((envelope, elapsed_ms(started), attempt, provider_request_id));
-                }
+            let (failure, rejected, wait) = match response {
+                Ok(response) if response.status().is_success() => return Ok((response, attempt)),
                 Ok(response) => {
                     let status = response.status();
                     let provider_request_id = provider_request_id_from_headers(response.headers());
-                    let retryable = status.is_server_error() || status.as_u16() == 429;
-                    if retryable && attempt < self.transport_retries {
-                        retry_delay(attempt).await;
-                        continue;
-                    }
+                    let wait = retry_after(response.headers());
                     // Carry the provider's own explanation. Without it a wrong
                     // key (401), a wrong model name (404), a rejected parameter
                     // (400) and an exhausted quota (429) all reached the user as
@@ -680,32 +697,54 @@ impl AiRuntime {
                     // which is undiagnosable. The body is the provider's error
                     // text, not our request, so the bearer token is not in it —
                     // but it is still bounded and never logged.
-                    let body = response.text().await.unwrap_or_default();
-                    return Err(ChatCompletionFailure::new(
-                        provider_http_error(status, &body, retryable),
-                        elapsed_ms(started),
-                        attempt,
-                        provider_request_id,
-                    ));
+                    let text = response.text().await.unwrap_or_default();
+                    let retryable = (status.is_server_error() || status.as_u16() == 429)
+                        && !is_quota_exhausted_body(&text);
+                    let error = provider_http_error(status, &text, retryable);
+                    let failure = ChatCompletionFailure::new(error, elapsed_ms(started), attempt, provider_request_id);
+                    (failure, Some((status, text)), wait)
                 }
                 Err(error) => {
                     let retryable = error.is_timeout() || error.is_connect();
-                    if retryable && attempt < self.transport_retries {
-                        retry_delay(attempt).await;
-                        continue;
-                    }
-                    return Err(ChatCompletionFailure::new(
-                        transport_error(&error, retryable),
-                        elapsed_ms(started),
-                        attempt,
-                        None,
-                    ));
+                    let error = transport_error(&error, retryable);
+                    (ChatCompletionFailure::new(error, elapsed_ms(started), attempt, None), None, None)
                 }
+            };
+            if failure.error.retryable && may_retry {
+                retry_delay(attempt, wait).await;
+                continue;
             }
+            return Err(Rejected { failure, status_and_body: rejected });
         }
-        unreachable!("retry loop always returns")
+        unreachable!("the last attempt always returns")
     }
 }
+
+/// A non-success answer (or no answer) that the retry policy gave up on.
+struct Rejected {
+    failure: ChatCompletionFailure,
+    /// The HTTP status and body, when the provider answered at all.
+    status_and_body: Option<(reqwest::StatusCode, String)>,
+}
+
+/// A 429 that is a spent quota or billing limit, not a rate limit: retrying
+/// cannot help, so it is reported at once.
+fn is_quota_exhausted_body(body: &str) -> bool {
+    let lower = body.to_ascii_lowercase();
+    ["insufficient_quota", "exceeded your current quota", "insufficient balance", "billing"]
+        .iter()
+        .any(|phrase| lower.contains(phrase))
+}
+
+/// The provider's `Retry-After` (whole seconds), bounded so a hostile or
+/// confused value cannot park the learner's request.
+fn retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let seconds = headers.get(reqwest::header::RETRY_AFTER)?.to_str().ok()?.trim().parse::<u64>().ok()?;
+    Some(Duration::from_secs(seconds).min(MAX_RETRY_AFTER))
+}
+
+/// Longest `Retry-After` honoured between two attempts.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(5);
 
 /// The typed error for a provider HTTP failure. A 400 whose body says the prompt
 /// is over the context window is the context-exceeded error, so the caller can
@@ -1325,7 +1364,7 @@ impl AiRuntime {
         body: &Value,
         on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
     ) -> Result<CompletionReply, AgentModelFailure> {
-        if self.stream_unsupported.load(Ordering::Relaxed) {
+        if self.stream_refused_recently() {
             return self.plain_as_one_delta(body, on_delta).await;
         }
         let mut streamed = body.clone();
@@ -1335,7 +1374,10 @@ impl AiRuntime {
         let (mut response, retry_count) = match self.post_streaming(&streamed).await {
             Ok(Some(open)) => open,
             Ok(None) => {
-                self.stream_unsupported.store(true, Ordering::Relaxed);
+                STREAM_REFUSALS
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert(self.stream_refusal_key(), Instant::now());
                 return self.plain_as_one_delta(body, on_delta).await;
             }
             Err(failure) => return Err(failure.into_trace()),
@@ -1389,6 +1431,19 @@ impl AiRuntime {
         fold.into_reply(&self.config.model, elapsed_ms(started), retry_count, header_request_id)
     }
 
+    fn stream_refusal_key(&self) -> String {
+        format!("{}|{}", self.config.base_url.trim_end_matches('/'), self.config.model)
+    }
+
+    /// Whether this endpoint refused streaming within [`STREAM_REFUSAL_TTL`].
+    fn stream_refused_recently(&self) -> bool {
+        STREAM_REFUSALS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&self.stream_refusal_key())
+            .is_some_and(|refused| refused.elapsed() < STREAM_REFUSAL_TTL)
+    }
+
     /// The plain request, its answer delivered as one delta when it may be shown.
     async fn plain_as_one_delta(
         &self,
@@ -1410,55 +1465,11 @@ impl AiRuntime {
         &self,
         body: &Value,
     ) -> Result<Option<(reqwest::Response, u32)>, ChatCompletionFailure> {
-        let endpoint = format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'));
-        let started = Instant::now();
-        for attempt in 0..=self.transport_retries {
-            let response = self
-                .client
-                .post(&endpoint)
-                .bearer_auth(&self.api_key)
-                .json(body)
-                .send()
-                .await;
-            match response {
-                Ok(response) if response.status().is_success() => {
-                    return Ok(Some((response, attempt)));
-                }
-                Ok(response) => {
-                    let status = response.status();
-                    let provider_request_id = provider_request_id_from_headers(response.headers());
-                    let retryable = status.is_server_error() || status.as_u16() == 429;
-                    if retryable && attempt < self.transport_retries {
-                        retry_delay(attempt).await;
-                        continue;
-                    }
-                    let body = response.text().await.unwrap_or_default();
-                    if stream_refused(status, &body) {
-                        return Ok(None);
-                    }
-                    return Err(ChatCompletionFailure::new(
-                        provider_http_error(status, &body, retryable),
-                        elapsed_ms(started),
-                        attempt,
-                        provider_request_id,
-                    ));
-                }
-                Err(error) => {
-                    let retryable = error.is_timeout() || error.is_connect();
-                    if retryable && attempt < self.transport_retries {
-                        retry_delay(attempt).await;
-                        continue;
-                    }
-                    return Err(ChatCompletionFailure::new(
-                        transport_error(&error, retryable),
-                        elapsed_ms(started),
-                        attempt,
-                        None,
-                    ));
-                }
-            }
+        match self.send_with_retries(body, Instant::now()).await {
+            Ok(open) => Ok(Some(open)),
+            Err(Rejected { status_and_body: Some((status, text)), .. }) if stream_refused(status, &text) => Ok(None),
+            Err(rejected) => Err(rejected.failure),
         }
-        unreachable!("retry loop always returns")
     }
 }
 
@@ -1824,8 +1835,11 @@ fn partial_reasoning_tag_len(text: &str) -> usize {
     if could_become_tag { tail.len() - open } else { 0 }
 }
 
-async fn retry_delay(attempt: u32) {
-    tokio::time::sleep(Duration::from_millis(250 * 2u64.pow(attempt))).await;
+/// Waits before the next attempt: the provider's own `Retry-After` when it sent
+/// one, otherwise 250 ms doubling per attempt.
+async fn retry_delay(attempt: u32, retry_after: Option<Duration>) {
+    let backoff = Duration::from_millis(250 * 2u64.pow(attempt));
+    tokio::time::sleep(retry_after.unwrap_or(backoff)).await;
 }
 
 fn elapsed_ms(started: Instant) -> u64 {
@@ -3259,6 +3273,116 @@ mod tests {
         assert!(failure.error.message.contains("HTTP 422"), "{}", failure.error.message);
         assert_eq!(failure.error.status, Some(422));
         assert_eq!(failure.error.class, "http_4xx");
+    }
+
+    #[tokio::test]
+    async fn a_stream_refusal_outlives_the_runtime_that_met_it() {
+        // The coach builds a fresh runtime for every question: the refusal must
+        // not be forgotten with the first one, or each turn pays a rejected
+        // request before its real one.
+        let plain = r#"{"model":"m","choices":[{"message":{"content":"{\"answer\":\"plain\"}"},"finish_reason":"stop"}]}"#;
+        let (first, server) = scripted_fixture(vec![
+            (400, "application/json", r#"{"error":{"message":"stream_options is not supported"}}"#),
+            (200, "application/json", plain),
+            (200, "application/json", plain),
+        ]);
+        let (sink, rows) = ledger_rows();
+        let first = first.with_ledger(sink.clone());
+        let second = AiRuntime::new(first.config.clone(), "fixture-key".into()).unwrap().with_ledger(sink);
+        let mut deltas = Vec::new();
+        for runtime in [&first, &second] {
+            runtime
+                .complete_with_trace_streaming(fixture_completion_request(), &mut |delta: &str| {
+                    deltas.push(delta.to_owned());
+                })
+                .await
+                .unwrap();
+        }
+        let bodies = server.join().unwrap();
+        assert_eq!(bodies.len(), 3, "the second runtime goes straight to the plain request");
+        assert_eq!(bodies[0]["stream"], json!(true));
+        assert!(bodies[1].get("stream").is_none() && bodies[2].get("stream").is_none());
+        assert_eq!(deltas.len(), 2);
+        // The rejected stream attempt and the plain fallback are one traced
+        // coach call: the gateway writes no ledger row for any of it.
+        assert!(rows.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_rate_limit_waits_for_retry_after_then_succeeds() {
+        let ok = r#"{"model":"m","choices":[{"message":{"content":"{\"answer\":\"ok\"}"},"finish_reason":"stop"}]}"#;
+        let (runtime, server) = scripted_fixture(vec![
+            (429, "application/json\r\nRetry-After: 1", r#"{"error":{"message":"Rate limit reached"}}"#),
+            (200, "application/json", ok),
+        ]);
+        let started = Instant::now();
+        let (_, retries) = runtime.complete_with_trace(fixture_completion_request()).await.unwrap();
+        assert_eq!(server.join().unwrap().len(), 2);
+        assert_eq!(retries, 1);
+        assert!(started.elapsed() >= Duration::from_millis(950), "waited {:?}, not the 250 ms default", started.elapsed());
+    }
+
+    #[test]
+    fn retry_after_is_whole_seconds_and_bounded() {
+        let headers = |value: &'static str| {
+            let mut map = reqwest::header::HeaderMap::new();
+            map.insert(reqwest::header::RETRY_AFTER, reqwest::header::HeaderValue::from_static(value));
+            map
+        };
+        assert_eq!(retry_after(&headers("2")), Some(Duration::from_secs(2)));
+        assert_eq!(retry_after(&headers(" 3 ")), Some(Duration::from_secs(3)));
+        assert_eq!(retry_after(&headers("86400")), Some(MAX_RETRY_AFTER));
+        // An HTTP date or garbage falls back to the default backoff.
+        assert_eq!(retry_after(&headers("Wed, 21 Oct 2026 07:28:00 GMT")), None);
+        assert_eq!(retry_after(&headers("soon")), None);
+        assert_eq!(retry_after(&reqwest::header::HeaderMap::new()), None);
+    }
+
+    #[tokio::test]
+    async fn an_exhausted_quota_is_reported_at_once_not_retried_as_a_rate_limit() {
+        let (runtime, server) = scripted_fixture(vec![(
+            429,
+            "application/json",
+            r#"{"error":{"message":"You exceeded your current quota, please check your plan","type":"insufficient_quota"}}"#,
+        )]);
+        let started = Instant::now();
+        let failure = runtime.complete_with_trace(fixture_completion_request()).await.unwrap_err();
+        assert_eq!(server.join().unwrap().len(), 1, "one attempt, no retry");
+        assert_eq!(failure.retry_count, 0);
+        assert_eq!(failure.error.status, Some(429));
+        assert!(!failure.error.retryable);
+        assert!(failure.error.message.contains("exceeded your current quota"));
+        assert!(started.elapsed() < Duration::from_millis(240), "no backoff before giving up");
+    }
+
+    #[tokio::test]
+    async fn a_plain_rate_limit_retries_with_backoff_up_to_the_cap_and_stays_retryable() {
+        let limited = (429, "application/json", r#"{"error":{"message":"Rate limit reached"}}"#);
+        let (runtime, server) = scripted_fixture(vec![limited, limited, limited]);
+        let started = Instant::now();
+        let failure = runtime.complete_with_trace(fixture_completion_request()).await.unwrap_err();
+        assert_eq!(server.join().unwrap().len(), 1 + MAX_RETRIES as usize, "the retry budget is a hard cap");
+        assert_eq!(failure.retry_count, MAX_RETRIES);
+        assert!(failure.error.retryable, "left to the learner to try again");
+        assert!(started.elapsed() >= Duration::from_millis(700), "250 ms then 500 ms of backoff, got {:?}", started.elapsed());
+    }
+
+    #[tokio::test]
+    async fn an_auth_failure_is_never_retried_on_either_path() {
+        let rejected = (401, "application/json", r#"{"error":{"message":"Incorrect API key provided"}}"#);
+        let (runtime, server) = scripted_fixture(vec![rejected]);
+        let failure = runtime.complete_with_trace(fixture_completion_request()).await.unwrap_err();
+        assert_eq!(server.join().unwrap().len(), 1);
+        assert_eq!((failure.error.status, failure.error.retryable, failure.retry_count), (Some(401), false, 0));
+        assert!(failure.error.message.contains("Incorrect API key"));
+
+        let (runtime, server) = scripted_fixture(vec![rejected]);
+        let failure = runtime
+            .complete_with_trace_streaming(fixture_completion_request(), &mut |_: &str| {})
+            .await
+            .unwrap_err();
+        assert_eq!(server.join().unwrap().len(), 1, "a 401 never reads as 'does not stream'");
+        assert_eq!((failure.error.status, failure.error.retryable), (Some(401), false));
     }
 
     #[test]

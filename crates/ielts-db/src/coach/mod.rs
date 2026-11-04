@@ -375,14 +375,37 @@ pub fn list_recent_coach_messages(
     thread_id: &str,
     limit: u32,
 ) -> DbResult<Vec<CoachMessage>> {
+    recent_coach_messages(conn, thread_id, limit, false)
+}
+
+/// The newest `limit` completed user/assistant turns, chronological: what a
+/// prompt may replay. Failure notes and unfinished rows are filtered here, in
+/// SQL, so they never use up the limit: a thread that has failed a lot would
+/// otherwise start sliding its replayed window (and with it the cached prompt
+/// prefix) earlier than its real conversation length.
+pub fn list_recent_coach_turns(
+    conn: &Connection,
+    thread_id: &str,
+    limit: u32,
+) -> DbResult<Vec<CoachMessage>> {
+    recent_coach_messages(conn, thread_id, limit, true)
+}
+
+fn recent_coach_messages(
+    conn: &Connection,
+    thread_id: &str,
+    limit: u32,
+    turns_only: bool,
+) -> DbResult<Vec<CoachMessage>> {
     let mut stmt = conn.prepare(
         "SELECT id, thread_id, role, content, structured_payload, status, created_at, sequence
          FROM coach_messages
          WHERE thread_id = ?1
+           AND (?3 = 0 OR (status = 'completed' AND role IN ('user', 'assistant')))
          ORDER BY sequence DESC
          LIMIT ?2",
     )?;
-    let rows = stmt.query_map(params![thread_id, limit.min(500) as i64], |r| {
+    let rows = stmt.query_map(params![thread_id, limit.min(500) as i64, turns_only], |r| {
         message_from_row(r, 0)
     })?;
     let mut out = Vec::new();
