@@ -6,7 +6,7 @@
 
 - M10 教学策略进化与 M11 Prompt/Skill 注册表的 Rust 实现、表（迁移 0033）均已删除；`ContextMaterializerService`、`PromptModule::CoreSoul` 不在当前树里，`crates/ielts-application/src/context_soul_policy.txt` 无任何读者。ADR-M5/M10/M11 描述的是历史设计，不是现状。
 - 现在的 Soul 是 `soul.*` 显式偏好（称呼、昵称、语气、目标分、考试日期、留言）加只追加审计 `soul_revisions`；周报生成时模型最多提出两项带证据、可撤销的编辑（`soul.companionNotes`、`soul.toneSuggestion`）。没有任何流程改写学习者设置的字段。
-- 教练每条回答都由宿主写一行 `coach_strategy_assignments_v0`，策略恒为 `evidence_first_v1`（常量），没有选择与变体；`coach_outcome_links_v0` 没有写入者。
+- 教练每条回答都由宿主写一行 `coach_strategy_assignments_v0`，策略恒为 `evidence_first_v1`（常量），没有选择与变体；`coach_outcome_links_v0` 没有写入者（已删除，见下）。
 
 ## 发现与处理
 
@@ -25,7 +25,7 @@
 
 ## 仍存在的缺口
 
-- 教练策略恒为 `evidence_first_v1`，`coach_outcome_links_v0` 没有写入者，`memory_ids_used` 与反馈没有被任何读者联合使用：策略级别的效果评估（M10）没有输入也没有读者。`afterCoach` 是不依赖这些表的确定性替代，但只是计数对比。
+- 教练策略恒为 `evidence_first_v1`，`memory_ids_used` 与反馈没有被任何读者联合使用：策略级别的效果评估（M10）没有输入也没有读者。`coach_outcome_links_v0` 没有写入者、因果归因不可靠，已由迁移 0036 删除（见 ADR-M6 末尾的修订）；策略满意度今后直接联结 `coach_strategy_assignments_v0.coach_message_id` 与 `coach_feedback.coach_message_id`。`afterCoach` 是不依赖这些表的确定性替代，但只是计数对比。
 - 没有 Prompt Registry 与教练提示词的评测/发布流程（M11 已删除）；教练系统提示词在 `coach.rs` 里以常量字节断言。
 - `context_soul_policy.txt` 无读者；Soul 策略层（CoreSoul）在当前树里不存在，周报的 `profileEdits` 是唯一由模型写 Soul 的路径，字段受限、可撤销。
 - 阅读复盘代理（`readingAttemptReviewV1`，默认关）的 `search_active_memories` 仍是另一套记忆视图（含待核实候选），没有 Soul。
