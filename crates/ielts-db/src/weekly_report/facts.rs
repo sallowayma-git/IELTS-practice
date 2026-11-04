@@ -16,7 +16,7 @@ use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
 use crate::weekly_pack::{evaluation_of, field, instant, window_observations, AssetBook, Obs};
 
-pub use super::coach_facts::{AskedQuestion, CoachFact, NoteFact, NoteVerdict, RedoQuestion};
+pub use super::coach_facts::{AskedQuestion, CoachFact, NoteFact, NoteVerdict, RedoQuestion, StrategyFeedback, Tally};
 use super::coach_facts::coach_week;
 
 /// One finished reading attempt.
@@ -103,6 +103,8 @@ pub struct WeekFacts {
     pub coach_questions: Vec<AskedQuestion>,
     /// Earlier misses redone in the window, with whether the coach was asked first.
     pub coach_redos: Vec<RedoQuestion>,
+    /// What the learner signalled about each teaching strategy, by strategy id.
+    pub coach_strategies: Vec<StrategyFeedback>,
     /// Per question type: (answered right, answered wrong). Blanks are neither.
     pub type_totals: BTreeMap<String, (u32, u32)>,
 }
@@ -350,6 +352,7 @@ pub fn week_facts(
         coach: coach.days,
         coach_questions: coach.asked,
         coach_redos: coach.redone,
+        coach_strategies: coach.strategies,
         type_totals: type_totals(&window),
     })
 }

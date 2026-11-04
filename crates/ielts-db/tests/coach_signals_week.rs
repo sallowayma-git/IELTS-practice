@@ -158,7 +158,9 @@ fn teaching_notes_are_tallied_by_verdict_and_by_strategy_ignoring_spelling() {
         {"kind": "strategy_outcome", "text": "t", "strategy": "Contrastive walk-through", "outcome": "helped", "evidence": "now I get it"},
         {"kind": "preference", "text": "short examples", "evidence": "short examples first"},
         // A note the weekly pack would also refuse (only an id token) is not counted either.
-        {"kind": "preference", "text": "x", "evidence": "obs-14"},
+        {"kind": "preference", "text": "obs-14", "evidence": "short examples"},
+        // A recorded difficulty is its own count, not a wish.
+        {"kind": "difficulty", "text": "判断题里 NOT GIVEN 与 FALSE 经常混淆"},
     ]);
     say(&conn, &t, "assistant", json!({"answer": "x", "teachingNotes": notes}), "2026-10-05T10:01:00Z");
     ask(&conn, &t, &["q2"], "2026-10-06T10:00:00Z");
@@ -166,7 +168,7 @@ fn teaching_notes_are_tallied_by_verdict_and_by_strategy_ignoring_spelling() {
     say(&conn, &t, "assistant", json!({"answer": "x", "teachingNotes": more}), "2026-10-06T10:01:00Z");
 
     let block = block(&conn).unwrap();
-    assert_eq!(block.data["teachingNotes"], json!({"wished": 1, "helped": 1, "notHelped": 1}));
+    assert_eq!(block.data["teachingNotes"], json!({"wished": 1, "helped": 1, "notHelped": 1, "difficulty": 1}));
     assert_eq!(
         block.data["strategies"],
         json!([{"strategy": "Contrastive walk-through", "helped": 1, "notHelped": 1}])
@@ -210,4 +212,98 @@ fn the_block_is_a_pure_function_of_the_rows() {
     ask(&conn, &t, &["q1"], "2026-10-05T10:00:00Z");
     ask(&conn, &t, &["q1"], "2026-10-05T10:05:00Z");
     assert_eq!(block(&conn), block(&conn));
+}
+
+/// One assistant answer written with `strategy` on a thread over `asset`, with the learner's `feedback` on it.
+fn strategy_answer(conn: &Connection, asset: &str, message: &str, strategy: &str, feedback: &[&str], at: &str) {
+    let thread = format!("thread-{message}");
+    conn.execute(
+        "INSERT INTO coach_threads (id, attempt_id, asset_id, status, created_at, updated_at) VALUES (?1, NULL, ?2, 'open', ?3, ?3)",
+        params![thread, asset, at],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO coach_messages (id, thread_id, role, content, status, created_at, sequence)
+         VALUES (?1, ?2, 'assistant', 'text', 'completed', ?3, 1)",
+        params![message, thread, at],
+    )
+    .unwrap();
+    if !strategy.is_empty() {
+        conn.execute(
+            "INSERT INTO coach_strategy_assignments_v0
+             (id, user_id, coach_message_id, strategy_id, skills_addressed_json, memory_ids_used_json, followup_type, created_at)
+             VALUES (?1, 'local', ?2, ?3, '[]', '[]', 'explain', ?4)",
+            params![format!("csa-{message}"), message, strategy, at],
+        )
+        .unwrap();
+    }
+    for kind in feedback {
+        conn.execute(
+            "INSERT INTO coach_feedback (id, user_id, coach_message_id, feedback_kind, created_at) VALUES (?1, 'local', ?2, ?3, ?4)",
+            params![format!("cfb-{message}-{kind}"), message, kind, at],
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn feedback_is_credited_to_the_strategy_that_wrote_the_answer_with_the_passages_it_came_from() {
+    let (_dir, conn) = fixture();
+    strategy_answer(&conn, "P1", "m1", "example_first_v1", &["need_example", "too_long"], "2026-10-05T10:00:00Z");
+    strategy_answer(&conn, "P1", "m2", "example_first_v1", &["thumbs_up"], "2026-10-06T10:00:00Z");
+    strategy_answer(&conn, "P2", "m3", "example_first_v1", &["need_example"], "2026-10-07T10:00:00Z");
+    strategy_answer(&conn, "P1", "m4", "concise_direct_v1", &["too_long"], "2026-10-07T11:00:00Z");
+    // Outside the window, a re-ask verdict, and an answer with no recorded strategy: none of them is counted.
+    strategy_answer(&conn, "P3", "m5", "example_first_v1", &["need_example"], "2026-09-01T10:00:00Z");
+    strategy_answer(&conn, "P3", "m6", "example_first_v1", &["reask_same_question"], "2026-10-07T12:00:00Z");
+    strategy_answer(&conn, "P3", "m7", "", &["need_example"], "2026-10-07T13:00:00Z");
+    // The learner's own reports on a catalog strategy join the tally; a free-form label does not.
+    submit(&conn, "a1", json!({"q1": "FALSE", "q2": "FALSE", "q3": "A"}), "2026-10-05T09:00:00Z");
+    let t = thread(&conn, "a1");
+    say(
+        &conn,
+        &t,
+        "assistant",
+        json!({"teachingNotes": [
+            {"kind": "strategy_outcome", "text": "例子先行对该学习者有效", "strategy": "Example-First v1", "outcome": "helped"},
+            {"kind": "strategy_outcome", "text": "提问引导没有帮助", "strategy": "socratic walk", "outcome": "not_helped"},
+        ]}),
+        "2026-10-08T10:00:00Z",
+    );
+
+    let block = block(&conn).unwrap();
+    let rows = block.data["strategyFeedback"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0]["strategy"], "example_first_v1");
+    assert_eq!(rows[0]["label"], "先给例子");
+    assert_eq!((rows[0]["total"].clone(), rows[0]["articles"].clone()), (json!(5), json!(2)));
+    assert_eq!(rows[0]["assetIds"], json!(["P1", "P2"]));
+    assert_eq!(
+        rows[0]["signals"],
+        json!([
+            {"kind": "need_example", "label": "需要例子", "count": 2, "assetIds": ["P1", "P2"]},
+            {"kind": "helped", "label": "学习者说有帮助", "count": 1, "assetIds": ["P1"]},
+            {"kind": "thumbs_up", "label": "有帮助", "count": 1, "assetIds": ["P1"]},
+            {"kind": "too_long", "label": "太长", "count": 1, "assetIds": ["P1"]},
+        ])
+    );
+    assert_eq!(rows[1]["strategy"], "concise_direct_v1");
+    assert_eq!(rows[1]["signals"], json!([{"kind": "too_long", "label": "太长", "count": 1, "assetIds": ["P1"]}]));
+
+    // Every number the narrative may cite carries the passages behind it.
+    let facts = project_weekly_facts(&[block], None, chrono::NaiveDate::from_ymd_opt(2026, 10, 10).unwrap());
+    let articles = &facts["coach.strategy.example_first_v1.articles"];
+    assert_eq!((articles.value.clone(), articles.provenance.asset_ids.clone()), (json!(2), vec!["P1".to_string(), "P2".to_string()]));
+    let wanted = &facts["coach.strategy.example_first_v1.need_example"];
+    assert_eq!((wanted.value.clone(), wanted.provenance.asset_ids.len()), (json!(2), 2));
+    assert!(facts.contains_key("coach.strategy.concise_direct_v1.too_long"));
+    assert!(!facts.contains_key("coach.strategy.example_first_v1.too_long"), "only the three busiest signals become facts");
+}
+
+#[test]
+fn a_week_without_strategy_signals_has_no_strategy_feedback() {
+    let (_dir, conn) = fixture();
+    strategy_answer(&conn, "P1", "m1", "", &["too_long"], "2026-10-05T10:00:00Z");
+    let block = block(&conn).unwrap();
+    assert!(block.data.get("strategyFeedback").is_none());
 }

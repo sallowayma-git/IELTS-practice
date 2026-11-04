@@ -18,6 +18,8 @@ use serde_json::{json, Value};
 const MAX_QUESTION_TYPES: usize = 2;
 const MAX_REPEATED_TYPES: usize = 2;
 const MAX_COACH_KINDS: usize = 2;
+const MAX_COACH_STRATEGIES: usize = 3;
+const MAX_STRATEGY_SIGNALS: usize = 3;
 const MAX_ESSAYS: usize = 2;
 const MAX_PLAN_ITEMS: usize = 2;
 
@@ -250,10 +252,12 @@ fn coach_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
             ("coach.notes.wished", "学习者提出讲法要求的次数", "wished"),
             ("coach.notes.helped", "学习者反馈讲法有帮助的次数", "helped"),
             ("coach.notes.notHelped", "学习者反馈讲法没帮助的次数", "notHelped"),
+            ("coach.notes.difficulty", "教练记录的反复出现的难点次数", "difficulty"),
         ] {
             add_number(facts, id, label, notes, key, FactFormat::Number, "coach_signals", default());
         }
     }
+    strategy_feedback_facts(facts, data);
     if let Some(repeated) = data.get("repeatedAsks") {
         add_number(facts, "coach.repeatedAsks.questions", "反复追问的题数", repeated, "questions", FactFormat::Number, "coach_signals", assets(repeated));
         add_number(facts, "coach.repeatedAsks.asks", "反复追问的提问次数", repeated, "asks", FactFormat::Number, "coach_signals", assets(repeated));
@@ -266,6 +270,42 @@ fn coach_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
             ("coach.afterCoach.unexplainedStillWrong", "没问过教练的错题重做后仍错的次数", "unexplainedStillWrong"),
         ] {
             add_number(facts, id, label, after, key, FactFormat::Number, "coach_signals", assets(after));
+        }
+    }
+}
+
+/// Per teaching strategy: how many passages it was signalled on, and each of its
+/// busiest signals. Every fact carries the passages it came from, so a claim
+/// about "the same direction on two different passages" can be checked.
+fn strategy_feedback_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
+    let rows = data.get("strategyFeedback").and_then(Value::as_array).into_iter().flatten();
+    for row in rows.take(MAX_COACH_STRATEGIES) {
+        let Some(strategy) = row.get("strategy").and_then(Value::as_str) else { continue };
+        let name = row.get("label").and_then(Value::as_str).unwrap_or(strategy);
+        add_number(
+            facts,
+            &format!("coach.strategy.{strategy}.articles"),
+            &format!("「{name}」讲法涉及的文章数"),
+            row,
+            "articles",
+            FactFormat::Number,
+            "coach_signals",
+            assets(row),
+        );
+        let signals = row.get("signals").and_then(Value::as_array).into_iter().flatten();
+        for signal in signals.take(MAX_STRATEGY_SIGNALS) {
+            let Some(kind) = signal.get("kind").and_then(Value::as_str) else { continue };
+            let what = signal.get("label").and_then(Value::as_str).unwrap_or(kind);
+            add_number(
+                facts,
+                &format!("coach.strategy.{strategy}.{kind}"),
+                &format!("「{name}」讲法下「{what}」次数"),
+                signal,
+                "count",
+                FactFormat::Number,
+                "coach_signals",
+                assets(signal),
+            );
         }
     }
 }
