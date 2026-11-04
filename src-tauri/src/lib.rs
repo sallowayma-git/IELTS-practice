@@ -309,6 +309,10 @@ pub fn run() {
             commands::coach_feedback::coach_record_feedback,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_list_feedback,
+            #[cfg(feature = "memory-core-v1")]
+            commands::memory_card::coach_confirm_memory_card,
+            #[cfg(feature = "memory-core-v1")]
+            commands::memory_card::coach_dismiss_memory_card,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_reask_link,
             #[cfg(feature = "learning-observation-v1")]

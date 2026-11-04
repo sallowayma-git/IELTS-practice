@@ -549,6 +549,18 @@
           "markdownDescription": "Enables the clear_history command without any pre-configured scope."
         },
         {
+          "description": "Enables the coach_confirm_memory_card command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-coach-confirm-memory-card",
+          "markdownDescription": "Enables the coach_confirm_memory_card command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the coach_dismiss_memory_card command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-coach-dismiss-memory-card",
+          "markdownDescription": "Enables the coach_dismiss_memory_card command without any pre-configured scope."
+        },
+        {
           "description": "Enables the coach_ensure_thread command without any pre-configured scope.",
           "type": "string",
           "const": "allow-coach-ensure-thread",
@@ -1501,6 +1513,18 @@
           "type": "string",
           "const": "deny-clear-history",
           "markdownDescription": "Denies the clear_history command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the coach_confirm_memory_card command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-coach-confirm-memory-card",
+          "markdownDescription": "Denies the coach_confirm_memory_card command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the coach_dismiss_memory_card command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-coach-dismiss-memory-card",
+          "markdownDescription": "Denies the coach_dismiss_memory_card command without any pre-configured scope."
         },
         {
           "description": "Denies the coach_ensure_thread command without any pre-configured scope.",

@@ -530,6 +530,17 @@ impl MemoryStore for ApplicationStore<'_> {
             .with_conn(|conn| ielts_db::forget_memory(conn, command))
             .map_err(memory_error)
     }
+
+    fn create_learner_memory(
+        &self,
+        input: &ielts_domain::MemoryCandidatePersistenceInput,
+        actor_id: &str,
+        reason: &str,
+    ) -> Result<ielts_domain::MemoryMutationReceipt, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::create_learner_memory(conn, input, actor_id, reason))
+            .map_err(memory_error)
+    }
 }
 
 impl LearnerModelStore for ApplicationStore<'_> {
