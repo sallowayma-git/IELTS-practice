@@ -332,6 +332,41 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         self.assertNotIn("sentences", system)
         self.assertNotIn("sentences", user)
 
+    def test_the_prompt_says_how_coach_lines_become_preference_or_strategy_memory(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "learner asked:",
+            "did not help",
+            "Their first id is the learner's message",
+            "namespace preference",
+            "namespace strategy",
+            "at least two DIFFERENT assets",
+            "one remark is not a trait",
+            "Feedback-only coach lines",
+        ):
+            self.assertIn(needed, system)
+        # Coach feedback is an interaction fact: it is never offered as a way to write a preference.
+        self.assertIn("never preferences by themselves", system)
+
+    def test_a_mutation_may_cite_the_learner_message_id_a_coach_line_leads_with(self) -> None:
+        pack = _pack()
+        pack["lines"][3] = {
+            "ids": ["obs-msg1", "obs-a1"], "date": "2026-10-08", "kind": "coach",
+            "text": 'coach on P1 "Passage P1": learner asked: "use short examples first"',
+        }
+        mutation = _add(
+            namespace="preference",
+            canonicalKey="preference.reading.short_examples_first",
+            statement="学习者希望讲解先给简短例子。",
+            evidenceObservationIds=["obs-msg1", "obs-a1"],
+        )
+        bridge = FakeHostBridge(pack=pack, content=_answer(mutations=[mutation]))
+        _run(bridge)
+        self.assertEqual(bridge.submitted()["mutations"], [mutation])
+        self.assertEqual(bridge.submitted()["droppedMutations"], 0)
+
     def test_the_per_block_sentence_path_is_gone(self) -> None:
         for removed in ("_build_narrative", "_build_system_prompt_v2", "_build_digest_v2",
                         "_build_system_prompt_no_facts"):
