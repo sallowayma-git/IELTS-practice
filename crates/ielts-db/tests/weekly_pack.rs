@@ -248,7 +248,7 @@ fn note_text_is_sanitized_clipped_and_checked_before_it_reaches_the_pack() {
         assert!(!line.contains(refused), "{refused}");
     }
     assert!(line.contains("coach note, strategy helped: ok"), "{line}");
-    assert!(!pack.to_value().to_string().contains("obs-1"));
+    assert!(!line.contains("obs-1") && !line.contains("mem-2"), "id tokens never survive in a note: {line}");
 }
 
 #[test]

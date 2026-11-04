@@ -479,7 +479,7 @@ fn the_v3_pack_is_deterministic_and_carries_only_its_own_sections() {
     }
     let keys: BTreeSet<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
     assert!(keys.iter().all(|key| {
-        ["schemaVersion", "window", "observationCount", "header", "lines", "memories", "preferences", "omitted"]
+        ["schemaVersion", "window", "observationCount", "header", "lines", "memories", "confirmed", "preferences", "omitted"]
             .contains(key)
     }));
 
