@@ -364,7 +364,11 @@ Question:
         // serialized gateway request, including roles, quoting and JSON
         // overhead, and drop whole old rounds until it fits. Only old history
         // may go, never the evidence or the current ask.
-        let serialized = serde_json::to_string(&request).map_err(|error| ApplicationError::new("coach.trace_invalid", error.to_string(), false))?;
+        // The caller attaches the thread's cache key afterwards, and the trace
+        // checks the same budget against the request WITH it: measure with a key
+        // of the same length so the two never disagree at the edge.
+        let sized = CompletionRequest { cache_key: Some(coach_cache_key("")), ..request.clone() };
+        let serialized = serde_json::to_string(&sized).map_err(|error| ApplicationError::new("coach.trace_invalid", error.to_string(), false))?;
         if estimate_tokens(&serialized) <= COACH_INPUT_TOKEN_BUDGET {
             return Ok(request);
         }
@@ -1231,6 +1235,26 @@ Why?"));
         assert!(kept % 2 == 0, "only whole rounds are kept");
         assert!(digest.content.contains(&format!("{} messages trimmed", 10 - kept)), "{}", digest.content);
         assert!(request.messages.last().unwrap().content.ends_with(&long_question));
+    }
+
+    #[test]
+    fn the_budget_check_counts_the_cache_key_the_caller_attaches_afterwards() {
+        let ctx = context("");
+        let question = |chars: usize| "w".repeat(chars);
+        // The longest question build_request accepts is the budget's edge.
+        let (mut fits, mut over) = (0usize, 4 * COACH_INPUT_TOKEN_BUDGET as usize);
+        while over - fits > 1 {
+            let middle = (fits + over) / 2;
+            match build_request(&[], Some(&ctx), &no_profile(), &question(middle)) {
+                Ok(_) => fits = middle,
+                Err(_) => over = middle,
+            }
+        }
+        let mut request = build_request(&[], Some(&ctx), &no_profile(), &question(fits)).unwrap();
+        request.cache_key = Some(coach_cache_key("thread-1"));
+        // What the trace sees (and refuses above the budget) is still inside it.
+        let traced = serde_json::to_string(&request).unwrap();
+        assert!(estimate_tokens(&traced) <= COACH_INPUT_TOKEN_BUDGET, "{} tokens", estimate_tokens(&traced));
     }
 
     #[test]
