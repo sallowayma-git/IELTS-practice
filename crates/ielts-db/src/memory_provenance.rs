@@ -1,12 +1,13 @@
 //! From a memory back to the coach words it was learned from.
 //!
-//! A teaching note is evidence only because the learner typed it. When the
-//! weekly consolidation turns notes into a `preference` or `strategy` memory,
-//! the memory cites the `coach.question.asked` observation of that learner
-//! message (`weekly_pack` puts it on the coach line). This read walks the same
-//! lineage the other way, with no new table: memory evidence -> observation ->
-//! coach message ids, so a memory can always answer "which message said so?".
-//! Read-only; the lineage is the memory's own `memory_evidence` rows.
+//! A teaching note is the coach's reading of one exchange. When the weekly
+//! consolidation (or the learner, on a preference card) turns notes into a
+//! `preference` or `strategy` memory, the memory cites the `coach.question.asked`
+//! observation of the learner message the coach answered (`weekly_pack` puts it on
+//! the coach line, paired by the answer, not by what a note quotes). This read walks
+//! the same lineage the other way, with no new table: memory evidence ->
+//! observation -> coach message ids, so a memory can always answer "which exchange
+//! said so?". Read-only; the lineage is the memory's own `memory_evidence` rows.
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -26,8 +27,9 @@ pub struct CoachMessageSource {
     /// The coach answer that recorded the teaching notes, when there is one.
     pub answer_message_id: Option<String>,
     pub attempt_id: Option<String>,
-    /// The learner's quotes the answer's teaching notes were based on, kept
-    /// only when they really occur in the learner message.
+    /// The learner quotes an older answer's teaching notes recorded as `evidence`,
+    /// kept only when they really occur in the learner message. Current notes carry
+    /// no quote, so this is empty for them.
     pub quotes: Vec<String>,
 }
 
