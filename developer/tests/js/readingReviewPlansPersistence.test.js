@@ -32,6 +32,48 @@ async function withAppDataPages(count, run) {
     }
 }
 
+test('the bundled ocean reading passage receives a persisted review plan despite its listening title', async t => {
+    await withAppDataPages(2, async ([writer, reader]) => {
+        const passage = await writer.evaluate(() => window.__READING_EXAM_MANIFEST__['p1-medium-182']);
+        assert.equal(passage.title, 'Listening to the Ocean 海洋探测');
+        const cases = [
+            { id: 'ocean-reading', type: 'reading', title: passage.title, enrolled: true },
+            { id: 'neutral-reading', type: 'reading', title: 'Ocean exploration', enrolled: true },
+            { id: 'listening-control', type: 'listening', title: 'Reading strategies', enrolled: false }
+        ];
+        for (const { id, type, title, enrolled } of cases) {
+            await t.test(id, async () => {
+                const receipt = await writer.evaluate(async record => AppData.practice.completeAttempt({
+                    operationId: record.id, record
+                }), { id, type, title, examId: passage.examId, sessionId: id,
+                    metadata: { libraryConfigurationId: id },
+                    completedAt: '2026-09-01T00:20:00.000Z', totalQuestions: 13, correctAnswers: 8 });
+                assert.equal(receipt.committed, true);
+                assert.equal(receipt.record.type, type);
+                const result = await reader.evaluate(async id => {
+                    const queue = await AppData.practice.listReviewQueue();
+                    const queued = queue.records.filter(record => record.recordId === id);
+                    return { state: await AppData.practice.getReviewState(id), queued,
+                        task: queued.length ? await AppData.practice.getReviewTask(queued[0].id) : null };
+                }, id);
+                if (enrolled) {
+                    assert.equal(result.state?.reviewCount, 1);
+                    assert.equal(result.state.nextReview, '2026-09-02T00:20:00.000Z');
+                    assert.equal(result.queued.length, 1);
+                    assert.equal(result.queued[0].wrongCount, 5);
+                    assert.equal(result.task.recordId, id);
+                    assert.equal(result.task.examId, passage.examId);
+                    assert.equal(result.task.summary.title, title);
+                } else {
+                    assert.equal(result.state, null);
+                    assert.deepEqual(result.queued, []);
+                    assert.equal(result.task, null);
+                }
+            });
+        }
+    });
+});
+
 test('article plans and practice records commit atomically across real IndexedDB writers and restore', async () => {
     await withAppDataPages(2, async pages => {
         const firstRead = await pages[0].evaluate(async () => {

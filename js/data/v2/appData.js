@@ -720,8 +720,16 @@
 
     function practiceType(record) {
         const metadata = asObject(record.metadata);
-        const hints = [record.type, record.practiceType, metadata.type, metadata.examType, metadata.practiceType,
-            record.examId, record.title, metadata.examId, metadata.title].filter(Boolean).join(' ').toLowerCase();
+        const explicitTypes = [record.type, record.examType, record.practiceType,
+            metadata.type, metadata.examType, metadata.practiceType];
+        for (const value of explicitTypes) {
+            const type = String(value || '').trim().toLowerCase().replace(/-suite$/, '');
+            if (type === 'reading' || type === 'listening') return type;
+        }
+        // Legacy records without a recognized type still use their descriptive hints.
+        const title = record.title || record.examTitle || metadata.examTitle || metadata.title;
+        const hints = [...explicitTypes, record.examId, title, metadata.examId, metadata.title]
+            .filter(Boolean).join(' ').toLowerCase();
         if (hints.includes('listen') || hints.includes('audio') || hints.includes('hearing')) return 'listening';
         if (hints.includes('read')) return 'reading';
         return null;
@@ -788,7 +796,8 @@
         const summary = layers.summary;
         // An annotation resave of the same historical record is not a new attempt.
         const isNew = !(existing && existing.summary && existing.summary.data);
-        if (isNew && isRealPracticeRecord(summary) && practiceType(summary) === 'reading') {
+        // Read explicit type aliases before the light projection drops them.
+        if (isNew && isRealPracticeRecord(summary) && practiceType(source) === 'reading') {
             const entries = asArray(source.suiteEntries);
             const candidates = entries.length ? entries : [source];
             candidates.forEach((raw, index) => {

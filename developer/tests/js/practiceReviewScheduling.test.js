@@ -240,6 +240,67 @@ test('新完成阅读将自动评分写入轻量文章计划，不复制到练�
     assert.equal(shared.docs.get('practice.reviewPlans').data[0].examId, 'p1-reading-01');
 });
 
+test('review enrollment honors explicit types before conflicting ID and title hints', async t => {
+    const sources = [
+        ['type', type => ({ type })],
+        ['examType', examType => ({ examType })],
+        ['practiceType', practiceType => ({ practiceType })],
+        ['metadata.type', type => ({ metadata: { type } })],
+        ['metadata.examType', examType => ({ metadata: { examType } })],
+        ['metadata.practiceType', practiceType => ({ metadata: { practiceType } })]
+    ];
+    for (const [field, properties] of sources) {
+        for (const type of ['reading', 'listening']) {
+            await t.test(`${field}: ${type}`, async () => {
+                const { app } = harness(); await app.ready;
+                const record = readingRecord({ type: 'practice',
+                    examId: type === 'reading' ? 'listening-control' : 'reading-control',
+                    title: type === 'reading' ? 'Listening to the Ocean 海洋探测' : 'Reading strategies',
+                    ...properties(` ${type.toUpperCase()} `) });
+                const receipt = await app.practice.completeAttempt({ record });
+                assert.equal(receipt.committed, true);
+                const state = await app.practice.getReviewState(record.id);
+                const queue = await app.practice.listReviewQueue();
+                if (type === 'reading') {
+                    assert.equal(state?.reviewCount, 1);
+                    assert.equal(queue.records.length, 1);
+                    assert.equal(queue.records[0].recordId, record.id);
+                } else {
+                    assert.equal(state, null);
+                    assert.equal(queue.records.length, 0);
+                }
+            });
+        }
+    }
+});
+
+test('review enrollment retains suite types and legacy type inference', async t => {
+    const cases = [
+        ['reading suite', { type: 'reading-suite', title: 'Listening to the Ocean' }, true],
+        ['listening suite', { type: 'listening-suite', title: 'Reading strategies' }, false],
+        ['root reading type wins', { type: 'reading', metadata: { type: 'listening' }, title: 'Listening to the Ocean' }, true],
+        ['root listening type wins', { type: 'listening', metadata: { type: 'reading' } }, false],
+        ['missing type uses ID', { type: undefined, examId: 'legacy-reading-01', title: 'Ocean exploration' }, true],
+        ['generic type uses listening ID', { type: 'practice', examId: 'legacy-listening-01' }, false],
+        ['unknown type uses title', { type: 'unknown', examId: 'p1-medium-182', title: 'Reading habits' }, true],
+        ['legacy exam title', { type: 'practice', examId: 'p1-medium-182', title: undefined, examTitle: 'Reading habits' }, true],
+        ['legacy metadata exam title', { type: 'practice', examId: 'p1-medium-182', title: undefined,
+            metadata: { examTitle: 'Reading habits' } }, true],
+        ['legacy metadata title', { type: 'practice', examId: 'p1-medium-182', title: undefined,
+            metadata: { title: 'Reading habits' } }, true],
+        ['no recognized type or hint', { type: 'unknown', examId: 'p1-medium-182', title: 'Ocean exploration' }, false]
+    ];
+    for (const [name, properties, enrolled] of cases) {
+        await t.test(name, async () => {
+            const { app } = harness(); await app.ready;
+            const record = readingRecord(properties);
+            await app.practice.completeAttempt({ record });
+            assert.equal(Boolean(await app.practice.getReviewState(record.id)), enrolled);
+            assert.equal((await app.practice.listReviewQueue()).records.length, enrolled ? 1 : 0);
+        });
+    }
+});
+
 test('满分 / 听力 / 演示记录不自动入队', async () => {
     const { app, shared } = harness();
     await app.ready;
