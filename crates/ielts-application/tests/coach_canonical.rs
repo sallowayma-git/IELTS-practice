@@ -49,7 +49,7 @@ impl CoachStore for Store {
         thread: &str,
         limit: u32,
     ) -> Result<Vec<CoachMessage>, ApplicationError> {
-        list_recent_coach_messages(&self.0.lock().unwrap(), thread, limit).map_err(app_error)
+        list_recent_coach_turns(&self.0.lock().unwrap(), thread, limit).map_err(app_error)
     }
     fn complete_run(
         &self,
