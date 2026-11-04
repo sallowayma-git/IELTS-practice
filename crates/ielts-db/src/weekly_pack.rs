@@ -10,8 +10,10 @@
 //! every id it cites is an id in this pack.
 //!
 //! Size is bounded by `WEEKLY_PACK_TOKEN_CAP`. Preferences and memories share
-//! at most `WEEKLY_CONTEXT_TOKEN_BUDGET` of it (preferences first, then the most
-//! recently observed memories), so practice lines always keep the rest. The
+//! at most `WEEKLY_CONTEXT_TOKEN_BUDGET` of it (preferences first, then the
+//! memories the learner confirmed, then the most recently observed memories), so
+//! practice lines always keep the rest. Confirmed memories are shown so the
+//! model can complement them, and carry no id: they can never be a target. The
 //! coach lines, notes included, share one `WEEKLY_COACH_TOKEN_BUDGET`, newest
 //! day first, so a talkative week cannot crowd out scores and misses. When the
 //! lines do not fit, every line of a question type missed in two or more
@@ -55,6 +57,7 @@ pub const WEEKLY_MIN_OBSERVATIONS: usize = 8;
 
 const MAX_MEMORIES: usize = 30;
 const MAX_PREFERENCES: usize = 20;
+const MAX_CONFIRMED: usize = 20;
 /// Distinct learner messages one coach line may cite besides the attempt score;
 /// a note whose message would not fit is left out, so every kept note is traceable.
 const MAX_COACH_SOURCES: usize = 7;
@@ -104,6 +107,17 @@ pub struct PackMemory {
     pub last_observed: String,
 }
 
+/// A memory the learner confirmed (`user_explicit`). Read-only context: no id, so
+/// no mutation can name it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackConfirmed {
+    pub namespace: String,
+    pub scope: String,
+    pub canonical_key: String,
+    pub statement: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PackPreference {
     pub key: String,
@@ -121,6 +135,7 @@ pub struct WeeklyPack {
     pub lines: Vec<WeeklyLine>,
     pub omitted: usize,
     pub memories: Vec<PackMemory>,
+    pub confirmed: Vec<PackConfirmed>,
     pub preferences: Vec<PackPreference>,
 }
 
@@ -133,6 +148,7 @@ impl WeeklyPack {
             "header": self.header,
             "lines": self.lines,
             "memories": self.memories,
+            "confirmed": self.confirmed,
             "preferences": self.preferences,
         });
         if self.omitted > 0 {
@@ -729,7 +745,7 @@ fn add_note_days(conn: &Connection, user_id: &str, from: &str, to: &str, days: &
 /// message answered (the closest user message before it in the thread): the
 /// citable form of "what the learner actually wrote". It is the pairing that
 /// matters, not what the note quotes, so a note needs no verbatim evidence.
-fn answered_learner_observation(conn: &Connection, user_id: &str, assistant_message: &str) -> Option<String> {
+pub(crate) fn answered_learner_observation(conn: &Connection, user_id: &str, assistant_message: &str) -> Option<String> {
     conn.query_row(
         "SELECT o.id
            FROM coach_messages a
@@ -978,6 +994,30 @@ pub(crate) fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<
     Ok(memories.into_iter().flatten().collect())
 }
 
+/// The memories the learner confirmed, newest first. A stored statement that fails
+/// today's guards is left out, like any other memory.
+fn confirmed_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackConfirmed>> {
+    let mut statement = conn.prepare(
+        "SELECT namespace, scope, canonical_key, content
+           FROM memory_items
+          WHERE user_id = ?1 AND status = 'active' AND sensitivity = 'normal' AND source_class = 'user_explicit'
+            AND scope IN ('activity:reading','activity:writing') AND trim(content) != ''
+          ORDER BY julianday(COALESCE(last_observed_at, updated_at)) DESC, id
+          LIMIT ?2",
+    )?;
+    let rows = statement.query_map(params![user_id, MAX_CONFIRMED as i64], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+    })?;
+    let mut confirmed = Vec::new();
+    for row in rows {
+        let (namespace, scope, canonical_key, content) = row?;
+        if is_safe_for_prompt(&content) {
+            confirmed.push(PackConfirmed { namespace, scope, canonical_key, statement: clip(&content, PREFERENCE_CHARS) });
+        }
+    }
+    Ok(confirmed)
+}
+
 fn explicit_preferences(conn: &Connection, user_id: &str) -> DbResult<Vec<PackPreference>> {
     let mut statement = conn.prepare(
         "SELECT preference_key, scope, value_json FROM explicit_user_preferences
@@ -1016,10 +1056,15 @@ pub fn weekly_pack(conn: &Connection, user_id: &str, start: DateTime<Utc>, end: 
         lines: Vec::new(),
         omitted: 0,
         memories: Vec::new(),
+        confirmed: Vec::new(),
         preferences: Vec::new(),
     };
-    (pack.preferences, pack.memories) =
-        fit_context(explicit_preferences(conn, user_id)?, active_memories(conn, user_id)?, WEEKLY_CONTEXT_TOKEN_BUDGET);
+    (pack.preferences, pack.confirmed, pack.memories) = fit_context(
+        explicit_preferences(conn, user_id)?,
+        confirmed_memories(conn, user_id)?,
+        active_memories(conn, user_id)?,
+        WEEKLY_CONTEXT_TOKEN_BUDGET,
+    );
     // The omitted note is part of what must fit, so reserve for it up front.
     pack.omitted = lines.len() + coach_omitted;
     let budget = WEEKLY_PACK_TOKEN_CAP.saturating_sub(pack.estimated_tokens());
@@ -1051,26 +1096,29 @@ fn take_fitting<T: Serialize>(items: Vec<T>, budget: u32) -> (Vec<T>, u32) {
 }
 
 /// Bound the carried-along context: explicit preferences first (the learner said
-/// them), then memories in recency order, until `budget` is spent.
+/// them), then the memories the learner confirmed, then memories in recency order,
+/// until `budget` is spent.
 fn fit_context(
     preferences: Vec<PackPreference>,
+    confirmed: Vec<PackConfirmed>,
     memories: Vec<PackMemory>,
     budget: u32,
-) -> (Vec<PackPreference>, Vec<PackMemory>) {
+) -> (Vec<PackPreference>, Vec<PackConfirmed>, Vec<PackMemory>) {
     let (preferences, left) = take_fitting(preferences, budget);
+    let (confirmed, left) = take_fitting(confirmed, left);
     let (memories, _) = take_fitting(memories, left);
-    (preferences, memories)
+    (preferences, confirmed, memories)
 }
 
 /// Last line of defence for the cap: the per-item estimates above already sum to
 /// at least the whole, so this only trims if that ever stops being true. Oldest
-/// lines go first, then the least recent memories, then preferences.
+/// lines go first, then the least recent memories, then confirmed memories, then preferences.
 fn enforce_cap(pack: &mut WeeklyPack) {
     while pack.estimated_tokens() > WEEKLY_PACK_TOKEN_CAP {
         if !pack.lines.is_empty() {
             pack.lines.remove(0);
             pack.omitted += 1;
-        } else if pack.memories.pop().is_none() && pack.preferences.pop().is_none() {
+        } else if pack.memories.pop().is_none() && pack.confirmed.pop().is_none() && pack.preferences.pop().is_none() {
             break;
         }
     }

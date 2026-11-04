@@ -352,6 +352,12 @@ fn memories_and_preferences_ride_along_but_explicit_ones_are_not_mutable_targets
     assert_eq!(pack.memory_ids().into_iter().collect::<Vec<_>>(), vec!["mem-inferred".to_string()]);
     assert_eq!(pack.preferences.len(), 1);
     assert_eq!(pack.preferences[0].key, "explanation_language");
+    // The learner's confirmed memory is shown for context, without an id nobody could target.
+    assert_eq!(pack.confirmed.len(), 1);
+    assert_eq!(pack.confirmed[0].canonical_key, "mem-explicit");
+    let confirmed = &pack.to_value()["confirmed"][0];
+    assert_eq!(confirmed["statement"], "Reads the stem first.");
+    assert!(confirmed.get("memoryId").is_none());
 }
 
 #[test]
