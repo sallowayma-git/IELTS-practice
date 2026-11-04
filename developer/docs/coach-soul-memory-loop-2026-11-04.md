@@ -31,3 +31,37 @@
 - 阅读复盘代理（`readingAttemptReviewV1`，默认关）的 `search_active_memories` 仍是另一套记忆视图（含待核实候选），没有 Soul。
 - 重复追问只在题目级判断，没有跨文章按题型/技能聚合。
 - 教练反馈（点赞/太长等）没有投影成观察，只能用该次作答的得分观察作为证据。
+
+## 第一阶段：笔记分层与近期信号
+
+动机：教练的 `teachingNotes` 只存在 assistant 消息的 payload 上，只有每周一次的周整合会读，学习者今天说过的偏好/困惑下一个线程完全不知道。参考「当日工作层（今天和昨天自动加载）」的思路，第一阶段只做读取时切片，不写任何记忆，所以「长期记忆只由周整合写」这条不变量不变。
+
+### 笔记新增字段（可选，向后兼容）
+
+- `scope`：`profile`（关于学习者本人，跨题有价值）｜`question`（只关于当前题或这段原文）。缺省/非法 = `profile`。`question` 笔记只随消息存档：不进近期信号、不出偏好卡片（也不计入同一技能困惑 ≥2 次的累计）、不进周包与周报的教练事实。
+- `horizon`：`session`｜`recent`｜`durable`。缺省/非法 = `recent`。第一阶段只有一个效果：`session` 不进跨线程近期信号。过期与晋升用它是第三阶段的事。
+- 非法取值只丢该字段，不丢整条笔记；旧笔记反序列化再序列化字节不变。优先级不由模型声明。
+- 定义只有一处：`ielts_domain::teaching_note`（`TeachingNoteScope` / `TeachingNoteHorizon`，缺省与解析）；写入校验在 `teaching_notes.rs`，读取方（卡片、周包、近期信号）都用同一份缺省。
+
+### 近期信号（`ielts_db::recent_signals`，由 `build_coach_system_context` 调用）
+
+- 窗口：`RECENT_SIGNAL_WINDOW_DAYS = 2`，所有线程的已完成 assistant 消息，`now` 可注入（`build_coach_system_context_at`）。
+- 纳入：`scope != question`、`horizon != session`、`kind` 为 `preference` / `difficulty` / `strategy_outcome`、文本过 `is_safe_for_prompt` 且 ≤ 200 字符；该消息的 `memoryCardState` 为 `dismissed`（学习者说不要记）或 `confirmed`（已成真正的记忆）则整条消息排除。
+- 去重：同一 `(kind, skillKey)`（无 skillKey 则按规范化文本）只留最新一条。
+- 优先级由宿主推导：`remember` 最高；其次窗口内同一 `(kind, skillKey)` 出现次数多者；最后按新近。至多 `RECENT_SIGNAL_MAX = 4` 条；顺序确定（同分时按消息时间、消息 id、笔记序号）。
+- 形状：`LearnerProfileSnapshot.recent_signals`（`recentSignals`，空则不序列化），条目 id 为 `signal:<messageId>:<noteIndex>`，不以 `mem-` 开头，所以不计入 recalled memory、不增加 `recall_count`。
+- 冻结：与画像其余部分一起在新线程首轮冻结；已冻结的旧画像 JSON 没有该字段，读取与重新序列化字节不变；无信号的学习者看到的画像字节与改动前一致（只有标签文字多了一段说明，已有线程会有一次前缀缓存失效）。
+- 预算：仍受 `PROFILE_TOKEN_BUDGET` 约束，缩减顺序为 `recent_signals` → `memories` → `weak_skills` → `preferences`（信号最不确定，最先丢）。
+- 标签：`signal:` 条目是学习者最近两天对教练说过的话的未确认观察，弱于 `preference`/`soul`，只用来调整讲解侧重点，不当作已确认事实，不复述给学习者。
+- 不写任何记忆表，无迁移、无新表、无新增写路径。
+
+### 同步改动
+
+- 教练提示词「笔记规则」段补充 `scope` / `horizon` 定义与判断示例（默认只有跨题有价值的信号才写笔记）；整段仍 ≤ 1500 token 断言。
+- 评测语料（`developer/tests/tools/coach-eval/`）每条期望带 `scope`，适用时带 `horizon`；补了 question 类与 profile/durable 类用例；评分器新增 `scope`、`horizon` 两项指标（question 类消息写出的笔记必须是 question 范围）。
+
+### 仍未做
+
+- 第二阶段（预整合落库）：把窗口内高置信信号在周整合之前以受控方式落库（需要新的写路径、证据与可撤销设计）。
+- 第三阶段（周整合的晋升与遗忘）：周整合读取 `horizon` / `scope`，让 `durable` 信号优先晋升，`recent` 过期，`session` 不进周包；周整合提示词本阶段未改。
+- 近期信号依赖模型自己正确声明 `scope`：写错成 `profile` 的题目级笔记仍会进入信号（但最多 4 条、只存活 2 天；只有带卡片的笔记才能被学习者一键否决）。评测语料的 `scope` 指标用来观察这一风险。
