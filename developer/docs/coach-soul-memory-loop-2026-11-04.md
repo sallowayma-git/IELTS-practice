@@ -57,7 +57,7 @@
 
 ### 同步改动
 
-- 教练提示词「笔记规则」段补充 `scope` / `horizon` 定义与判断示例（默认只有跨题有价值的信号才写笔记）；整段仍 ≤ 1500 token 断言。
+- 教练提示词「笔记规则」段补充 `scope` / `horizon` 定义与判断示例（默认只有跨题有价值的信号才写笔记）；整段仍 ≤ 1280 token 断言。
 - 评测语料（`developer/tests/tools/coach-eval/`）每条期望带 `scope`，适用时带 `horizon`；补了 question 类与 profile/durable 类用例；评分器新增 `scope`、`horizon` 两项指标（question 类消息写出的笔记必须是 question 范围）。
 
 ### 仍未做
