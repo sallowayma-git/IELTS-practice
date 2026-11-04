@@ -16,10 +16,19 @@
 //! Backward compatibility: messages stored before this format carry only
 //! `preference` / `strategy_outcome` notes with a mandatory `evidence` quote.
 //! They deserialize into the same type (`evidence` is optional, `remember`
-//! defaults to false).
+//! defaults to false, `scope` and `horizon` are absent and stay absent).
+//!
+//! `scope` and `horizon` are the model's declaration of what a note is about and
+//! how long it matters. An unknown value is read as absent (the note survives);
+//! absent means `profile` / `recent` for every reader (see
+//! `ielts_domain::teaching_note`). Priority is never declared by the model.
 
-use ielts_domain::{is_safe_for_prompt, TEACHING_NOTE_EVIDENCE_CHARS, TEACHING_NOTE_STRATEGY_CHARS};
-use serde::{Deserialize, Serialize};
+use ielts_domain::{
+    is_safe_for_prompt, TeachingNoteHorizon, TeachingNoteScope, TEACHING_NOTE_EVIDENCE_CHARS,
+    TEACHING_NOTE_STRATEGY_CHARS,
+};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 /// Most notes one answer keeps. Anything beyond is rejected, not truncated.
@@ -64,6 +73,22 @@ pub struct TeachingNote {
     /// Optional learner words the note rests on. Informational, never validated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence: Option<String>,
+    /// Who the note is about. Absent means `profile`.
+    #[serde(default, deserialize_with = "lenient", skip_serializing_if = "Option::is_none")]
+    pub scope: Option<TeachingNoteScope>,
+    /// How long the note matters. Absent means `recent`.
+    #[serde(default, deserialize_with = "lenient", skip_serializing_if = "Option::is_none")]
+    pub horizon: Option<TeachingNoteHorizon>,
+}
+
+/// A field the host can read or leave out: a value of the wrong type or with an
+/// unknown name is `None`, never an error that would take the whole note down.
+fn lenient<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    Ok(Option::<Value>::deserialize(deserializer)?.and_then(|value| serde_json::from_value(value).ok()))
 }
 
 fn is_false(value: &bool) -> bool {
@@ -128,6 +153,8 @@ fn candidate(item: &Value) -> Option<TeachingNote> {
         // "Remember this" is a request about the learner, not about a strategy.
         remember: parsed.remember && !is_outcome,
         evidence: parsed.evidence.and_then(clean_evidence),
+        scope: parsed.scope,
+        horizon: parsed.horizon,
     };
     if is_outcome && note.strategy.is_none() {
         return None;
@@ -356,5 +383,59 @@ mod tests {
         assert_eq!(notes[1].outcome, Some(TeachingNoteOutcome::Helped));
         // Re-serializing an old note reproduces it exactly: nothing is added.
         assert_eq!(serde_json::to_value(&notes).unwrap(), old);
+    }
+
+    #[test]
+    fn scope_and_horizon_are_kept_when_valid() {
+        let review = review(json!([
+            {"kind": "preference", "text": "以后先给例子", "scope": "profile", "horizon": "durable", "remember": true},
+            {"kind": "difficulty", "text": "第三段 however 没看懂", "scope": "question", "horizon": "session"},
+            {"kind": "preference", "text": "短一点", "horizon": "recent"},
+        ]));
+        assert_eq!(review.rejected, 0);
+        let got: Vec<_> = review.notes.iter().map(|note| (note.scope, note.horizon)).collect();
+        assert_eq!(
+            got,
+            vec![
+                (Some(TeachingNoteScope::Profile), Some(TeachingNoteHorizon::Durable)),
+                (Some(TeachingNoteScope::Question), Some(TeachingNoteHorizon::Session)),
+                (None, Some(TeachingNoteHorizon::Recent)),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_invalid_scope_or_horizon_is_dropped_but_never_costs_the_note() {
+        let review = review(json!([
+            {"kind": "preference", "text": "one", "scope": "everything", "horizon": "forever"},
+            {"kind": "preference", "text": "two", "scope": 7, "horizon": ["durable"]},
+            {"kind": "preference", "text": "three", "scope": "Question", "horizon": null},
+        ]));
+        assert_eq!(review.rejected, 0);
+        assert_eq!(review.notes.len(), 3);
+        assert!(review.notes.iter().all(|note| note.scope.is_none() && note.horizon.is_none()));
+        let stored = serde_json::to_value(&review.notes).unwrap();
+        assert!(stored.as_array().unwrap().iter().all(|note| note.get("scope").is_none() && note.get("horizon").is_none()));
+    }
+
+    #[test]
+    fn scope_and_horizon_do_not_change_what_makes_two_notes_the_same() {
+        let review = review(json!([
+            {"kind": "preference", "text": "Short examples", "scope": "profile"},
+            {"kind": "preference", "text": "short examples", "scope": "question", "horizon": "session"},
+        ]));
+        assert_eq!((review.notes.len(), review.rejected), (1, 1));
+    }
+
+    #[test]
+    fn old_notes_round_trip_byte_for_byte_and_new_fields_survive_a_round_trip() {
+        let old = r#"[{"kind":"preference","text":"short examples","evidence":"short examples"},{"kind":"difficulty","text":"t","skillKey":"reading.tfng","remember":true}]"#;
+        let notes: Vec<TeachingNote> = serde_json::from_str(old).unwrap();
+        assert!(notes.iter().all(|note| note.scope.is_none() && note.horizon.is_none()));
+        assert_eq!(serde_json::to_string(&notes).unwrap(), old);
+
+        let new = r#"[{"kind":"preference","text":"x","remember":true,"scope":"profile","horizon":"durable"}]"#;
+        let notes: Vec<TeachingNote> = serde_json::from_str(new).unwrap();
+        assert_eq!(serde_json::to_string(&notes).unwrap(), new);
     }
 }
