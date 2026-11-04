@@ -21,7 +21,7 @@
 //! replaced by one "omitted" note.
 //!
 //! Coach notes are the essence of a coaching session in the coach's own words
-//! (`coach_facts::read_notes` is the one rule for what a readable note is). They
+//! (`coach_facts::read_note` is the one rule for what a readable note is). They
 //! are data, never instructions: each note's text passes the prompt guards and
 //! is clipped, and the line cites the observation of the learner message the
 //! answer belonged to, so a memory built on it can always be traced back.
@@ -41,7 +41,7 @@ use crate::learning_observations::{
 use crate::learner::canonical_reading_skill_key;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
-use crate::weekly_report::coach_facts::{read_notes, NoteVerdict, ReadNote};
+use crate::weekly_report::coach_facts::{read_window_notes, NoteVerdict, ReadNote};
 
 pub const WEEKLY_PACK_SCHEMA_VERSION: u32 = 3;
 /// Upper bound of the whole serialized pack, in `estimate_tokens` units.
@@ -703,39 +703,18 @@ fn add_reask_days(conn: &Connection, from: &str, to: &str, days: &mut CoachDays)
 }
 
 fn add_note_days(conn: &Connection, user_id: &str, from: &str, to: &str, days: &mut CoachDays) -> DbResult<()> {
-    let mut notes = conn.prepare(
-        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.structured_payload, m.created_at, m.id
-           FROM coach_messages m
-           JOIN coach_threads t ON t.id = m.thread_id
-           LEFT JOIN attempts a ON a.id = t.attempt_id
-          WHERE m.role = 'assistant' AND m.status = 'completed'
-            AND CASE WHEN json_valid(m.structured_payload) THEN json_extract(m.structured_payload, '$.teachingNotes') END IS NOT NULL
-            AND julianday(m.created_at) > julianday(?1) AND julianday(m.created_at) <= julianday(?2)
-          ORDER BY julianday(m.created_at), m.id",
-    )?;
-    let rows = notes.query_map(params![from, to], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, String>(3)?,
-            row.get::<_, String>(4)?,
-        ))
-    })?;
-    for row in rows {
-        let (attempt, asset, payload, at, message) = row?;
-        // A message none of whose notes is readable adds no day at all.
-        let read = read_notes(&serde_json::from_str(&payload).unwrap_or(Value::Null));
-        if read.is_empty() {
-            continue;
+    // A message none of whose notes is readable adds no day at all. The notes of
+    // one message are adjacent, so its source is looked up once.
+    let mut source: Option<(String, Option<String>)> = None;
+    for (note, read) in read_window_notes(conn, from, to)? {
+        if source.as_ref().map(|(message, _)| message) != Some(&note.message_id) {
+            source = Some((note.message_id.clone(), answered_learner_observation(conn, user_id, &note.message_id)));
         }
-        let source = answered_learner_observation(conn, user_id, &message);
-        let entry = days.entry((attempt, day(&at))).or_default();
-        entry.seen(asset, at);
-        for phrase in read.iter().map(note_phrase) {
-            if !entry.notes.iter().any(|(earlier, _)| *earlier == phrase) {
-                entry.notes.push((phrase, source.clone()));
-            }
+        let entry = days.entry((note.attempt_id, day(&note.created_at))).or_default();
+        entry.seen(note.asset_id, note.created_at);
+        let phrase = note_phrase(&read);
+        if !entry.notes.iter().any(|(earlier, _)| *earlier == phrase) {
+            entry.notes.push((phrase, source.as_ref().and_then(|(_, observation)| observation.clone())));
         }
     }
     Ok(())
@@ -764,7 +743,7 @@ pub(crate) fn answered_learner_observation(conn: &Connection, user_id: &str, ass
 }
 
 /// One note as a part of a coach line. The coach's own words, so it says whose
-/// they are; the strategy and skill are already sanitized by `read_notes`.
+/// they are; the strategy and skill are already sanitized by `read_note`.
 fn note_phrase(note: &ReadNote) -> String {
     let strategy = note.fact.strategy.as_deref().unwrap_or("strategy");
     let head = match note.fact.verdict {

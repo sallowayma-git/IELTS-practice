@@ -13,13 +13,14 @@
 //! A note whose `scope` is `question` is about one question, not about the
 //! learner: it earns no card and does not count toward a skill's tally.
 
+use std::collections::HashSet;
+
 use chrono::{DateTime, Duration, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use ielts_domain::TeachingNoteScope;
-
+use crate::coach_signal_digest::{payload_notes, read_coach_notes, NoteContent, NoteKind, NoteRange};
 use crate::sqlite::DbResult;
 
 /// How far back earlier difficulty notes still count toward a card.
@@ -73,67 +74,38 @@ pub fn evaluate_coach_memory_card(
     if coach_memory_card_handled(payload) {
         return Ok(None);
     }
-    let Some(notes) = payload["teachingNotes"].as_array() else {
-        return Ok(None);
-    };
     let since = (now - Duration::days(CARD_WINDOW_DAYS)).to_rfc3339();
-    for (note_index, note) in notes.iter().enumerate() {
-        if TeachingNoteScope::of_note(note) == TeachingNoteScope::Question {
+    for (note_index, note) in payload_notes(payload) {
+        if !earns_card(conn, &note, message_id, &since)? || is_active_memory(conn, &note.text)? {
             continue;
         }
-        let Some(text) = note["text"].as_str().map(str::trim).filter(|text| !text.is_empty()) else {
-            continue;
-        };
-        if !earns_card(conn, note, message_id, &since)? || is_active_memory(conn, text)? {
-            continue;
-        }
-        return Ok(Some(CoachMemoryCard {
-            note_index,
-            text: text.to_owned(),
-            skill_key: skill_key(note).map(str::to_owned),
-        }));
+        return Ok(Some(CoachMemoryCard { note_index, text: note.text, skill_key: note.skill_key }));
     }
     Ok(None)
 }
 
-fn earns_card(conn: &Connection, note: &Value, message_id: Option<&str>, since: &str) -> DbResult<bool> {
-    let remembered = note["remember"].as_bool() == Some(true);
-    match note["kind"].as_str() {
-        Some("preference") => Ok(remembered),
-        Some("difficulty") if remembered => Ok(true),
-        Some("difficulty") => match skill_key(note) {
-            Some(skill) => Ok(earlier_difficulties(conn, skill, message_id, since)? + 1 >= CARD_DIFFICULTY_THRESHOLD),
-            None => Ok(false),
-        },
+fn earns_card(conn: &Connection, note: &NoteContent, message_id: Option<&str>, since: &str) -> DbResult<bool> {
+    match (note.kind, note.skill_key.as_deref()) {
+        (NoteKind::Preference, _) => Ok(note.remember),
+        (NoteKind::Difficulty, _) if note.remember => Ok(true),
+        (NoteKind::Difficulty, Some(skill)) => {
+            Ok(earlier_difficulties(conn, skill, message_id, since)? + 1 >= CARD_DIFFICULTY_THRESHOLD)
+        }
         _ => Ok(false),
     }
-}
-
-fn skill_key(note: &Value) -> Option<&str> {
-    note["skillKey"].as_str().map(str::trim).filter(|skill| !skill.is_empty())
 }
 
 /// Stored answers (any thread, other than `message_id`) since `since` that kept
 /// a `difficulty` note on `skill`. One answer counts once however many such
 /// notes it carries.
 fn earlier_difficulties(conn: &Connection, skill: &str, message_id: Option<&str>, since: &str) -> DbResult<i64> {
-    // json_each over a payload that is not JSON, or a notes value that is not
-    // an array of objects, must contribute nothing instead of failing the query.
-    let count = conn.query_row(
-        "SELECT COUNT(DISTINCT m.id)
-         FROM coach_messages m,
-              json_each(CASE WHEN json_valid(m.structured_payload) THEN m.structured_payload ELSE '{}' END, '$.teachingNotes') n
-         WHERE m.role = 'assistant' AND m.status = 'completed'
-           AND julianday(m.created_at) >= julianday(?1)
-           AND (?2 IS NULL OR m.id != ?2)
-           AND n.type = 'object'
-           AND CASE WHEN n.type = 'object' THEN json_extract(n.value, '$.kind') END = 'difficulty'
-           AND CASE WHEN n.type = 'object' THEN COALESCE(json_extract(n.value, '$.scope'), 'profile') END != 'question'
-           AND CASE WHEN n.type = 'object' THEN trim(json_extract(n.value, '$.skillKey')) END = ?3",
-        params![since, message_id, skill],
-        |row| row.get(0),
-    )?;
-    Ok(count)
+    let answers: HashSet<String> = read_coach_notes(conn, NoteRange::since(since))?
+        .into_iter()
+        .filter(|note| note.content.kind == NoteKind::Difficulty && note.content.skill_key.as_deref() == Some(skill))
+        .filter(|note| Some(note.message_id.as_str()) != message_id)
+        .map(|note| note.message_id)
+        .collect();
+    Ok(answers.len() as i64)
 }
 
 /// Whether an active memory of this learner already says the same thing.

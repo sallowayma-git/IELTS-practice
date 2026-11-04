@@ -16,10 +16,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
-use ielts_domain::{CoachStrategyId, TeachingNoteScope, TEACHING_NOTE_STRATEGY_CHARS};
+use ielts_domain::{CoachStrategyId, TEACHING_NOTE_STRATEGY_CHARS};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
+use crate::coach_signal_digest::{read_coach_notes, CoachNote, NoteContent, NoteKind, NoteRange, SIGNAL_TEXT_CHARS};
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
 use crate::weekly_pack::{field, note_field, note_text, Obs};
@@ -62,39 +63,40 @@ pub(crate) struct ReadNote {
 }
 
 /// Longest note text that reaches the prompt, in characters.
-pub(crate) const NOTE_TEXT_CHARS: usize = 200;
+pub(crate) const NOTE_TEXT_CHARS: usize = SIGNAL_TEXT_CHARS;
 const NOTE_SKILL_CHARS: usize = 80;
 
-/// Every readable note of one assistant message. A payload without a notes
-/// array, or a note that is malformed, unsafe or empty, adds nothing. Neither
-/// does a note whose `scope` is `question`: it is about one question, not about
-/// the learner, so the pack and the report never see it. A note with no scope
-/// (every note stored before the field existed) is a profile note.
+/// The weekly reading of one stored note (the stored notes themselves are read
+/// by [`read_coach_notes`], which already left out malformed notes and those
+/// whose `scope` is `question`: about one question, not about the learner, so
+/// the pack and the report never see them). `None` when the text is unsafe, or a
+/// `strategy_outcome` does not say `helped` or `not_helped`. Unlike a signal, a
+/// long text is clipped here, not skipped.
 ///
 /// Old messages (a `preference` or `strategy_outcome` with a verified
 /// `evidence` quote) and current ones (any of the three kinds, `evidence`
 /// optional) are read by the same rule: `evidence` plays no part, and the
 /// coach's `text` is the content either way.
-pub(crate) fn read_notes(payload: &Value) -> Vec<ReadNote> {
-    payload["teachingNotes"].as_array().into_iter().flatten().filter_map(read_note).collect()
-}
-
-fn read_note(note: &Value) -> Option<ReadNote> {
-    if TeachingNoteScope::of_note(note) == TeachingNoteScope::Question {
-        return None;
-    }
-    let text = note_text(field(note, "text"), NOTE_TEXT_CHARS)?;
-    let verdict = match (field(note, "kind"), field(note, "outcome")) {
-        ("preference", _) => NoteVerdict::Wished,
-        ("difficulty", _) => NoteVerdict::Difficulty,
-        ("strategy_outcome", "helped") => NoteVerdict::Helped,
-        ("strategy_outcome", "not_helped") => NoteVerdict::NotHelped,
+pub(crate) fn read_note(note: &NoteContent) -> Option<ReadNote> {
+    let text = note_text(&note.text, NOTE_TEXT_CHARS)?;
+    let verdict = match (note.kind, note.outcome.as_deref()) {
+        (NoteKind::Preference, _) => NoteVerdict::Wished,
+        (NoteKind::Difficulty, _) => NoteVerdict::Difficulty,
+        (NoteKind::StrategyOutcome, Some("helped")) => NoteVerdict::Helped,
+        (NoteKind::StrategyOutcome, Some("not_helped")) => NoteVerdict::NotHelped,
         _ => return None,
     };
     let reported = matches!(verdict, NoteVerdict::Helped | NoteVerdict::NotHelped);
-    let strategy = note_field(field(note, "strategy"), TEACHING_NOTE_STRATEGY_CHARS).filter(|_| reported);
-    let skill = note_field(field(note, "skillKey"), NOTE_SKILL_CHARS);
+    let strategy = note.strategy.as_deref().and_then(|raw| note_field(raw, TEACHING_NOTE_STRATEGY_CHARS)).filter(|_| reported);
+    let skill = note.skill_key.as_deref().and_then(|raw| note_field(raw, NOTE_SKILL_CHARS));
     Some(ReadNote { fact: NoteFact { verdict, strategy }, skill, text })
+}
+
+/// The readable notes of the window `(from, to]`, oldest answer first, each with
+/// the weekly reading and where it was stored.
+pub(crate) fn read_window_notes(conn: &Connection, from: &str, to: &str) -> DbResult<Vec<(CoachNote, ReadNote)>> {
+    let notes = read_coach_notes(conn, NoteRange::between(from, to))?;
+    Ok(notes.into_iter().filter_map(|note| read_note(&note.content).map(|read| (note, read))).collect())
 }
 
 /// Coach use on one attempt on one day.
@@ -370,25 +372,9 @@ fn add_notes(
     to: &str,
     offset: FixedOffset,
 ) -> DbResult<()> {
-    let mut query = conn.prepare(
-        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.structured_payload, m.created_at
-           FROM coach_messages m
-           JOIN coach_threads t ON t.id = m.thread_id
-           LEFT JOIN attempts a ON a.id = t.attempt_id
-          WHERE m.role = 'assistant' AND m.status = 'completed'
-            AND CASE WHEN json_valid(m.structured_payload) THEN json_extract(m.structured_payload, '$.teachingNotes') END IS NOT NULL
-            AND julianday(m.created_at) > julianday(?1) AND julianday(m.created_at) <= julianday(?2)
-          ORDER BY julianday(m.created_at), m.id",
-    )?;
-    let rows = query.query_map(params![from, to], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
-    })?;
-    for row in rows {
-        let (attempt, asset, payload, at) = row?;
-        let notes: Vec<NoteFact> = read_notes(&parse(Some(&payload))).into_iter().map(|note| note.fact).collect();
-        if !notes.is_empty() {
-            day_entry(days, attempt, asset, local_day(&at, offset)).notes.extend(notes);
-        }
+    for (note, read) in read_window_notes(conn, from, to)? {
+        let day = local_day(&note.created_at, offset);
+        day_entry(days, note.attempt_id, note.asset_id, day).notes.push(read.fact);
     }
     Ok(())
 }
