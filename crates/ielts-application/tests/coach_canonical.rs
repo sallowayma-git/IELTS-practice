@@ -186,8 +186,8 @@ async fn canonical_evidence_replaces_forged_payload_and_is_never_system() {
         .filter(|m| m.role == "system")
         .collect();
     assert_eq!(systems.len(), 1);
-    assert!(systems[0].content.contains("evidence_first_v1"));
-    assert!(systems[0].content.contains("locate canonical passage evidence first"));
+    assert_eq!(systems[0].content, ielts_application::coach_strategies::coach_system_prompt());
+    assert!(systems[0].content.contains("- evidence_first_v1: use when"));
     assert!(!systems[0].content.contains("HOST_CANONICAL_PASSAGE"));
     let data = request
         .messages
@@ -1022,4 +1022,69 @@ async fn consecutive_turns_on_a_real_thread_share_a_byte_identical_prefix_throug
         ("user", "And q2?"), ("assistant", "two"),
         ("user", "Try again on q1."),
     ]);
+}
+
+/// Replies with fixed text, whatever it is asked.
+struct FixedReply(String);
+
+#[async_trait]
+impl LanguageModel for FixedReply {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        Ok(CompletionResponse { content: self.0.clone(), model: "scripted".into(), latency_ms: 1, usage: None, provider_request_id: None })
+    }
+}
+
+async fn say(store: &Store, thread: &CoachThread, content: &str, reply: Value) -> CoachRunResult {
+    let mut run = command(thread, Some(json!({"focusQuestionIds": ["q1"]})));
+    run.content = content.into();
+    CoachService::run(store, run, || Ok(FixedReply(reply.to_string()))).await.unwrap()
+}
+
+fn assignment(store: &Store, message: &str) -> (String, String) {
+    store.0.lock().unwrap().query_row(
+        "SELECT strategy_id,followup_type FROM coach_strategy_assignments_v0 WHERE coach_message_id=?1",
+        [message], |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap()
+}
+
+#[tokio::test]
+async fn the_strategy_the_model_picked_is_recorded_and_a_bad_one_falls_back() {
+    let (_dir, store, thread) = fixture();
+    let picked = say(&store, &thread, "对比一下这两个", json!({"strategy": "contrastive_v1", "answer": "A 对 B。"})).await;
+    assert_eq!(picked.assistant_message.content, "A 对 B。");
+    assert_eq!(assignment(&store, &picked.assistant_message.id), ("contrastive_v1".into(), "contrast".into()));
+    assert_eq!(picked.assistant_message.structured_payload.unwrap()["strategyId"], "contrastive_v1");
+
+    for reply in [json!({"strategy": "made_up_v9", "answer": "x"}), json!({"answer": "x"})] {
+        let fallback = say(&store, &thread, "再讲一次", reply).await;
+        assert_eq!(assignment(&store, &fallback.assistant_message.id), ("evidence_first_v1".into(), "explain".into()));
+    }
+}
+
+#[tokio::test]
+async fn notes_become_a_card_only_when_asked_to_remember_or_when_a_difficulty_repeats() {
+    let (_dir, store, thread) = fixture();
+    let skill = "reading.tfng.false_vs_not_given";
+    let note = |text: &str| json!({"kind": "difficulty", "text": text, "skillKey": skill});
+
+    let first = say(&store, &thread, "这类题我老错", json!({"strategy": "step_by_step_v1", "answer": "一步步来。", "teachingNotes": [note("该学习者对判断题容易困惑，需要更细致地讲解思路")]})).await;
+    let first = first.assistant_message.structured_payload.unwrap();
+    assert_eq!(first["teachingNotes"].as_array().unwrap().len(), 1);
+    assert!(first.get("memoryCard").is_none(), "one report is not yet a pattern");
+
+    let second = say(&store, &thread, "还是不会判断题", json!({"answer": "再看一遍。", "teachingNotes": [note("该学习者对判断题的 NG 与 False 反复混淆")]})).await;
+    let second = second.assistant_message.structured_payload.unwrap();
+    assert_eq!(second["memoryCard"]["noteIndex"], 0);
+    assert_eq!(second["memoryCard"]["skillKey"], skill);
+
+    let asked = say(&store, &thread, "请记住，以后先给结论", json!({"answer": "好的。", "teachingNotes": [{"kind": "preference", "text": "该学习者希望先听结论再看证据", "remember": true}]})).await;
+    assert_eq!(asked.assistant_message.structured_payload.unwrap()["memoryCard"]["text"], "该学习者希望先听结论再看证据");
+
+    // A turn that is not the learner's own typing keeps no notes, so earns no card.
+    let mut preset = command(&thread, Some(json!({"focusQuestionIds": ["q1"], "promptKind": "preset"})));
+    preset.content = "解释这题".into();
+    let reply = json!({"answer": "好。", "teachingNotes": [{"kind": "preference", "text": "x", "remember": true}]});
+    let result = CoachService::run(&store, preset, || Ok(FixedReply(reply.to_string()))).await.unwrap();
+    let payload = result.assistant_message.structured_payload.unwrap();
+    assert!(payload.get("teachingNotes").is_none() && payload.get("memoryCard").is_none());
 }
