@@ -257,6 +257,7 @@ def main() -> int:
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading Coach streaming, lifecycle and panel contract", ["node", "--test", "developer/tests/js/readingCoachStreaming.test.mjs", "developer/tests/js/readingCoachLifecycle.test.mjs", "developer/tests/js/readingCoachPanelContract.test.mjs"]),
         run_command("Reading Coach preference card and feedback entry points", ["node", "--test", "developer/tests/js/readingCoachMemoryCard.test.mjs"]),
+        run_command("Reading question flags (mark for review)", ["node", "--test", "developer/tests/js/readingQuestionFlag.test.mjs"]),
         run_command("Reading AI review is opt-in",["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
         run_command("Vue production build", [NPM, "--prefix", "apps/writing-vue", "run", "build"]),

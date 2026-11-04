@@ -1,8 +1,4 @@
 <template>
-  <!-- Mark-for-review flag beside a question number in the bottom nav. The nav
-       mounts it only while the number is hovered/focused or marked, so an idle
-       nav carries no extra DOM. Read-only (review/replay) keeps a marked flag
-       visible but inert: a plain image, not a control. -->
   <component
     :is="readOnly ? 'span' : 'button'"
     class="q-flag"
@@ -16,6 +12,10 @@
 </template>
 
 <script setup>
+// Mark-for-review flag beside a question number in the bottom nav. The nav
+// mounts it only while the number is hovered/focused or marked, so an idle nav
+// carries no extra DOM. Read-only (review/replay) keeps a marked flag visible
+// but inert: a plain image, not a control.
 import { computed } from 'vue'
 
 const props = defineProps({
