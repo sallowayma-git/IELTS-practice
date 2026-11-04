@@ -3286,7 +3286,9 @@ mod tests {
             (200, "application/json", plain),
             (200, "application/json", plain),
         ]);
-        let second = AiRuntime::new(first.config.clone(), "fixture-key".into()).unwrap();
+        let (sink, rows) = ledger_rows();
+        let first = first.with_ledger(sink.clone());
+        let second = AiRuntime::new(first.config.clone(), "fixture-key".into()).unwrap().with_ledger(sink);
         let mut deltas = Vec::new();
         for runtime in [&first, &second] {
             runtime
@@ -3301,6 +3303,9 @@ mod tests {
         assert_eq!(bodies[0]["stream"], json!(true));
         assert!(bodies[1].get("stream").is_none() && bodies[2].get("stream").is_none());
         assert_eq!(deltas.len(), 2);
+        // The rejected stream attempt and the plain fallback are one traced
+        // coach call: the gateway writes no ledger row for any of it.
+        assert!(rows.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

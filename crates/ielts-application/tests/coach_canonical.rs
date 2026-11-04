@@ -725,6 +725,102 @@ async fn incomplete_stream_metadata_survives_the_coach_failure_trace() {
     assert_eq!(receipt["failureMessageId"], messages[1].id);
 }
 
+/// Streams the start of an answer, then the connection dies.
+struct CutMidAnswer;
+
+#[async_trait]
+impl LanguageModel for CutMidAnswer {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        panic!("the coach must use the traced streaming path");
+    }
+
+    async fn complete_with_trace_streaming(
+        &self,
+        _request: CompletionRequest,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<(CompletionResponse, u32), ielts_application::AgentModelFailure> {
+        on_delta(r#"{"answer":"Check the qua"#);
+        Err(ielts_application::AgentModelFailure::new(ModelError::classed(
+            "AI stream failed: connection reset",
+            true,
+            "stream_error",
+        )))
+    }
+}
+
+#[tokio::test]
+async fn a_stream_cut_mid_answer_never_persists_the_half_answer_or_a_second_receipt() {
+    let (_dir, store, thread) = fixture();
+    let mut shown = String::new();
+    let error = CoachService::run_streaming(&store, command(&thread, None), || Ok(CutMidAnswer), &mut |delta: &str| {
+        shown.push_str(delta)
+    })
+    .await
+    .unwrap_err();
+    // The learner saw the start of it, and the run says plainly that it failed.
+    assert_eq!(shown, "Check the qua");
+    assert_eq!((error.code.as_str(), error.retryable), ("coach.provider_failed", true));
+    let conn = store.0.lock().unwrap();
+    let messages = list_coach_messages(&conn, &thread.id, None, 10).unwrap();
+    let shape: Vec<(&str, &str)> = messages.iter().map(|m| (m.role.as_str(), m.status.as_str())).collect();
+    assert_eq!(shape, vec![("user", "completed"), ("system", "failed")]);
+    assert!(messages.iter().all(|m| !m.content.contains("Check the qua")), "the partial text is never stored");
+    let (invocations, assignments): (i64, i64) = conn.query_row(
+        "SELECT (SELECT COUNT(*) FROM llm_invocations), (SELECT COUNT(*) FROM coach_strategy_assignments_v0)",
+        [], |r| Ok((r.get(0)?, r.get(1)?)),
+    ).unwrap();
+    assert_eq!((invocations, assignments), (1, 0));
+}
+
+/// Never answers: the run is abandoned while the provider call is in flight.
+struct Hangs;
+
+#[async_trait]
+impl LanguageModel for Hangs {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test]
+async fn an_abandoned_run_leaves_one_failure_receipt_no_half_answer_and_frees_the_thread() {
+    let (_dir, store, thread) = fixture();
+    {
+        let run = CoachService::run(&store, command(&thread, None), || Ok(Hangs));
+        tokio::pin!(run);
+        // Polled once: the user turn and the trace are written, the provider call hangs.
+        tokio::select! {
+            _ = &mut run => unreachable!("the provider never answers"),
+            _ = tokio::task::yield_now() => {}
+        }
+        // The view went away: the future is dropped here.
+    }
+    {
+        let conn = store.0.lock().unwrap();
+        let messages = list_coach_messages(&conn, &thread.id, None, 10).unwrap();
+        let shape: Vec<(&str, &str)> = messages.iter().map(|m| (m.role.as_str(), m.status.as_str())).collect();
+        assert_eq!(shape, vec![("user", "completed"), ("system", "failed")], "no assistant row of any status");
+        assert_eq!(messages[1].structured_payload.as_ref().unwrap()["code"], "coach.interrupted");
+        let (runs, failed, invocations, errors): (i64, i64, i64, i64) = conn.query_row(
+            "SELECT (SELECT COUNT(*) FROM agent_runs), (SELECT COUNT(*) FROM agent_runs WHERE status='failed'),
+                    (SELECT COUNT(*) FROM llm_invocations), (SELECT COUNT(*) FROM llm_invocations WHERE error_json IS NOT NULL)",
+            [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        ).unwrap();
+        assert_eq!((runs, failed, invocations, errors), (1, 1, 1, 1), "one receipt, closed as failed");
+    }
+    // The gate was released with the future: the next question runs, and the
+    // abandoned one is history without an answer.
+    let (request, result) = run_turn(&store, &thread, "Try again.").await;
+    assert_eq!(result.assistant_message.status, "completed");
+    let replayed: Vec<(&str, &str)> = request.messages[2..request.messages.len() - 1]
+        .iter()
+        .map(|m| (m.role.as_str(), m.content.as_str()))
+        .collect();
+    assert_eq!(replayed, vec![("user", "Explain my mistake.")]);
+    let invocations: i64 = store.0.lock().unwrap().query_row("SELECT COUNT(*) FROM llm_invocations", [], |r| r.get(0)).unwrap();
+    assert_eq!(invocations, 2, "one row per run, never a duplicate");
+}
+
 /// Records every request and answers from a script, one entry per call.
 struct Scripted {
     store: Store,
