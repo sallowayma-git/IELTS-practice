@@ -30,6 +30,7 @@ pub mod migrate;
 pub mod modes;
 pub mod perf;
 pub mod reading;
+pub mod recent_signals;
 pub mod safety;
 pub mod secrets;
 pub mod settings;
@@ -75,7 +76,8 @@ pub use safety::*;
 pub use secrets::*;
 pub use settings::*;
 pub use sqlite::*;
-pub use system_context::{build_coach_system_context, coach_profile_message, COACH_PROFILE_LABEL};
+pub use recent_signals::{recent_signals, RECENT_SIGNAL_MAX, RECENT_SIGNAL_WINDOW_DAYS};
+pub use system_context::{build_coach_system_context, build_coach_system_context_at, coach_profile_message, COACH_PROFILE_LABEL};
 pub use vocab::*;
 pub use weekly_pack::*;
 pub use weekly_report::{

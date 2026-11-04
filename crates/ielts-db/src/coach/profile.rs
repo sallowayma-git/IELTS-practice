@@ -30,10 +30,16 @@ pub struct LearnerProfileSnapshot {
     pub memories: Vec<ProfileStatement>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub weak_skills: Vec<WeakSkill>,
+    /// Unconfirmed observations from the last two days of teaching notes, ids
+    /// `signal:<messageId>:<noteIndex>`. Absent from every profile frozen before
+    /// this field existed, and from the bytes of any profile that has none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent_signals: Vec<ProfileStatement>,
 }
 
-/// One preference or learned memory. `id` is the memory id (`mem-...`) for a
-/// memory item, or `preference:<scope>:<key>` for an explicit preference row.
+/// One preference, learned memory or recent signal. `id` is the memory id
+/// (`mem-...`) for a memory item, `preference:<scope>:<key>` for an explicit
+/// preference row, or `signal:<messageId>:<noteIndex>` for a recent signal.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileStatement {
@@ -53,7 +59,10 @@ pub struct WeakSkill {
 
 impl LearnerProfileSnapshot {
     pub fn is_empty(&self) -> bool {
-        self.preferences.is_empty() && self.memories.is_empty() && self.weak_skills.is_empty()
+        self.preferences.is_empty()
+            && self.memories.is_empty()
+            && self.weak_skills.is_empty()
+            && self.recent_signals.is_empty()
     }
 
     /// Memory item ids present in the snapshot, in prompt order.
@@ -139,6 +148,7 @@ mod tests {
             preferences: vec![statement("preference:global:tone", "tone: brief"), statement("mem-p", "x")],
             memories: vec![statement("mem-a", "y")],
             weak_skills: vec![],
+            recent_signals: vec![statement("signal:m:0", "z")],
         };
         assert_eq!(snapshot.memory_ids(), vec!["mem-p", "mem-a"]);
         assert!(LearnerProfileSnapshot::default().is_empty());

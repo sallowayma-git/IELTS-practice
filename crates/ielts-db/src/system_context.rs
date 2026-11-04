@@ -22,14 +22,18 @@
 //!   wants to be taught first.
 //! - **Weak skills** come from the learner model with the same evidence gate as
 //!   before.
+//! - **Recent signals** are the last two days' unconfirmed teaching notes, sliced
+//!   at read time by [`crate::recent_signals`]: what the learner told the coach
+//!   before the weekly consolidation could turn it into memory.
 //!
 //! The result is a plain [`LearnerProfileSnapshot`], so the frozen
 //! per-thread storage and the prompt message keep their shape: Soul entries are
 //! `soul:*` statements at the head of `preferences`/`memories`, and only `mem-*`
-//! ids count as recalled memories. Nothing here writes: Soul is edited by the
+//! ids count as recalled memories (`signal:*` ids do not). Nothing here writes: Soul is edited by the
 //! learner or (two fields, audited, undoable) by the weekly dream, and memory
 //! is written by the weekly consolidation only.
 
+use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde_json::{Map, Value};
 
@@ -40,6 +44,7 @@ use crate::coach::{
     PROFILE_MAX_PREFERENCES, PROFILE_MAX_WEAK_SKILLS, PROFILE_TOKEN_BUDGET,
     WEAK_SKILL_MASTERY_CEILING, WEAK_SKILL_MIN_DISTINCT_ASSETS,
 };
+use crate::recent_signals::recent_signals;
 use crate::soul::soul_profile;
 use crate::sqlite::DbResult;
 
@@ -55,7 +60,10 @@ Entries with an id starting `soul:` are the learner's own address, tone and goal
 follow the address and tone in how you word the answer. Other entries tailor emphasis and \
 examples; preference and strategy entries describe how this learner likes to be explained to, \
 so pick the explanation strategy accordingly unless that conflicts with the evidence rules; \
-a `soul:` entry marked as an observation is a weekly guess, not something the learner said:";
+a `soul:` entry marked as an observation is a weekly guess, not something the learner said. \
+Entries with an id starting `signal:` are unconfirmed observations of what the learner told the \
+coach in the last two days: weaker than preference and soul entries, use them only to adjust \
+emphasis, never treat them as confirmed facts and never repeat them to the learner:";
 
 /// The profile message of a thread, or `None` when the profile is empty.
 pub fn coach_profile_message(profile: &LearnerProfileSnapshot) -> Option<String> {
@@ -72,36 +80,49 @@ pub fn coach_profile_message(profile: &LearnerProfileSnapshot) -> Option<String>
 /// This is the one entry point a coach run uses. Freezing the result on the
 /// thread (so the prompt prefix stays byte-stable) stays the coach store's job.
 pub fn build_coach_system_context(conn: &Connection, user_id: &str) -> DbResult<LearnerProfileSnapshot> {
+    build_coach_system_context_at(conn, user_id, Utc::now())
+}
+
+/// [`build_coach_system_context`] as of `now`: the clock the memory expiry and
+/// the recent-signal window are read against, so a test can fix it.
+pub fn build_coach_system_context_at(
+    conn: &Connection,
+    user_id: &str,
+    now: DateTime<Utc>,
+) -> DbResult<LearnerProfileSnapshot> {
     let soul = soul_profile(conn, user_id)?;
     let (stated, observed) = soul_statements(&soul);
 
     // The learner's own words (explicit preferences, then memories they stated)
     // share one cap, as before; Soul entries do not compete for it.
     let mut said = explicit_preference_rows(conn, user_id)?;
-    said.extend(memory_rows(conn, user_id, true)?);
+    said.extend(memory_rows(conn, user_id, true, now)?);
     said.truncate(PROFILE_MAX_PREFERENCES);
     let mut preferences = stated;
     preferences.extend(said);
 
-    let mut learned = memory_rows(conn, user_id, false)?;
+    let mut learned = memory_rows(conn, user_id, false, now)?;
     learned.truncate(PROFILE_MAX_MEMORIES);
     let mut memories = observed;
     memories.extend(learned);
 
     let weak_skills = weak_skill_rows(conn, user_id)?;
-    Ok(fit(LearnerProfileSnapshot { preferences, memories, weak_skills }, PROFILE_TOKEN_BUDGET))
+    let recent_signals = recent_signals(conn, now)?;
+    let profile = LearnerProfileSnapshot { preferences, memories, weak_skills, recent_signals };
+    Ok(fit(profile, PROFILE_TOKEN_BUDGET))
 }
 
 fn tokens(profile: &LearnerProfileSnapshot) -> u32 {
     estimate_tokens(&serde_json::to_string(profile).unwrap_or_default())
 }
 
-/// Deterministic shrink to the budget: learned memories go first, then weak
-/// skills, then preferences, each from its tail. Soul entries lead their lists,
-/// so they are the last thing to go.
+/// Deterministic shrink to the budget: recent signals go first (the least
+/// certain entries), then learned memories, weak skills and preferences, each
+/// from its tail. Soul entries lead their lists, so they are the last thing to go.
 fn fit(mut profile: LearnerProfileSnapshot, budget: u32) -> LearnerProfileSnapshot {
     while tokens(&profile) > budget {
-        if profile.memories.pop().is_none()
+        if profile.recent_signals.pop().is_none()
+            && profile.memories.pop().is_none()
             && profile.weak_skills.pop().is_none()
             && profile.preferences.pop().is_none()
         {
@@ -181,8 +202,8 @@ fn explicit_preference_rows(conn: &Connection, user_id: &str) -> DbResult<Vec<Pr
 /// Active, unexpired, normal-sensitivity reading memories. `explicit` selects
 /// the learner-stated ones (preferences) or the learned ones. `predicted`
 /// hypotheses are never offered: a prompt cannot present them as observed.
-fn memory_rows(conn: &Connection, user_id: &str, explicit: bool) -> DbResult<Vec<ProfileStatement>> {
-    let now = chrono::Utc::now().to_rfc3339();
+fn memory_rows(conn: &Connection, user_id: &str, explicit: bool, now: DateTime<Utc>) -> DbResult<Vec<ProfileStatement>> {
+    let now = now.to_rfc3339();
     let mut query = conn.prepare(
         "SELECT id,content FROM memory_items
          WHERE user_id=?1 AND scope=?2 AND status='active' AND sensitivity='normal'
@@ -237,4 +258,52 @@ fn weak_skill_rows(conn: &Connection, user_id: &str) -> DbResult<Vec<WeakSkill>>
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(id: &str) -> ProfileStatement {
+        ProfileStatement { id: id.into(), statement: "word ".repeat(40).trim().into() }
+    }
+
+    fn skill() -> WeakSkill {
+        WeakSkill { skill_key: "reading.tfng".into(), label: "TFNG".into(), mastery: 0.4, distinct_articles: 3 }
+    }
+
+    /// Every list has entries; each lower budget must take away the next list in
+    /// order: signals, then memories, then weak skills, then preferences.
+    #[test]
+    fn the_budget_takes_signals_first_then_memories_weak_skills_and_preferences() {
+        let full = LearnerProfileSnapshot {
+            preferences: vec![entry("preference:global:a")],
+            memories: vec![entry("mem-1")],
+            weak_skills: vec![skill()],
+            recent_signals: vec![entry("signal:m:0"), entry("signal:m:1")],
+        };
+        let lists = |p: &LearnerProfileSnapshot| (p.recent_signals.len(), p.memories.len(), p.weak_skills.len(), p.preferences.len());
+        assert_eq!(lists(&fit(full.clone(), u32::MAX)), (2, 1, 1, 1));
+
+        let mut shrinking = full;
+        let mut seen = vec![lists(&shrinking)];
+        for budget in (0..tokens(&shrinking)).rev() {
+            shrinking = fit(shrinking, budget);
+            if seen.last() != Some(&lists(&shrinking)) {
+                seen.push(lists(&shrinking));
+            }
+        }
+        // One entry at a time, from the least certain list to the most certain.
+        assert_eq!(
+            seen,
+            vec![(2, 1, 1, 1), (1, 1, 1, 1), (0, 1, 1, 1), (0, 0, 1, 1), (0, 0, 0, 1), (0, 0, 0, 0)]
+        );
+    }
+
+    #[test]
+    fn the_label_still_describes_every_entry_family() {
+        for family in ["`soul:`", "`signal:`", "preference and strategy entries"] {
+            assert!(COACH_PROFILE_LABEL.contains(family), "{family}");
+        }
+    }
 }

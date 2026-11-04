@@ -1431,6 +1431,7 @@ Why?"));
             preferences: vec![ielts_db::ProfileStatement { id: "preference:global:tone".into(), statement: "tone: brief".into() }],
             memories: vec![ielts_db::ProfileStatement { id: "mem-1".into(), statement: "Misses qualifiers in TFNG.".into() }],
             weak_skills: vec![ielts_db::WeakSkill { skill_key: "reading.tfng.false_vs_not_given".into(), label: "False versus Not Given".into(), mastery: 0.31, distinct_articles: 3 }],
+            ..Default::default()
         }
     }
 
