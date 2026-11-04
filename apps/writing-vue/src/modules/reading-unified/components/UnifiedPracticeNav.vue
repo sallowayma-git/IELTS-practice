@@ -10,7 +10,11 @@
       :class="{ active: part.key === activePartKey, 'is-placeholder': part.placeholder }"
       :aria-label="`Part ${part.index} questions`"
     >
-      <div class="part-nav-info">
+      <div
+        class="part-nav-info"
+        :class="{ 'is-linked': part.link }"
+        @click="part.link && $emit('open-part', part.link)"
+      >
         <div class="part-nav-name" :class="{ inactive: !part.placeholder && part.key !== activePartKey }">Part {{ part.index }}</div>
         <div class="part-nav-status">{{ part.answeredCount }} of {{ part.total }}</div>
       </div>
@@ -35,13 +39,13 @@
     </section>
     <div class="nav-controls-right">
       <button
-        v-if="reviewMode"
+        v-if="showExit"
         id="exit-btn"
         type="button"
         @click="$emit('leave')"
       >Exit</button>
       <button
-        v-if="reviewMode"
+        v-if="showReset"
         id="reset-btn"
         type="button"
         :disabled="resetDisabled"
@@ -50,8 +54,8 @@
       <button
         id="submit-btn"
         type="button"
-        title="Submit"
-        aria-label="Submit"
+        :title="submitLabel"
+        :aria-label="submitLabel"
         :disabled="submitDisabled"
         :class="{ 'is-submitted': reviewMode }"
         @click="$emit('submit')"
@@ -74,10 +78,16 @@ const props = defineProps({
   activeQuestionId: { type: String, default: '' },
   reviewMode: { type: Boolean, default: false },
   submitDisabled: { type: Boolean, default: false },
-  resetDisabled: { type: Boolean, default: false }
+  submitLabel: { type: String, default: 'Submit' },
+  resetDisabled: { type: Boolean, default: false },
+  showExit: { type: Boolean, default: false },
+  showReset: { type: Boolean, default: false },
+  // Suite runs fill the other two parts from the suite sequence:
+  // { p1: { answeredCount, total, link }, ... }; link is emitted on click.
+  partSummaries: { type: Object, default: null }
 })
 
-defineEmits(['scroll-to-question', 'submit', 'reset', 'leave'])
+defineEmits(['scroll-to-question', 'submit', 'reset', 'leave', 'open-part'])
 
 const PART_KEYS = ['p1', 'p2', 'p3']
 const PART_TOTALS = { p1: 13, p2: 13, p3: 14 }
@@ -107,12 +117,14 @@ const partSections = computed(() => (
   PART_KEYS.map((key, sectionIndex) => {
     const placeholder = key !== activePartKey.value
     if (placeholder) {
+      const summary = props.partSummaries?.[key] || null
       return {
         key,
         index: sectionIndex + 1,
         placeholder: true,
-        answeredCount: 0,
-        total: PART_TOTALS[key],
+        answeredCount: summary?.answeredCount ?? 0,
+        total: summary?.total ?? PART_TOTALS[key],
+        link: summary?.link || null,
         questions: []
       }
     }
@@ -132,6 +144,7 @@ const partSections = computed(() => (
       placeholder: false,
       answeredCount: questions.filter((question) => question.status && question.status !== 'unknown').length,
       total: questions.length,
+      link: null,
       questions
     }
   })

@@ -272,6 +272,8 @@ pub trait CoachStore: Send + Sync {
         command: &AppendCoachMessageCommand,
     ) -> Result<CoachMessage, ApplicationError>;
 
+    /// The newest `limit` completed user/assistant turns, chronological. Failure
+    /// notes and unfinished rows do not count against the limit.
     fn load_history(
         &self,
         thread_id: &str,

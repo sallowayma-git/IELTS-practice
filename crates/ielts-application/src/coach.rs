@@ -1,7 +1,8 @@
 use ielts_db::{
     AppendCoachMessageCommand, CoachRunResult, RecordCoachFailureCommand, RunCoachCommand,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::{Arc, LazyLock, PoisonError};
 
 use ielts_domain::{estimate_tokens, CONTEXT_HARD_TOKEN_CEILING};
 use serde_json::{json, Value};
@@ -20,10 +21,16 @@ use crate::{
 const COACH_HISTORY_MESSAGE_LIMIT: u32 = 500;
 
 /// History grows append-only until it costs more than this, then the oldest
-/// half is dropped in one step. Between trims the prompt prefix (system,
-/// evidence, history so far) is byte-identical from turn to turn, which is what
-/// provider-side prompt caching keys on.
+/// half of its rounds is dropped in one step. Between trims the prompt prefix
+/// (system, evidence, history so far) is byte-identical from turn to turn,
+/// which is what provider-side prompt caching keys on.
 const COACH_HISTORY_TOKEN_BUDGET: u32 = 8_000;
+
+/// Room kept for the closing turn (request controls plus the question) when the
+/// history budget is derived from what is left of the input budget. A constant,
+/// not the actual question: the history window must not move with how long this
+/// turn's question happens to be.
+const COACH_FINAL_TURN_RESERVE: u32 = 1_000;
 
 /// Round-3 audit (7.8): input budget for the assembled coach prompt. Reuses the
 /// single 32k authority rather than introducing a second hardcoded number.
@@ -75,6 +82,34 @@ fn is_learner_free_input(metadata: &Value) -> bool {
     };
     freeform && metadata["action"] != REVIEW_ACTION
 }
+
+/// Per-thread run gates. A thread's entry lives only while some run holds or
+/// awaits it: idle entries are pruned on the next acquisition, so the map is
+/// bounded by the number of threads in flight.
+#[derive(Default)]
+struct ThreadGates {
+    gates: std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+}
+
+impl ThreadGates {
+    /// Waits (FIFO) until no other run holds `thread_id`. Threads never wait on
+    /// each other.
+    async fn lock(&self, thread_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+        let gate = {
+            let mut gates = self.gates.lock().unwrap_or_else(PoisonError::into_inner);
+            gates.retain(|_, gate| Arc::strong_count(gate) > 1);
+            gates.entry(thread_id.to_owned()).or_default().clone()
+        };
+        gate.lock_owned().await
+    }
+
+    #[cfg(test)]
+    fn tracked(&self) -> usize {
+        self.gates.lock().unwrap_or_else(PoisonError::into_inner).len()
+    }
+}
+
+static THREAD_GATES: LazyLock<ThreadGates> = LazyLock::new(ThreadGates::default);
 
 pub struct CoachService;
 
@@ -128,6 +163,12 @@ impl CoachService {
                 false,
             ));
         }
+        // One run at a time per thread, from history read to answer commit. Two
+        // overlapping runs would each build their prompt without the other's
+        // question and then commit u1, u2, a1, a2: answers detached from their
+        // questions, replayed that way forever. The same gate makes the review
+        // idempotency check below race-free (a double click pays once).
+        let _turn = THREAD_GATES.lock(&command.thread_id).await;
         let context =
             store.resolve_context(&command.thread_id, command.question_context.as_ref())?;
         // The automatic review is a pure function of the attempt: once a
@@ -277,13 +318,8 @@ Question:
         ));
     }
 
-    let prefix = messages.len();
-    let mandatory_cost = estimate_tokens(&final_turn)
-        + messages
-            .iter()
-            .map(|message| estimate_tokens(&message.content))
-            .sum::<u32>();
-    if mandatory_cost > COACH_INPUT_TOKEN_BUDGET {
+    let stable_cost: u32 = messages.iter().map(|message| estimate_tokens(&message.content)).sum();
+    if stable_cost + estimate_tokens(&final_turn) > COACH_INPUT_TOKEN_BUDGET {
         return Err(ApplicationError::new(
             "coach.input_budget_exceeded",
             "canonical context and current question exceed the coach input budget",
@@ -299,35 +335,74 @@ Question:
             message.status == "completed" && matches!(message.role.as_str(), "user" | "assistant")
         })
         .collect();
-    let costs: Vec<u32> = turns.iter().map(|turn| estimate_tokens(&turn.content)).collect();
-    let start = history_window_start(&costs, COACH_HISTORY_TOKEN_BUDGET);
-    // The dropped half is not silently forgotten: a short deterministic digest
-    // takes its place at one fixed position, right after the evidence. It is a
-    // pure function of the dropped turns, which only change when the window
-    // moves, so the prefix stays byte-stable between trims.
-    if let Some(digest) = trimmed_digest(&turns[..start]) {
-        messages.push(ChatMessage::new("user", digest));
-    }
-    messages.extend(turns[start..].iter().map(|turn| ChatMessage::new(turn.role.clone(), turn.content.clone())));
-    messages.push(ChatMessage::new("user", final_turn));
-
-    let mut request = CompletionRequest {
-        messages,
-        temperature: 0.2,
-        max_tokens: COACH_OUTPUT_TOKEN_CEILING,
-        cache_key: None,
-    };
-    // Safety net for oversized evidence: the history budget is far below the
-    // input budget, so this rarely fires. Count the actual serialized gateway
-    // request, including roles, quoting and JSON overhead. Only old history may
-    // be removed, never the evidence or the current ask.
-    while estimate_tokens(&serde_json::to_string(&request).map_err(|error| ApplicationError::new("coach.trace_invalid", error.to_string(), false))?) > COACH_INPUT_TOKEN_BUDGET {
-        if request.messages.len() <= prefix + 1 {
+    let rounds = rounds(&turns);
+    // The history budget depends only on the thread-stable prefix (system,
+    // evidence, profile), never on this turn's question, so the trim points are
+    // a pure function of the thread's history.
+    let history_budget = COACH_HISTORY_TOKEN_BUDGET
+        .min(COACH_INPUT_TOKEN_BUDGET.saturating_sub(stable_cost + COACH_FINAL_TURN_RESERVE));
+    let mut first_round = history_window_start(&rounds, history_budget);
+    loop {
+        let start = rounds.get(first_round).map_or(turns.len(), |round| round.first_turn);
+        let mut request = CompletionRequest {
+            messages: messages.clone(),
+            temperature: 0.2,
+            max_tokens: COACH_OUTPUT_TOKEN_CEILING,
+            cache_key: None,
+        };
+        // The dropped rounds are not silently forgotten: a short deterministic
+        // digest takes their place at one fixed position, right after the
+        // stable prefix. It is a pure function of the dropped turns, which only
+        // change when the window moves, so the prefix stays byte-stable between
+        // trims.
+        if let Some(digest) = trimmed_digest(&turns[..start]) {
+            request.messages.push(ChatMessage::new("user", digest));
+        }
+        request.messages.extend(turns[start..].iter().map(|turn| ChatMessage::new(turn.role.clone(), turn.content.clone())));
+        request.messages.push(ChatMessage::new("user", final_turn.clone()));
+        // Safety net for an abnormally long question: count the actual
+        // serialized gateway request, including roles, quoting and JSON
+        // overhead, and drop whole old rounds until it fits. Only old history
+        // may go, never the evidence or the current ask.
+        // The caller attaches the thread's cache key afterwards, and the trace
+        // checks the same budget against the request WITH it: measure with a key
+        // of the same length so the two never disagree at the edge.
+        let sized = CompletionRequest { cache_key: Some(coach_cache_key("")), ..request.clone() };
+        let serialized = serde_json::to_string(&sized).map_err(|error| ApplicationError::new("coach.trace_invalid", error.to_string(), false))?;
+        if estimate_tokens(&serialized) <= COACH_INPUT_TOKEN_BUDGET {
+            return Ok(request);
+        }
+        if first_round >= rounds.len() {
             return Err(ApplicationError::new("coach.input_budget_exceeded", "serialized canonical request exceeds the coach input budget", false));
         }
-        request.messages.remove(prefix);
+        first_round += 1;
     }
-    Ok(request)
+}
+
+/// One exchange of the thread: the learner's message(s) and the replies that
+/// answer them. History is only ever dropped in whole rounds, so a trimmed
+/// prompt never opens on an assistant answer whose question is gone.
+struct Round {
+    /// Index into the completed user/assistant turns where the round begins.
+    first_turn: usize,
+    /// Token cost of the round's content.
+    cost: u32,
+}
+
+/// Groups turns into rounds: a round starts at a user turn that follows an
+/// assistant turn (or opens the history). Consecutive user turns, which a
+/// failed run leaves behind before the learner asks again, stay in one round.
+fn rounds(turns: &[&ielts_db::CoachMessage]) -> Vec<Round> {
+    let mut rounds: Vec<Round> = Vec::new();
+    for (index, turn) in turns.iter().enumerate() {
+        let opens_round = index == 0 || (turn.role == "user" && turns[index - 1].role == "assistant");
+        let cost = estimate_tokens(&turn.content);
+        match rounds.last_mut() {
+            Some(round) if !opens_round => round.cost += cost,
+            _ => rounds.push(Round { first_turn: index, cost }),
+        }
+    }
+    rounds
 }
 
 /// What the trimmed turns covered, by question id: the user messages carry the
@@ -357,19 +432,20 @@ fn trimmed_digest(dropped: &[&ielts_db::CoachMessage]) -> Option<String> {
     ))
 }
 
-/// Index of the first history turn to keep. The window is replayed from the
-/// start of the thread: each turn is appended, and only when the window exceeds
-/// `budget` is its oldest half dropped in one step. The result depends only on
-/// the history itself, and it is append-stable: between trims the window start
-/// does not move, so consecutive prompts share their whole history prefix.
-fn history_window_start(costs: &[u32], budget: u32) -> usize {
+/// Index of the first round to keep. The window is replayed from the start of
+/// the thread: each round is appended, and only when the window exceeds `budget`
+/// is its oldest half (in whole rounds) dropped in one step. The result depends
+/// only on the history itself, and it is append-stable: between trims the
+/// window start does not move, so consecutive prompts share their whole history
+/// prefix.
+fn history_window_start(rounds: &[Round], budget: u32) -> usize {
     let mut start = 0;
     let mut total = 0u32;
-    for end in 0..costs.len() {
-        total += costs[end];
+    for end in 0..rounds.len() {
+        total += rounds[end].cost;
         while total > budget && start <= end {
             let drop = (end + 1 - start).div_ceil(2);
-            total -= costs[start..start + drop].iter().sum::<u32>();
+            total -= rounds[start..start + drop].iter().map(|round| round.cost).sum::<u32>();
             start += drop;
         }
     }
@@ -428,7 +504,16 @@ fn provider_failure(error: ModelError) -> ApplicationError {
     if error.context_exceeded {
         return ApplicationError::new("coach.context_exceeded", error.message, false);
     }
-    ApplicationError::new("coach.provider_failed", error.message, error.retryable)
+    // The three provider failures the learner can act on differently: fix the
+    // key, wait a moment, or try again. Everything else stays the generic code,
+    // which every existing client already handles.
+    let code = match (error.status, error.class) {
+        (Some(401 | 403), _) => "coach.auth_failed",
+        (Some(429), _) => "coach.rate_limited",
+        (_, "timeout") => "coach.timeout",
+        _ => "coach.provider_failed",
+    };
+    ApplicationError::new(code, error.message, error.retryable)
 }
 
 fn record_failure<S: CoachStore>(store: &S, thread_id: &str, user_message_id: &str, error: &ApplicationError) {
@@ -684,6 +769,97 @@ Why?"));
         assert!(state.failures.is_empty());
     }
 
+    /// Yields to the scheduler while "waiting on the provider", then echoes the
+    /// question it was asked, so interleaved runs are visible in the history.
+    struct EchoModel {
+        yields: u32,
+    }
+
+    #[async_trait]
+    impl LanguageModel for EchoModel {
+        async fn complete(&self, request: CompletionRequest) -> Result<crate::CompletionResponse, ModelError> {
+            for _ in 0..self.yields {
+                tokio::task::yield_now().await;
+            }
+            let asked = request.messages.last().unwrap().content.rsplit('\n').next().unwrap().to_owned();
+            Ok(crate::CompletionResponse {
+                content: json!({"answer": format!("re: {asked}")}).to_string(),
+                model: "echo".into(),
+                latency_ms: 1,
+                usage: None,
+                provider_request_id: None,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn overlapping_runs_on_one_thread_commit_whole_exchanges_in_order() {
+        let store = FakeCoachStore::default();
+        let run = |question: &'static str| {
+            let store = &store;
+            async move { CoachService::run(store, command(question), || Ok(EchoModel { yields: 8 })).await.unwrap() }
+        };
+        let (first, second, third) = tokio::join!(run("one"), run("two"), run("three"));
+        let state = store.state.lock().unwrap();
+        let log: Vec<(&str, &str)> = state.messages.iter().map(|m| (m.role.as_str(), m.content.as_str())).collect();
+        // Never u1, u2, a1, a2: each answer sits directly under its own question.
+        assert_eq!(log, vec![
+            ("user", "one"), ("assistant", "re: one"),
+            ("user", "two"), ("assistant", "re: two"),
+            ("user", "three"), ("assistant", "re: three"),
+        ]);
+        assert_eq!(first.assistant_message.content, "re: one");
+        assert_eq!(second.assistant_message.content, "re: two");
+        assert_eq!(third.assistant_message.content, "re: three");
+        assert!(state.failures.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_queued_run_builds_its_prompt_from_the_history_the_first_run_left() {
+        let store = FakeCoachStore::default();
+        let seen = Arc::new(Mutex::new(Vec::<CompletionRequest>::new()));
+        struct Spy(Arc<Mutex<Vec<CompletionRequest>>>);
+        #[async_trait]
+        impl LanguageModel for Spy {
+            async fn complete(&self, request: CompletionRequest) -> Result<crate::CompletionResponse, ModelError> {
+                tokio::task::yield_now().await;
+                self.0.lock().unwrap().push(request);
+                Ok(crate::CompletionResponse { content: r#"{"answer":"ok"}"#.into(), model: "spy".into(), latency_ms: 1, usage: None, provider_request_id: None })
+            }
+        }
+        let (a, b) = tokio::join!(
+            CoachService::run(&store, command("one"), || Ok(Spy(seen.clone()))),
+            CoachService::run(&store, command("two"), || Ok(Spy(seen.clone()))),
+        );
+        a.unwrap();
+        b.unwrap();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 2);
+        // The second prompt replays the first exchange; it was not built blind.
+        let replayed: Vec<&str> = seen[1].messages[2..seen[1].messages.len() - 1].iter().map(|m| m.content.as_str()).collect();
+        assert_eq!(replayed, vec!["one", "ok"]);
+    }
+
+    #[tokio::test]
+    async fn gates_exclude_per_thread_prune_when_idle_and_never_block_other_threads() {
+        let gates = ThreadGates::default();
+        let held = gates.lock("a").await;
+        // Another thread is not blocked by it...
+        drop(gates.lock("b").await);
+        // ...the same thread is.
+        tokio::select! {
+            _ = gates.lock("a") => panic!("a second run on the same thread must wait"),
+            _ = tokio::task::yield_now() => {}
+        }
+        assert_eq!(gates.tracked(), 1, "b was idle and is gone; a is live");
+        drop(held);
+        // Idle entries go on the next acquisition; only the live one remains.
+        drop(gates.lock("c").await);
+        assert_eq!(gates.tracked(), 1);
+        drop(gates.lock("c").await);
+        assert_eq!(gates.tracked(), 1);
+    }
+
     #[tokio::test]
     async fn rejects_empty_question_before_loading_model() {
         let store = FakeCoachStore::default();
@@ -740,6 +916,38 @@ Why?"));
             assert!(!failure.retryable);
             let state = store.state.lock().unwrap();
             assert_eq!(state.failures.len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn auth_rate_limit_and_timeout_failures_get_their_own_codes() {
+        let cases = [
+            (ModelError::http_status("AI provider returned HTTP 401", false, 401), "coach.auth_failed", false),
+            (ModelError::http_status("AI provider returned HTTP 403", false, 403), "coach.auth_failed", false),
+            (ModelError::http_status("AI provider returned HTTP 429", true, 429), "coach.rate_limited", true),
+            (ModelError::http_status("AI provider returned HTTP 429: quota", false, 429), "coach.rate_limited", false),
+            (ModelError::classed("AI request failed: timed out", true, "timeout"), "coach.timeout", true),
+            // Everything else keeps the generic code, with its own retry verdict.
+            (ModelError::http_status("AI provider returned HTTP 500", true, 500), "coach.provider_failed", true),
+            (ModelError::http_status("AI provider returned HTTP 404", false, 404), "coach.provider_failed", false),
+            (ModelError::classed("AI request failed: refused", true, "transport"), "coach.provider_failed", true),
+            (ModelError::classed("AI stream ended before the reply completed", true, "stream_error"), "coach.provider_failed", true),
+        ];
+        for (error, code, retryable) in cases {
+            let message = error.message.clone();
+            let store = FakeCoachStore::default();
+            let model = FakeModel {
+                response: Err(error),
+                store_state: store.state.clone(),
+                request: Arc::new(Mutex::new(None)),
+            };
+            let failure = CoachService::run(&store, command("Why?"), || Ok(model)).await.unwrap_err();
+            assert_eq!((failure.code.as_str(), failure.retryable), (code, retryable), "{message}");
+            assert_eq!(failure.message, message);
+            // Whatever the code, the failure is recorded once and the question stays.
+            let state = store.state.lock().unwrap();
+            assert_eq!(state.failures.len(), 1);
+            assert_eq!(state.messages.len(), 1);
         }
     }
 
@@ -878,6 +1086,11 @@ Why?"));
         }
     }
 
+    /// One single-turn round per cost, for the window arithmetic alone.
+    fn round_costs(costs: &[u32]) -> Vec<Round> {
+        costs.iter().enumerate().map(|(first_turn, &cost)| Round { first_turn, cost }).collect()
+    }
+
     fn turns(count: u32, text: &str) -> Vec<CoachMessage> {
         (1..=count)
             .map(|sequence| {
@@ -921,18 +1134,18 @@ Why?"));
     fn history_window_drops_oldest_half_once_then_stays_put() {
         // 10 turns of 100 tokens against a 1000 budget fit exactly.
         let mut costs = vec![100u32; 10];
-        assert_eq!(history_window_start(&costs, 1_000), 0);
+        assert_eq!(history_window_start(&round_costs(&costs), 1_000), 0);
         // The 11th overflows: the oldest half (6 of 11) goes in a single step...
         costs.push(100);
-        assert_eq!(history_window_start(&costs, 1_000), 6);
+        assert_eq!(history_window_start(&round_costs(&costs), 1_000), 6);
         // ...and further appends leave the window start untouched until the next
         // overflow, so the prefix is stable in between.
         for extra in 12..=15 {
             costs.push(100);
-            assert_eq!(history_window_start(&costs, 1_000), 6, "len {extra}");
+            assert_eq!(history_window_start(&round_costs(&costs), 1_000), 6, "len {extra}");
         }
         costs.extend([100, 100]);
-        assert!(history_window_start(&costs, 1_000) > 6);
+        assert!(history_window_start(&round_costs(&costs), 1_000) > 6);
     }
 
     #[test]
@@ -941,7 +1154,7 @@ Why?"));
         let mut last_start = 0;
         let mut moves = 0;
         for end in 1..=costs.len() {
-            let start = history_window_start(&costs[..end], 2_000);
+            let start = history_window_start(&round_costs(&costs[..end]), 2_000);
             assert!(start >= last_start, "window start moved backwards");
             if start != last_start {
                 moves += 1;
@@ -960,6 +1173,88 @@ Why?"));
         let kept = request.messages.len() - 2; // system + final turn
         assert!(kept < 12 && kept >= 2, "kept {kept}");
         assert!(request.messages[request.messages.len() - 2].content.ends_with("12"));
+    }
+
+    #[test]
+    fn trimming_drops_whole_rounds_and_never_opens_on_an_answer() {
+        // 9 rounds of ~600 tokens each overflow the 8000-token history budget
+        // on an odd round count, where a per-message halving would cut mid-round.
+        let text = "x".repeat(2_400);
+        for rounds_count in 1..=30u32 {
+            let history = turns(rounds_count * 2, &text);
+            let request = build_request(&history, Some(&context("")), &no_profile(), "now").unwrap();
+            let replayed: Vec<&ChatMessage> = request.messages[2..request.messages.len() - 1]
+                .iter()
+                .filter(|message| !message.content.starts_with("Earlier in this thread"))
+                .collect();
+            assert!(replayed.len() % 2 == 0, "{rounds_count} rounds: {} messages", replayed.len());
+            if let Some(first) = replayed.first() {
+                assert_eq!(first.role, "user", "{rounds_count} rounds: window opens on an answer");
+            }
+        }
+    }
+
+    #[test]
+    fn a_failed_turn_stays_in_the_round_of_the_retry_that_answers_it() {
+        // user (failed run, no answer) -> user (retry) -> assistant: one round.
+        let history = [
+            message("thread-1", "user", "first", 1, "completed", None),
+            message("thread-1", "assistant", "answer", 2, "completed", None),
+            message("thread-1", "user", "broken", 3, "completed", None),
+            message("thread-1", "user", "retry", 4, "completed", None),
+            message("thread-1", "assistant", "fixed", 5, "completed", None),
+        ];
+        let turns: Vec<&CoachMessage> = history.iter().collect();
+        let starts: Vec<usize> = rounds(&turns).iter().map(|round| round.first_turn).collect();
+        assert_eq!(starts, vec![0, 2]);
+    }
+
+    #[test]
+    fn the_history_window_does_not_move_with_the_length_of_this_turns_question() {
+        let ctx = context("");
+        let text = "x".repeat(2_400);
+        let history = turns(40, &text);
+        let short = build_request(&history, Some(&ctx), &no_profile(), "ok?").unwrap();
+        let long = build_request(&history, Some(&ctx), &no_profile(), &"why ".repeat(500)).unwrap();
+        // Same dropped rounds, same digest, same replayed history: only the closing turn differs.
+        let shared = short.messages.len() - 1;
+        assert_eq!(short.messages.len(), long.messages.len());
+        assert_eq!(short.messages[..shared], long.messages[..shared]);
+    }
+
+    #[test]
+    fn an_abnormally_long_question_drops_whole_old_rounds_and_keeps_the_digest_honest() {
+        let ctx = context("");
+        let text = "x".repeat(2_400);
+        let history = turns(10, &text);
+        let long_question = "w".repeat(4 * 26_000);
+        let request = build_request(&history, Some(&ctx), &no_profile(), &long_question).unwrap();
+        assert!(estimate_tokens(&serde_json::to_string(&request).unwrap()) <= COACH_INPUT_TOKEN_BUDGET);
+        let digest = request.messages.get(2).filter(|m| m.content.starts_with("Earlier in this thread")).expect("dropped rounds are digested");
+        let kept = request.messages.len() - 4; // system, evidence, digest, closing turn
+        assert!(kept % 2 == 0, "only whole rounds are kept");
+        assert!(digest.content.contains(&format!("{} messages trimmed", 10 - kept)), "{}", digest.content);
+        assert!(request.messages.last().unwrap().content.ends_with(&long_question));
+    }
+
+    #[test]
+    fn the_budget_check_counts_the_cache_key_the_caller_attaches_afterwards() {
+        let ctx = context("");
+        let question = |chars: usize| "w".repeat(chars);
+        // The longest question build_request accepts is the budget's edge.
+        let (mut fits, mut over) = (0usize, 4 * COACH_INPUT_TOKEN_BUDGET as usize);
+        while over - fits > 1 {
+            let middle = (fits + over) / 2;
+            match build_request(&[], Some(&ctx), &no_profile(), &question(middle)) {
+                Ok(_) => fits = middle,
+                Err(_) => over = middle,
+            }
+        }
+        let mut request = build_request(&[], Some(&ctx), &no_profile(), &question(fits)).unwrap();
+        request.cache_key = Some(coach_cache_key("thread-1"));
+        // What the trace sees (and refuses above the budget) is still inside it.
+        let traced = serde_json::to_string(&request).unwrap();
+        assert!(estimate_tokens(&traced) <= COACH_INPUT_TOKEN_BUDGET, "{} tokens", estimate_tokens(&traced));
     }
 
     #[test]

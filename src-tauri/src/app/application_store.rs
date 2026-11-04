@@ -124,7 +124,7 @@ impl CoachStore for ApplicationStore<'_> {
             // `list_coach_messages(.., None, limit)` is an ASC cursor and would
             // return the oldest `limit` rows, dropping the question the user
             // just asked once a thread grows past it.
-            .with_conn(|conn| ielts_db::list_recent_coach_messages(conn, thread_id, limit))
+            .with_conn(|conn| ielts_db::list_recent_coach_turns(conn, thread_id, limit))
             .map_err(enrichment_error)
     }
 

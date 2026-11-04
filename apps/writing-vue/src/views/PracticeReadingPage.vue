@@ -1,271 +1,136 @@
 <template>
-  <div class="reading-page" :class="readingPageClassList" :style="readingPageStyle">
-    <header class="reading-header header">
-      <div class="header-content">
-        <h1 id="exam-title">{{ pageTitle }}</h1>
-        <p id="exam-subtitle">{{ headerSummary }}</p>
-      </div>
-      <div
-        v-if="showSuiteReviewNav"
-        id="review-nav-bar"
-        class="review-nav-bar"
-        :data-review-index="suiteReviewNavIndex"
-        :data-review-total="suiteReviewNavTotal"
-        data-view-mode="review"
+  <!-- Exam chrome mirrors assets/generated/reading-exams/reading-practice-unified.html
+       (skin: modules/reading-unified/styles/unified.css, generated). Host-only
+       surfaces — coach, dictionary bubble, analysis — ride on top of it. -->
+  <div
+    id="runified-root"
+    class="runified"
+    :class="readingPageClassList"
+    :data-suite-mode="activeSuiteSessionId ? 'true' : null"
+  >
+    <UnifiedExamHeader
+      :title="pageTitle"
+      :subtitle="headerSummary"
+      :show-timer="Boolean(payload)"
+      :timer-text="formattedTimer"
+      :timer-running="timerRunning"
+      :review-mode="reviewMode"
+      :note-count="noteEntries.length"
+      :notes-open="noteDrawerOpen"
+      :options-open="settingsPanelOpen"
+      :part-index="partIndex"
+      :instruction="subHeaderInstruction"
+      @toggle-timer="toggleTimer"
+      @toggle-notes="noteDrawerOpen = !noteDrawerOpen"
+      @toggle-options="toggleSettingsPanel"
+    />
+
+    <div ref="settingsPanel" @keydown="handleSettingsDialogKeydown">
+      <UnifiedOptionsPanel
+        v-if="settingsPanelOpen"
+        :font-size="fontSize"
+        :dark-mode="darkMode"
+        :annotations="annotations"
+        :question-nav-collapsed="questionNavCollapsed"
+        :clear-disabled="reviewMode || isMemorizeMode || resetButtonDisabled"
+        @close="closeFloatingPanels"
+        @select-font="selectFontSize"
+        @set-dark="setDarkMode"
+        @toggle-annotation="toggleAnnotation"
+        @toggle-question-nav="setQuestionNavCollapsed(!questionNavCollapsed)"
+        @clear-answers="handleResetButton"
       >
-        <button
-          type="button"
-          data-review-dir="prev"
-          :disabled="!canNavigateSuiteReviewPrev"
-          @click="navigateSuiteReview('prev')"
-        >
-          上一篇
-        </button>
-        <button
-          type="button"
-          data-review-dir="next"
-          :disabled="!canNavigateSuiteReviewNext"
-          @click="navigateSuiteReview('next')"
-        >
-          下一篇
-        </button>
-      </div>
-      <div class="reading-header-actions header-controls">
-        <button
-          v-if="payload"
-          id="timer"
-          class="reading-stat reading-timer"
-          type="button"
-          :class="{ paused: !timerRunning && !reviewMode }"
-          :disabled="reviewMode"
-          :title="timerRunning ? '暂停计时' : '继续计时'"
-          data-reading-timer
-          @click="toggleTimer"
-        >
-          {{ formattedTimer }}
-        </button>
-        <button
-          v-if="payload"
-          class="header-btn"
-          id="settings-btn"
-          title="阅读设置"
-          aria-label="阅读设置"
-          aria-controls="settings-panel"
-          :aria-expanded="settingsPanelOpen"
-          type="button"
-          @click="toggleSettingsPanel"
-        >
-          ☰
-        </button>
-        <button
-          v-if="payload"
-          class="header-btn"
-          id="note-btn"
-          type="button"
-          title="阅读笔记"
-          aria-label="阅读笔记"
-          aria-controls="notes-panel"
-          :aria-expanded="notesPanelOpen"
-          @click="toggleNotesPanel"
-        >
-          笔记
-        </button>
-      </div>
-    </header>
-
-    <div v-if="error" class="inline-message inline-message-error">
-      <span>{{ error }}</span>
-      <button class="btn-text" type="button" @click="loadAsset">重试</button>
-    </div>
-
-    <div v-if="loading" class="surface loading" role="status" aria-live="polite" aria-busy="true">正在加载阅读内容…</div>
-
-    <div v-if="submitError" class="inline-message inline-message-error">
-      <span>{{ submitError }}</span>
-    </div>
-
-    <div
-      ref="settingsPanel"
-      id="settings-panel"
-      class="reading-floating-panel reading-settings-panel"
-      v-show="settingsPanelOpen"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-panel-title"
-      @keydown="handleSettingsDialogKeydown"
-    >
-      <header class="settings-panel-header">
-        <h2 id="settings-panel-title">阅读设置</h2>
-        <button class="settings-panel-close" type="button" aria-label="关闭阅读设置" @click="closeFloatingPanels">关闭</button>
-      </header>
-      <div class="settings-section">
-        <h3 class="settings-title">字号调整</h3>
-        <div class="settings-options">
-          <button
-            v-for="option in fontSizeOptions"
-            :key="option.value"
-            class="settings-option"
-            :class="{ active: readingFontSize === option.value }"
-            type="button"
-            :data-size="option.value"
-            :style="option.style"
-            @click="selectReadingFont(option.value)"
-          >
-            {{ option.label }}
-          </button>
+        <div class="settings-section" id="reading-coach-setting-section">
+          <h3 class="settings-title">AI 教练</h3>
+          <div class="settings-options">
+            <button
+              class="settings-option"
+              type="button"
+              data-reading-coach-enabled="true"
+              :class="{ active: readingCoachEnabled === true }"
+              :disabled="readingCoachSettingSaving"
+              @click="updateReadingCoachEnabled(true)"
+            >开启</button>
+            <button
+              class="settings-option"
+              type="button"
+              data-reading-coach-enabled="false"
+              :class="{ active: readingCoachEnabled === false }"
+              :disabled="readingCoachSettingSaving"
+              @click="updateReadingCoachEnabled(false)"
+            >关闭</button>
+          </div>
+          <p v-if="readingCoachSettingError" class="settings-hint" role="alert">{{ readingCoachSettingError }}</p>
         </div>
-      </div>
-      <div class="settings-section" id="reading-coach-setting-section">
-        <h3 class="settings-title">AI 教练</h3>
-        <div class="settings-options">
-          <button
-            class="settings-option"
-            type="button"
-            data-reading-coach-enabled="true"
-            :class="{ active: readingCoachEnabled === true }"
-            :disabled="readingCoachSettingSaving"
-            @click="updateReadingCoachEnabled(true)"
-          >
-            开启
-          </button>
-          <button
-            class="settings-option"
-            type="button"
-            data-reading-coach-enabled="false"
-            :class="{ active: readingCoachEnabled === false }"
-            :disabled="readingCoachSettingSaving"
-            @click="updateReadingCoachEnabled(false)"
-          >
-            关闭
-          </button>
+        <div v-if="activeSuiteSessionId" class="settings-section" id="suite-flow-mode-section">
+          <h3 class="settings-title">套题流程模式</h3>
+          <div class="settings-options">
+            <button
+              class="settings-option"
+              type="button"
+              data-suite-flow-mode="auto"
+              :class="{ active: suiteAutoAdvance === true }"
+              @click="setSuiteAutoAdvance(true)"
+            >自动跳转下一篇</button>
+            <button
+              class="settings-option"
+              type="button"
+              data-suite-flow-mode="manual"
+              :class="{ active: suiteAutoAdvance === false }"
+              @click="setSuiteAutoAdvance(false)"
+            >提交后停留回看</button>
+          </div>
         </div>
-        <p v-if="readingCoachSettingError" class="settings-help settings-help-error">
-          {{ readingCoachSettingError }}
-        </p>
-      </div>
-      <div
-        v-if="activeSuiteSessionId"
-        class="settings-section"
-        id="suite-flow-mode-section"
-      >
-        <h3 class="settings-title">套题流程模式</h3>
-        <div class="settings-options">
+        <template #actions>
           <button
+            v-if="canSnapshot"
+            id="options-snapshot"
             class="settings-option"
             type="button"
-            data-suite-flow-mode="auto"
-            :class="{ active: suiteAutoAdvance === true }"
-            @click="setSuiteAutoAdvance(true)"
-          >
-            自动跳转下一篇
-          </button>
+            @click="snapshotAnswers"
+          >保存作答快照</button>
           <button
+            id="options-leave"
             class="settings-option"
             type="button"
-            data-suite-flow-mode="manual"
-            :class="{ active: suiteAutoAdvance === false }"
-            @click="setSuiteAutoAdvance(false)"
-          >
-            提交后停留回看
-          </button>
-        </div>
-      </div>
+            :disabled="leaving"
+            @click="handleLeave"
+          >{{ returnLabel }}</button>
+        </template>
+      </UnifiedOptionsPanel>
     </div>
 
-    <div
-      ref="notesPanel"
-      id="notes-panel"
-      class="reading-floating-panel reading-notes-panel"
-      v-show="notesPanelOpen"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="notes-panel-title"
-      @keydown="handleNotesDialogKeydown"
-    >
-      <header>
-        <h3 id="notes-panel-title">阅读笔记</h3>
-        <button id="close-note" type="button" @click="closeFloatingPanels">关闭</button>
-      </header>
-      <textarea ref="notesTextarea" v-model="notesText" aria-label="阅读笔记"></textarea>
-      <p v-if="notesError" class="settings-help settings-help-error" role="alert">{{ notesError }}</p>
-    </div>
-    <div class="overlay" v-show="settingsPanelOpen || notesPanelOpen" @click="closeFloatingPanels"></div>
-
-    <div
-      id="selbar"
-      class="reading-selection-toolbar"
-      v-show="selectionToolbarVisible"
-      :style="selectionToolbarStyle"
-      @mousedown.prevent="keepSelectionToolbar = true"
-      @mouseup="keepSelectionToolbar = false"
-    >
-      <button type="button" id="btnHL" data-role="highlight" @click="applySelectionHighlight('highlight')">高亮标记</button>
-      <button type="button" id="btnUH" data-role="remove-highlight" @click="removeSelectionHighlight">取消高亮</button>
-      <button type="button" id="btnNote" data-role="note" @click="applySelectionNote">添加笔记</button>
+    <div ref="notesPanel" @keydown="handleNotesDialogKeydown">
+      <UnifiedNotes
+        v-model:text="notesText"
+        :drawer-open="noteDrawerOpen"
+        :editor-open="notesPanelOpen"
+        :entries="noteEntries"
+        :error="notesError"
+        @open-editor="openNoteEditor"
+        @close-editor="closeFloatingPanels"
+        @close-drawer="noteDrawerOpen = false"
+        @locate="locateNote"
+      />
     </div>
 
-    <div
+    <UnifiedSelectionBar
+      :visible="selectionToolbarVisible"
+      :position="selectionToolbarStyle"
+      @hold="keepSelectionToolbar = $event"
+      @note="applySelectionNote"
+      @remove="removeSelectionHighlight"
+      @highlight="applySelectionHighlight('highlight')"
+    />
+
+    <ReadingDictionaryBubble
       v-if="dictionaryBubble.visible"
-      id="review-highlight-dictionary-bubble"
-      class="review-highlight-dictionary-bubble"
-      role="dialog"
-      aria-live="polite"
-      :style="{ left: `${dictionaryBubble.left}px`, top: `${dictionaryBubble.top}px` }"
-    >
-      <div class="vocab-bubble-head">
-        <div>
-          <h4 class="vocab-term">{{ dictionaryBubble.term }}</h4>
-          <div v-if="dictionaryBubble.meta" class="vocab-meta">{{ dictionaryBubble.meta }}</div>
-        </div>
-        <button class="vocab-close" type="button" aria-label="关闭" @click="closeDictionaryBubble">×</button>
-      </div>
-      <template v-if="dictionaryBubble.parts.length">
-        <div
-          v-for="part in dictionaryBubble.parts"
-          :key="part.term + part.meaning"
-          class="vocab-part"
-        >
-          <div class="vocab-term vocab-part-term">{{ part.term }}</div>
-          <div v-if="part.meta" class="vocab-meta">{{ part.meta }}</div>
-          <div v-if="part.meaning" class="vocab-section">
-            <div class="vocab-label">中文释义</div>
-            <div class="vocab-text">{{ part.meaning }}</div>
-          </div>
-          <div v-if="part.definition" class="vocab-section">
-            <div class="vocab-label">英文释义</div>
-            <div class="vocab-text">{{ part.definition }}</div>
-          </div>
-        </div>
-      </template>
-      <div v-else class="vocab-section">
-        <div class="vocab-label">{{ dictionaryBubble.found ? '释义' : '未收录' }}</div>
-        <div class="vocab-text">{{ dictionaryBubble.meaning || '未找到该高亮内容。可先加入阅读高亮生词，后续在单词背诵中补充释义。' }}</div>
-      </div>
-      <div v-if="dictionaryBubble.definition" class="vocab-section">
-        <div class="vocab-label">英文释义</div>
-        <div class="vocab-text">{{ dictionaryBubble.definition }}</div>
-      </div>
-      <div v-if="dictionaryBubble.example" class="vocab-section">
-        <div class="vocab-label">例句</div>
-        <div class="vocab-text">{{ dictionaryBubble.example }}</div>
-      </div>
-      <div v-if="dictionaryBubble.sourceLine" class="vocab-section">
-        <div class="vocab-label">来源</div>
-        <div class="vocab-text">{{ dictionaryBubble.sourceLine }}</div>
-      </div>
-      <div class="vocab-actions">
-        <button
-          class="vocab-add"
-          type="button"
-          :disabled="dictionaryBubble.saved"
-          @click="saveDictionaryBubbleWord"
-        >
-          {{ dictionaryBubble.saved ? '已加入' : '加入生词本' }}
-        </button>
-      </div>
-    </div>
+      :bubble="dictionaryBubble"
+      @close="closeDictionaryBubble"
+      @save="saveDictionaryBubbleWord"
+    />
 
-    <div v-if="isEndlessMode" class="inline-message endless-message" data-reading-endless-mode role="status" aria-live="polite">
+    <div v-if="isEndlessMode" class="endless-message" data-reading-endless-mode role="status" aria-live="polite">
       <span>{{ endlessStatusText }}</span>
       <div class="endless-actions">
         <button v-if="endlessNextAssetId" class="btn-text" type="button" :disabled="leaving" @click="goToNextEndlessAsset">下一篇</button>
@@ -273,21 +138,23 @@
       </div>
     </div>
 
-    <p v-if="highlightRestoreWarning" class="settings-help settings-help-error" role="status">
-      {{ highlightRestoreWarning }}
+    <p v-if="error" class="runified-status is-error" role="alert">
+      <span>{{ error }}</span>
+      <button class="btn-text" type="button" @click="loadAsset">重试</button>
     </p>
-
-    <p v-if="snapshotMessage" class="reading-action-status snapshot-message" role="status" aria-live="polite">
-      {{ snapshotMessage }}
-    </p>
+    <p v-else-if="submitError" class="runified-status is-error" role="alert">{{ submitError }}</p>
+    <p v-else-if="highlightRestoreWarning" class="runified-status is-error" role="status">{{ highlightRestoreWarning }}</p>
+    <p v-else-if="snapshotMessage" class="runified-status snapshot-message" role="status" aria-live="polite">{{ snapshotMessage }}</p>
+    <p v-if="loading" class="runified-status" role="status" aria-live="polite" aria-busy="true">正在加载阅读内容…</p>
+    <p v-else-if="!asset" class="runified-status" role="status">未找到阅读题目，返回练习库重新选择资源。</p>
 
     <p class="sr-only" aria-live="polite">{{ dragInteractionStatus }}</p>
 
-    <section
+    <div
       v-if="!loading && asset && payload"
-      class="reading-workspace shell"
+      ref="shellRef"
+      class="shell"
       :class="{ 'review-mode': reviewMode, 'memorize-mode': isMemorizeMode }"
-      :style="readingWorkspaceStyle"
       data-practice-reading-page
       @click="handleWorkspaceClick"
       @keydown="handleWorkspaceKeydown"
@@ -304,14 +171,15 @@
       />
 
       <div
-        id="reading-divider"
+        id="divider"
+        ref="dividerRef"
         :class="{ 'is-dragging': dividerDragging }"
         role="separator"
         aria-orientation="vertical"
-        aria-label="调整原文和题目宽度"
+        aria-label="调整原文与题目宽度"
         aria-valuemin="0"
         aria-valuemax="100"
-        :aria-valuenow="Math.round(leftPanePercent)"
+        :aria-valuenow="dividerValue"
         tabindex="0"
         @pointerdown="startDividerDrag"
         @keydown="handleDividerKeydown"
@@ -358,20 +226,28 @@
           :attempt-review-tool-calls="attemptReviewToolCalls"
           @retry-review="runAutomaticReviewCoach"
           @run-attempt-review="runAttemptReview"
+          @jump="scrollToQuestion"
+        />
+        <SuitePassageNav
+          v-if="activeSuiteSessionId"
+          :can-prev="canNavigateSuiteReviewPrev"
+          :can-next="canNavigateSuiteReviewNext"
+          @navigate="navigateSuiteReview"
         />
       </ReadingQuestionPane>
-    </section>
+    </div>
 
     <ReadingCoachPanel
       v-if="readingCoachEnabled"
       :submission="submission"
       :reading-coach-open="readingCoachOpen"
-      :coach-error="coachError"
       :coach-loading="coachLoading"
       :coach-status-text="coachStatusText"
+      :coach-notice="coachNotice"
+      :coach-history-failed="coachHistoryFailed"
+      :coach-retry-kind="coachRetryKind"
       :selected-context="selectedContext"
       :coach-transcript="coachTranscript"
-      :coach-response="coachResponse"
       :coach-quick-actions="coachQuickActions"
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
@@ -387,46 +263,34 @@
       @follow-up="askCoachFollowUp"
       @feedback="submitCoachFeedback($event.messageId, $event.kind)"
       @reask="reaskCoachMessage"
+      @retry="retryCoachQuery"
+      @reload-history="reloadCoachHistory"
       @update:coach-query="coachQuery = $event"
       @refresh-selected-context="refreshSelectedContext"
       @ask="askCoach"
     />
 
-    <ReadingAnswerNav
+    <UnifiedPracticeNav
       v-if="!loading && asset && payload"
-      :asset="asset"
-      :payload="payload"
-      :suite-session="suiteSession"
-      :answered-count="answeredCount"
-      :return-route="returnRoute"
-      :return-label="returnLabel"
-      :reset-button-disabled="resetButtonDisabled"
-      :reset-button-label="resetButtonLabel"
-      :primary-button-disabled="primaryButtonDisabled"
-      :primary-button-label="primaryButtonLabel"
-      :loading="loading"
-      :submitting="submitting"
-      :leaving="leaving"
-      :read-only-mode="readOnlyMode"
-      :can-snapshot="canSnapshot"
+      :question-order="payload.questionOrder || []"
+      :display-map="payload.questionDisplayMap || {}"
+      :category="navCategory"
       :has-answer="hasAnswer"
-      :is-marked-question="isMarkedQuestion"
-      :get-review-class="getReviewClass"
-      :get-legacy-nav-status="getLegacyNavStatus"
-      :is-active-question="isActiveQuestion"
-      :get-display-label="getDisplayLabel"
+      :answer-comparison="submission?.answerComparison || null"
+      :active-question-id="activeQuestionId"
+      :review-mode="reviewMode"
+      :submit-disabled="primaryButtonDisabled"
+      :submit-label="primaryButtonLabel"
+      :show-exit="reviewMode || isMemorizeMode"
+      :show-reset="reviewMode || isMemorizeMode"
+      :reset-disabled="resetButtonDisabled"
+      :part-summaries="suitePartSummaries"
       @scroll-to-question="scrollToQuestion"
-      @toggle-marked-question="toggleMarkedQuestion"
-      @leave="handleLeave"
+      @submit="handlePrimaryButton"
       @reset="handleResetButton"
-      @snapshot="snapshotAnswers"
-      @primary="handlePrimaryButton"
+      @leave="handleLeave"
+      @open-part="openSuitePart"
     />
-
-    <section v-if="!loading && !asset" class="surface empty-state">
-      <strong>未找到阅读题目</strong>
-      <span>返回练习库重新选择资源。</span>
-    </section>
   </div>
 </template>
 
@@ -437,28 +301,36 @@ import { practiceReadingSuite, practiceSessions } from '@/api/practice-client.js
 import { learningRepository } from '@/api/learning-repository.js'
 import { readingCoachSettingsApi } from '@/modules/practice-reading/api'
 import { featureFlags } from '@/config/feature-flags.js'
-import ReadingAnswerNav from '@/modules/practice-reading/components/ReadingAnswerNav.vue'
 import ReadingCoachPanel from '@/modules/practice-reading/components/ReadingCoachPanel.vue'
 import ReadingPassagePane from '@/modules/practice-reading/components/ReadingPassagePane.vue'
 import ReadingQuestionPane from '@/modules/practice-reading/components/ReadingQuestionPane.vue'
 import ReadingReviewPanel from '@/modules/practice-reading/components/ReadingReviewPanel.vue'
+import ReadingDictionaryBubble from '@/modules/practice-reading/components/ReadingDictionaryBubble.vue'
+import SuitePassageNav from '@/modules/reading-unified/components/SuitePassageNav.vue'
+import UnifiedExamHeader from '@/modules/reading-unified/components/UnifiedExamHeader.vue'
+import UnifiedNotes from '@/modules/reading-unified/components/UnifiedNotes.vue'
+import UnifiedOptionsPanel from '@/modules/reading-unified/components/UnifiedOptionsPanel.vue'
+import UnifiedSelectionBar from '@/modules/reading-unified/components/UnifiedSelectionBar.vue'
+import UnifiedPracticeNav from '@/modules/reading-unified/components/UnifiedPracticeNav.vue'
+import { useUnifiedDisplay } from '@/modules/reading-unified/composables/useUnifiedDisplay.js'
+import { useUnifiedDivider } from '@/modules/reading-unified/composables/useUnifiedDivider.js'
+import { useNativeAnswerControls } from '@/modules/reading-unified/composables/useNativeAnswerControls.js'
+import { applyResultsToQuestionArea } from '@/modules/reading-unified/reviewMarks.js'
 import { useReadingAsset } from '@/modules/practice-reading/useReadingAsset'
 import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
 import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
 import { useReadingHighlights } from '@/modules/practice-reading/useReadingHighlights'
 import { normalizeComparableText } from '@/modules/practice-reading/readingHighlightCore.js'
 import { useReadingModeFlow } from '@/modules/practice-reading/useReadingModeFlow'
+import { applyMemorizeLocatorHighlights, clearMemorizeLocatorHighlights } from '@/modules/practice-reading/memorizeLocators.js'
+import { readSelectedContext } from '@/modules/practice-reading/selectionContext.js'
 import { canSnapshotReadingAnswers, readingDraftOwnerMatches } from '@/modules/practice-reading/readingModeFlowCore.js'
 import { useReadingTimer } from '@/modules/practice-reading/useReadingTimer'
 import { useReadingAttempt } from '@/modules/practice-reading/useReadingAttempt'
-import {
-  readingFontSizeOptions as fontSizeOptions,
-  useReadingUiPreferences
-} from '@/modules/practice-reading/useReadingUiPreferences'
+import { useReadingUiPreferences } from '@/modules/practice-reading/useReadingUiPreferences'
 import { useReadingInteractions } from '@/modules/practice-reading/useReadingInteractions'
 import {
   escapeCss,
-  expandQuestionSequence,
   normalizeQuestionId,
   resolveAnswerAliases as resolveAnswerAliasesFromIds
 } from '@/modules/practice-reading/readingQuestionIds'
@@ -475,6 +347,8 @@ const EXPLANATION_SPLIT_KINDS = new Set([
   'true_false_not_given',
   'yes_no_not_given'
 ])
+// Note highlights feed the Notes drawer, so they restore with plain highlights.
+const RESTORED_ANNOTATION_KINDS = ['highlight', 'note']
 const coachQuickActions = [
   { id: 'hint', label: '给我提示' },
   { id: 'explain', label: '解释这题' },
@@ -532,9 +406,27 @@ const endlessNextAssetId = ref('')
 const readingCoachEnabled = ref(true)
 const readingCoachSettingSaving = ref(false)
 const readingCoachSettingError = ref('')
-const leftPanePercent = ref(50)
-const dividerDragging = ref(false)
-let dividerPointerId = null
+const noteDrawerOpen = ref(false)
+const {
+  shellRef,
+  dividerRef,
+  dragging: dividerDragging,
+  valueNow: dividerValue,
+  startDrag: startDividerDrag,
+  handleKeydown: handleDividerKeydown
+} = useUnifiedDivider()
+const {
+  rootClassList: displayClassList,
+  fontSize,
+  darkMode,
+  annotations,
+  questionNavCollapsed,
+  initializeDisplayPreferences,
+  selectFontSize,
+  toggleAnnotation,
+  setDarkMode,
+  setQuestionNavCollapsed
+} = useUnifiedDisplay()
 const activeQuestionVisit = {
   questionId: '',
   startedAtMs: 0
@@ -543,6 +435,7 @@ const activeQuestionId = ref('')
 const readingPassagePane = ref(null)
 const readingAttempt = useReadingAttempt()
 let tauriAttemptId = ''
+let nativeControls = null
 let draftAutosaveTimer = null
 let snapshotMessageTimer = null
 
@@ -554,17 +447,13 @@ const {
   notesTextarea,
   notesText,
   notesError,
-  readingFontSize,
   suiteAutoAdvance,
-  readingPageClassList: preferencePageClassList,
-  readingPageStyle,
   initializeReadingPreferences,
   toggleSettingsPanel,
   toggleNotesPanel,
   handleSettingsDialogKeydown,
   handleNotesDialogKeydown,
   closeFloatingPanels,
-  selectReadingFont,
   setSuiteAutoAdvance,
   loadReadingNotes,
   clearReadingNotesDraft
@@ -645,12 +534,10 @@ const {
   initializeAnswers: initializeReadingAnswers,
   assignAnswer,
   setAnswer,
-  toggleAnswerOption,
   getAnswerValue,
   getRawAnswer,
   getAnswerEntries,
   hasAnswer,
-  isOptionSelected,
   snapshotAnswers: snapshotAnswerMap,
   getAnswerFingerprint
 } = useReadingAnswers({
@@ -658,29 +545,17 @@ const {
   readOnlySource: readOnlyMode,
   onTrack: recordAnswerTimeline,
   onSyncNative: syncNativeControl,
-  onMutate: () => {
+  onMutate: (_questionId, _value, metadata) => {
     clearSnapshotMessage()
     submitError.value = ''
+    // User edits (typed, ticked or dropped) autosave; hydration is untracked.
+    if (metadata.changed && metadata.options.track) scheduleDraftAutosave()
   }
 })
 const {
-  currentDragPayload,
   getInteraction,
   getDisplayLabel,
-  isChoiceControl,
   isDragDropControl,
-  getOptions,
-  isMultiValueCheckbox,
-  getDragDropGroup,
-  getDragDropGroupQuestionIds,
-  allowsDragOptionReuse,
-  getSelectedOption,
-  getSelectedOptionLabel,
-  findQuestionUsingDragOption,
-  isDragOptionUnavailable,
-  setDragDropAnswer,
-  clearDragDropAnswer,
-  dropOnAnswerSlot,
   dragInteractionStatus,
   handleWorkspaceClick,
   handleWorkspaceKeydown,
@@ -689,14 +564,9 @@ const {
   handleDragOver,
   handleDragLeave,
   handleDrop,
-  findNativeDropzonesByQuestionId,
-  ensureDropzoneHolder,
   syncDropzoneControl,
-  setReadOnlyDomControls,
-  clearDragHoverState,
-  getNativeDropzoneElement,
-  getDragPoolElement,
-  resolveDropzoneQuestionId
+  syncPoolConsumedState,
+  setReadOnlyDomControls
 } = useReadingInteractions({
   payloadSource: () => payload.value,
   readOnlyModeSource: readOnlyMode,
@@ -705,8 +575,33 @@ const {
   assignAnswer,
   recordQuestionVisit: (questionId) => recordQuestionVisit(questionId)
 })
+nativeControls = useNativeAnswerControls({
+  payloadSource: () => payload.value,
+  readOnlySource: () => readOnlyMode.value,
+  getInteraction,
+  getRawAnswer,
+  getAnswerEntries,
+  setAnswer,
+  isDragDropControl,
+  syncDropzoneControl,
+  onAnswerInput: (questionIds) => {
+    questionIds.forEach((questionId) => recordQuestionVisit(questionId))
+  }
+})
+// Entering review marks options/dropzones; leaving it (reset) clears them.
+watch(
+  () => [submission.value?.answerComparison || null, payload.value],
+  async ([comparison]) => {
+    await nextTick()
+    applyResultsToQuestionArea(
+      reviewMode.value ? comparison : null,
+      payload.value?.questionDisplayMap || null,
+      nativeControls.resolveNativeQuestionIds
+    )
+  },
+  { flush: 'post' }
+)
 const {
-  elapsedSeconds,
   timerRunning,
   suiteTimerState,
   formattedTimer,
@@ -728,8 +623,6 @@ const {
 const {
   coachQuery,
   coachLoading,
-  coachError,
-  coachResponse,
   selectedContext,
   readingCoachOpen,
   llmReviewStatus,
@@ -740,6 +633,11 @@ const {
   coachFollowUps,
   coachFeedback,
   coachReaskableId,
+  coachNotice,
+  coachHistoryFailed,
+  coachRetryKind,
+  retryCoachQuery,
+  reloadCoachHistory,
   resetReadingCoachState,
   setReadingCoachOpen,
   hydrateReadingCoachFromSubmission,
@@ -765,7 +663,7 @@ const {
     return props.sessionId || route.params.sessionId ? 'review' : 'single'
   },
   readCoachEnabled: () => readingCoachEnabled.value,
-  readSelectedContext,
+  readSelectedContext: () => readSelectedContext(getDisplayLabel),
   getDisplayLabel,
   formatReviewAnswer,
   flushActiveQuestionVisit,
@@ -843,14 +741,36 @@ const canRecycleSubmittedAttempt = computed(() => Boolean(
   && !submitting.value
 ))
 const readingPageClassList = computed(() => ({
-  ...preferencePageClassList.value,
+  ...displayClassList.value,
   'reading-memorize-mode': isMemorizeMode.value,
   'reading-pane-resizing': dividerDragging.value,
   'exam-mode': !reviewMode.value && !isMemorizeMode.value
 }))
-const readingWorkspaceStyle = computed(() => ({
-  '--atlas-reading-left-pane-width': `${leftPanePercent.value}%`
-}))
+// Suite runs map passage n to Part n; single practice follows the category.
+const navCategory = computed(() => (
+  activeSuiteSessionId.value && currentSuitePassageIndex.value >= 0
+    ? `P${currentSuitePassageIndex.value + 1}`
+    : String(payload.value?.meta?.category || asset.value?.category || 'P1')
+))
+const partIndex = computed(() => {
+  const match = navCategory.value.toUpperCase().match(/P([123])/)
+  return match ? Number(match[1]) : 1
+})
+const subHeaderInstruction = computed(() => {
+  const order = Array.isArray(payload.value?.questionOrder) ? payload.value.questionOrder : []
+  const labels = order
+    .map((questionId) => Number(String(getDisplayLabel(questionId)).match(/\d+/)?.[0]))
+    .filter((value) => Number.isFinite(value))
+  if (!labels.length) return ''
+  const first = Math.min(...labels)
+  const last = Math.max(...labels)
+  return first === last
+    ? `Read the text and answer question ${first}.`
+    : `Read the text and answer questions ${first}-${last}.`
+})
+const noteEntries = computed(() => (
+  (highlightSnapshot.value || []).filter((entry) => entry.kind === 'note')
+))
 const primaryButtonLabel = computed(() => {
   if (submitting.value) return '提交中…'
   if (isMemorizeMode.value) return '退出背题'
@@ -860,11 +780,6 @@ const primaryButtonLabel = computed(() => {
 const primaryButtonDisabled = computed(() => {
   if (isMemorizeMode.value) return leaving.value
   return !canSubmit.value
-})
-const resetButtonLabel = computed(() => {
-  if (isMemorizeMode.value) return '转为练习'
-  if (reviewMode.value) return '重新作答'
-  return '清空作答'
 })
 const resetButtonDisabled = computed(() => {
   if (isMemorizeMode.value) return leaving.value
@@ -912,16 +827,26 @@ const currentSuitePassageIndex = computed(() => {
     || String(entry?.examId || '').trim() === currentAssetId
   ))
 })
-const suiteReviewNavIndex = computed(() => Math.max(0, currentSuitePassageIndex.value))
-const suiteReviewNavTotal = computed(() => suiteSequence.value.length || 0)
-const showSuiteReviewNav = computed(() => Boolean(
-  reviewMode.value
-  && activeSuiteSessionId.value
-  && suiteSequence.value.length > 1
-  && currentSuitePassageIndex.value >= 0
-))
 const canNavigateSuiteReviewPrev = computed(() => findSuiteReviewNavigationTarget('prev') !== null)
 const canNavigateSuiteReviewNext = computed(() => findSuiteReviewNavigationTarget('next') !== null)
+// The other two parts of the bottom nav show suite passages; a submitted one
+// opens its review while this passage is itself in review.
+const suitePartSummaries = computed(() => {
+  if (!activeSuiteSessionId.value || !suiteSequence.value.length) return null
+  const summaries = {}
+  suiteSequence.value.forEach((entry, index) => {
+    const sessionId = String(entry?.sessionId || entry?.attemptId || '').trim()
+    const total = Number(entry?.scoreInfo?.totalQuestions) || null
+    summaries[`p${index + 1}`] = {
+      answeredCount: entry?.status === 'submitted' ? (total ?? 0) : 0,
+      total: total ?? undefined,
+      link: reviewMode.value && entry?.status === 'submitted' && sessionId
+        ? { assetId: entry.assetId, sessionId }
+        : null
+    }
+  })
+  return summaries
+})
 const analysisSignals = computed(() => submission.value?.analysisSignals || submission.value?.analysisArtifacts?.analysisSignals || null)
 const singleAttemptAnalysis = computed(() => submission.value?.singleAttemptAnalysis || submission.value?.analysisArtifacts?.singleAttemptAnalysis || null)
 const singleAttemptAnalysisLlm = computed(() => (
@@ -1055,12 +980,16 @@ async function runAttemptReview() {
 
 onMounted(async () => {
   await initializeReadingPreferences()
+  await initializeDisplayPreferences()
   attachHighlightDocumentListeners()
   await loadReadingCoachPreference()
   await loadAsset()
 })
 
 onBeforeUnmount(() => {
+  // Leaving the page closes the coach stream; a late reply must not land in a
+  // transcript nobody is looking at.
+  resetReadingCoachState()
   flushActiveQuestionVisit()
   stopPracticeTimer()
   if (!reviewMode.value && !isMemorizeMode.value && !isEndlessMode.value) {
@@ -1076,7 +1005,6 @@ onBeforeUnmount(() => {
   }
   clearSnapshotMessage()
   detachHighlightDocumentListeners()
-  removeDividerDragListeners()
 })
 
 onUpdated(() => {
@@ -1150,6 +1078,7 @@ async function loadAsset() {
   clearEndlessTimer()
   resetPracticeTimerClock()
   endlessNextAssetId.value = ''
+  let restoredTimer = null
   try {
     const data = await loadReadingAsset(normalizedAssetId)
     if (isEndlessMode.value && !(await reconcileEndlessRoute())) {
@@ -1172,7 +1101,7 @@ async function loadAsset() {
     if (replaySessionId) {
       await loadSubmittedSession(replaySessionId)
     } else if (isTauriRuntime() && !isMemorizeMode.value) {
-      await hydrateOpenDraft(
+      restoredTimer = await hydrateOpenDraft(
         normalizedAssetId,
         activeSuiteSessionId.value || null,
         activeEndlessSessionId.value || null
@@ -1188,14 +1117,15 @@ async function loadAsset() {
     if (isTauriRuntime()) {
       const attemptScope = tauriAttemptId || replaySessionId || null
       const passageDocument = String(readingPassagePane.value?.$el?.textContent || '').trim()
-      await hydrateHighlightsFromStore(asset.value.id, attemptScope, passageDocument || null)
+      await hydrateHighlightsFromStore(asset.value.id, attemptScope, passageDocument || null, RESTORED_ANNOTATION_KINDS)
     }
     restoreHighlightsFromRecords(highlightSnapshot.value)
     applyMemorizeStudyLayer()
     if (readOnlyMode.value) {
       setPracticeTimerElapsedSeconds(Math.max(0, Number(submission.value?.duration || 0)))
       setReadOnlyDomControls(true)
-    } else {
+    } else if (restoredTimer?.running !== false) {
+      // A draft paused by the student reopens paused.
       startPracticeTimer()
     }
   }
@@ -1227,7 +1157,7 @@ async function loadSubmittedSession(sessionId) {
   fillCorrectAnswersFromPayload(loadedSubmission)
   const attemptScope = String(loadedSubmission.sessionId || loadedSubmission.attemptId || sessionId || '').trim()
   if (isTauriRuntime() && asset.value?.id) {
-    const persisted = await hydrateHighlightsFromStore(asset.value.id, attemptScope || null)
+    const persisted = await hydrateHighlightsFromStore(asset.value.id, attemptScope || null, null, RESTORED_ANNOTATION_KINDS)
     if (!persisted.length) {
       highlightSnapshot.value = normalizeHighlightSnapshotState(
         loadedSubmission.highlights || loadedSubmission.analysisArtifacts?.highlights || []
@@ -1239,7 +1169,7 @@ async function loadSubmittedSession(sessionId) {
     )
   }
   hydrateReadingCoachFromSubmission(loadedSubmission, {
-    open: true,
+    open: false,
     pendingIfMissing: true,
     successMessage: 'AI 复盘已载入',
     pendingMessage: 'AI 复盘待补全'
@@ -1299,6 +1229,7 @@ async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null
       markedQuestions.value = marked
     }
     showSnapshotMessage('已恢复未提交草稿。')
+    return timer
   } catch (draftError) {
     console.warn('加载阅读草稿失败:', draftError)
   }
@@ -1435,21 +1366,6 @@ function resetAnswers() {
   showSnapshotMessage('已清空本页作答。')
 }
 
-function isMarkedQuestion(questionId) {
-  const normalized = normalizeQuestionId(questionId)
-  return Boolean(normalized && markedQuestions.value.includes(normalized))
-}
-
-function toggleMarkedQuestion(questionId) {
-  if (readOnlyMode.value) return
-  const normalized = normalizeQuestionId(questionId)
-  if (!normalized) return
-  markedQuestions.value = isMarkedQuestion(normalized)
-    ? markedQuestions.value.filter((entry) => entry !== normalized)
-    : [...markedQuestions.value, normalized]
-  scheduleDraftAutosave()
-}
-
 async function recycleSubmittedAttempt() {
   if (!canRecycleSubmittedAttempt.value) {
     return
@@ -1485,120 +1401,15 @@ async function snapshotAnswers() {
   }
 }
 
-function handleQuestionInput(event) {
-  if (readOnlyMode.value) {
-    return
-  }
-  const target = event.target
-  if (!target || !target.name) {
-    return
-  }
-
-  if (target.type === 'checkbox') {
-    collectCheckboxGroup(target.name)
-    scheduleDraftAutosave()
-    return
-  }
-
-  const questionId = normalizeQuestionId(target.name)
-  if (!questionId) return
-  recordQuestionVisit(questionId)
-
-  if (target.type === 'radio') {
-    if (target.checked) {
-      setAnswer(questionId, target.value)
-      scheduleDraftAutosave()
-    }
-    return
-  }
-
-  setAnswer(questionId, target.value)
-  scheduleDraftAutosave()
-}
-
-function collectCheckboxGroup(name) {
-  const questionIds = expandQuestionSequence(name)
-  if (!questionIds.length) {
-    return
-  }
-  questionIds.forEach((questionId) => recordQuestionVisit(questionId))
-  const checkedValues = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${escapeCss(name)}"]`))
-    .filter((input) => input.checked)
-    .map((input) => String(input.value || '').trim())
-    .filter(Boolean)
-    .sort((left, right) => left.localeCompare(right, 'en'))
-
-  if (questionIds.length === 1 && isMultiValueCheckbox(questionIds[0])) {
-    setAnswer(questionIds[0], checkedValues)
-    return
-  }
-
-  questionIds.forEach((questionId, index) => {
-    setAnswer(questionId, checkedValues[index] || '')
-  })
-}
-
+// Wrappers: useReadingAnswers needs the sync hook before the controls exist.
+function handleQuestionInput(event) { return nativeControls.handleQuestionInput(event) }
 function syncDomAnswers() {
-  getAnswerEntries().forEach(([questionId, value]) => {
-    syncNativeControl(questionId, value)
-  })
+  nativeControls.syncDomAnswers()
+  // Non-reusable pools grey out cards already placed in a dropzone.
+  syncPoolConsumedState()
 }
-
-function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId)) {
-  if (typeof document === 'undefined') {
-    return
-  }
-  const interaction = getInteraction(questionId)
-  // Bundled payloads carry no interactionModel: questions whose native markup
-  // has dropzones route to the dropzone sync (isDragDropControl falls back).
-  if (interaction?.control === 'dragdrop' || (!interaction?.control && isDragDropControl(questionId))) {
-    syncDropzoneControl(questionId, explicitValue)
-    return
-  }
-  const names = new Set(resolveAnswerAliases(questionId))
-  if (interaction?.name) {
-    names.add(interaction.name)
-  }
-
-  if (interaction?.control === 'checkbox' && interaction.name) {
-    const groupIds = expandQuestionSequence(interaction.name)
-    const selectedValues = new Set()
-    groupIds.forEach((id) => {
-      const value = getRawAnswer(id)
-      if (Array.isArray(value)) {
-        value.map((entry) => String(entry || '').trim()).filter(Boolean).forEach((entry) => selectedValues.add(entry))
-        return
-      }
-      const normalized = String(value || '').trim()
-      if (normalized) {
-        selectedValues.add(normalized)
-      }
-    })
-    document.querySelectorAll(`input[type="checkbox"][name="${escapeCss(interaction.name)}"]`).forEach((input) => {
-      input.checked = selectedValues.has(String(input.value || '').trim())
-      syncNativeReadOnly(input)
-    })
-    return
-  }
-
-  names.forEach((name) => {
-    const escaped = escapeCss(name)
-    document.querySelectorAll(`input[type="radio"][name="${escaped}"]`).forEach((input) => {
-      input.checked = String(input.value || '').trim() === String(explicitValue || '').trim()
-      syncNativeReadOnly(input)
-    })
-    document.querySelectorAll(`input[type="text"][name="${escaped}"], textarea[name="${escaped}"]`).forEach((input) => {
-      input.value = String(explicitValue || '')
-      syncNativeReadOnly(input)
-    })
-  })
-}
-
-function syncNativeReadOnly(control) {
-  const readOnly = readOnlyMode.value
-  control.disabled = readOnly
-  control.tabIndex = readOnly ? -1 : 0
-  control.setAttribute('aria-disabled', readOnly ? 'true' : 'false')
+function syncNativeControl(questionId, explicitValue) {
+  return nativeControls?.syncNativeControl(questionId, explicitValue)
 }
 
 function scheduleDraftAutosave() {
@@ -1690,7 +1501,6 @@ const modeFlow = useReadingModeFlow({
   reviewMode,
   canSubmit,
   canRecycleSubmittedAttempt,
-  readingCoachEnabled,
   suiteAutoAdvance,
   suiteSequence,
   currentSuitePassageIndex,
@@ -1737,72 +1547,32 @@ function handlePrimaryButton() { return modeFlow.handlePrimaryButton() }
 function ensureMemorizeSession() { return modeFlow.ensureMemorizeSession() }
 function finishActiveMemorizeSession() { return modeFlow.finishActiveMemorizeSession() }
 
-function startDividerDrag(event) {
-  if (!event || (Number.isFinite(Number(event.button)) && event.button > 0)) {
-    return
-  }
-  const shell = document.querySelector('.reading-workspace.shell')
-  if (!shell) return
-  event.preventDefault()
-  dividerDragging.value = true
-  dividerPointerId = event.pointerId
-  event.currentTarget?.setPointerCapture?.(event.pointerId)
-  document.addEventListener('pointermove', handleDividerDrag)
-  document.addEventListener('pointerup', stopDividerDrag)
-  document.addEventListener('pointercancel', stopDividerDrag)
-  handleDividerDrag(event)
+function openSuitePart(link) {
+  if (!link?.assetId || !link?.sessionId) return
+  router.push({
+    name: 'PracticeReadingReview',
+    params: { assetId: link.assetId, sessionId: link.sessionId },
+    query: { suiteSessionId: activeSuiteSessionId.value }
+  })
 }
 
-function handleDividerDrag(event) {
-  if (!dividerDragging.value || !event) {
-    return
-  }
-  const shell = document.querySelector('.reading-workspace.shell')
-  if (!shell) return
-  const rect = shell.getBoundingClientRect()
-  if (!rect.width) return
-  const percent = ((event.clientX - rect.left) / rect.width) * 100
-  leftPanePercent.value = Math.max(34, Math.min(66, percent))
+function openNoteEditor() {
+  if (!notesPanelOpen.value) toggleNotesPanel()
 }
 
-function stopDividerDrag(event) {
-  if (!dividerDragging.value) {
-    return
+function locateNote(note) {
+  // Persisted notes carry an annotation id; unsynced ones are located by their text.
+  let anchor = note.id
+    ? document.querySelector(`[data-note-id="${escapeCss(note.id)}"], [data-annotation-id="${escapeCss(note.id)}"]`)
+    : null
+  if (!anchor) {
+    const candidates = document.querySelectorAll('#left .hl[data-hl-type="note"], #left .hl[data-note-id]')
+    anchor = Array.from(candidates).find((node) => normalizeComparableText(node.textContent) === note.text) || null
   }
-  dividerDragging.value = false
-  const divider = document.getElementById('reading-divider')
-  try {
-    if (divider && dividerPointerId != null) {
-      divider.releasePointerCapture?.(dividerPointerId)
-    } else if (divider && event?.pointerId != null) {
-      divider.releasePointerCapture?.(event.pointerId)
-    }
-  } catch (_) {}
-  dividerPointerId = null
-  removeDividerDragListeners()
-}
-
-function removeDividerDragListeners() {
-  document.removeEventListener('pointermove', handleDividerDrag)
-  document.removeEventListener('pointerup', stopDividerDrag)
-  document.removeEventListener('pointercancel', stopDividerDrag)
-}
-
-function handleDividerKeydown(event) {
-  const step = event.shiftKey ? 8 : 3
-  if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    leftPanePercent.value = Math.max(34, leftPanePercent.value - step)
-  } else if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    leftPanePercent.value = Math.min(66, leftPanePercent.value + step)
-  } else if (event.key === 'Home') {
-    event.preventDefault()
-    leftPanePercent.value = 40
-  } else if (event.key === 'End') {
-    event.preventDefault()
-    leftPanePercent.value = 60
-  }
+  if (!anchor) return
+  anchor.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  anchor.classList.add('reading-note-flash')
+  setTimeout(() => anchor.classList.remove('reading-note-flash'), 1200)
 }
 
 function applyMemorizeStudyLayer() {
@@ -1813,180 +1583,10 @@ function applyMemorizeStudyLayer() {
   Object.entries(payload.value.answerKey).forEach(([questionId, answer]) => {
     const text = formatReviewAnswer(answer)
     if (text) {
-      applyMemorizeLocatorHighlights(questionId, text)
+      applyMemorizeLocatorHighlights(questionId, text, getTextNodes)
     }
   })
   setReadOnlyDomControls(true)
-}
-
-function applyMemorizeLocatorHighlights(questionId, answerText) {
-  const root = document.getElementById('left')
-  if (!root) return
-  const tokens = String(answerText || '')
-    .split(/[;,/|]/)
-    .map((entry) => entry.replace(/^\s*[A-Z]\.\s*/, '').trim())
-    .filter((entry) => entry.length >= 3)
-    .slice(0, 3)
-  tokens.forEach((token) => {
-    wrapTextMatches(root, token, {
-      className: 'memorize-locator-highlight',
-      attrs: {
-        'data-memorize-question-id': questionId
-      },
-      limit: 1,
-      skipSelector: '.hl, .memorize-locator-highlight'
-    })
-  })
-}
-
-function clearMemorizeLocatorHighlights() {
-  if (typeof document === 'undefined') return
-  document.querySelectorAll('.memorize-locator-highlight').forEach((node) => {
-    const parent = node.parentNode
-    if (!parent) return
-    while (node.firstChild) {
-      parent.insertBefore(node.firstChild, node)
-    }
-    parent.removeChild(node)
-    parent.normalize()
-  })
-}
-
-function wrapTextMatches(root, needle, options = {}) {
-  const text = normalizeComparableText(needle)
-  if (!root || text.length < 3) {
-    return []
-  }
-  const matches = []
-  const className = options.className || 'hl'
-  const attrs = options.attrs || {}
-  const limit = Math.max(1, Number(options.limit) || 20)
-  const skipSelector = options.skipSelector || '.hl'
-  const nodes = getTextNodes(root)
-  for (let index = 0; index < nodes.length && matches.length < limit; index += 1) {
-    let current = nodes[index]
-    if (current.parentElement?.closest?.(skipSelector)) {
-      continue
-    }
-    while (current && matches.length < limit) {
-      const source = current.nodeValue || ''
-      const hit = source.toLowerCase().indexOf(text.toLowerCase())
-      if (hit < 0) break
-      const matchedNode = current.splitText(hit)
-      const remainder = matchedNode.splitText(text.length)
-      const span = document.createElement('span')
-      span.className = className
-      Object.entries(attrs).forEach(([key, value]) => {
-        if (value != null) {
-          span.setAttribute(key, String(value))
-        }
-      })
-      matchedNode.parentNode.insertBefore(span, matchedNode)
-      span.appendChild(matchedNode)
-      matches.push(span)
-      current = remainder
-    }
-  }
-  return matches
-}
-
-function readSelectedContext() {
-  if (typeof window === 'undefined' || typeof window.getSelection !== 'function') {
-    return null
-  }
-  const selection = window.getSelection()
-  const text = selection && typeof selection.toString === 'function'
-    ? String(selection.toString() || '').trim()
-    : ''
-  if (!text) {
-    return null
-  }
-  const element = resolveSelectionElement(selection)
-  const questionNumbers = collectSelectedQuestionNumbers(element)
-  const paragraphLabels = collectSelectedParagraphLabels(element)
-  const scope = element?.closest?.('.question-panel, .question-group, [data-answer-question-id], [data-review-question-id]')
-    ? 'question'
-    : 'passage'
-  return {
-    text: text.slice(0, 500),
-    scope,
-    questionNumbers,
-    paragraphLabels
-  }
-}
-
-function resolveSelectionElement(selection) {
-  const nodes = [selection?.anchorNode, selection?.focusNode].filter(Boolean)
-  for (const node of nodes) {
-    const element = node.nodeType === 3 ? node.parentElement : node
-    if (element && typeof element.closest === 'function') {
-      return element
-    }
-  }
-  return null
-}
-
-function normalizeSelectedQuestionNumber(value) {
-  const raw = String(value || '').trim()
-  if (!raw) return ''
-  const exactNumber = raw.match(/^\d+$/)
-  const qNumber = raw.match(/\bq(\d+)\b/i) || raw.match(/^q(\d+)/i)
-  const numeric = exactNumber?.[0] || qNumber?.[1] || ''
-  if (!numeric) return ''
-  const questionId = normalizeQuestionId(`q${Number(numeric)}`)
-  return String(getDisplayLabel(questionId) || numeric).replace(/^q/i, '').trim()
-}
-
-function collectSelectedQuestionNumbers(element) {
-  if (!element || typeof element.closest !== 'function') {
-    return []
-  }
-  const candidates = []
-  const direct = element.closest('[data-answer-question-id], [data-review-question-id], [data-question-ids], [data-question], [data-question-id], [name], [id]')
-  if (direct?.dataset?.questionIds) {
-    candidates.push(...String(direct.dataset.questionIds).split(','))
-  }
-  if (direct?.dataset?.answerQuestionId) {
-    candidates.push(direct.dataset.answerQuestionId)
-  }
-  if (direct?.dataset?.reviewQuestionId) {
-    candidates.push(direct.dataset.reviewQuestionId)
-  }
-  if (direct?.dataset?.question) {
-    candidates.push(direct.dataset.question)
-  }
-  if (direct?.dataset?.questionId) {
-    candidates.push(direct.dataset.questionId)
-  }
-  const name = direct?.getAttribute?.('name')
-  if (name) candidates.push(name)
-  if (direct?.id) candidates.push(direct.id)
-
-  const group = element.closest('[data-question-ids]')
-  if (group?.dataset?.questionIds) {
-    candidates.push(...String(group.dataset.questionIds).split(','))
-  }
-  return Array.from(new Set(candidates.map(normalizeSelectedQuestionNumber).filter(Boolean)))
-}
-
-function collectSelectedParagraphLabels(element) {
-  if (!element || typeof element.closest !== 'function') {
-    return []
-  }
-  const labels = []
-  const paragraph = element.closest('[data-paragraph], [data-paragraph-label], .passage-block, .paragraph-wrapper')
-  if (paragraph?.dataset?.paragraph) {
-    labels.push(paragraph.dataset.paragraph)
-  }
-  if (paragraph?.dataset?.paragraphLabel) {
-    labels.push(paragraph.dataset.paragraphLabel)
-  }
-  const text = String(paragraph?.textContent || element.textContent || '').trim()
-  const match = text.match(/^(?:paragraph\s*)?([A-H])\b/i)
-  if (match?.[1]) {
-    labels.push(match[1])
-  }
-  return Array.from(new Set(labels.map((item) => String(item || '').replace(/^paragraph\s*/i, '').trim().toUpperCase()).filter(Boolean)))
 }
 
 function getReviewEntry(questionId) {
@@ -1999,18 +1599,6 @@ function getReviewClass(questionId) {
   if (entry.isCorrect === true) return 'review-correct'
   if (entry.isCorrect === false) return 'review-incorrect'
   return 'review-neutral'
-}
-
-function getLegacyNavStatus(questionId) {
-  const entry = getReviewEntry(questionId)
-  if (entry?.isCorrect === true) return 'correct'
-  if (entry?.isCorrect === false) return 'incorrect'
-  return hasAnswer(questionId) ? 'answered' : ''
-}
-
-function isActiveQuestion(questionId) {
-  const normalized = normalizeQuestionId(questionId)
-  return Boolean(normalized && activeQuestionId.value === normalized)
 }
 
 function getLegacyResultClass(questionId) {
@@ -2265,7 +1853,6 @@ function getGroupOfficialExplanations(group) {
     .filter((section) => section.text || section.items.length)
 }
 
-
 function resolveAnswerAliases(questionId) {
   return resolveAnswerAliasesFromIds(questionId, payload.value?.questionDisplayMap || null)
 }
@@ -2291,4 +1878,14 @@ function getQuestionKindLabel(kind) {
 
 </script>
 
-<style src="../modules/practice-reading/styles/page.css"></style>
+<style src="../modules/reading-unified/styles/unified.css"></style>
+<style src="../modules/practice-reading/styles/host-extras.css"></style>
+<style scoped>
+/* Fixed full-viewport mount: the exam owns the window, escaping the SPA
+   shell padding (the skin itself lays out header/sub-header/shell/nav). */
+#runified-root {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+}
+</style>

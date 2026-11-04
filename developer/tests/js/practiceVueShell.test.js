@@ -146,25 +146,25 @@ function testWritingTopicCards() {
 
 function testReadingActionOwnership() {
   const page = read('apps/writing-vue/src/views/PracticeReadingPage.vue')
-  const pageCss = read('apps/writing-vue/src/modules/practice-reading/styles/page.css')
-  const examTheme = read('apps/writing-vue/src/styles/design-system/exam-theme.css')
+  const skin = read('apps/writing-vue/src/modules/reading-unified/styles/unified.css')
+  const hostExtras = read('apps/writing-vue/src/modules/practice-reading/styles/host-extras.css')
   const designSystem = read('apps/writing-vue/src/styles/design-system/index.css')
-  const nav = read('apps/writing-vue/src/modules/practice-reading/components/ReadingAnswerNav.vue')
+  const nav = read('apps/writing-vue/src/modules/reading-unified/components/UnifiedPracticeNav.vue')
   const interactions = read('apps/writing-vue/src/modules/practice-reading/useReadingInteractions.ts')
   const preferences = read('apps/writing-vue/src/modules/practice-reading/useReadingUiPreferences.ts')
   const preferenceStore = read('apps/writing-vue/src/composables/useTauriPreferences.js')
 
   has(nav, 'id="exit-btn"', 'stable Reading exit identifier')
-  has(nav, '@click="handleLeave"', 'guarded Reading exit')
-  has(nav, "emit('leave')", 'Reading exit event')
+  has(nav, 'id="submit-btn"', 'stable Reading submit identifier')
+  has(nav, "$emit('leave')", 'Reading exit event')
   has(page, '@leave="handleLeave"', 'page-owned guarded leave flow')
   has(page, 'const canSnapshot = computed', 'single snapshot capability')
-  has(page, 'src="../modules/practice-reading/styles/page.css"', 'Reading layout stylesheet split')
-  has(pageCss, 'grid-template-rows: minmax(0, 1fr);', 'constrained Reading workspace row')
-  has(pageCss, 'overscroll-behavior: contain;', 'pane-local Reading scroll')
-  has(designSystem, "./exam-theme.css", 'exam theme registered in design system')
-  has(examTheme, '--exam-navy:', 'exam navy token')
-  has(examTheme, '.reading-page.exam-mode #reading-coach-fab', 'exam mode hides coach chrome')
+  has(page, 'src="../modules/reading-unified/styles/unified.css"', 'exam page wears the generated unified skin')
+  has(page, 'src="../modules/practice-reading/styles/host-extras.css"', 'host-only surfaces styled separately')
+  has(skin, 'GENERATED FILE', 'unified skin is generated from the opensource page')
+  has(skin, 'overscroll-behavior: contain;', 'pane-local Reading scroll')
+  lacks(designSystem, "./exam-theme.css", 'retired navy exam theme')
+  has(hostExtras, '.runified.exam-mode #reading-coach-fab', 'exam mode hides coach chrome')
   has(designSystem, "./tokens.css", 'paper tokens registered in design system')
   has(read('apps/writing-vue/src/styles/main.css'), "./design-system/exam-frozen.css", 'exam freeze layer loaded before the paper skin')
   has(read('apps/writing-vue/src/styles/design-system/exam-frozen.css'), '.atlas-exam {', 'exam token pin')
@@ -172,7 +172,7 @@ function testReadingActionOwnership() {
   lacks(interactions, 'reviewModeSource', 'split review-only interaction source')
   has(page, 'ref="settingsPanel"', 'Reading settings dialog element ref')
   has(page, '@keydown="handleSettingsDialogKeydown"', 'Reading settings Escape/focus handling')
-  has(page, 'aria-controls="settings-panel"', 'Reading settings trigger relationship')
+  has(read('apps/writing-vue/src/modules/reading-unified/components/UnifiedExamHeader.vue'), 'aria-controls="settings-panel"', 'Reading settings trigger relationship')
   has(preferences, 'function handleSettingsDialogKeydown', 'Reading settings keyboard controller')
   has(preferences, 'function focusFirstPanelControl', 'Reading settings initial focus')
   has(preferenceStore, 'async function setDurable', 'awaitable SQLite preference migration write')
@@ -187,7 +187,7 @@ function testReadingActionOwnership() {
     migrationSource.indexOf('await preferences.setDurable') < migrationSource.indexOf('removeLocal(key)'),
     'legacy storage must be removed only after SQLite confirms the write'
   )
-  for (const copy of ["return '提交作答'", "return '清空作答'", "<h3 id=\"notes-panel-title\">阅读笔记</h3>"]) {
+  for (const copy of ["return '提交作答'", '保存作答快照', '<h3 class="settings-title">AI 教练</h3>']) {
     has(page, copy, 'Chinese Reading product copy')
   }
 }
