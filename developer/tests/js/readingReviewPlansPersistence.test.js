@@ -7,19 +7,33 @@ import { chromium } from 'playwright';
 const scripts = ['data/v2/dataCatalog.js', 'data/v2/dataKernel.js', 'data/practiceRecordSource.js',
     'core/vocabScheduler.js', 'core/practiceReviewScheduler.js', 'data/v2/appData.js']
     .map(name => fs.readFileSync(new URL(`../../../js/${name}`, import.meta.url), 'utf8'));
+const readingCatalog = fs.readFileSync(new URL('../../../assets/generated/reading-exams/manifest.js', import.meta.url), 'utf8');
 
-test('article plans and practice records commit atomically across real IndexedDB writers and restore', async () => {
+async function withAppDataPages(count, run) {
     const server = http.createServer((_req, res) => res.end('<!doctype html><title>Isolated review database</title>'));
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext();
+    let browser;
     try {
-        const pages = await Promise.all([context.newPage(), context.newPage()]);
+        browser = await chromium.launch({ headless: true });
+        const context = await browser.newContext();
+        const pages = await Promise.all(Array.from({ length: count }, () => context.newPage()));
         for (const page of pages) {
             await page.goto(`http://127.0.0.1:${server.address().port}`);
-            for (const content of scripts) await page.addScriptTag({ content });
+            for (const content of scripts.slice(0, -1)) await page.addScriptTag({ content });
+            await page.evaluate(() => { window.testDataInternals = window.__AppDataV2Internals; });
+            await page.addScriptTag({ content: scripts.at(-1) });
+            await page.addScriptTag({ content: readingCatalog });
             await page.evaluate(() => AppData.ready);
         }
+        return await run(pages);
+    } finally {
+        if (browser) await browser.close();
+        await new Promise(resolve => server.close(resolve));
+    }
+}
+
+test('article plans and practice records commit atomically across real IndexedDB writers and restore', async () => {
+    await withAppDataPages(2, async pages => {
         const firstRead = await pages[0].evaluate(async () => {
             const prototype = IDBObjectStore.prototype;
             const originals = {}; let writes = 0; let scans = 0;
@@ -70,8 +84,134 @@ test('article plans and practice records commit atomically across real IndexedDB
         const restored = await pages[1].evaluate((id) => AppData.practice.getReviewTask(id), taskId);
         assert.deepEqual(restored, task, 'practice-scoped export restores the complete article plan');
         assert.equal(await pages[1].evaluate(async () => (await AppData.practice.get('redo')).notes[0].id), 'redo');
-    } finally {
-        await browser.close();
-        await new Promise(resolve => server.close(resolve));
-    }
+    });
 });
+
+test('historical replay annotations retain stored identities and existing content', async t => {
+    await withAppDataPages(1, async ([page]) => {
+        const aliases = await page.evaluate(() => window.__READING_EXAM_ALIASES__);
+        assert.equal(Object.keys(aliases).length, 3, 'exercise every released retired alias');
+        for (const [retiredId, canonicalId] of Object.entries(aliases)) {
+            for (const storedId of [retiredId, canonicalId]) {
+                for (const suite of [false, true]) {
+                    await t.test(`${storedId}: ${suite ? 'suite' : 'single'}`, async () => {
+                        const result = await page.evaluate(async ({ retiredId, canonicalId, storedId, suite }) => {
+                            const recordId = `${storedId}-${suite ? 'suite' : 'single'}`;
+                            const annotations = {
+                                notes: [{ id: 'existing-note', body: 'saved before replay' }],
+                                highlights: [{ id: 'existing-highlight', text: 'original evidence' }],
+                                markedQuestions: ['q1'], noteOutlines: [{ id: 'outline', title: 'Evidence' }]
+                            };
+                            const entry = { examId: storedId, metadata: { examId: storedId }, type: 'reading',
+                                completedAt: '2026-09-01T00:00:00.000Z', totalQuestions: 10, correctAnswers: 7,
+                                answers: { q1: 'A' }, ...annotations };
+                            const record = suite
+                                ? { id: recordId, examId: 'suite', type: 'reading-suite', suiteEntries: [entry,
+                                    { ...entry, examId: 'other-passage', metadata: { examId: 'other-passage' } }] }
+                                : { ...entry, id: recordId };
+                            await AppData.practice.completeAttempt({ operationId: recordId, record });
+                            const before = await AppData.backups.export({ domains: ['practice'] });
+                            const replay = await AppData.practice.get(recordId, { projection: 'full' });
+                            const replayEntry = suite ? replay.suiteEntries[0] : replay;
+                            await AppData.practice.updateAnnotations({ recordId, examId: replayEntry.examId,
+                                patch: { notes: [...replayEntry.notes, { id: 'new-note', body: 'added in replay' }] } });
+                            await AppData.practice.updateAnnotations({ recordId, examId: canonicalId,
+                                patch: { highlights: [...replayEntry.highlights, { id: 'new-highlight', text: 'new evidence' }] } });
+                            // Older replay clients may still send the retired ID.
+                            await AppData.practice.updateAnnotations({ recordId, examId: retiredId, patch: { scrollY: 123 } });
+                            let unrelatedError;
+                            try { await AppData.practice.updateAnnotations({ recordId, examId: 'unrelated-passage', patch: { notes: [] } }); }
+                            catch (error) { unrelatedError = error.code; }
+                            const after = await AppData.backups.export({ domains: ['practice'] });
+                            const full = await AppData.practice.get(recordId, { projection: 'full' });
+                            const stored = after.entities.practiceAnnotations.find(row => row.recordId === recordId).data;
+                            return { before: before.entities, after: after.entities, replayEntry, full,
+                                stored, unrelatedError, annotations };
+                        }, { retiredId, canonicalId, storedId, suite });
+                        assert.equal(result.replayEntry.examId, canonicalId);
+                        assert.deepEqual(result.after.practiceSummaries, result.before.practiceSummaries, 'historical summaries are unchanged');
+                        assert.deepEqual(result.after.practiceDetails, result.before.practiceDetails, 'historical facts and IDs are unchanged');
+                        const full = suite ? result.full.suiteEntries[0] : result.full;
+                        assert.equal(full.examId, canonicalId);
+                        assert.deepEqual(full.notes.map(note => note.id), ['existing-note', 'new-note']);
+                        assert.deepEqual(full.highlights.map(highlight => highlight.id), ['existing-highlight', 'new-highlight']);
+                        assert.deepEqual(full.markedQuestions, result.annotations.markedQuestions);
+                        assert.deepEqual(full.noteOutlines, result.annotations.noteOutlines);
+                        assert.equal(full.scrollY, 123);
+                        const keyed = suite ? result.stored.suiteEntries : result.stored.annotations;
+                        assert.deepEqual(keyed[storedId].notes, full.notes, 'updates use the stored annotation key');
+                        assert.equal(Object.hasOwn(keyed, storedId === retiredId ? canonicalId : retiredId), false, 'aliases do not create orphan annotation keys');
+                        assert.equal(result.unrelatedError, 'VALIDATION', 'unrelated exam IDs remain invalid');
+                        if (suite) {
+                            assert.deepEqual(result.full.suiteEntries[1].notes, result.annotations.notes);
+                            assert.deepEqual(result.full.suiteEntries[1].highlights, result.annotations.highlights);
+                        }
+                    });
+                }
+            }
+        }
+    });
+});
+
+for (const includePlans of [true, false]) {
+    test(`backup merge ${includePlans ? 'with' : 'without'} imported plans rejects a concurrent review and can be previewed again`, async () => {
+        await withAppDataPages(2, async ([importer, reviewer]) => {
+            const snapshot = await importer.evaluate(async includePlans => {
+                await AppData.practice.completeAttempt({ operationId: 'seed-review', record: {
+                    id: 'review-record', examId: 'reading-review', type: 'reading',
+                    completedAt: '2026-09-01T00:00:00.000Z', totalQuestions: 10, correctAnswers: 7,
+                    answers: { q1: 'A' }
+                } });
+                const snapshot = await AppData.backups.export({ domains: ['practice'] });
+                if (!includePlans) {
+                    delete snapshot.envelopes['practice.reviewPlans'];
+                    snapshot.checksum = window.testDataInternals.checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
+                }
+                return snapshot;
+            }, includePlans);
+            const before = await reviewer.evaluate(() => AppData.practice.getReviewTask('review-record'));
+            assert.equal(before.reviewState.reviewCount, 1);
+            let reviewReceipt;
+            await importer.exposeFunction('commitConcurrentReview', async () => {
+                reviewReceipt = await reviewer.evaluate(() => AppData.practice.recordReviewOutcome({
+                    recordId: 'review-record', reviewAttemptId: 'other-tab-review',
+                    quality: 'good', reviewedAt: '2026-09-02T01:00:00.000Z'
+                }));
+            });
+            const plan = await importer.evaluate(async snapshot => {
+                const prototype = window.testDataInternals.DataKernel.prototype;
+                const read = prototype.read;
+                let injected = false;
+                prototype.read = async function(key, options) {
+                    const current = await read.call(this, key, options);
+                    if (key === 'practice.reviewPlans' && !injected) {
+                        injected = true;
+                        // Commit after the captured read, before preview can read again.
+                        await window.commitConcurrentReview();
+                    }
+                    return current;
+                };
+                try { return await AppData.backups.previewImport(snapshot, { practiceMode: 'merge' }); }
+                finally { prototype.read = read; }
+            }, snapshot);
+            assert.equal(reviewReceipt.committed, true);
+            const concurrent = await reviewer.evaluate(() => AppData.practice.getReviewTask('review-record'));
+            assert.equal(concurrent.reviewState.reviewCount, 2);
+            assert.notEqual(concurrent.reviewState.nextReview, before.reviewState.nextReview);
+            assert.ok(concurrent.reviewState.appliedReviewAttemptIds.includes('other-tab-review'));
+            const commitError = await importer.evaluate(async planId => {
+                try { await AppData.backups.commitImport(planId); return null; }
+                catch (error) { return error.code; }
+            }, plan.id);
+            assert.equal(commitError, 'CONFLICT', 'a stale preview cannot install over a successful review');
+            assert.deepEqual(await reviewer.evaluate(() => AppData.practice.getReviewTask('review-record')), concurrent);
+            const retry = await importer.evaluate(async snapshot => {
+                const preview = await AppData.backups.previewImport(snapshot, { practiceMode: 'merge' });
+                return AppData.backups.commitImport(preview.id);
+            }, snapshot);
+            assert.equal(retry.committed, true, 'a fresh preview can be committed');
+            assert.deepEqual(await reviewer.evaluate(() => AppData.practice.getReviewTask('review-record')), concurrent,
+                'the new preview retains the review count, schedule, and attempt ID');
+        });
+    });
+}

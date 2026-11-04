@@ -1388,12 +1388,19 @@
                 delete annotations.reviewState;
                 const patch = clone(asObject(command.patch)); delete patch.reviewState;
                 const detail = clone(asObject(current.detail && current.detail.data)); const examId = String(command.examId || current.summary.data.examId || 'default');
+                const resolveExamId = typeof global.resolveReadingExamId === 'function' ? global.resolveReadingExamId : (id) => id;
+                const matchesExamId = (id) => resolveExamId(String(id)) === resolveExamId(examId);
+                // Replay projects canonical IDs, but annotations must keep the keys
+                // used by the stored record and joinPracticeRecord.
                 if (Array.isArray(detail.suiteEntries) && detail.suiteEntries.length) {
-                    if (!detail.suiteEntries.some((entry) => String(entry.examId || asObject(entry.metadata).examId || '') === examId)) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
-                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(patch)) });
+                    const entry = detail.suiteEntries.find((entry) => matchesExamId(entry.examId || asObject(entry.metadata).examId || ''));
+                    if (!entry) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
+                    const storedExamId = String(entry.examId || asObject(entry.metadata).examId || entry.id);
+                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [storedExamId]: Object.assign({}, asObject(annotations.suiteEntries)[storedExamId], clone(patch)) });
                 } else {
-                    if (current.summary.data.examId && String(current.summary.data.examId) !== examId) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
-                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(patch)) });
+                    const storedExamId = String(current.summary.data.examId || examId);
+                    if (current.summary.data.examId && !matchesExamId(storedExamId)) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
+                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [storedExamId]: Object.assign({}, asObject(annotations.annotations)[storedExamId], clone(patch)) });
                     Object.assign(annotations, clone(patch));
                 }
                 return kernel.mutateEntities([{
@@ -2499,7 +2506,11 @@
             // Restore current article plans only, with an owner in the final record set.
             // A history backup without plans does not enroll its old practice records.
             const planCurrent = await kernel.read(REVIEW_PLANS_KEY, { withMeta: true });
-            revisionToken.documents[REVIEW_PLANS_KEY] = planCurrent.envelope?.revision || 0;
+            // A merged document must retain the revision of the data it used.
+            // A later read cannot make an already-stale merge safe to install.
+            if (!hasOwn(revisionToken.documents, REVIEW_PLANS_KEY)) {
+                revisionToken.documents[REVIEW_PLANS_KEY] = planCurrent.envelope?.revision || 0;
+            }
             const importedPlans = snapshot.envelopes[REVIEW_PLANS_KEY]?.data;
             const plans = importedPlans === undefined ? (replacePractice ? [] : planCurrent.data) : importedPlans;
             const ownerIds = new Set(snapshot.entities.practiceSummaries.map(row => row.recordId));
