@@ -241,12 +241,13 @@
       v-if="readingCoachEnabled"
       :submission="submission"
       :reading-coach-open="readingCoachOpen"
-      :coach-error="coachError"
       :coach-loading="coachLoading"
       :coach-status-text="coachStatusText"
+      :coach-notice="coachNotice"
+      :coach-history-failed="coachHistoryFailed"
+      :coach-retry-kind="coachRetryKind"
       :selected-context="selectedContext"
       :coach-transcript="coachTranscript"
-      :coach-response="coachResponse"
       :coach-quick-actions="coachQuickActions"
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
@@ -262,6 +263,8 @@
       @follow-up="askCoachFollowUp"
       @feedback="submitCoachFeedback($event.messageId, $event.kind)"
       @reask="reaskCoachMessage"
+      @retry="retryCoachQuery"
+      @reload-history="reloadCoachHistory"
       @update:coach-query="coachQuery = $event"
       @refresh-selected-context="refreshSelectedContext"
       @ask="askCoach"
@@ -620,8 +623,6 @@ const {
 const {
   coachQuery,
   coachLoading,
-  coachError,
-  coachResponse,
   selectedContext,
   readingCoachOpen,
   llmReviewStatus,
@@ -632,6 +633,11 @@ const {
   coachFollowUps,
   coachFeedback,
   coachReaskableId,
+  coachNotice,
+  coachHistoryFailed,
+  coachRetryKind,
+  retryCoachQuery,
+  reloadCoachHistory,
   resetReadingCoachState,
   setReadingCoachOpen,
   hydrateReadingCoachFromSubmission,
@@ -981,6 +987,9 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  // Leaving the page closes the coach stream; a late reply must not land in a
+  // transcript nobody is looking at.
+  resetReadingCoachState()
   flushActiveQuestionVisit()
   stopPracticeTimer()
   if (!reviewMode.value && !isMemorizeMode.value && !isEndlessMode.value) {

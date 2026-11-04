@@ -167,25 +167,38 @@
   user-select: none;
 }
 
+/* The panel text follows the Options font size (the exam scales through
+   --runified-rem); --coach-px is one design pixel at the chosen size. */
 .runified .reading-coach-panel {
+  --coach-px: calc(var(--runified-rem) / 16);
   position: fixed;
   right: 16px;
   bottom: calc(var(--footer-height) + 60px);
   z-index: 3500;
   display: none;
   flex-direction: column;
-  width: min(400px, calc(100vw - 32px));
-  max-height: min(64vh, 560px);
+  width: min(calc(400 * var(--coach-px)), calc(100vw - 32px));
+  max-height: min(64vh, calc(560 * var(--coach-px)));
   overflow: hidden;
   border: 1px solid #8f8f8f;
   border-radius: 3px;
   background: #fff;
   color: var(--ink);
-  font-size: 15px;
+  font-size: calc(15 * var(--coach-px));
 }
 
 .runified .reading-coach-panel.is-open {
   display: flex;
+}
+
+.runified .reading-coach-panel:focus {
+  outline: none;
+}
+
+.runified .reading-coach-fab:focus-visible,
+.runified .reading-coach-panel :focus-visible {
+  outline: 2px solid #418fc6;
+  outline-offset: 1px;
 }
 
 .runified .reading-coach-panel__header {
@@ -200,7 +213,7 @@
 }
 
 .runified .reading-coach-panel__title {
-  font-size: 15px;
+  font-size: calc(15 * var(--coach-px));
   font-weight: 700;
 }
 
@@ -225,11 +238,42 @@
   padding: 6px 16px;
   border-bottom: 1px solid var(--soft-line);
   color: var(--muted-ink);
-  font-size: 13px;
+  font-size: calc(13 * var(--coach-px));
 }
 
 .runified .reading-coach-panel__status:empty {
   display: none;
+}
+
+.runified .reading-coach-panel__status.is-loading::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+  content: "";
+  animation: reading-coach-pulse 1.1s ease-in-out infinite;
+}
+
+/* Notices that belong to no message: history failed to load, nothing selected. */
+.runified .reading-coach-panel__notice {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--incorrect);
+  background: var(--incorrect-bg);
+  color: var(--incorrect);
+  font-size: calc(13 * var(--coach-px));
+}
+
+.runified .reading-coach-panel__notice .reading-coach-chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .runified .reading-coach-panel__selected-context {
@@ -240,7 +284,7 @@
   gap: 8px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--soft-line);
-  font-size: 13px;
+  font-size: calc(13 * var(--coach-px));
 }
 
 .runified .reading-coach-panel__selected-context span {
@@ -263,6 +307,10 @@
   padding: 14px 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.runified .reading-coach-panel__messages:focus-visible {
+  outline-offset: -2px;
 }
 
 .runified .reading-coach-msg {
@@ -293,7 +341,49 @@
   color: var(--incorrect);
 }
 
-.runified .reading-coach-feedback {
+/* The answer being written ends in a caret until the reply is validated. */
+.runified .reading-coach-msg[aria-busy="true"]::after {
+  content: "\258D";
+  margin-left: 2px;
+  animation: reading-coach-pulse 1.1s ease-in-out infinite;
+}
+
+.runified .reading-coach-msg__code {
+  max-width: 100%;
+  margin: 6px 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border: 1px solid var(--soft-line);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.04);
+  font: calc(13 * var(--coach-px)) / 1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  white-space: pre;
+}
+
+.runified .reading-coach-msg__code:first-child {
+  margin-top: 0;
+}
+
+.runified .reading-coach-msg__code:last-child {
+  margin-bottom: 0;
+}
+
+.runified .reading-coach-msg code {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.runified .reading-coach-msg__code code {
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+}
+
+.runified .reading-coach-feedback,
+.runified .reading-coach-retry {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -302,9 +392,10 @@
 }
 
 .runified .reading-coach-feedback__option {
-  height: 28px;
+  height: auto;
+  min-height: calc(28 * var(--coach-px));
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13 * var(--coach-px));
 }
 
 .runified .reading-coach-feedback__option.is-selected {
@@ -316,7 +407,7 @@
 
 .runified .reading-coach-feedback__note {
   color: var(--muted-ink);
-  font-size: 12px;
+  font-size: calc(12 * var(--coach-px));
 }
 
 .runified .reading-coach-feedback__note.is-error {
@@ -324,7 +415,8 @@
 }
 
 .runified .reading-coach-panel__actions,
-.runified .reading-coach-panel__followups {
+.runified .reading-coach-panel__followups,
+.runified .reading-coach-panel__jump {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
@@ -333,15 +425,27 @@
   border-top: 1px solid var(--soft-line);
 }
 
+.runified .reading-coach-panel__jump {
+  justify-content: center;
+  padding: 6px 16px;
+}
+
+/* A chip is a short label, but follow-ups are model text: wrap, never overflow. */
 .runified .reading-coach-chip {
-  height: 30px;
-  padding: 0 12px;
-  font-size: 13px;
+  height: auto;
+  min-height: calc(30 * var(--coach-px));
+  max-width: 100%;
+  padding: 3px 12px;
+  font-size: calc(13 * var(--coach-px));
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
 }
 
 .runified .reading-coach-panel__composer {
   display: flex;
   flex: 0 0 auto;
+  align-items: flex-end;
   gap: 8px;
   padding: 10px 16px 12px;
   border-top: 1px solid var(--soft-line);
@@ -350,14 +454,19 @@
 .runified .reading-coach-panel__input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 33px;
-  padding: 0 10px;
+  height: auto;
+  min-height: calc(33 * var(--coach-px));
+  max-height: calc(120 * var(--coach-px));
+  padding: 6px 10px;
   border: 1px solid #8f8f8f;
   border-radius: 3px;
   background: #fff;
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14 * var(--coach-px));
+  line-height: 1.4;
+  overflow-y: auto;
+  resize: none;
 }
 
 .runified .reading-coach-panel__input:focus {
@@ -366,16 +475,41 @@
   outline-offset: 0;
 }
 
+.runified .reading-coach-panel__send {
+  height: auto;
+  min-height: calc(33 * var(--coach-px));
+  font-size: calc(14 * var(--coach-px));
+}
+
+@keyframes reading-coach-pulse {
+  50% { opacity: 0.25; }
+}
+
 @media (max-width: 980px) {
   .runified .reading-coach-panel {
     right: 8px;
     left: 8px;
     width: auto;
     max-height: 70vh;
+    max-height: 70dvh;
   }
 
   .runified .reading-coach-fab {
     right: 10px;
+  }
+
+  /* One scrolling row per chip group keeps the conversation tall enough to read. */
+  .runified .reading-coach-panel__actions,
+  .runified .reading-coach-panel__followups {
+    flex-wrap: nowrap;
+    padding: 8px 12px;
+    overflow-x: auto;
+  }
+
+  .runified .reading-coach-panel__actions .reading-coach-chip,
+  .runified .reading-coach-panel__followups .reading-coach-chip {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 }
 
@@ -738,10 +872,37 @@
   color: #f2b8b5;
 }
 
+.runified.dark-mode .reading-coach-panel__notice {
+  border-color: var(--incorrect);
+  background: var(--incorrect-bg);
+  color: #f2b8b5;
+}
+
+.runified.dark-mode .reading-coach-msg__code,
+.runified.dark-mode .reading-coach-msg code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.runified.dark-mode .reading-coach-msg__code {
+  border-color: #333b44;
+}
+
+.runified.dark-mode .reading-coach-msg__code code {
+  background: transparent;
+}
+
+.runified.dark-mode .reading-coach-chip:disabled,
+.runified.dark-mode .reading-coach-feedback__option:disabled,
+.runified.dark-mode .reading-coach-panel__send:disabled {
+  border-color: #333b44;
+  color: #8a949f;
+}
+
 .runified.dark-mode .reading-coach-panel__status,
 .runified.dark-mode .reading-coach-panel__selected-context,
 .runified.dark-mode .reading-coach-panel__actions,
 .runified.dark-mode .reading-coach-panel__followups,
+.runified.dark-mode .reading-coach-panel__jump,
 .runified.dark-mode .reading-coach-panel__composer,
 .runified.dark-mode .vocab-part + .vocab-part {
   border-color: #333b44;
