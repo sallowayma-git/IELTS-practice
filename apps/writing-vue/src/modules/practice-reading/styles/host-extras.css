@@ -1035,3 +1035,103 @@
 .runified.dark-mode .reading-html .memorize-locator-highlight {
   background: #1e3346;
 }
+
+/* ---- question flags (mark for review) ------------------------------- */
+
+/* A flag exists in the DOM only while its number is hovered/focused or marked
+   (UnifiedPracticeNav), so every rule here is keyed off the flag or a class
+   that only exists with it: an idle nav keeps the skin's exact geometry. The
+   flag hangs off the number's top-right corner as an overlay and never moves
+   the number or its neighbours. */
+.runified {
+  --runified-flag: #c62828;
+  --runified-flag-bg: #fff;
+}
+
+.runified.dark-mode {
+  --runified-flag: #ff7a70;
+  --runified-flag-bg: #14181d;
+}
+
+/* The column becomes the flag's positioning box (the skin leaves it static). */
+.runified .q-column.has-flag {
+  position: relative;
+}
+
+.runified .q-flag {
+  position: absolute;
+  top: -10px;
+  right: -7px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  /* Fixed desktop size: no 44px touch floor on exam controls. */
+  width: 17px;
+  height: 17px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--runified-flag-bg);
+  color: var(--muted-ink);
+  line-height: 0;
+  cursor: pointer;
+  animation: runified-flag-in 120ms ease-out;
+}
+
+.runified .q-flag:hover:not(.is-static),
+.runified .q-flag.is-marked {
+  color: var(--runified-flag);
+}
+
+.runified .q-flag.is-marked {
+  border-color: var(--runified-flag);
+}
+
+/* Read-only (review/replay): the red flag stays, the control does not. */
+.runified .q-flag.is-static {
+  cursor: default;
+}
+
+.runified .q-flag-icon {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.runified .q-flag.is-marked .q-flag-cloth {
+  fill: currentColor;
+}
+
+/* Marked number: a thin red frame inside the chip's own border; no size change. */
+.runified .q-item.is-marked {
+  box-shadow: inset 0 0 0 1px var(--runified-flag);
+}
+
+/* On phones the chips scroll horizontally, which clips vertically too; widen
+   the clip box by the overlay's reach and pull the margin back so the row's
+   layout box (and the nav height) stays put. */
+@media (max-width: 980px) {
+  .runified .part-nav-section.active .part-nav-questions.has-flag {
+    padding-block: 12px;
+    margin-block: -12px;
+  }
+}
+
+@keyframes runified-flag-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runified .q-flag {
+    animation: none;
+    transition: none;
+  }
+}

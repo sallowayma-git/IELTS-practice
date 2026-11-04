@@ -289,11 +289,14 @@
       :show-reset="reviewMode || isMemorizeMode"
       :reset-disabled="resetButtonDisabled"
       :part-summaries="suitePartSummaries"
+      :is-marked="isMarkedQuestion"
+      :flags-read-only="readOnlyMode"
       @scroll-to-question="scrollToQuestion"
       @submit="handlePrimaryButton"
       @reset="handleResetButton"
       @leave="handleLeave"
       @open-part="openSuitePart"
+      @toggle-marked-question="toggleMarkedQuestion"
     />
   </div>
 </template>
@@ -316,6 +319,7 @@ import UnifiedNotes from '@/modules/reading-unified/components/UnifiedNotes.vue'
 import UnifiedOptionsPanel from '@/modules/reading-unified/components/UnifiedOptionsPanel.vue'
 import UnifiedSelectionBar from '@/modules/reading-unified/components/UnifiedSelectionBar.vue'
 import UnifiedPracticeNav from '@/modules/reading-unified/components/UnifiedPracticeNav.vue'
+import { useMarkedQuestions } from '@/modules/reading-unified/composables/useMarkedQuestions.js'
 import { useUnifiedDisplay } from '@/modules/reading-unified/composables/useUnifiedDisplay.js'
 import { useUnifiedDivider } from '@/modules/reading-unified/composables/useUnifiedDivider.js'
 import { useNativeAnswerControls } from '@/modules/reading-unified/composables/useNativeAnswerControls.js'
@@ -403,7 +407,19 @@ const attemptReviewContent = ref('')
 const attemptReviewToolCalls = ref([])
 const suiteSession = ref(null)
 const answerTimeline = reactive({})
-const markedQuestions = ref([])
+// Flag toggles are user edits and autosave like answers; hydration and reset
+// go through restore/clear, which never save.
+const {
+  markedQuestions,
+  isMarkedQuestion,
+  toggleMarkedQuestion,
+  restoreMarkedQuestions,
+  clearMarkedQuestions
+} = useMarkedQuestions({
+  normalizeId: normalizeQuestionId,
+  isReadOnly: () => readOnlyMode.value,
+  onUserChange: () => scheduleDraftAutosave()
+})
 const interactionCount = ref(0)
 const endlessCountdown = ref(0)
 const endlessNextAssetId = ref('')
@@ -1233,9 +1249,7 @@ async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null
     Object.entries(answers).forEach(([questionId, value]) => {
       assignAnswer(questionId, value)
     })
-    if (marked.length) {
-      markedQuestions.value = marked
-    }
+    if (marked.length) restoreMarkedQuestions(marked)
     showSnapshotMessage('已恢复未提交草稿。')
     return timer
   } catch (draftError) {
@@ -1276,7 +1290,7 @@ function resetAttemptMetadata() {
   Object.keys(answerTimeline).forEach((key) => {
     delete answerTimeline[key]
   })
-  markedQuestions.value = []
+  clearMarkedQuestions()
   interactionCount.value = 0
 }
 
@@ -1336,9 +1350,7 @@ async function updateReadingCoachEnabled(enabled) {
 }
 
 function restoreSubmittedMetadata(loadedSubmission) {
-  markedQuestions.value = Array.isArray(loadedSubmission?.markedQuestions)
-    ? loadedSubmission.markedQuestions.map(normalizeQuestionId).filter(Boolean)
-    : []
+  restoreMarkedQuestions(loadedSubmission?.markedQuestions)
   Object.keys(answerTimeline).forEach((key) => {
     delete answerTimeline[key]
   })

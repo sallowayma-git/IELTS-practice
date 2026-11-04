@@ -18,22 +18,36 @@
         <div class="part-nav-name" :class="{ inactive: !part.placeholder && part.key !== activePartKey }">Part {{ part.index }}</div>
         <div class="part-nav-status">{{ part.answeredCount }} of {{ part.total }}</div>
       </div>
-      <div v-if="!part.placeholder" class="part-nav-questions">
+      <div v-if="!part.placeholder" class="part-nav-questions" :class="{ 'has-flag': part.questions.some(showFlag) }">
+        <!-- Hover/focus on the column (number + its flag) mounts the flag, so
+             moving from the number onto the flag never unmounts it. -->
         <div
           v-for="question in part.questions"
           :key="question.questionId"
           class="q-column"
+          :class="{ 'has-flag': showFlag(question) }"
           :data-question-id="question.questionId"
           :data-part="part.key"
+          @mouseenter="hoverId = question.questionId"
+          @mouseleave="onMouseLeave(question.questionId)"
+          @focusin="onFocusIn(question.questionId, $event)"
+          @focusout="onFocusOut(question.questionId, $event)"
         >
           <div class="q-bar-segment" :class="question.status"></div>
           <button
             type="button"
             class="q-item"
-            :class="[question.status, { active: question.questionId === activeQuestionId }]"
+            :class="[question.status, { active: question.questionId === activeQuestionId, 'is-marked': question.marked }]"
             :title="`第 ${question.label} 题`"
             @click="$emit('scroll-to-question', question.questionId)"
           >{{ question.label }}</button>
+          <QuestionFlag
+            v-if="showFlag(question)"
+            :label="question.label"
+            :marked="question.marked"
+            :read-only="flagsReadOnly"
+            @toggle="$emit('toggle-marked-question', question.questionId)"
+          />
         </div>
       </div>
     </section>
@@ -67,7 +81,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import QuestionFlag from './QuestionFlag.vue'
 
 const props = defineProps({
   questionOrder: { type: Array, default: () => [] },
@@ -84,10 +99,42 @@ const props = defineProps({
   showReset: { type: Boolean, default: false },
   // Suite runs fill the other two parts from the suite sequence:
   // { p1: { answeredCount, total, link }, ... }; link is emitted on click.
-  partSummaries: { type: Object, default: null }
+  partSummaries: { type: Object, default: null },
+  // Question flags: `isMarked(questionId)` is the page's normalizing lookup.
+  // Read-only (review/replay) keeps marked flags visible but offers no toggle.
+  isMarked: { type: Function, default: () => false },
+  flagsReadOnly: { type: Boolean, default: false }
 })
 
-defineEmits(['scroll-to-question', 'submit', 'reset', 'leave', 'open-part'])
+defineEmits(['scroll-to-question', 'submit', 'reset', 'leave', 'open-part', 'toggle-marked-question'])
+
+// A flag is mounted only for a marked question or one the pointer / keyboard
+// focus is on; an idle nav therefore has exactly the pre-flag DOM.
+const hoverId = ref('')
+const focusId = ref('')
+
+function showFlag(question) {
+  if (question.marked) return true
+  if (props.flagsReadOnly) return false
+  return hoverId.value === question.questionId || focusId.value === question.questionId
+}
+
+function onMouseLeave(questionId) {
+  if (hoverId.value === questionId) hoverId.value = ''
+}
+
+// Only keyboard focus (focus-visible) counts: clicking a number must not leave
+// its flag showing after the pointer moves away.
+function onFocusIn(questionId, event) {
+  let visible = true
+  try { visible = event.target.matches(':focus-visible') } catch { /* old engines: treat as visible */ }
+  if (visible) focusId.value = questionId
+}
+
+function onFocusOut(questionId, event) {
+  if (event.currentTarget.contains(event.relatedTarget)) return
+  if (focusId.value === questionId) focusId.value = ''
+}
 
 const PART_KEYS = ['p1', 'p2', 'p3']
 const PART_TOTALS = { p1: 13, p2: 13, p3: 14 }
@@ -135,7 +182,8 @@ const partSections = computed(() => (
         label: props.displayMap[questionId] || String(questionId).replace(/^q/i, ''),
         status: props.reviewMode
           ? comparisonStatus(props.answerComparison, questionId, answered)
-          : (answered ? 'answered' : '')
+          : (answered ? 'answered' : ''),
+        marked: Boolean(props.isMarked(questionId))
       }
     })
     return {
