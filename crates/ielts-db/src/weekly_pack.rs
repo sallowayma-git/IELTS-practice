@@ -505,7 +505,9 @@ struct CoachDay {
     at: String,
     kinds: BTreeMap<String, u32>,
     reasks: u32,
-    notes: Vec<String>,
+    /// Each note's phrase and, when it could be traced, the observation of the
+    /// learner message that carries its quote.
+    notes: Vec<(String, Option<String>)>,
 }
 
 impl CoachDay {
@@ -561,7 +563,7 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         entry.reasks += 1;
     }
     let mut notes = conn.prepare(
-        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.structured_payload, m.created_at
+        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.structured_payload, m.created_at, m.id
            FROM coach_messages m
            JOIN coach_threads t ON t.id = m.thread_id
            LEFT JOIN attempts a ON a.id = t.attempt_id
@@ -571,21 +573,34 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
           ORDER BY julianday(m.created_at), m.id",
     )?;
     let rows = notes.query_map(params![from, to], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, String>(4)?,
+        ))
     })?;
     for row in rows {
-        let (attempt, asset, payload, at) = row?;
+        let (attempt, asset, payload, at, message) = row?;
         // A message whose notes all fail the prompt-safety check adds no day at all.
-        let phrases = teaching_note_phrases(&serde_json::from_str(&payload).unwrap_or(Value::Null));
-        if phrases.is_empty() {
+        let payload = serde_json::from_str(&payload).unwrap_or(Value::Null);
+        let notes = teaching_notes(&payload);
+        if notes.is_empty() {
             continue;
         }
+        let learner = answered_learner_message(conn, user_id, &message);
         let entry = days.entry((attempt, day(&at))).or_default();
         entry.seen(asset, at);
-        for phrase in phrases {
-            if !entry.notes.contains(&phrase) {
-                entry.notes.push(phrase);
+        for (phrase, quote) in notes {
+            if entry.notes.iter().any(|(earlier, _)| *earlier == phrase) {
+                continue;
             }
+            let source = learner
+                .as_ref()
+                .filter(|(content, _)| content.contains(quote.as_str()))
+                .map(|(_, id)| id.clone());
+            entry.notes.push((phrase, source));
         }
     }
     // Keep the most recent days, by real time, with the attempt id only as a tiebreak.
@@ -611,11 +626,15 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
             parts.push(format!("re-asked {}x", entry.reasks));
         }
         let title = if entry.asset.is_empty() { "an attempt".to_owned() } else { format!("{} \"{}\"", entry.asset, assets.title(&entry.asset)) };
-        let parts = with_notes(parts, &title, &entry.notes);
+        let (parts, sources) = with_notes(parts, &title, &entry.notes);
         if parts.is_empty() {
             continue;
         }
-        let ids = attempt_score_id(conn, user_id, &attempt).into_iter().collect();
+        // The learner messages behind the notes come first: a memory that cites
+        // this line can then be traced back to the words that produced it.
+        let mut ids = sources;
+        ids.extend(attempt_score_id(conn, user_id, &attempt));
+        ids.truncate(MAX_LINE_IDS);
         let facet = Facet::Coach { kinds: entry.kinds, reasks: entry.reasks };
         lines.push(line(ids, &entry.at, "coach", format!("coach on {title}: {}", parts.join("; ")), facet));
     }
@@ -623,10 +642,12 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
 }
 
 /// Adds the day's notes in order, up to `MAX_COACH_NOTES`, skipping any that would
-/// push the line past `COACH_LINE_CHARS`.
-fn with_notes(mut parts: Vec<String>, title: &str, notes: &[String]) -> Vec<String> {
+/// push the line past `COACH_LINE_CHARS`. Returns the parts and the observation
+/// ids of the learner messages behind the notes that were kept.
+fn with_notes(mut parts: Vec<String>, title: &str, notes: &[(String, Option<String>)]) -> (Vec<String>, Vec<String>) {
+    let mut sources: Vec<String> = Vec::new();
     let mut kept = 0;
-    for note in notes {
+    for (note, source) in notes {
         if kept == MAX_COACH_NOTES {
             break;
         }
@@ -635,15 +656,44 @@ fn with_notes(mut parts: Vec<String>, title: &str, notes: &[String]) -> Vec<Stri
             parts.pop();
         } else {
             kept += 1;
+            if let Some(source) = source.as_ref().filter(|source| !sources.contains(source)) {
+                sources.push(source.clone());
+            }
         }
     }
-    parts
+    (parts, sources)
+}
+
+/// The learner message an assistant message answered (the closest user message
+/// before it in the thread) with its projected `coach.question.asked`
+/// observation: the citable form of "what the learner actually wrote".
+fn answered_learner_message(conn: &Connection, user_id: &str, assistant_message: &str) -> Option<(String, String)> {
+    conn.query_row(
+        "SELECT u.content, o.id
+           FROM coach_messages a
+           JOIN coach_messages u ON u.thread_id = a.thread_id AND u.role = 'user'
+            AND u.sequence = (SELECT MAX(sequence) FROM coach_messages
+                               WHERE thread_id = a.thread_id AND role = 'user' AND sequence < a.sequence)
+           JOIN learner_observations o ON o.observation_type = 'coach.question.asked'
+            AND o.user_id = ?2 AND o.projector_key = ?3 AND o.projector_version = ?4
+            AND json_extract(o.payload_json, '$.messageId') = u.id
+          WHERE a.id = ?1
+          ORDER BY o.id LIMIT 1",
+        params![assistant_message, user_id, LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION],
+        |row| Ok((row.get::<_, String>(0)?.trim().to_owned(), row.get::<_, String>(1)?)),
+    )
+    .ok()
 }
 
 /// The phrases for one assistant message's stored notes. The host validated them
 /// at write time; they are checked again here because they are read into the prompt.
-fn teaching_note_phrases(payload: &Value) -> Vec<String> {
-    payload["teachingNotes"].as_array().into_iter().flatten().filter_map(teaching_note_phrase).collect()
+fn teaching_notes(payload: &Value) -> Vec<(String, String)> {
+    payload["teachingNotes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|note| teaching_note_phrase(note).map(|phrase| (phrase, field(note, "evidence").to_owned())))
+        .collect()
 }
 
 /// One phrase per stored teaching note. Only the learner's verified quote and the

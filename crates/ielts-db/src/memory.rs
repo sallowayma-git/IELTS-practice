@@ -1709,7 +1709,11 @@ fn hash_only_tombstone_json(conn: &Connection, memory_id: &str) -> DbResult<Stri
 
 fn parse_observation_activity(namespace: &str) -> DbResult<Activity> {
     match namespace {
-        "reading" => Ok(Activity::Reading),
+        // The coach only exists on reading attempts (its ledger events are
+        // written with activity `reading`), so a coach observation is reading
+        // evidence. Without this a memory could not cite the learner message a
+        // teaching note came from, and the whole validation snapshot failed.
+        "reading" | "coach" => Ok(Activity::Reading),
         "writing" => Ok(Activity::Writing),
         _ => Err(DbError::Validation(format!(
             "unsupported observation activity namespace {namespace}"
