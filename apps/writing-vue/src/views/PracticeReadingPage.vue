@@ -252,6 +252,8 @@
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
       :coach-feedback="coachFeedback"
+      :coach-adjustments="coachAdjustments"
+      :coach-memory-cards="coachMemoryCards"
       :coach-reaskable-id="coachReaskableId"
       :coach-query="coachQuery"
       :can-ask-coach="canAskCoach"
@@ -262,6 +264,8 @@
       @selection-action="runCoachSelectionAction"
       @follow-up="askCoachFollowUp"
       @feedback="submitCoachFeedback($event.messageId, $event.kind)"
+      @memory-card-confirm="confirmCoachMemoryCard($event.messageId, $event.text)"
+      @memory-card-dismiss="dismissCoachMemoryCard($event.messageId)"
       @reask="reaskCoachMessage"
       @retry="retryCoachQuery"
       @reload-history="reloadCoachHistory"
@@ -632,6 +636,8 @@ const {
   coachTranscript,
   coachFollowUps,
   coachFeedback,
+  coachAdjustments,
+  coachMemoryCards,
   coachReaskableId,
   coachNotice,
   coachHistoryFailed,
@@ -648,6 +654,8 @@ const {
   askCoachFollowUp,
   reaskCoachMessage,
   submitCoachFeedback,
+  confirmCoachMemoryCard,
+  dismissCoachMemoryCard,
   runCoachQuickAction,
   runCoachSelectionAction,
   runAutomaticReviewCoach

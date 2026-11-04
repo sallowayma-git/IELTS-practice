@@ -59,7 +59,7 @@ function send(response, status, payload) {
 function createBackend() {
   // The seed is created once: the backend is the owner of this state.
   const state = createSeedState(Date.now())
-  const handlers = createHandlers(state, { send() {} })
+  const handlers = createHandlers(state, { coachScenario: process.env.MOCK_COACH || '', send() {} })
 
   async function invoke(cmd, args) {
     const handler = handlers[cmd]

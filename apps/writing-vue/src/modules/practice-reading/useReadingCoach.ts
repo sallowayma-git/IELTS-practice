@@ -38,17 +38,74 @@ type CoachTranscriptEntry = {
 
 // Subset of the Rust CoachFeedbackKind enum offered in the panel. Labels are
 // Chinese; values are the snake_case wire names (see memory-repository.js).
+// These are the *verdicts*: the host keeps one per answer, so the panel locks
+// after the first. `menu` options live behind "讲得不对劲?" instead of the row.
 export const READING_COACH_FEEDBACK_OPTIONS = [
   { kind: 'thumbs_up', label: '有帮助' },
   { kind: 'thumbs_down', label: '没帮助' },
-  { kind: 'incorrect', label: '讲错了' }
+  { kind: 'incorrect', label: '讲错了', menu: true }
+] as const
+
+// Adjustments say *how* to explain next time. They are not verdicts: any number
+// of them may stack on one answer, each recorded once (idempotent per kind).
+export const READING_COACH_ADJUSTMENT_OPTIONS = [
+  { kind: 'too_long', label: '太长了' },
+  { kind: 'too_short', label: '太简略' },
+  { kind: 'too_abstract', label: '太抽象' },
+  { kind: 'need_example', label: '想要例子' },
+  { kind: 'need_step_by_step', label: '想分步讲' },
+  { kind: 'not_relevant', label: '答非所问' }
 ] as const
 
 export type ReadingCoachFeedbackKind = typeof READING_COACH_FEEDBACK_OPTIONS[number]['kind']
+export type ReadingCoachAdjustmentKind = typeof READING_COACH_ADJUSTMENT_OPTIONS[number]['kind']
 
 export type ReadingCoachFeedbackState = {
   kind: ReadingCoachFeedbackKind | null
   status: 'saving' | 'saved' | 'failed'
+}
+
+export type ReadingCoachAdjustmentStatus = 'saving' | 'saved' | 'failed'
+export type ReadingCoachAdjustmentState = Partial<Record<ReadingCoachAdjustmentKind, ReadingCoachAdjustmentStatus>>
+
+// The strategyId the host stamps on an answer, in the learner's words.
+const COACH_STRATEGY_LABELS: Record<string, string> = {
+  evidence_first_v1: '先讲证据',
+  example_first_v1: '先给例子',
+  step_by_step_v1: '分步讲解',
+  contrastive_v1: '对比辨析',
+  socratic_prompt_v1: '提问引导',
+  concise_direct_v1: '简洁直给'
+}
+
+export const MEMORY_CARD_TEXT_LIMIT = 300
+
+// What a preference card does in the learner's words, per host error code.
+const MEMORY_CARD_NOT_FOUND = '找不到这条对话，请刷新后再试'
+const MEMORY_CARD_RETRY = '保存失败，请重试'
+const MEMORY_CARD_ERRORS: Record<string, string> = {
+  'memory_card.invalid_text': '这条偏好为空、太长或包含不能保存的内容，请修改后再试',
+  'memory_card.rejected': '这条偏好已经记过，或与已有设置冲突',
+  'memory_card.no_source': MEMORY_CARD_NOT_FOUND,
+  'memory_card.not_found': MEMORY_CARD_NOT_FOUND,
+  'memory_card.persistence_failed': MEMORY_CARD_RETRY
+}
+
+/** What this view knows of a card besides the host's `memoryCardState`. */
+type MemoryCardLocal = { status: 'saving' | 'confirmed' | 'dismissed' | 'failed'; text?: string; error?: string }
+
+/** One card as the panel draws it. Dismissed and superseded cards have no view. */
+export type CoachMemoryCardView = {
+  messageId: string
+  noteIndex: number
+  /** The coach's suggested wording, the box's initial value. */
+  text: string
+  state: 'pending' | 'confirmed'
+  /** The wording just saved; empty when the card was confirmed in an earlier visit. */
+  savedText: string
+  /** A request is in flight (any card): no second one may start. */
+  busy: boolean
+  error: string
 }
 
 const READING_COACH_REASK_QUERY = '没太懂，换个讲法把刚才这个问题再讲一遍'
@@ -189,6 +246,87 @@ export function isFeedbackEligible(entry: CoachTranscriptEntry | null | undefine
   )
 }
 
+function isAdjustmentKind(kind: unknown): kind is ReadingCoachAdjustmentKind {
+  return READING_COACH_ADJUSTMENT_OPTIONS.some((option) => option.kind === kind)
+}
+
+/** Durable adjustment rows (coach_list_feedback) as panel state, keyed by message id. */
+export function adjustmentStateFromRecords(records: unknown): Record<string, ReadingCoachAdjustmentState> {
+  const state: Record<string, ReadingCoachAdjustmentState> = {}
+  for (const item of Array.isArray(records) ? records : []) {
+    const row = asRecord(item)
+    const messageId = String(row?.coachMessageId || '').trim()
+    if (!messageId || !isAdjustmentKind(row?.feedbackKind)) continue
+    state[messageId] = { ...state[messageId], [row!.feedbackKind]: 'saved' }
+  }
+  return state
+}
+
+/** The Chinese name of the explanation strategy behind an answer; '' for old answers or unknown ids. */
+export function coachStrategyLabel(entry: CoachTranscriptEntry | null | undefined): string {
+  const id = entry?.snapshot?.strategyId
+  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(COACH_STRATEGY_LABELS, id)
+    ? COACH_STRATEGY_LABELS[id]
+    : ''
+}
+
+function memoryCardOf(entry: CoachTranscriptEntry): { noteIndex: number; text: string } | null {
+  const card = asRecord(entry.snapshot?.memoryCard)
+  const text = typeof card?.text === 'string' ? card.text.trim() : ''
+  const noteIndex = card?.noteIndex
+  if (!isFeedbackEligible(entry) || !text) return null
+  return typeof noteIndex === 'number' && Number.isInteger(noteIndex) && noteIndex >= 0 ? { noteIndex, text } : null
+}
+
+// What the learner did with a card: the host's word first (it survives reloads),
+// then what this view just did.
+function memoryCardDecision(entry: CoachTranscriptEntry, local: MemoryCardLocal | undefined): 'confirmed' | 'dismissed' | '' {
+  const saved = entry.snapshot?.memoryCardState
+  if (saved === 'confirmed' || saved === 'dismissed') return saved
+  return local?.status === 'confirmed' || local?.status === 'dismissed' ? local.status : ''
+}
+
+/**
+ * Which preference cards the panel shows, by message id. A decided card is
+ * settled: confirmed stays as a one-line receipt, dismissed disappears. Only the
+ * newest card in the thread can still ask; a newer card supersedes every older
+ * undecided one for good (even once the newer one is dismissed), so the
+ * conversation never fills with questions or revives a stale one.
+ */
+export function memoryCardViews(
+  transcript: CoachTranscriptEntry[],
+  local: Record<string, MemoryCardLocal>
+): Record<string, CoachMemoryCardView> {
+  const busy = Object.values(local).some((item) => item.status === 'saving')
+  const views: CoachMemoryCardView[] = []
+  let newestId = ''
+  for (const entry of transcript) {
+    const card = memoryCardOf(entry)
+    if (!card) continue
+    newestId = entry.id
+    const decision = memoryCardDecision(entry, local[entry.id])
+    if (decision === 'dismissed') continue
+    views.push({
+      messageId: entry.id,
+      ...card,
+      state: decision === 'confirmed' ? 'confirmed' : 'pending',
+      savedText: decision === 'confirmed' ? (local[entry.id]?.text || '') : '',
+      busy,
+      error: local[entry.id]?.status === 'failed' ? (local[entry.id].error || '') : ''
+    })
+  }
+  return Object.fromEntries(
+    views.filter((view) => view.state === 'confirmed' || view.messageId === newestId).map((view) => [view.messageId, view])
+  )
+}
+
+function memoryCardFailure(failure: unknown): MemoryCardLocal {
+  const code = errorField(failure, 'code')
+  // Dismiss lost a race with a confirm: the card is settled, show it so.
+  if (code === 'memory_card.already_confirmed') return { status: 'confirmed' }
+  return { status: 'failed', error: MEMORY_CARD_ERRORS[code] || MEMORY_CARD_RETRY }
+}
+
 function hasLlmReview(submission: AnyRecord | null | undefined): boolean {
   return Boolean(
     submission?.singleAttemptAnalysisLlm
@@ -263,6 +401,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   const coachTranscriptState = ref<CoachTranscriptEntry[]>([])
   const coachThreadId = ref('')
   const coachFeedback = ref<Record<string, ReadingCoachFeedbackState>>({})
+  const coachAdjustments = ref<Record<string, ReadingCoachAdjustmentState>>({})
+  const memoryCardLocal = ref<Record<string, MemoryCardLocal>>({})
   // Notices that belong to no transcript row (history load failed, nothing
   // selected) and the way forward from the last failed request.
   const coachNotice = ref('')
@@ -303,6 +443,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   })
   const coachFollowUps = computed(() => coachFollowUpSource.value?.followUps || [])
   const coachReaskableId = computed(() => latestReaskableId(coachTranscriptState.value))
+  const coachMemoryCards = computed(() => memoryCardViews(coachTranscriptState.value, memoryCardLocal.value))
   const canAskCoach = computed(() => Boolean(submission.value && coachQuery.value.trim() && !coachLoading.value))
   const coachRetryKind = computed<CoachRetryKind>(() => {
     const code = coachRetry.value?.code
@@ -373,6 +514,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachTranscriptState.value = []
     coachThreadId.value = ''
     coachFeedback.value = {}
+    coachAdjustments.value = {}
+    memoryCardLocal.value = {}
   }
 
   function setReadingCoachOpen(value: unknown) {
@@ -444,9 +587,19 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       const records = await readingCoachApi.listFeedback(threadId)
       if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachFeedback.value = { ...feedbackStateFromRecords(records), ...coachFeedback.value }
+      mergeAdjustments(adjustmentStateFromRecords(records))
     } catch (feedbackFailure) {
       console.warn('阅读教练反馈加载失败:', feedbackFailure)
     }
+  }
+
+  // What the host already holds is the floor; what this view is doing right now wins.
+  function mergeAdjustments(saved: Record<string, ReadingCoachAdjustmentState>) {
+    const merged = { ...coachAdjustments.value }
+    for (const [messageId, kinds] of Object.entries(saved)) {
+      merged[messageId] = { ...kinds, ...merged[messageId] }
+    }
+    coachAdjustments.value = merged
   }
 
   function hydrateReadingCoachFromSubmission(nextSubmission: AnyRecord | null | undefined, hydrateOptions: HydrateOptions = {}) {
@@ -945,6 +1098,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   // verdict and returns it for any later one, so the saved state shows the
   // durable kind; a failed save clears the selection so the learner can retry.
   async function submitCoachFeedback(messageId: unknown, feedbackKind: unknown) {
+    if (isAdjustmentKind(feedbackKind)) return submitCoachAdjustment(messageId, feedbackKind)
     const entry = findFeedbackEligibleEntry(messageId)
     const option = READING_COACH_FEEDBACK_OPTIONS.find((item) => item.kind === feedbackKind)
     if (!entry || !option) return
@@ -963,6 +1117,76 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
     if (!isCurrentSubmission(sessionId)) return
     coachFeedback.value = { ...coachFeedback.value, [entry.id]: next }
+  }
+
+  // "Too long", "want an example"...: each kind is recorded once per answer and
+  // never locks the others. A failed save unlocks that one kind for a retry.
+  async function submitCoachAdjustment(messageId: unknown, kind: ReadingCoachAdjustmentKind) {
+    const entry = findFeedbackEligibleEntry(messageId)
+    if (!entry) return
+    const current = coachAdjustments.value[entry.id]?.[kind]
+    if (current === 'saving' || current === 'saved') return
+    const setStatus = (status: ReadingCoachAdjustmentStatus) => {
+      coachAdjustments.value = {
+        ...coachAdjustments.value,
+        [entry.id]: { ...coachAdjustments.value[entry.id], [kind]: status }
+      }
+    }
+    setStatus('saving')
+    try {
+      await readingCoachApi.recordFeedback(entry.id, kind)
+      setStatus('saved')
+    } catch (feedbackFailure) {
+      console.warn('阅读教练反馈保存失败:', feedbackFailure)
+      setStatus('failed')
+    }
+  }
+
+  // One preference-card request at a time, whichever card it is for. The result
+  // is keyed by message id, which is unique, so a late answer is always filed
+  // under the right card even after the learner has moved to another attempt.
+  async function settleMemoryCard(messageId: string, request: () => Promise<MemoryCardLocal>) {
+    const setLocal = (next: MemoryCardLocal) => {
+      memoryCardLocal.value = { ...memoryCardLocal.value, [messageId]: next }
+    }
+    setLocal({ status: 'saving' })
+    try {
+      setLocal(await request())
+    } catch (failure) {
+      console.warn('阅读教练偏好卡片操作失败:', failure)
+      setLocal(memoryCardFailure(failure))
+    }
+  }
+
+  function startableMemoryCard(messageId: unknown): CoachMemoryCardView | null {
+    const card = coachMemoryCards.value[String(messageId || '')]
+    return card && card.state === 'pending' && !card.busy ? card : null
+  }
+
+  async function confirmCoachMemoryCard(messageId: unknown, text: unknown) {
+    const card = startableMemoryCard(messageId)
+    if (!card) return
+    const wording = String(text ?? '').split(/\s+/).filter(Boolean).join(' ')
+    if (!wording || [...wording].length > MEMORY_CARD_TEXT_LIMIT) {
+      memoryCardLocal.value = {
+        ...memoryCardLocal.value,
+        [card.messageId]: { status: 'failed', error: MEMORY_CARD_ERRORS['memory_card.invalid_text'] }
+      }
+      return
+    }
+    await settleMemoryCard(card.messageId, async () => {
+      await readingCoachApi.confirmMemoryCard(card.messageId, card.noteIndex, wording)
+      return { status: 'confirmed', text: wording }
+    })
+  }
+
+  async function dismissCoachMemoryCard(messageId: unknown) {
+    const card = startableMemoryCard(messageId)
+    if (!card) return
+    await settleMemoryCard(card.messageId, async () => {
+      await readingCoachApi.dismissMemoryCard(card.messageId, card.noteIndex)
+      return { status: 'dismissed' }
+    })
   }
 
   async function runCoachQuickAction(actionId: unknown) {
@@ -1021,6 +1245,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachTranscript,
     coachFollowUps,
     coachFeedback,
+    coachAdjustments,
+    coachMemoryCards,
     coachReaskableId,
     coachNotice,
     coachHistoryFailed,
@@ -1037,6 +1263,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     askCoachFollowUp,
     reaskCoachMessage,
     submitCoachFeedback,
+    confirmCoachMemoryCard,
+    dismissCoachMemoryCard,
     runCoachQuickAction,
     runCoachSelectionAction,
     runAutomaticReviewCoach,
