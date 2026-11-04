@@ -45,7 +45,7 @@
 
 ### 近期信号（`ielts_db::recent_signals`，由 `build_coach_system_context` 调用）
 
-- 窗口：`RECENT_SIGNAL_WINDOW_DAYS = 2`，所有线程的已完成 assistant 消息，`now` 可注入（`build_coach_system_context_at`）。
+- 窗口：`RECENT_SIGNAL_WINDOW_DAYS = 2`（第二阶段改名为 `RECENT_SIGNAL_RECENT_DAYS`，并为 `durable` 增加 14 天窗口），所有线程的已完成 assistant 消息，`now` 可注入（`build_coach_system_context_at`）。
 - 纳入：`scope != question`、`horizon != session`、`kind` 为 `preference` / `difficulty` / `strategy_outcome`、文本过 `is_safe_for_prompt` 且 ≤ 200 字符；该消息的 `memoryCardState` 为 `dismissed`（学习者说不要记）或 `confirmed`（已成真正的记忆）则整条消息排除。
 - 去重：同一 `(kind, skillKey)`（无 skillKey 则按规范化文本）只留最新一条。
 - 优先级由宿主推导：`remember` 最高；其次窗口内同一 `(kind, skillKey)` 出现次数多者；最后按新近。至多 `RECENT_SIGNAL_MAX = 4` 条；顺序确定（同分时按消息时间、消息 id、笔记序号）。
@@ -62,6 +62,53 @@
 
 ### 仍未做
 
-- 第二阶段（预整合落库）：把窗口内高置信信号在周整合之前以受控方式落库（需要新的写路径、证据与可撤销设计）。
+- ~~第二阶段（预整合落库）~~：评估后取消，由下面的「第二阶段：统一信号汇总」取代（不落库）。
 - 第三阶段（周整合的晋升与遗忘）：周整合读取 `horizon` / `scope`，让 `durable` 信号优先晋升，`recent` 过期，`session` 不进周包；周整合提示词本阶段未改。
 - 近期信号依赖模型自己正确声明 `scope`：写错成 `profile` 的题目级笔记仍会进入信号（但最多 4 条、只存活 2 天；只有带卡片的笔记才能被学习者一键否决）。评测语料的 `scope` 指标用来观察这一风险。
+
+## 第二阶段：统一信号汇总（signal digest）
+
+目标：同一批 `teachingNotes` 有三个读者，各自解析、各自过滤，规则会慢慢漂移。第二阶段把它们收敛成**一个读取函数 + 一个汇总函数**，让「当日工作层」（去重、计数、定优先级、按 horizon 定有效期）成为一个确定性的纯函数，并让第三阶段的周整合直接拿到带复现计数的输入。
+
+### 为什么不落库
+
+- 落库的「工作层」要么放宽「长期记忆只由周整合写」的不变量，要么变成又一张和笔记本身重复的表，需要同步、过期与撤销；而汇总只依赖笔记，重算的结果与存储的结果一样，却没有任何要保持一致的东西。
+- 所以：**不新增迁移或表，不写 `memory_items`，不新增写路径，不调用模型**。学习者在卡片上确认/拒绝（`memoryCardState`）仍是唯一影响笔记是否参与汇总的输入。
+
+### 单一来源：`ielts_db::coach_signal_digest`
+
+- `payload_notes(payload)`：一条 payload 里的笔记的唯一接受规则。非数组/非对象条目、未知 `kind`、空 `text` 跳过；`scope = question` 永不读取（缺省/非法 = `profile`）；`horizon` 缺省/非法 = `recent`；`text`、`skillKey`、`strategy` 去首尾空白。
+- `read_coach_notes(conn, NoteRange)`：已完成 assistant 消息中某时间段的全部笔记，每条带 `message_id`、`note_index`、`asset_id`（线程的 asset，否则所属 attempt 的 asset，都没有则空）、`attempt_id`、`created_at`、`card_handled`。JSON 容错：非 JSON 载荷、非数组 `teachingNotes` 不贡献任何笔记。
+- `coach_signal_digest(conn, now, SignalWindows)`：窗口内的汇总，排除 `session`、排除所在消息 `memoryCardState` 为 `dismissed`/`confirmed` 的笔记、文本须 `is_safe_for_prompt` 且 ≤ 200 字符（跳过不截断）。按 `(kind, skillKey)`（无 skillKey 则规范化文本）聚合为 `SignalDigestEntry`。
+
+### `SignalDigestEntry`
+
+| 字段 | 含义 |
+|---|---|
+| `kind`、`skill_key`、`text` | 取最新一条笔记 |
+| `remember` | 任一条为 true |
+| `horizon` | 取最长（`Durable` > `Recent`），不会是 `Session` |
+| `repeat_count` | 贡献它的**不同回答消息**数（同一条回答里说两遍只算一次） |
+| `distinct_assets` | 不同 asset（passage）数，没有 asset 的线程不计 |
+| `first_seen` / `last_seen` | 贡献它的回答的最早/最晚时间 |
+| `source_message_ids` | 至多 3 个，最新优先 |
+| `best_message_id` / `best_note_index` | 最新那条笔记的位置（画像里的 `signal:<id>:<index>`） |
+
+排序确定：`remember` 降序 → `repeat_count` 降序 → `last_seen` 降序 → `best_message_id` 升序 → `best_note_index` 升序。
+
+### 窗口
+
+- `RECENT_SIGNAL_RECENT_DAYS = 2`：`horizon = recent`（默认）的有效期，与第一阶段一致。
+- `RECENT_SIGNAL_DURABLE_DAYS = 14`：`horizon = durable` 的有效期。「以后都先讲结论」这类稳定偏好在周整合晋升之前一直可见，不会两天后从教练视野里消失。
+- `session` 永不进汇总；`scope = question` 永不进汇总。
+
+### 三个读者
+
+- 教练近期信号切片（`recent_signals`）：变成 digest 的前 `RECENT_SIGNAL_MAX = 4` 条，id `signal:<best_message_id>:<best_note_index>`，statement 为最新文本。预算最先丢、冻结画像字节兼容、空窗口字节不变，与第一阶段一致。**有意变化**：`repeat_count` 按不同回答消息计（第一阶段按笔记计）；同分同时间的平局按消息 id、笔记序号升序（第一阶段是笔记序号降序）；`durable` 笔记活 14 天。
+- 偏好卡片（`coach/cards.rs`）：解析与 `scope` 判断改用共享读取；「同技能困惑近 30 天 ≥ 2 个回答」的累计原语义不变（30 天窗口，不受 horizon 影响，`session` 笔记仍计入），只是由原来的一条 SQL 改成对共享读取结果在内存里数不同回答。卡片的文本只要求非空，不套信号的安全/长度规则。
+- 周包与周报教练事实（`weekly_report/coach_facts.rs`、`weekly_pack.rs`）：改用共享读取，保留周内特有的映射（`outcome` → `helped`/`not_helped`，文本清洗并截断到 200 字符而非跳过）。周包输出逐字节不变（前后对照运行，见提交说明）。
+
+### 仍未做
+
+- 第三阶段（周整合的晋升与遗忘）：周包带上 `repeat_count` / `distinct_assets` / `first_seen` / `last_seen`，周整合据此决定晋升（多个回答、多篇文章、跨天复现者优先；`durable` 优先）与遗忘（`recent` 过期、`session` 不进周包）；周整合提示词本阶段未改，周包格式未变。
+- 教练画像标签仍写「last two days」，实际 `durable` 信号可活 14 天；标签文字单独精简，本阶段未动。
