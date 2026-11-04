@@ -1,7 +1,8 @@
 use ielts_db::{
     AppendCoachMessageCommand, CoachRunResult, RecordCoachFailureCommand, RunCoachCommand,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::{Arc, LazyLock, PoisonError};
 
 use ielts_domain::{estimate_tokens, CONTEXT_HARD_TOKEN_CEILING};
 use serde_json::{json, Value};
@@ -82,6 +83,34 @@ fn is_learner_free_input(metadata: &Value) -> bool {
     freeform && metadata["action"] != REVIEW_ACTION
 }
 
+/// Per-thread run gates. A thread's entry lives only while some run holds or
+/// awaits it: idle entries are pruned on the next acquisition, so the map is
+/// bounded by the number of threads in flight.
+#[derive(Default)]
+struct ThreadGates {
+    gates: std::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+}
+
+impl ThreadGates {
+    /// Waits (FIFO) until no other run holds `thread_id`. Threads never wait on
+    /// each other.
+    async fn lock(&self, thread_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+        let gate = {
+            let mut gates = self.gates.lock().unwrap_or_else(PoisonError::into_inner);
+            gates.retain(|_, gate| Arc::strong_count(gate) > 1);
+            gates.entry(thread_id.to_owned()).or_default().clone()
+        };
+        gate.lock_owned().await
+    }
+
+    #[cfg(test)]
+    fn tracked(&self) -> usize {
+        self.gates.lock().unwrap_or_else(PoisonError::into_inner).len()
+    }
+}
+
+static THREAD_GATES: LazyLock<ThreadGates> = LazyLock::new(ThreadGates::default);
+
 pub struct CoachService;
 
 impl CoachService {
@@ -134,6 +163,12 @@ impl CoachService {
                 false,
             ));
         }
+        // One run at a time per thread, from history read to answer commit. Two
+        // overlapping runs would each build their prompt without the other's
+        // question and then commit u1, u2, a1, a2: answers detached from their
+        // questions, replayed that way forever. The same gate makes the review
+        // idempotency check below race-free (a double click pays once).
+        let _turn = THREAD_GATES.lock(&command.thread_id).await;
         let context =
             store.resolve_context(&command.thread_id, command.question_context.as_ref())?;
         // The automatic review is a pure function of the attempt: once a
@@ -719,6 +754,97 @@ Why?"));
         assert_eq!(state.trace_responses[0]["content"], chunks.concat());
         assert_eq!(state.messages.len(), 2);
         assert!(state.failures.is_empty());
+    }
+
+    /// Yields to the scheduler while "waiting on the provider", then echoes the
+    /// question it was asked, so interleaved runs are visible in the history.
+    struct EchoModel {
+        yields: u32,
+    }
+
+    #[async_trait]
+    impl LanguageModel for EchoModel {
+        async fn complete(&self, request: CompletionRequest) -> Result<crate::CompletionResponse, ModelError> {
+            for _ in 0..self.yields {
+                tokio::task::yield_now().await;
+            }
+            let asked = request.messages.last().unwrap().content.rsplit('\n').next().unwrap().to_owned();
+            Ok(crate::CompletionResponse {
+                content: json!({"answer": format!("re: {asked}")}).to_string(),
+                model: "echo".into(),
+                latency_ms: 1,
+                usage: None,
+                provider_request_id: None,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn overlapping_runs_on_one_thread_commit_whole_exchanges_in_order() {
+        let store = FakeCoachStore::default();
+        let run = |question: &'static str| {
+            let store = &store;
+            async move { CoachService::run(store, command(question), || Ok(EchoModel { yields: 8 })).await.unwrap() }
+        };
+        let (first, second, third) = tokio::join!(run("one"), run("two"), run("three"));
+        let state = store.state.lock().unwrap();
+        let log: Vec<(&str, &str)> = state.messages.iter().map(|m| (m.role.as_str(), m.content.as_str())).collect();
+        // Never u1, u2, a1, a2: each answer sits directly under its own question.
+        assert_eq!(log, vec![
+            ("user", "one"), ("assistant", "re: one"),
+            ("user", "two"), ("assistant", "re: two"),
+            ("user", "three"), ("assistant", "re: three"),
+        ]);
+        assert_eq!(first.assistant_message.content, "re: one");
+        assert_eq!(second.assistant_message.content, "re: two");
+        assert_eq!(third.assistant_message.content, "re: three");
+        assert!(state.failures.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_queued_run_builds_its_prompt_from_the_history_the_first_run_left() {
+        let store = FakeCoachStore::default();
+        let seen = Arc::new(Mutex::new(Vec::<CompletionRequest>::new()));
+        struct Spy(Arc<Mutex<Vec<CompletionRequest>>>);
+        #[async_trait]
+        impl LanguageModel for Spy {
+            async fn complete(&self, request: CompletionRequest) -> Result<crate::CompletionResponse, ModelError> {
+                tokio::task::yield_now().await;
+                self.0.lock().unwrap().push(request);
+                Ok(crate::CompletionResponse { content: r#"{"answer":"ok"}"#.into(), model: "spy".into(), latency_ms: 1, usage: None, provider_request_id: None })
+            }
+        }
+        let (a, b) = tokio::join!(
+            CoachService::run(&store, command("one"), || Ok(Spy(seen.clone()))),
+            CoachService::run(&store, command("two"), || Ok(Spy(seen.clone()))),
+        );
+        a.unwrap();
+        b.unwrap();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 2);
+        // The second prompt replays the first exchange; it was not built blind.
+        let replayed: Vec<&str> = seen[1].messages[2..seen[1].messages.len() - 1].iter().map(|m| m.content.as_str()).collect();
+        assert_eq!(replayed, vec!["one", "ok"]);
+    }
+
+    #[tokio::test]
+    async fn gates_exclude_per_thread_prune_when_idle_and_never_block_other_threads() {
+        let gates = ThreadGates::default();
+        let held = gates.lock("a").await;
+        // Another thread is not blocked by it...
+        drop(gates.lock("b").await);
+        // ...the same thread is.
+        tokio::select! {
+            _ = gates.lock("a") => panic!("a second run on the same thread must wait"),
+            _ = tokio::task::yield_now() => {}
+        }
+        assert_eq!(gates.tracked(), 1, "b was idle and is gone; a is live");
+        drop(held);
+        // Idle entries go on the next acquisition; only the live one remains.
+        drop(gates.lock("c").await);
+        assert_eq!(gates.tracked(), 1);
+        drop(gates.lock("c").await);
+        assert_eq!(gates.tracked(), 1);
     }
 
     #[tokio::test]
