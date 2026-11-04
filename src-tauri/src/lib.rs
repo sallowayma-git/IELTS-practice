@@ -313,8 +313,6 @@ pub fn run() {
             commands::coach_feedback::coach_record_reask_link,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_strategy_assignment,
-            #[cfg(feature = "learning-observation-v1")]
-            commands::coach_feedback::coach_link_outcome,
         ])
         .setup(|app| {
             // Register now, parse off the main thread: startup never waits on the 5 MB file.

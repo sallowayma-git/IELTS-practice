@@ -1,18 +1,17 @@
 //! M6 coach closed-loop application use cases.
 //!
 //! Thin persistence-backed service that records canonical coach feedback,
-//! re-ask linkage, strategy assignment provenance, and outcome links. The
+//! re-ask linkage, and strategy assignment provenance. The
 //! service owns the use-case boundary; the Tauri adapter only supplies the
 //! persistence port and maps the result to an IPC envelope.
 //!
 //! These are user-interaction facts and teaching-strategy provenance, not
 //! long-term preferences. M6-07 only promotes repeated patterns to memory
-//! candidates after later outcomes confirm a stable preference.
+//! candidates after later evidence confirms a stable preference.
 
 use ielts_domain::{
-    CoachFeedbackRecord, CoachOutcomeLinkRecord, CoachReaskLinkRecord,
-    CoachStrategyAssignmentRecord, LinkCoachOutcomeCommand, RecordCoachFeedbackCommand,
-    RecordCoachStrategyAssignmentCommand, RecordReaskLinkCommand,
+    CoachFeedbackRecord, CoachReaskLinkRecord, CoachStrategyAssignmentRecord,
+    RecordCoachFeedbackCommand, RecordCoachStrategyAssignmentCommand, RecordReaskLinkCommand,
 };
 
 use crate::ApplicationError;
@@ -33,11 +32,6 @@ pub trait CoachFeedbackStore {
         &self,
         command: &RecordCoachStrategyAssignmentCommand,
     ) -> Result<CoachStrategyAssignmentRecord, ApplicationError>;
-
-    fn link_coach_outcome(
-        &self,
-        command: &LinkCoachOutcomeCommand,
-    ) -> Result<CoachOutcomeLinkRecord, ApplicationError>;
 }
 
 pub struct CoachFeedbackService<'a> {
@@ -74,15 +68,6 @@ impl<'a> CoachFeedbackService<'a> {
     ) -> Result<CoachStrategyAssignmentRecord, ApplicationError> {
         self.store.record_coach_strategy_assignment(command)
     }
-
-    /// M6-10: link a strategy assignment to a future observation. Satisfaction
-    /// and learning outcomes are recorded on separate rows.
-    pub fn link_outcome(
-        &self,
-        command: &LinkCoachOutcomeCommand,
-    ) -> Result<CoachOutcomeLinkRecord, ApplicationError> {
-        self.store.link_coach_outcome(command)
-    }
 }
 
 #[cfg(test)]
@@ -90,8 +75,7 @@ mod tests {
     use std::sync::Mutex;
 
     use ielts_domain::{
-        CoachFeedbackKind, CoachFollowupType, CoachOutcomeKind, CoachStrategyId,
-        LinkCoachOutcomeCommand, RecordCoachFeedbackCommand,
+        CoachFeedbackKind, CoachFollowupType, CoachStrategyId, RecordCoachFeedbackCommand,
         RecordCoachStrategyAssignmentCommand, RecordReaskLinkCommand,
     };
 
@@ -102,7 +86,6 @@ mod tests {
         feedback: Mutex<Vec<CoachFeedbackRecord>>,
         reask: Mutex<Vec<CoachReaskLinkRecord>>,
         assignments: Mutex<Vec<CoachStrategyAssignmentRecord>>,
-        outcomes: Mutex<Vec<CoachOutcomeLinkRecord>>,
     }
 
     impl CoachFeedbackStore for FakeStore {
@@ -154,20 +137,6 @@ mod tests {
             self.assignments.lock().unwrap().push(record.clone());
             Ok(record)
         }
-
-        fn link_coach_outcome(
-            &self,
-            command: &LinkCoachOutcomeCommand,
-        ) -> Result<CoachOutcomeLinkRecord, ApplicationError> {
-            let record = CoachOutcomeLinkRecord {
-                strategy_assignment_id: command.strategy_assignment_id.clone(),
-                future_observation_id: command.future_observation_id.clone(),
-                outcome_kind: command.outcome_kind,
-                created_at: "2026-08-16T00:00:00Z".into(),
-            };
-            self.outcomes.lock().unwrap().push(record.clone());
-            Ok(record)
-        }
     }
 
     #[test]
@@ -201,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn delegates_strategy_assignment_and_outcome_to_store() {
+    fn delegates_strategy_assignment_to_store() {
         let store = FakeStore::default();
         let service = CoachFeedbackService::new(&store);
         let assignment = service
@@ -216,13 +185,5 @@ mod tests {
             })
             .unwrap();
         assert_eq!(assignment.strategy_id, CoachStrategyId::EvidenceFirstV1);
-        let outcome = service
-            .link_outcome(&LinkCoachOutcomeCommand {
-                strategy_assignment_id: assignment.id.clone(),
-                future_observation_id: "lobs-1".into(),
-                outcome_kind: CoachOutcomeKind::Learning,
-            })
-            .unwrap();
-        assert_eq!(outcome.outcome_kind, CoachOutcomeKind::Learning);
     }
 }

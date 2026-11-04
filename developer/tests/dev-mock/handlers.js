@@ -654,7 +654,6 @@ export function createHandlers(state, host) {
     coach_list_feedback: ({ threadId }) => clone(coachFeedback.filter((row) => row.threadId === threadId).map((row) => row.record)),
     coach_record_reask_link: () => null,
     coach_record_strategy_assignment: () => null,
-    coach_link_outcome: () => null,
     coach_ensure_thread: ({ cmd }) => {
       coachThreadId = `coach-${cmd?.attemptId || 'thread'}`
       return { id: coachThreadId, attemptId: cmd?.attemptId || null, status: 'open' }

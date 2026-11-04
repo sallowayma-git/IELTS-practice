@@ -5,10 +5,9 @@
 
 use ielts_application::{ApplicationError, CoachFeedbackService, CoachFeedbackStore};
 use ielts_domain::{
-    CoachFeedbackKind, CoachFeedbackRecord, CoachFollowupType, CoachOutcomeKind,
-    CoachOutcomeLinkRecord, CoachReaskLinkRecord, CoachStrategyAssignmentRecord, CoachStrategyId,
-    LinkCoachOutcomeCommand, RecordCoachFeedbackCommand, RecordCoachStrategyAssignmentCommand,
-    RecordReaskLinkCommand,
+    CoachFeedbackKind, CoachFeedbackRecord, CoachFollowupType, CoachReaskLinkRecord,
+    CoachStrategyAssignmentRecord, CoachStrategyId, RecordCoachFeedbackCommand,
+    RecordCoachStrategyAssignmentCommand, RecordReaskLinkCommand,
 };
 use std::sync::Mutex;
 
@@ -17,7 +16,6 @@ struct CapturingStore {
     feedback: Mutex<Vec<RecordCoachFeedbackCommand>>,
     reask: Mutex<Vec<RecordReaskLinkCommand>>,
     assignments: Mutex<Vec<RecordCoachStrategyAssignmentCommand>>,
-    outcomes: Mutex<Vec<LinkCoachOutcomeCommand>>,
 }
 
 impl CoachFeedbackStore for CapturingStore {
@@ -63,19 +61,6 @@ impl CoachFeedbackStore for CapturingStore {
             memory_ids_used: command.memory_ids_used.clone(),
             context_snapshot_id: command.context_snapshot_id.clone(),
             followup_type: command.followup_type,
-            created_at: "2026-08-16T00:00:00Z".into(),
-        })
-    }
-
-    fn link_coach_outcome(
-        &self,
-        command: &LinkCoachOutcomeCommand,
-    ) -> Result<CoachOutcomeLinkRecord, ApplicationError> {
-        self.outcomes.lock().unwrap().push(command.clone());
-        Ok(CoachOutcomeLinkRecord {
-            strategy_assignment_id: command.strategy_assignment_id.clone(),
-            future_observation_id: command.future_observation_id.clone(),
-            outcome_kind: command.outcome_kind,
             created_at: "2026-08-16T00:00:00Z".into(),
         })
     }
@@ -131,26 +116,4 @@ fn service_delegates_strategy_assignment_with_full_metadata() {
     assert_eq!(record.skills_addressed, vec!["reading.tfng".to_string()]);
     assert_eq!(record.memory_ids_used.len(), 2);
     assert_eq!(record.context_snapshot_id.as_deref(), Some("ctx-1"));
-}
-
-#[test]
-fn service_delegates_outcome_link_and_keeps_kinds_distinct() {
-    let store = CapturingStore::default();
-    let service = CoachFeedbackService::new(&store);
-    let satisfaction = service
-        .link_outcome(&LinkCoachOutcomeCommand {
-            strategy_assignment_id: "csa-1".into(),
-            future_observation_id: "lobs-1".into(),
-            outcome_kind: CoachOutcomeKind::Satisfaction,
-        })
-        .unwrap();
-    let learning = service
-        .link_outcome(&LinkCoachOutcomeCommand {
-            strategy_assignment_id: "csa-1".into(),
-            future_observation_id: "lobs-1".into(),
-            outcome_kind: CoachOutcomeKind::Learning,
-        })
-        .unwrap();
-    assert_ne!(satisfaction.outcome_kind, learning.outcome_kind);
-    assert_eq!(store.outcomes.lock().unwrap().len(), 2);
 }

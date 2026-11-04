@@ -183,15 +183,6 @@ impl CoachFeedbackStore for ApplicationStore<'_> {
             .with_conn(|conn| ielts_db::record_coach_strategy_assignment(conn, command))
             .map_err(coach_feedback_error)
     }
-
-    fn link_coach_outcome(
-        &self,
-        command: &ielts_domain::LinkCoachOutcomeCommand,
-    ) -> Result<ielts_domain::CoachOutcomeLinkRecord, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::link_coach_outcome(conn, command))
-            .map_err(coach_feedback_error)
-    }
 }
 
 impl AgentStore for ApplicationStore<'_> {
