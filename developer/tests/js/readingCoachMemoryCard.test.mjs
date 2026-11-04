@@ -133,18 +133,30 @@ test('memoryCardState decides the card: confirmed is a receipt, dismissed is gon
   assert.equal(views(run).a3.state, 'pending', 'an unknown state is not a decision')
 })
 
-test('only the newest undecided card keeps its buttons; decided ones are unaffected', async () => {
+test('only the newest card keeps its buttons; confirmed receipts are unaffected', async () => {
   const run = await ready({
     messages: [
       user('u1'), open('a1'),
       user('u2'), open('a2', { memoryCardState: 'confirmed' }),
-      user('u3'), open('a3'),
-      user('u4'), open('a4', { memoryCardState: 'dismissed' })
+      user('u3'), open('a3')
     ]
   })
-  // a1 folded away by the newer a3; a2 stays as a receipt; a4 was dismissed.
+  // a1 folded away by the newer cards; a2 stays as a receipt; a3 is the one that asks.
   assert.deepEqual(Object.keys(views(run)), ['a2', 'a3'])
   assert.deepEqual([views(run).a2.state, views(run).a3.state], ['confirmed', 'pending'])
+})
+
+test('a superseded card stays folded even after the newer card is dismissed', async () => {
+  const run = await ready({ messages: [user('u1'), open('a1'), user('u2'), open('a2')] })
+  assert.deepEqual(Object.keys(views(run)), ['a2'])
+  await run.coach.dismissCoachMemoryCard('a2')
+  assert.deepEqual(views(run), {}, 'a1 does not come back')
+  run.setMessages([user('u1'), open('a1'), user('u2'), open('a2', { memoryCardState: 'dismissed' })])
+  run.coach.resetReadingCoachState()
+  run.rehydrate()
+  await settle()
+  await settle()
+  assert.deepEqual(views(run), {}, 'nor after a reload')
 })
 
 test('a new card folds the previous one away', async () => {
@@ -260,7 +272,7 @@ test('a failed dismiss keeps the card and says why', async () => {
 test('while a request is in flight no second one starts, for any card', async () => {
   let release
   const gate = new Promise((resolve) => { release = resolve })
-  const run = await ready({ messages: [user('u1'), open('a1'), user('u2'), open('a2', { memoryCardState: 'confirmed' })], confirm: () => gate })
+  const run = await ready({ messages: [user('u0'), open('a0', { memoryCardState: 'confirmed' }), user('u1'), open('a1')], confirm: () => gate })
   const first = run.coach.confirmCoachMemoryCard('a1', '先给例子')
   const second = run.coach.confirmCoachMemoryCard('a1', '先给例子')
   const third = run.coach.dismissCoachMemoryCard('a1')

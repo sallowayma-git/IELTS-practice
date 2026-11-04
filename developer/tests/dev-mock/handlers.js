@@ -692,7 +692,10 @@ export function createHandlers(state, host) {
     coach_list_messages: ({ threadId, afterSequence }) => coachScenarioMessages(
       host.coachScenario, threadId, afterSequence, (messageId, noteIndex) => ownOf(memoryCards, `${messageId}:${noteIndex}`)?.state
     ),
-    coach_run: () => ({ status: 'completed', messages: [] }),
+    // With ?mockCoach=... a question gets the canned answer (its messages come from coach_list_messages).
+    coach_run: () => (host.coachScenario
+      ? { status: 'completed', assistantMessage: { id: 'mock-coach-a1', role: 'assistant', content: '（模拟回答）' }, messages: [] }
+      : { status: 'completed', messages: [] }),
     journal_get_daily: ({ query = {} }) => clone(ownOf(notebook.journals, query.journalDate) || {
       id: `journal-${query.journalDate}`, userId: 'local', journalDate: query.journalDate, version: 1, status: 'published',
       facts: { journalDate: query.journalDate, timeSpentMs: 0, writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [], memoryChanges: ZERO_MEMORY_CHANGES, coachFeedbackCount: 0, coachReaskCount: 0, sourceHash: 'mock', todayObservationIds: [], memoryEvents: [] },

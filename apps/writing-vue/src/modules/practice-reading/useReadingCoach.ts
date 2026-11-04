@@ -288,9 +288,10 @@ function memoryCardDecision(entry: CoachTranscriptEntry, local: MemoryCardLocal 
 
 /**
  * Which preference cards the panel shows, by message id. A decided card is
- * settled: confirmed stays as a one-line receipt, dismissed disappears. Of the
- * undecided ones only the newest keeps its buttons; older ones fold away so the
- * conversation never fills with questions.
+ * settled: confirmed stays as a one-line receipt, dismissed disappears. Only the
+ * newest card in the thread can still ask; a newer card supersedes every older
+ * undecided one for good (even once the newer one is dismissed), so the
+ * conversation never fills with questions or revives a stale one.
  */
 export function memoryCardViews(
   transcript: CoachTranscriptEntry[],
@@ -298,10 +299,13 @@ export function memoryCardViews(
 ): Record<string, CoachMemoryCardView> {
   const busy = Object.values(local).some((item) => item.status === 'saving')
   const views: CoachMemoryCardView[] = []
+  let newestId = ''
   for (const entry of transcript) {
     const card = memoryCardOf(entry)
+    if (!card) continue
+    newestId = entry.id
     const decision = memoryCardDecision(entry, local[entry.id])
-    if (!card || decision === 'dismissed') continue
+    if (decision === 'dismissed') continue
     views.push({
       messageId: entry.id,
       ...card,
@@ -311,10 +315,8 @@ export function memoryCardViews(
       error: local[entry.id]?.status === 'failed' ? (local[entry.id].error || '') : ''
     })
   }
-  const pending = views.filter((view) => view.state === 'pending')
-  const newest = pending[pending.length - 1]
   return Object.fromEntries(
-    views.filter((view) => view.state === 'confirmed' || view === newest).map((view) => [view.messageId, view])
+    views.filter((view) => view.state === 'confirmed' || view.messageId === newestId).map((view) => [view.messageId, view])
   )
 }
 
