@@ -532,7 +532,8 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
            JOIN coach_messages m ON m.id = f.coach_message_id
            JOIN coach_threads t ON t.id = m.thread_id
            LEFT JOIN attempts a ON a.id = t.attempt_id
-          WHERE f.user_id = ?1 AND julianday(f.created_at) > julianday(?2) AND julianday(f.created_at) <= julianday(?3)
+          WHERE f.user_id = ?1 AND f.feedback_kind != 'reask_same_question'
+            AND julianday(f.created_at) > julianday(?2) AND julianday(f.created_at) <= julianday(?3)
           ORDER BY julianday(f.created_at), f.id",
     )?;
     let rows = feedback.query_map(params![user_id, from, to], |row| {
@@ -699,7 +700,7 @@ fn teaching_notes(payload: &Value) -> Vec<(String, String)> {
 /// One phrase per stored teaching note. Only the learner's verified quote and the
 /// coach's strategy label reach the prompt: the model's own `text` never does, so
 /// it cannot pass as the learner's words or steer the weekly pass.
-fn teaching_note_phrase(note: &Value) -> Option<String> {
+pub(crate) fn teaching_note_phrase(note: &Value) -> Option<String> {
     let evidence = note_field(field(note, "evidence"), TEACHING_NOTE_EVIDENCE_CHARS)?;
     match field(note, "kind") {
         "preference" => Some(format!("learner asked: \"{evidence}\"")),
@@ -722,7 +723,7 @@ fn teaching_note_phrase(note: &Value) -> Option<String> {
 /// deleted: `cite:obs-14` must not fuse into a citable-looking token), whitespace
 /// is flattened, and any token containing an `obs-`/`mem-` id is dropped. A value
 /// still over `max` characters is skipped whole, never cut mid-word.
-fn note_field(raw: &str, max: usize) -> Option<String> {
+pub(crate) fn note_field(raw: &str, max: usize) -> Option<String> {
     let separated: String = raw
         .chars()
         .map(ascii_punctuation)

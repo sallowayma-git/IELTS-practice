@@ -239,11 +239,35 @@ fn coach_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
             "count",
             FactFormat::Number,
             "coach_signals",
-            default(),
+            assets(row),
         );
     }
     add_number(facts, "coach.reasks", "本周教练重问次数", data, "reasks", FactFormat::Number, "coach_signals", default());
     add_number(facts, "coach.attempts", "本周使用教练的练习数", data, "attempts", FactFormat::Number, "coach_signals", default());
+    add_number(facts, "coach.asks", "本周向教练提问次数", data, "asks", FactFormat::Number, "coach_signals", default());
+    if let Some(notes) = data.get("teachingNotes") {
+        for (id, label, key) in [
+            ("coach.notes.wished", "学习者提出讲法要求的次数", "wished"),
+            ("coach.notes.helped", "学习者反馈讲法有帮助的次数", "helped"),
+            ("coach.notes.notHelped", "学习者反馈讲法没帮助的次数", "notHelped"),
+        ] {
+            add_number(facts, id, label, notes, key, FactFormat::Number, "coach_signals", default());
+        }
+    }
+    if let Some(repeated) = data.get("repeatedAsks") {
+        add_number(facts, "coach.repeatedAsks.questions", "反复追问的题数", repeated, "questions", FactFormat::Number, "coach_signals", assets(repeated));
+        add_number(facts, "coach.repeatedAsks.asks", "反复追问的提问次数", repeated, "asks", FactFormat::Number, "coach_signals", assets(repeated));
+    }
+    if let Some(after) = data.get("afterCoach") {
+        for (id, label, key) in [
+            ("coach.afterCoach.explainedFixed", "问过教练的错题重做后改对的次数", "explainedFixed"),
+            ("coach.afterCoach.explainedStillWrong", "问过教练的错题重做后仍错的次数", "explainedStillWrong"),
+            ("coach.afterCoach.unexplainedFixed", "没问过教练的错题重做后改对的次数", "unexplainedFixed"),
+            ("coach.afterCoach.unexplainedStillWrong", "没问过教练的错题重做后仍错的次数", "unexplainedStillWrong"),
+        ] {
+            add_number(facts, id, label, after, key, FactFormat::Number, "coach_signals", assets(after));
+        }
+    }
 }
 
 fn plan_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
@@ -411,6 +435,48 @@ mod tests {
                 ], "totalMinutes": 30}),
             ),
         ]
+    }
+
+    #[test]
+    fn coach_signals_project_asks_notes_repeats_and_redo_outcomes_with_their_passages() {
+        let blocks = vec![block(
+            BlockKind::CoachSignals,
+            json!({
+                "feedback": [{"kind": "too_long", "label": "太长", "count": 2, "assetIds": ["p1", "p2"]}],
+                "reasks": 1, "asks": 6, "attempts": 3,
+                "teachingNotes": {"wished": 1, "helped": 2, "notHelped": 0},
+                "repeatedAsks": {"questions": 2, "asks": 5, "assetIds": ["p1"]},
+                "afterCoach": {"explainedFixed": 3, "explainedStillWrong": 1, "unexplainedFixed": 1,
+                               "unexplainedStillWrong": 2, "assetIds": ["p1", "p3"]},
+            }),
+        )];
+        let facts = project_weekly_facts(&blocks, None, day(11));
+        let value = |id: &str| facts[id].value.clone();
+        assert_eq!(value("coach.asks"), json!(6));
+        assert_eq!(value("coach.notes.helped"), json!(2));
+        assert_eq!(value("coach.notes.notHelped"), json!(0));
+        assert_eq!(value("coach.repeatedAsks.asks"), json!(5));
+        assert_eq!(value("coach.afterCoach.explainedFixed"), json!(3));
+        assert_eq!(value("coach.afterCoach.unexplainedStillWrong"), json!(2));
+        // The passages behind a signal travel with it: Soul edits need two of them.
+        assert_eq!(facts["coach.too_long.count"].provenance.asset_ids, vec!["p1", "p2"]);
+        assert_eq!(facts["coach.afterCoach.explainedFixed"].provenance.asset_ids, vec!["p1", "p3"]);
+        assert_eq!(facts["coach.repeatedAsks.questions"].provenance.asset_ids, vec!["p1"]);
+        // Labels are distinct, so a citation matches exactly one fact.
+        let labels: std::collections::BTreeSet<&str> = facts.values().map(|fact| fact.label.as_str()).collect();
+        assert_eq!(labels.len(), facts.len());
+    }
+
+    #[test]
+    fn an_old_coach_block_without_the_new_keys_still_projects() {
+        let blocks = vec![block(
+            BlockKind::CoachSignals,
+            json!({"feedback": [{"kind": "too_long", "label": "太长", "count": 2}], "reasks": 4, "attempts": 2}),
+        )];
+        let facts = project_weekly_facts(&blocks, None, day(11));
+        let ids: Vec<&str> = facts.keys().map(String::as_str).collect();
+        assert_eq!(ids, vec!["coach.attempts", "coach.reasks", "coach.too_long.count"]);
+        assert!(facts["coach.too_long.count"].provenance.asset_ids.is_empty());
     }
 
     #[test]

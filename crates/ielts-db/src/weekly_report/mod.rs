@@ -7,6 +7,7 @@
 //! computed live midweek and persisted when the weekend run finishes, together
 //! with the model's validated narrative and Soul edits (see `narrative`).
 
+pub mod coach_facts;
 pub mod facts;
 pub mod narrative;
 pub mod project;
