@@ -135,17 +135,27 @@
             :data-reading-coach-feedback-state="feedbackFor(entry.id)?.status || 'idle'"
           >
             <button
-              v-for="option in feedbackOptions"
+              v-for="option in primaryOptions"
               :key="option.kind"
               class="reading-coach-feedback__option"
-              :class="{ 'is-selected': feedbackFor(entry.id)?.kind === option.kind }"
+              :class="{ 'is-selected': isOptionSelected(entry.id, option.kind) }"
               type="button"
-              :aria-pressed="feedbackFor(entry.id)?.kind === option.kind ? 'true' : 'false'"
-              :disabled="isFeedbackLocked(entry.id)"
+              :aria-pressed="isOptionSelected(entry.id, option.kind) ? 'true' : 'false'"
+              :disabled="isOptionLocked(entry.id, option.kind)"
               :data-reading-coach-feedback-kind="option.kind"
               @click="$emit('feedback', { messageId: entry.id, kind: option.kind })"
             >
               {{ option.label }}
+            </button>
+            <button
+              class="reading-coach-feedback__option reading-coach-feedback__more"
+              type="button"
+              :aria-expanded="feedbackMenuId === entry.id ? 'true' : 'false'"
+              :aria-controls="feedbackMenuDomId(entry.id)"
+              data-reading-coach-feedback-menu-toggle
+              @click="toggleFeedbackMenu(entry.id, $event)"
+            >
+              讲得不对劲？
             </button>
             <button
               v-if="entry.id === coachReaskableId"
@@ -158,16 +168,51 @@
               换个讲法
             </button>
             <span
-              v-if="feedbackFor(entry.id)?.status === 'saved'"
+              v-if="feedbackNote(entry.id) === 'saved'"
               class="reading-coach-feedback__note"
               data-reading-coach-feedback-note="saved"
             >已记下</span>
             <span
-              v-else-if="feedbackFor(entry.id)?.status === 'failed'"
+              v-else-if="feedbackNote(entry.id) === 'failed'"
               class="reading-coach-feedback__note is-error"
               data-reading-coach-feedback-note="failed"
             >没保存上，可以再点一次</span>
+            <span
+              v-if="coachStrategyLabel(entry)"
+              class="reading-coach-feedback__strategy"
+              data-reading-coach-strategy
+            >讲法：{{ coachStrategyLabel(entry) }}</span>
+            <div
+              v-if="feedbackMenuId === entry.id"
+              :id="feedbackMenuDomId(entry.id)"
+              class="reading-coach-feedback__menu"
+              role="group"
+              aria-label="哪里讲得不对劲"
+              data-reading-coach-feedback-menu
+              @keydown.esc.stop.prevent="closeFeedbackMenu(true)"
+            >
+              <button
+                v-for="option in menuOptions"
+                :key="option.kind"
+                class="reading-coach-feedback__option"
+                :class="{ 'is-selected': isOptionSelected(entry.id, option.kind) }"
+                type="button"
+                :aria-pressed="isOptionSelected(entry.id, option.kind) ? 'true' : 'false'"
+                :disabled="isOptionLocked(entry.id, option.kind)"
+                :data-reading-coach-feedback-kind="option.kind"
+                @click="$emit('feedback', { messageId: entry.id, kind: option.kind })"
+              >
+                {{ option.label }}
+              </button>
+            </div>
           </div>
+          <ReadingCoachMemoryCard
+            v-if="coachMemoryCards[entry.id]"
+            :key="`card-${entry.id}`"
+            :card="coachMemoryCards[entry.id]"
+            @confirm="onCardAction('memory-card-confirm', $event)"
+            @dismiss="onCardAction('memory-card-dismiss', $event)"
+          />
         </template>
       </div>
       <div v-if="showJump" class="reading-coach-panel__jump" data-reading-coach-jump>
@@ -243,7 +288,13 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { READING_COACH_FEEDBACK_OPTIONS, isFeedbackEligible } from '../useReadingCoach'
+import {
+  READING_COACH_ADJUSTMENT_OPTIONS,
+  READING_COACH_FEEDBACK_OPTIONS,
+  coachStrategyLabel,
+  isFeedbackEligible
+} from '../useReadingCoach'
+import ReadingCoachMemoryCard from './ReadingCoachMemoryCard.vue'
 import ReadingCoachMessageText from './ReadingCoachMessageText.vue'
 
 const props = defineProps({
@@ -260,6 +311,8 @@ const props = defineProps({
   coachSelectionActions: { type: Array, default: () => [] },
   coachFollowUps: { type: Array, default: () => [] },
   coachFeedback: { type: Object, default: () => ({}) },
+  coachAdjustments: { type: Object, default: () => ({}) },
+  coachMemoryCards: { type: Object, default: () => ({}) },
   coachReaskableId: { type: String, default: '' },
   coachQuery: { type: String, default: '' },
   canAskCoach: { type: Boolean, default: false }
@@ -273,6 +326,8 @@ const emit = defineEmits([
   'selection-action',
   'follow-up',
   'feedback',
+  'memory-card-confirm',
+  'memory-card-dismiss',
   'reask',
   'retry',
   'reload-history',
@@ -281,7 +336,11 @@ const emit = defineEmits([
   'ask'
 ])
 
-const feedbackOptions = READING_COACH_FEEDBACK_OPTIONS
+// Two verdict buttons stay in the row; "讲错了" and the how-to-explain-next-time
+// adjustments sit one tap away behind "讲得不对劲？".
+const primaryOptions = READING_COACH_FEEDBACK_OPTIONS.filter((option) => !option.menu)
+const menuOptions = [...READING_COACH_FEEDBACK_OPTIONS.filter((option) => option.menu), ...READING_COACH_ADJUSTMENT_OPTIONS]
+const adjustmentKinds = new Set(READING_COACH_ADJUSTMENT_OPTIONS.map((option) => option.kind))
 // Within this distance of the end the log counts as "following" the newest text.
 const FOLLOW_THRESHOLD_PX = 48
 
@@ -290,6 +349,9 @@ const panel = ref(null)
 const log = ref(null)
 const input = ref(null)
 const showJump = ref(false)
+const feedbackMenuId = ref('')
+// The card whose confirm/dismiss we just forwarded: focus returns to the box once it settles.
+const cardActionId = ref('')
 
 // The failure note is only actionable while it is still the newest row.
 const retryEntryId = computed(() => {
@@ -311,6 +373,52 @@ function feedbackFor(messageId) {
 function isFeedbackLocked(messageId) {
   const state = feedbackFor(messageId)
   return Boolean(state && state.status !== 'failed')
+}
+
+function adjustmentStatus(messageId, kind) {
+  return props.coachAdjustments?.[messageId]?.[kind] || ''
+}
+
+function isOptionSelected(messageId, kind) {
+  if (adjustmentKinds.has(kind)) return adjustmentStatus(messageId, kind) === 'saved'
+  return feedbackFor(messageId)?.kind === kind
+}
+
+// A verdict is locked once given (any verdict locks the others); an adjustment
+// only locks itself, and unlocks again if its save failed.
+function isOptionLocked(messageId, kind) {
+  if (!adjustmentKinds.has(kind)) return isFeedbackLocked(messageId)
+  const status = adjustmentStatus(messageId, kind)
+  return status === 'saving' || status === 'saved'
+}
+
+function feedbackNote(messageId) {
+  const statuses = [feedbackFor(messageId)?.status, ...Object.values(props.coachAdjustments?.[messageId] || {})]
+  if (statuses.includes('failed')) return 'failed'
+  return statuses.includes('saved') ? 'saved' : ''
+}
+
+function feedbackMenuDomId(messageId) {
+  return `reading-coach-feedback-menu-${String(messageId).replace(/[^\w-]/g, '')}`
+}
+
+function toggleFeedbackMenu(messageId, event) {
+  feedbackMenuId.value = feedbackMenuId.value === messageId ? '' : messageId
+  if (!feedbackMenuId.value) event.currentTarget?.focus({ preventScroll: true })
+}
+
+// Esc folds the menu and keeps focus on its toggle, not on the page behind.
+function closeFeedbackMenu(restoreFocus = false) {
+  const toggle = restoreFocus
+    ? log.value?.querySelector(`[data-reading-coach-feedback-message-id="${feedbackMenuId.value}"] [data-reading-coach-feedback-menu-toggle]`)
+    : null
+  feedbackMenuId.value = ''
+  toggle?.focus({ preventScroll: true })
+}
+
+function onCardAction(event, payload) {
+  cardActionId.value = payload.messageId
+  emit(event, payload)
 }
 
 // A touch keyboard covers half the panel, so focus only jumps into the input
@@ -396,6 +504,17 @@ watch(() => props.readingCoachOpen, async (open) => {
 })
 
 watch(() => props.coachQuery, () => nextTick(fitInput))
+
+// Once the card the learner just acted on is settled (receipt or gone) they are
+// back to asking; a failed save keeps the card open and the card manages focus.
+watch(() => props.coachMemoryCards, (cards) => {
+  const id = cardActionId.value
+  if (!id) return
+  const card = cards[id]
+  if (card?.busy) return
+  cardActionId.value = ''
+  if (!card || card.state === 'confirmed') focusInput()
+})
 
 // Disabling a button that holds focus (a chip, send) drops focus to the page;
 // once the reply lands, hand it back to the box.

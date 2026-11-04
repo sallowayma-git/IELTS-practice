@@ -1,5 +1,11 @@
 import { settings } from '@/api/client.js'
-import { listCoachFeedback, recordCoachFeedback, recordCoachReaskLink } from '@/api/memory-repository.js'
+import {
+  confirmCoachMemoryCard,
+  dismissCoachMemoryCard,
+  listCoachFeedback,
+  recordCoachFeedback,
+  recordCoachReaskLink
+} from '@/api/memory-repository.js'
 import type { CoachFeedbackKind } from '@/api/memory-repository.js'
 import { practiceAssets, practiceCoach, practiceHistory, practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
 import {
@@ -72,6 +78,14 @@ export const readingCoachApi = {
 
   async listFeedback(threadId: string) {
     return listCoachFeedback(threadId)
+  },
+
+  async confirmMemoryCard(messageId: string, noteIndex: number, text: string) {
+    return confirmCoachMemoryCard(messageId, noteIndex, text)
+  },
+
+  async dismissMemoryCard(messageId: string, noteIndex: number) {
+    return dismissCoachMemoryCard(messageId, noteIndex)
   }
 }
 

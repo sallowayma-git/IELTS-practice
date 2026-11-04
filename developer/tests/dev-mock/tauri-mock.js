@@ -39,6 +39,8 @@ function install() {
   // Channel protocol: the backend sends { index, message } and the Channel
   // reorders by index, so the mock sends in order with an increasing index.
   const host = {
+    // ?mockCoach=card|cards|... seeds a coach thread (coach-scenarios.js); absent means empty.
+    coachScenario: new URLSearchParams(window.location.search).get('mockCoach') || '',
     send(channel, index, message) {
       const callback = callbacks.get(channel?.id)
       if (callback) callback({ index, message })

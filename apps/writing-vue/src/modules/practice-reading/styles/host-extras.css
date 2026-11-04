@@ -414,6 +414,100 @@
   color: var(--incorrect);
 }
 
+/* Which way of explaining this answer used: present, never the headline. */
+.runified .reading-coach-feedback__strategy {
+  margin-left: auto;
+  color: var(--muted-ink);
+  font-size: calc(11 * var(--coach-px));
+  opacity: 0.8;
+}
+
+/* "讲得不对劲？" opens its options in place: no popup to clip in a narrow panel. */
+.runified .reading-coach-feedback__menu {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+/* ---- preference card: "remember this?" under an answer ---------------- */
+
+.runified .reading-coach-card {
+  display: grid;
+  align-self: stretch;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #c3d8ec;
+  border-radius: 3px;
+  background: #f4f8fc;
+  font-size: calc(13 * var(--coach-px));
+  line-height: 1.45;
+}
+
+.runified .reading-coach-card__title {
+  font-weight: 700;
+}
+
+.runified .reading-coach-card__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(46 * var(--coach-px));
+  max-height: calc(120 * var(--coach-px));
+  padding: 5px 8px;
+  border: 1px solid #8f8f8f;
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.runified .reading-coach-card__input:focus {
+  border-color: #418fc6;
+  outline: 2px solid var(--focus-soft);
+  outline-offset: 0;
+}
+
+.runified .reading-coach-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.runified .reading-coach-card__count {
+  flex: 1 1 auto;
+  color: var(--muted-ink);
+  font-size: calc(12 * var(--coach-px));
+}
+
+.runified .reading-coach-card__count.is-over,
+.runified .reading-coach-card__error {
+  color: var(--incorrect);
+}
+
+.runified .reading-coach-card__confirm {
+  border-color: #418fc6;
+  background: #eaf1f8;
+  font-weight: 700;
+}
+
+.runified .reading-coach-card__status,
+.runified .reading-coach-card__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.runified .reading-coach-card__status:empty {
+  display: none;
+}
+
+.runified .reading-coach-card__hint {
+  color: var(--muted-ink);
+  font-size: calc(12 * var(--coach-px));
+}
+
 .runified .reading-coach-panel__actions,
 .runified .reading-coach-panel__followups,
 .runified .reading-coach-panel__jump {
@@ -881,6 +975,27 @@
 .runified.dark-mode .reading-coach-msg__code,
 .runified.dark-mode .reading-coach-msg code {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.runified.dark-mode .reading-coach-card {
+  border-color: #2c4a63;
+  background: #1a2530;
+}
+
+.runified.dark-mode .reading-coach-card__input {
+  border-color: #556070;
+  background: #14181d;
+  color: var(--ink);
+}
+
+.runified.dark-mode .reading-coach-card__confirm {
+  border-color: #418fc6;
+  background: #1e3346;
+}
+
+.runified.dark-mode .reading-coach-card__count.is-over,
+.runified.dark-mode .reading-coach-card__error {
+  color: #f2b8b5;
 }
 
 .runified.dark-mode .reading-coach-msg__code {

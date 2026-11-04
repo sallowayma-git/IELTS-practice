@@ -14,6 +14,7 @@ import {
   buildWritingEvaluation,
   writingDetail,
 } from './seed.js'
+import { coachScenarioMessages } from './coach-scenarios.js'
 import { weeklyReports } from './weekly-reports.js'
 
 const ZERO_MEMORY_CHANGES = { newCandidates: 0, promoted: 0, reinforced: 0, refined: 0, improved: 0, regressed: 0, contradicted: 0, superseded: 0 }
@@ -658,7 +659,10 @@ export function createHandlers(state, host) {
     coach_confirm_memory_card: ({ messageId, noteIndex, text }) => {
       const clean = String(text ?? '').split(/\s+/).filter(Boolean).join(' ')
       if (!clean) throw fail('memory_card.invalid_text', '请先写下要记住的偏好。')
-      if ([...clean].length > 300) throw fail('memory_card.invalid_text', '这条偏好太长了，请控制在 300 个字以内。')
+      if (Array.from(clean).length > 300) throw fail('memory_card.invalid_text', '这条偏好太长了，请控制在 300 个字以内。')
+      // Sentinels for the refusals a screenshot or a manual run needs to see.
+      if (clean.includes('【重复】')) throw fail('memory_card.rejected', '这条偏好已经记过。')
+      if (clean.includes('【失败】')) throw fail('memory_card.persistence_failed', '保存失败，请重试。')
       const key = `${messageId}:${noteIndex}`
       const card = ownOf(memoryCards, key) || {}
       if (!card.memoryId) {
@@ -684,7 +688,10 @@ export function createHandlers(state, host) {
       coachThreadId = `coach-${cmd?.attemptId || 'thread'}`
       return { id: coachThreadId, attemptId: cmd?.attemptId || null, status: 'open' }
     },
-    coach_list_messages: () => [],
+    // Empty unless the page opts in with ?mockCoach=... (see coach-scenarios.js).
+    coach_list_messages: ({ threadId, afterSequence }) => coachScenarioMessages(
+      host.coachScenario, threadId, afterSequence, (messageId, noteIndex) => ownOf(memoryCards, `${messageId}:${noteIndex}`)?.state
+    ),
     coach_run: () => ({ status: 'completed', messages: [] }),
     journal_get_daily: ({ query = {} }) => clone(ownOf(notebook.journals, query.journalDate) || {
       id: `journal-${query.journalDate}`, userId: 'local', journalDate: query.journalDate, version: 1, status: 'published',

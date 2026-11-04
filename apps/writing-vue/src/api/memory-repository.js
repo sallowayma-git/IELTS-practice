@@ -137,6 +137,30 @@ export async function listCoachFeedback(threadId) {
   return Array.isArray(records) ? records : []
 }
 
+/**
+ * Coach preference card. Unlike the commands above these take direct arguments
+ * (no `input`/`command` wrapper). The host owns the rules: confirm writes the
+ * learner's (possibly edited) text as one long-term preference and is idempotent
+ * per (messageId, noteIndex); dismiss only records the decision.
+ * Errors carry `memory_card.*` codes (see memory-repository.d.ts).
+ */
+export async function confirmCoachMemoryCard(messageId, noteIndex, text) {
+  const response = await invokeCommand('coach_confirm_memory_card', {
+    messageId: requireText(messageId, 'messageId'),
+    noteIndex,
+    text: String(text ?? '')
+  })
+  return unwrapCommandResponse(response, 'coach_confirm_memory_card')
+}
+
+export async function dismissCoachMemoryCard(messageId, noteIndex) {
+  const response = await invokeCommand('coach_dismiss_memory_card', {
+    messageId: requireText(messageId, 'messageId'),
+    noteIndex
+  })
+  return unwrapCommandResponse(response, 'coach_dismiss_memory_card')
+}
+
 export async function recordMemoryFeedback(memoryId, feedbackKind) {
   const response = await invokeCommand('memory_record_feedback', {
     memoryId,
@@ -223,6 +247,8 @@ export const memoryRepository = {
   recordCoachFeedback,
   recordCoachReaskLink,
   listCoachFeedback,
+  confirmCoachMemoryCard,
+  dismissCoachMemoryCard,
   recordMemoryFeedback,
   triggerDailyDream,
   getDailyJournal,
