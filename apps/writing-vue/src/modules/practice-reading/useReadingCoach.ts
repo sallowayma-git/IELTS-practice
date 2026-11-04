@@ -222,6 +222,9 @@ function coachFailureDetail(error: unknown): string | null {
   const code = errorField(error, 'code').toLowerCase()
   if (code === 'coach.output_truncated') return '回答过长，已被截断，请换个更具体的问题再试'
   if (code === 'coach.context_exceeded') return '内容超出模型上下文长度，请缩短选中的原文或问题后再试'
+  if (code === 'coach.auth_failed') return 'API 密钥无效或没有权限，请到设置里检查密钥后再试'
+  if (code === 'coach.rate_limited') return '请求过于频繁或额度已用完，请稍后再试'
+  if (code === 'coach.timeout') return '模型响应超时，请重试'
   return null
 }
 
