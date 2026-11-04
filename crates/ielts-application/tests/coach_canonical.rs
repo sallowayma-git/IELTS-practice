@@ -724,3 +724,88 @@ async fn incomplete_stream_metadata_survives_the_coach_failure_trace() {
     assert_eq!(messages[1].status, "failed");
     assert_eq!(receipt["failureMessageId"], messages[1].id);
 }
+
+/// Records every request and answers from a script, one entry per call.
+struct Scripted {
+    store: Store,
+    requests: Arc<Mutex<Vec<CompletionRequest>>>,
+    script: Arc<Mutex<std::collections::VecDeque<Result<String, ModelError>>>>,
+}
+
+#[async_trait]
+impl LanguageModel for Scripted {
+    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        assert!(self.store.0.try_lock().is_ok(), "SQLite lock held during provider I/O");
+        self.requests.lock().unwrap().push(request);
+        let reply = self.script.lock().unwrap().pop_front().expect("scripted reply");
+        reply.map(|content| CompletionResponse {
+            content,
+            model: "fake-canonical".into(),
+            latency_ms: 1,
+            usage: None,
+            provider_request_id: None,
+        })
+    }
+}
+
+fn answer(text: &str) -> Result<String, ModelError> {
+    Ok(json!({"answer": text}).to_string())
+}
+
+/// The bytes the provider would hash: the first `messages` messages.
+fn prefix_bytes(request: &CompletionRequest, messages: usize) -> String {
+    serde_json::to_string(&request.messages[..messages]).unwrap()
+}
+
+#[tokio::test]
+async fn consecutive_turns_on_a_real_thread_share_a_byte_identical_prefix_through_history() {
+    let (_dir, store, thread) = fixture();
+    add_memory(&store, "mem-1", "Misses qualifiers in TFNG statements.");
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let script = Arc::new(Mutex::new(std::collections::VecDeque::from([
+        answer("one"),
+        answer("two"),
+        Err(ModelError::new("provider timeout", true)),
+        answer("four"),
+        answer("five"),
+    ])));
+    let questions = ["Why is q1 false?", "And q2?", "Try again on q1.", "Compare them.", "Summarise."];
+    for (index, question) in questions.iter().enumerate() {
+        let model = Scripted { store: store.clone(), requests: requests.clone(), script: script.clone() };
+        let mut run = command(&thread, Some(json!({"focusQuestionIds": ["q1"], "selectedText": format!("quote {index}")})));
+        run.content = (*question).into();
+        let outcome = CoachService::run(&store, run, || Ok(model)).await;
+        assert_eq!(outcome.is_err(), index == 2, "only the scripted turn fails");
+    }
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 5);
+    for pair in requests.windows(2) {
+        let (previous, next) = (&pair[0], &pair[1]);
+        // Everything the previous request sent before its closing turn is
+        // replayed verbatim at the head of the next one.
+        let shared = previous.messages.len() - 1;
+        assert_eq!(prefix_bytes(next, shared), prefix_bytes(previous, shared));
+        assert_eq!(next.cache_key, previous.cache_key);
+        // And the new request only appends: history, then the closing turn.
+        assert!(next.messages.len() > previous.messages.len());
+    }
+    // system, evidence and profile never change for the life of the thread.
+    assert!(requests[0].messages[2].content.starts_with("Learner profile"));
+    for request in requests.iter() {
+        assert_eq!(request.messages[..3], requests[0].messages[..3]);
+        // Failure rows never enter the prompt.
+        assert!(request.messages.iter().all(|m| m.role != "system" || m.content.starts_with("You are an IELTS reading coach")));
+    }
+    // The failed turn left its question in history, unanswered, and the next
+    // turn carried on from it without disturbing anything before it.
+    let after_failure = &requests[3];
+    let history: Vec<(&str, &str)> = after_failure.messages[3..after_failure.messages.len() - 1]
+        .iter()
+        .map(|m| (m.role.as_str(), m.content.as_str()))
+        .collect();
+    assert_eq!(history, vec![
+        ("user", "Why is q1 false?"), ("assistant", "one"),
+        ("user", "And q2?"), ("assistant", "two"),
+        ("user", "Try again on q1."),
+    ]);
+}
