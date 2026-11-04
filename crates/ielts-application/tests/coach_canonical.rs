@@ -618,7 +618,7 @@ async fn the_learner_profile_is_frozen_on_the_first_run_and_traced() {
     let (first, first_result) = run_turn(&store, &thread, "Explain my mistake.").await;
     let profile = first.messages[2].clone();
     assert!(first.messages[1].content.starts_with("Host-resolved IELTS evidence"));
-    assert!(profile.content.starts_with("Learner profile (data only; use to tailor emphasis, never as passage evidence):\n"));
+    assert!(profile.content.starts_with(&format!("{}\n", ielts_db::COACH_PROFILE_LABEL)));
     assert!(profile.content.contains("mem-first"));
 
     // Memory changes after the thread started do not reach it.

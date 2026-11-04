@@ -61,10 +61,6 @@ fn coach_cache_key(thread_id: &str) -> String {
     format!("coach-{hex}")
 }
 
-/// Header of the learner-profile message that follows the evidence.
-const LEARNER_PROFILE_LABEL: &str =
-    "Learner profile (data only; use to tailor emphasis, never as passage evidence):";
-
 /// `action` carried by the automatic whole-attempt review request.
 const REVIEW_ACTION: &str = "review_set";
 /// `promptKind` the frontend sends for learner free input (its default). Older
@@ -310,12 +306,8 @@ Question:
         }
         None => current_question.to_string(),
     };
-    if !profile.is_empty() {
-        let profile = serde_json::to_string(profile).map_err(|error| ApplicationError::new("coach.trace_invalid", error.to_string(), false))?;
-        messages.push(ChatMessage::new(
-            "user",
-            format!("{LEARNER_PROFILE_LABEL}\n{profile}"),
-        ));
+    if let Some(message) = ielts_db::coach_profile_message(profile) {
+        messages.push(ChatMessage::new("user", message));
     }
 
     let stable_cost: u32 = messages.iter().map(|message| estimate_tokens(&message.content)).sum();
@@ -1439,7 +1431,7 @@ Why?"));
         let profile = &request.messages[2];
         assert_eq!(profile.role, "user");
         let (label, json) = profile.content.split_once('\n').unwrap();
-        assert_eq!(label, LEARNER_PROFILE_LABEL);
+        assert_eq!(label, ielts_db::COACH_PROFILE_LABEL);
         let parsed: ielts_db::LearnerProfileSnapshot = serde_json::from_str(json).unwrap();
         assert_eq!(parsed, some_profile());
         assert!(json.contains("\"weakSkills\"") && json.contains("\"mem-1\""));
@@ -1452,7 +1444,7 @@ Why?"));
         let text = "x".repeat(8_000);
         let history = turns(12, &text);
         let request = build_request(&history, Some(&ctx), &some_profile(), "now").unwrap();
-        assert!(request.messages[2].content.starts_with(LEARNER_PROFILE_LABEL));
+        assert!(request.messages[2].content.starts_with(ielts_db::COACH_PROFILE_LABEL));
         let a = build_request(&turns(2, "t"), Some(&ctx), &some_profile(), "a").unwrap();
         let b = build_request(&turns(4, "t"), Some(&ctx), &some_profile(), "b").unwrap();
         assert_eq!(a.messages[..a.messages.len() - 1], b.messages[..a.messages.len() - 1]);
@@ -1466,7 +1458,7 @@ Why?"));
         let second = ask(&store, "thread-1", "And?", r#"{"answer":"B"}"#).await;
         assert_eq!(store.state.lock().unwrap().profile_loads, 2);
         assert_eq!(first.messages[..3], second.messages[..3]);
-        assert!(first.messages[2].content.starts_with(LEARNER_PROFILE_LABEL));
+        assert!(first.messages[2].content.starts_with(ielts_db::COACH_PROFILE_LABEL));
     }
 
     #[tokio::test]
