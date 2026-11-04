@@ -725,6 +725,76 @@ async fn incomplete_stream_metadata_survives_the_coach_failure_trace() {
     assert_eq!(receipt["failureMessageId"], messages[1].id);
 }
 
+/// Answers with provider usage that reports a prompt-cache hit.
+struct CacheHit {
+    store: Store,
+}
+
+#[async_trait]
+impl LanguageModel for CacheHit {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        assert!(self.store.0.try_lock().is_ok(), "SQLite lock held during provider I/O");
+        Ok(CompletionResponse {
+            content: r#"{"answer":"Cached."}"#.into(),
+            model: "fake-canonical".into(),
+            latency_ms: 1,
+            usage: Some(ielts_application::TokenUsage {
+                input_tokens: 1_500,
+                output_tokens: 30,
+                cached_input_tokens: 1_200,
+                ..Default::default()
+            }),
+            provider_request_id: None,
+        })
+    }
+}
+
+#[tokio::test]
+async fn the_receipt_records_cache_hits_and_where_each_runs_prefix_agrees_with_the_last() {
+    let (_dir, store, thread) = fixture();
+    for question in ["Why is q1 false?", "And q2?", "Compare them."] {
+        let mut run = command(&thread, Some(json!({"focusQuestionIds": ["q1"], "selectedText": question})));
+        run.content = question.into();
+        CoachService::run(&store, run, || Ok(CacheHit { store: store.clone() })).await.unwrap();
+    }
+    let conn = store.0.lock().unwrap();
+    let mut statement = conn.prepare(
+        "SELECT r.result_json, i.usage_json FROM agent_runs r JOIN llm_invocations i ON i.run_id = r.id ORDER BY r.rowid",
+    ).unwrap();
+    let rows: Vec<(Value, Value)> = statement
+        .query_map([], |row| {
+            let (receipt, usage): (String, String) = (row.get(0)?, row.get(1)?);
+            Ok((serde_json::from_str(&receipt).unwrap(), serde_json::from_str(&usage).unwrap()))
+        })
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(rows.len(), 3);
+    for (receipt, usage) in &rows {
+        // Both the invocation row and the run receipt carry the hit, so the
+        // optimisation can be measured from either.
+        assert_eq!(usage["cachedInputTokens"], 1_200);
+        assert_eq!(usage["inputTokens"], 1_500);
+        assert_eq!(receipt["usage"]["cachedInputTokens"], 1_200);
+    }
+    let layout = |index: usize| -> (Vec<String>, Value) {
+        let layout = &rows[index].0["promptLayout"];
+        let hashes = layout["messageHashes"].as_array().unwrap().iter().map(|h| h.as_str().unwrap().to_owned()).collect();
+        (hashes, layout["cacheKey"].clone())
+    };
+    for index in 1..rows.len() {
+        let ((previous, previous_key), (next, next_key)) = (layout(index - 1), layout(index));
+        assert!(previous_key.as_str().unwrap().starts_with("coach-"));
+        assert_eq!(previous_key, next_key, "one routing key for the whole thread");
+        // Everything but the previous closing turn agrees from the front; the
+        // closing turns themselves are where two runs differ.
+        let shared = previous.len() - 1;
+        assert_eq!(next[..shared], previous[..shared], "prefix broke at run {index}");
+        assert_ne!(next[shared], previous[shared]);
+        assert_eq!(rows[index].0["promptLayout"]["messages"], next.len());
+    }
+}
+
 /// Streams the start of an answer, then the connection dies.
 struct CutMidAnswer;
 
