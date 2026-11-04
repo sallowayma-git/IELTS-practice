@@ -11,6 +11,7 @@ use ielts_domain::{
     MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
     MemoryObservationEvidence, MemoryPromotionCommand, MemoryProposalDisposition, MemoryScope,
     MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, RefutedMemorySummary, MAX_ACTIVE_MEMORY_PER_SCOPE,
+    MAX_DERIVED_PREFERENCE_MEMORIES_PER_SCOPE,
     MAX_EXPLICIT_PREFERENCES, MAX_MEMORY_CANDIDATE_OBSERVATIONS, MAX_MEMORY_CONTEXT_ITEMS,
     MAX_MEMORY_PROPOSALS, MAX_MEMORY_STATEMENT_BYTES, MAX_USER_NOTE_PREFERENCES,
     USER_NOTE_PREFERENCE_PREFIX,
@@ -1303,7 +1304,7 @@ fn insert_active_memory(
     now: &str,
 ) -> DbResult<(String, MemoryStatus, u64, Option<String>, String)> {
     require_safe_statement(statement)?;
-    make_room_for_insert(tx, command, &candidate.user_id, scope, now)?;
+    make_room_for_insert(tx, command, candidate, namespace, scope, now)?;
     let memory_id = format!("mem-{}", Uuid::new_v4());
     let content_hash = hash_text(statement);
     let (confidence, source_trust) = source_weights(candidate.source_class);
@@ -1337,18 +1338,45 @@ fn insert_active_memory(
     Ok((memory_id, MemoryStatus::Active, 1, None, after))
 }
 
+/// Pools a capacity eviction may take its victim from. `user_explicit` and
+/// `system_policy` memories are in neither: they are never evicted.
+const OTHER_NAMESPACES: &str = "m.source_class NOT IN ('user_explicit','system_policy') AND m.namespace NOT IN ('preference','goal')";
+const DERIVED_PREFERENCES: &str = "m.source_class NOT IN ('user_explicit','system_policy') AND m.namespace IN ('preference','goal')";
+
 /// A full scope evicts instead of refusing: archives the least valuable active
 /// memory (reason `capacity`) in the caller's transaction, so the insert lands.
 /// Never evicted: `user_explicit` memories, and any memory another candidate of
 /// the same weekly batch targets or resolved into. Fails only when nothing in
 /// the scope is evictable.
+///
+/// Preference and goal memories are shielded from every other namespace's
+/// eviction, so the model's own preference/goal memories cannot be allowed to
+/// pile up until nothing is left to displace: such an insert first pays for
+/// itself past `MAX_DERIVED_PREFERENCE_MEMORIES_PER_SCOPE`, from its own pool.
 fn make_room_for_insert(
     tx: &Transaction<'_>,
     command: &MemoryPromotionCommand,
-    user_id: &str,
+    candidate: &PendingCandidate,
+    namespace: MemoryNamespace,
     scope: MemoryScope,
     now: &str,
 ) -> DbResult<()> {
+    let user_id = candidate.user_id.as_str();
+    let derived_preference = matches!(namespace, MemoryNamespace::Preference | MemoryNamespace::Goal)
+        && !matches!(candidate.source_class, MemorySourceClass::UserExplicit | MemorySourceClass::SystemPolicy);
+    if derived_preference {
+        let held = tx.query_row(
+            &format!(
+                "SELECT COUNT(*) FROM memory_items m WHERE m.user_id=?1 AND m.scope=?2 AND m.status='active' AND {DERIVED_PREFERENCES}"
+            ),
+            params![user_id, scope.storage_key()],
+            |row| row.get::<_, i64>(0),
+        )?;
+        if held >= MAX_DERIVED_PREFERENCE_MEMORIES_PER_SCOPE as i64 {
+            evict_least_valuable(tx, command, user_id, scope, now, DERIVED_PREFERENCES)?
+                .ok_or_else(|| DbError::Validation("derived preference capacity reached".into()))?;
+        }
+    }
     let active_count = tx.query_row(
         "SELECT COUNT(*) FROM memory_items WHERE user_id=?1 AND scope=?2 AND status='active'",
         params![user_id, scope.storage_key()],
@@ -1357,38 +1385,44 @@ fn make_room_for_insert(
     if active_count < MAX_ACTIVE_MEMORY_PER_SCOPE as i64 {
         return Ok(());
     }
-    // Explicit user statements, host policy, and the preference/goal namespaces
-    // are never capacity victims. Times compare as instants (julianday), so
-    // mixed offsets order by real time rather than by text.
-    let victim: String = tx
+    evict_least_valuable(tx, command, user_id, scope, now, OTHER_NAMESPACES)?
+        .ok_or_else(|| DbError::Validation("active memory capacity reached".into()))?;
+    Ok(())
+}
+
+/// Archives the least valuable memory of `pool` (a fixed SQL condition on `m`).
+/// Times compare as instants (julianday), so mixed offsets order by real time
+/// rather than by text. `None` when the pool holds nothing evictable.
+fn evict_least_valuable(
+    tx: &Transaction<'_>,
+    command: &MemoryPromotionCommand,
+    user_id: &str,
+    scope: MemoryScope,
+    now: &str,
+    pool: &str,
+) -> DbResult<Option<String>> {
+    let victim: Option<String> = tx
         .query_row(
-            "SELECT m.id FROM memory_items m
-             WHERE m.user_id=?1 AND m.scope=?2 AND m.status='active'
-               AND m.source_class NOT IN ('user_explicit','system_policy')
-               AND m.namespace NOT IN ('preference','goal')
-               AND NOT EXISTS (
-                 SELECT 1 FROM memory_candidates c
-                 WHERE c.batch_id=(SELECT batch_id FROM memory_candidates WHERE id=?3)
-                   AND (c.target_memory_id=m.id OR c.resolved_memory_id=m.id))
-             ORDER BY m.importance ASC, m.contradicted_count DESC, m.confidence ASC,
-                      julianday(COALESCE(m.last_observed_at, m.updated_at)) ASC,
-                      m.recall_count ASC, m.id ASC
-             LIMIT 1",
+            &format!(
+                "SELECT m.id FROM memory_items m
+                 WHERE m.user_id=?1 AND m.scope=?2 AND m.status='active' AND {pool}
+                   AND NOT EXISTS (
+                     SELECT 1 FROM memory_candidates c
+                     WHERE c.batch_id=(SELECT batch_id FROM memory_candidates WHERE id=?3)
+                       AND (c.target_memory_id=m.id OR c.resolved_memory_id=m.id))
+                 ORDER BY m.importance ASC, m.contradicted_count DESC, m.confidence ASC,
+                          julianday(COALESCE(m.last_observed_at, m.updated_at)) ASC,
+                          m.recall_count ASC, m.id ASC
+                 LIMIT 1"
+            ),
             params![user_id, scope.storage_key(), command.candidate_id],
             |row| row.get(0),
         )
-        .optional()?
-        .ok_or_else(|| DbError::Validation("active memory capacity reached".into()))?;
-    archive_memory_record(
-        tx,
-        &victim,
-        &command.actor_type,
-        command.actor_id.as_deref(),
-        "capacity",
-        now,
-    )?;
+        .optional()?;
+    let Some(victim) = victim else { return Ok(None) };
+    archive_memory_record(tx, &victim, &command.actor_type, command.actor_id.as_deref(), "capacity", now)?;
     crate::consolidation::propagate_support_change_in_transaction(tx, &victim, "archived", now)?;
-    Ok(())
+    Ok(Some(victim))
 }
 
 /// Last line of defence at the `memory_items` write: a model-written statement

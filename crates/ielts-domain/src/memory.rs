@@ -14,6 +14,10 @@ pub const MAX_MEMORY_EVIDENCE_IDS: usize = 32;
 pub const MAX_MEMORY_KEY_BYTES: usize = 160;
 pub const MAX_MEMORY_STATEMENT_BYTES: usize = 4 * 1024;
 pub const MAX_ACTIVE_MEMORY_PER_SCOPE: usize = 128;
+/// How many `preference`/`goal` memories the model (not the learner, not host
+/// policy) may hold in one scope. Those namespaces are shielded from other
+/// namespaces' capacity evictions, so without this bound they could fill a scope.
+pub const MAX_DERIVED_PREFERENCE_MEMORIES_PER_SCOPE: usize = 32;
 pub const MAX_MEMORY_CONTEXT_ITEMS: u32 = 100;
 pub const MAX_MEMORY_CATALOG_ITEMS: u32 = 200;
 pub const MAX_MEMORY_CANDIDATE_OBSERVATIONS: u32 = 200;
