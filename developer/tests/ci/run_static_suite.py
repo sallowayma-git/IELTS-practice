@@ -187,6 +187,10 @@ def main() -> int:
             "Current document drift",
             [sys.executable, "developer/tests/ci/check_doc_drift.py"],
         ),
+        run_command(
+            "Coach eval corpus format",
+            [sys.executable, "developer/tests/tools/coach-eval/eval_coach.py", "--validate-only"],
+        ),
         run_command("Vue typecheck", [NPM, "--prefix", "apps/writing-vue", "run", "typecheck"]),
         run_command(
             "Reading payload contract",

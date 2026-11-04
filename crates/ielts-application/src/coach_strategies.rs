@@ -132,6 +132,16 @@ mod tests {
         assert!(socratic.when.contains("我不知道什么意思") && socratic.when.contains("直接告诉我"));
     }
 
+    /// Lets the offline evaluator (`developer/tests/tools/coach-eval`) run the
+    /// real prompt: `COACH_PROMPT_DUMP=<file> cargo test -p ielts-application --lib dumps_the_prompt_when_asked`.
+    /// A no-op without the variable.
+    #[test]
+    fn dumps_the_prompt_when_asked() {
+        if let Some(path) = std::env::var_os("COACH_PROMPT_DUMP") {
+            std::fs::write(path, coach_system_prompt()).unwrap();
+        }
+    }
+
     #[test]
     fn the_prompt_is_one_fixed_string() {
         assert!(std::ptr::eq(coach_system_prompt(), coach_system_prompt()));
