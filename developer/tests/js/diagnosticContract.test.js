@@ -583,3 +583,12 @@ test('cached sizes include final truncation issues and newly sanitized persisten
     assert.equal(event.persistence.diagnostics, 'memory-only');
     assert.equal(contract.eventBytes(revised), Buffer.byteLength(JSON.stringify(revised), 'utf8'));
 });
+
+test('accepts bounded four-segment release versions and rejects malformed ones', () => {
+    const versionOf = (appVersion) => contract.createNormalizer({
+        appVersion, buildId: `git:${'a'.repeat(40)}`,
+        environment: { runMode: 'subpath', browser: 'chromium', platform: 'windows', browserVersion: '140.0', context: 'main' }
+    }).normalize({ code: 'PRACTICE_SAVE_FAILED', module: 'practice', action: 'submit' }).appVersion;
+    for (const accepted of ['0.6.3', '0.6.3.2', '0.6.2-fix', '0.6.3.2-rc.1']) assert.equal(versionOf(accepted), accepted);
+    for (const rejected of ['0.6.3.2.1', '0.6', '0.6.3.', 'v0.6.3.2', '0.6.3.2-', '0.6.3.1234']) assert.equal(versionOf(rejected), 'unknown', rejected);
+});
