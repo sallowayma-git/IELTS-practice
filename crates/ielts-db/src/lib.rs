@@ -10,6 +10,7 @@ pub mod background_jobs;
 pub mod backup;
 pub mod coach;
 pub mod coach_feedback;
+pub mod coach_signal_digest;
 pub mod cognitive_read;
 pub mod consolidation;
 pub mod context;
@@ -76,7 +77,12 @@ pub use safety::*;
 pub use secrets::*;
 pub use settings::*;
 pub use sqlite::*;
-pub use recent_signals::{recent_signals, RECENT_SIGNAL_MAX, RECENT_SIGNAL_WINDOW_DAYS};
+pub use coach_signal_digest::{
+    coach_signal_digest, digest_notes, payload_notes, read_coach_notes, CoachNote, NoteContent, NoteKind, NoteRange,
+    SignalDigestEntry, SignalWindows, COACH_SIGNAL_WINDOWS, RECENT_SIGNAL_DURABLE_DAYS, RECENT_SIGNAL_RECENT_DAYS,
+    SIGNAL_SOURCES_MAX, SIGNAL_TEXT_CHARS,
+};
+pub use recent_signals::{recent_signals, RECENT_SIGNAL_MAX};
 pub use system_context::{build_coach_system_context, build_coach_system_context_at, coach_profile_message, COACH_PROFILE_LABEL};
 pub use vocab::*;
 pub use weekly_pack::*;

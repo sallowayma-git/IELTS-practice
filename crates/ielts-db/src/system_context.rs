@@ -22,9 +22,10 @@
 //!   wants to be taught first.
 //! - **Weak skills** come from the learner model with the same evidence gate as
 //!   before.
-//! - **Recent signals** are the last two days' unconfirmed teaching notes, sliced
-//!   at read time by [`crate::recent_signals`]: what the learner told the coach
-//!   before the weekly consolidation could turn it into memory.
+//! - **Recent signals** are the unconfirmed teaching notes of the last two days
+//!   (fourteen for notes the coach marked `durable`), sliced at read time from
+//!   [`crate::coach_signal_digest`] by [`crate::recent_signals`]: what the learner
+//!   told the coach before the weekly consolidation could turn it into memory.
 //!
 //! The result is a plain [`LearnerProfileSnapshot`], so the frozen
 //! per-thread storage and the prompt message keep their shape: Soul entries are

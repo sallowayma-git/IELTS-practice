@@ -127,7 +127,9 @@ fn signals_aggregate_across_threads_and_name_their_message_and_note() {
     let second = answer(&conn, &b, json!([preference("别太长"), difficulty(TFNG, "判断题容易混淆")]), "2026-11-04T10:00:00Z");
     let got = signals(&conn);
     let ids: Vec<String> = got.iter().map(|signal| signal.id.clone()).collect();
-    assert_eq!(ids, vec![format!("signal:{second}:1"), format!("signal:{second}:0"), format!("signal:{first}:0")]);
+    // Equal strength and time inside one answer: the earlier note comes first
+    // (the digest orders ties by message id, then note index, ascending).
+    assert_eq!(ids, vec![format!("signal:{second}:0"), format!("signal:{second}:1"), format!("signal:{first}:0")]);
     assert!(got.iter().all(|signal| !signal.id.starts_with("mem-")));
     assert!(context(&conn).memory_ids().is_empty(), "a signal is not a recalled memory");
 }
