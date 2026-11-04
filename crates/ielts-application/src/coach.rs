@@ -500,7 +500,16 @@ fn provider_failure(error: ModelError) -> ApplicationError {
     if error.context_exceeded {
         return ApplicationError::new("coach.context_exceeded", error.message, false);
     }
-    ApplicationError::new("coach.provider_failed", error.message, error.retryable)
+    // The three provider failures the learner can act on differently: fix the
+    // key, wait a moment, or try again. Everything else stays the generic code,
+    // which every existing client already handles.
+    let code = match (error.status, error.class) {
+        (Some(401 | 403), _) => "coach.auth_failed",
+        (Some(429), _) => "coach.rate_limited",
+        (_, "timeout") => "coach.timeout",
+        _ => "coach.provider_failed",
+    };
+    ApplicationError::new(code, error.message, error.retryable)
 }
 
 fn record_failure<S: CoachStore>(store: &S, thread_id: &str, user_message_id: &str, error: &ApplicationError) {
@@ -903,6 +912,38 @@ Why?"));
             assert!(!failure.retryable);
             let state = store.state.lock().unwrap();
             assert_eq!(state.failures.len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn auth_rate_limit_and_timeout_failures_get_their_own_codes() {
+        let cases = [
+            (ModelError::http_status("AI provider returned HTTP 401", false, 401), "coach.auth_failed", false),
+            (ModelError::http_status("AI provider returned HTTP 403", false, 403), "coach.auth_failed", false),
+            (ModelError::http_status("AI provider returned HTTP 429", true, 429), "coach.rate_limited", true),
+            (ModelError::http_status("AI provider returned HTTP 429: quota", false, 429), "coach.rate_limited", false),
+            (ModelError::classed("AI request failed: timed out", true, "timeout"), "coach.timeout", true),
+            // Everything else keeps the generic code, with its own retry verdict.
+            (ModelError::http_status("AI provider returned HTTP 500", true, 500), "coach.provider_failed", true),
+            (ModelError::http_status("AI provider returned HTTP 404", false, 404), "coach.provider_failed", false),
+            (ModelError::classed("AI request failed: refused", true, "transport"), "coach.provider_failed", true),
+            (ModelError::classed("AI stream ended before the reply completed", true, "stream_error"), "coach.provider_failed", true),
+        ];
+        for (error, code, retryable) in cases {
+            let message = error.message.clone();
+            let store = FakeCoachStore::default();
+            let model = FakeModel {
+                response: Err(error),
+                store_state: store.state.clone(),
+                request: Arc::new(Mutex::new(None)),
+            };
+            let failure = CoachService::run(&store, command("Why?"), || Ok(model)).await.unwrap_err();
+            assert_eq!((failure.code.as_str(), failure.retryable), (code, retryable), "{message}");
+            assert_eq!(failure.message, message);
+            // Whatever the code, the failure is recorded once and the question stays.
+            let state = store.state.lock().unwrap();
+            assert_eq!(state.failures.len(), 1);
+            assert_eq!(state.messages.len(), 1);
         }
     }
 
