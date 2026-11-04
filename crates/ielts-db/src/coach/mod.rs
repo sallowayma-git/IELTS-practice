@@ -11,9 +11,11 @@ use ielts_domain::LearningEventType;
 use crate::learning_events::{append_learning_event_if_enabled, NewLearningEvent};
 use crate::sqlite::{DbError, DbResult};
 
+mod cards;
 mod context;
 mod profile;
 mod trace;
+pub use cards::*;
 pub use profile::*;
 pub use trace::*;
 pub use context::{resolve_reading_coach_context, ResolvedCoachContext};
