@@ -1425,6 +1425,14 @@ mark.vocab-highlight:active,
     white-space: nowrap;
 }
 
+.bookshelf-pdf-unavailable {
+    min-height: 38px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
 .bookshelf-action-btn--main {
     flex: 1;
     min-width: 100px;

@@ -13,7 +13,8 @@
     "pdfFilename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.pdf",
     "legacyPath": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/",
     "legacyFilename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

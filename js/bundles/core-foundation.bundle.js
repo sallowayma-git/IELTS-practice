@@ -1,4 +1,4 @@
-globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId":"sha256:c440c3fe51770e9f99e988ce67ebfa78de84cb99498a513bc5bb1cfac18671f5","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-192.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-051.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-058.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-192.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-051.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-058.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
+globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":"sha256:1b0d80cab9f6c7d9ecf10a4c92b68f6595bfa8479595bcf4625ca776f7d54a26","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
 /* Generated by scripts/build-bundles.mjs. Do not edit by hand. */
 
 /* ===== js/diagnostics/diagnosticContract.js ===== */
@@ -415,7 +415,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         const appVersion = field(options, 'appVersion', setup);
         const buildId = field(options, 'buildId', setup);
         const defaults = {
-            appVersion: matches(appVersion, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? appVersion : 'unknown',
+            appVersion: matches(appVersion, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.\d{1,3})?(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? appVersion : 'unknown',
             buildId: matches(buildId, /^(?:sha256:[a-f0-9]{64}|git:[a-f0-9]{40})$/) ? buildId : 'unknown',
             environment: environment(field(options, 'environment', setup), setup)
         };
@@ -462,7 +462,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             const build = wire ? field(input, 'buildId', context) : defaults.buildId;
             const event = {
                 schemaVersion: SCHEMA_VERSION,
-                appVersion: matches(version, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? version : 'unknown',
+                appVersion: matches(version, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.\d{1,3})?(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? version : 'unknown',
                 buildId: matches(build, /^(?:sha256:[a-f0-9]{64}|git:[a-f0-9]{40})$/) ? build : 'unknown',
                 ...identity,
                 fingerprint: '',
@@ -2995,6 +2995,11 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     // not as document keys. import merge identity is resolved in AppData, not here.
     const definitions = [
         {
+            logicalKey: 'practice.reviewPlans', classification: 'authoritative',
+            defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
+            export: true, import: 'merge-by-id'
+        },
+        {
             logicalKey: 'settings.values', classification: 'authoritative',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: true, import: 'patch'
@@ -4912,7 +4917,6 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     }
 
     function normalizeAppliedAttemptIds(value) {
-        if (value === undefined) return [];
         if (!Array.isArray(value)) throw new TypeError('appliedReviewAttemptIds must be an array');
         const normalized = [];
         const seen = new Set();
@@ -4970,7 +4974,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         }
         const lastReviewed = input.lastReviewed == null ? null : validIso(input.lastReviewed, 'lastReviewed');
         const nextReview = validIso(input.nextReview, 'nextReview');
-        const updatedAt = validIso(input.updatedAt || nextReview, 'updatedAt');
+        if (typeof input.updatedAt !== 'string' || !input.updatedAt.trim()) throw new TypeError('updatedAt is required');
+        const updatedAt = validIso(input.updatedAt, 'updatedAt');
         const lastQuality = input.lastQuality == null ? null : String(input.lastQuality);
         if (lastQuality !== null && !VALID_QUALITIES.includes(lastQuality)) throw new TypeError('Invalid lastQuality');
         const normalizedLastAttemptId = input.lastReviewAttemptId == null
@@ -4979,7 +4984,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         const lastReviewAttemptId = normalizedLastAttemptId || null;
         const appliedReviewAttemptIds = normalizeAppliedAttemptIds(input.appliedReviewAttemptIds);
         if (lastReviewAttemptId && !appliedReviewAttemptIds.includes(lastReviewAttemptId)) {
-            appliedReviewAttemptIds.push(lastReviewAttemptId);
+            throw new TypeError('lastReviewAttemptId must be in appliedReviewAttemptIds');
         }
         return {
             schemaVersion: 1,
@@ -5048,9 +5053,18 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         };
     }
 
+    function qualityFromScore(correct, total) {
+        const c = Number(correct), t = Number(total);
+        if (!Number.isFinite(c) || !Number.isFinite(t) || t <= 0 || c < 0 || c > t) {
+            throw new TypeError('A reliable correct/total score is required');
+        }
+        // Compare counts directly: 60% and 80% both belong to good.
+        return c * 100 < t * 60 ? 'hard' : c * 100 <= t * 80 ? 'good' : 'easy';
+    }
+
     global.PracticeReviewScheduler = Object.freeze({
-        __v1: true,
         __v2: true,
+        qualityFromScore,
         QUALITY_VALUES,
         VALID_QUALITIES,
         createInitialState,
@@ -6726,7 +6740,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         const detail = { recordId: source.id };
         const annotations = { recordId: source.id };
         for (const [key, value] of Object.entries(source)) {
-            if (key === 'realData' || key === 'rawData' || key === 'answerMap' || key === 'answerList' || SUMMARY_FIELDS.has(key)) continue;
+            if (key === 'realData' || key === 'rawData' || key === 'answerMap' || key === 'answerList' || key === 'reviewState' || SUMMARY_FIELDS.has(key)) continue;
             if (ANNOTATION_FIELDS.has(key)) annotations[key] = withoutRawData(value);
             else if (key === 'suiteEntries') detail.suiteEntries = asArray(value).map((entry) => {
                 const next = Object.assign({}, asObject(entry));
@@ -6744,6 +6758,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     if (next.realData && hasOwn(next.realData, annotationKey)) delete next.realData[annotationKey];
                     if (next.rawData && hasOwn(next.rawData, annotationKey)) delete next.rawData[annotationKey];
                 }
+                // Practice facts and annotations never carry scheduling state.
+                delete next.reviewState;
+                if (next.realData) delete next.realData.reviewState;
+                if (next.rawData) delete next.rawData.reviewState;
                 delete next.realData; delete next.rawData;
                 if (Object.keys(annotation).length) {
                     if (!annotations.suiteEntries) annotations.suiteEntries = {};
@@ -6775,12 +6793,39 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         delete joined.recordId;
         if (mode === 'detail' || mode === 'medium') return jsonValue(joined, 'practice detail projection');
         const annotationData = asObject(annotations);
-        for (const [key, value] of Object.entries(annotationData)) if (key !== 'recordId' && key !== 'suiteEntries') joined[key] = clone(value);
+        for (const [key, value] of Object.entries(annotationData)) if (key !== 'recordId' && key !== 'suiteEntries' && key !== 'reviewState') joined[key] = clone(value);
         if (Array.isArray(joined.suiteEntries)) {
             const suiteAnnotations = asObject(annotationData.suiteEntries);
             joined.suiteEntries = joined.suiteEntries.map((entry) => Object.assign({}, entry, clone(suiteAnnotations[String(entry.examId || asObject(entry.metadata).examId || entry.id)] || {})));
         }
         return jsonValue(joined, 'practice full projection');
+    }
+
+    // A retired catalog ID names the same passage as its canonical entry.
+    // Stored records keep what was saved; reads present the current ID.
+    function withCurrentExamIds(record) {
+        const resolve = global.resolveReadingExamId;
+        if (!record || typeof record !== 'object' || typeof resolve !== 'function') return record;
+        const renamed = (item) => {
+            if (!item || typeof item !== 'object') return item;
+            const metadata = asObject(item.metadata);
+            const examId = item.examId ? resolve(item.examId) : item.examId;
+            const metadataExamId = metadata.examId ? resolve(metadata.examId) : metadata.examId;
+            if (examId === item.examId && metadataExamId === metadata.examId) return item;
+            const next = Object.assign({}, item, { examId });
+            if (hasOwn(item, 'metadata')) next.metadata = Object.assign({}, metadata, { examId: metadataExamId });
+            return next;
+        };
+        let result = renamed(record);
+        for (const field of ['suiteEntries', 'suiteEntrySummaries']) {
+            if (!Array.isArray(record[field])) continue;
+            const entries = record[field].map(renamed);
+            if (entries.some((entry, index) => entry !== record[field][index])) {
+                if (result === record) result = Object.assign({}, record);
+                result[field] = entries;
+            }
+        }
+        return result;
     }
 
     function projectDetail(record) { return joinPracticeRecord(splitPracticeRecord(record).summary, splitPracticeRecord(record).detail, null, 'detail'); }
@@ -6794,6 +6839,12 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         throw new Error('AppData v2 requires PracticeRecordSource (js/data/practiceRecordSource.js)');
     }
     const isRealPracticeRecord = practiceRecordSource.isRealPracticeRecord;
+    const practiceReviewScheduler = global.PracticeReviewScheduler;
+    if (!practiceReviewScheduler
+        || typeof practiceReviewScheduler.createInitialState !== 'function'
+        || typeof practiceReviewScheduler.scheduleOutcome !== 'function') {
+        throw new Error('AppData v2 requires PracticeReviewScheduler (js/core/practiceReviewScheduler.js)');
+    }
 
     function computeStats(records) {
         const stats = defaultStats();
@@ -6822,11 +6873,199 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
 
     function practiceType(record) {
         const metadata = asObject(record.metadata);
-        const hints = [record.type, record.practiceType, metadata.type, metadata.examType, metadata.practiceType,
-            record.examId, record.title, metadata.examId, metadata.title].filter(Boolean).join(' ').toLowerCase();
+        const explicitTypes = [record.type, record.examType, record.practiceType,
+            metadata.type, metadata.examType, metadata.practiceType];
+        for (const value of explicitTypes) {
+            const type = String(value || '').trim().toLowerCase().replace(/-suite$/, '');
+            if (type === 'reading' || type === 'listening') return type;
+        }
+        // Legacy records without a recognized type still use their descriptive hints.
+        const title = record.title || record.examTitle || metadata.examTitle || metadata.title;
+        const hints = [...explicitTypes, record.examId, title, metadata.examId, metadata.title]
+            .filter(Boolean).join(' ').toLowerCase();
         if (hints.includes('listen') || hints.includes('audio') || hints.includes('hearing')) return 'listening';
         if (hints.includes('read')) return 'reading';
         return null;
+    }
+
+    function reviewReferenceTime(summary) {
+        return validIso(summary.completedAt || summary.timestamp || summary.date) || nowIso();
+    }
+
+    // 复盘状态不是练习事实：它既不能被一次重新落库覆盖，也不能因为自身损坏而
+    // 阻断练习记录保存（那等于用调度元数据换掉用户真实成绩）。非法状态一律按“没有状态”
+    // 处理——listReviewQueue 同样会跳过它，用户重新完成一次练习即可重新入队。
+    function safeReviewState(value) {
+        if (!value) return null;
+        try { return practiceReviewScheduler.normalizeState(value); }
+        catch (_) { return null; }
+    }
+
+    function reviewWrongCount(summary) {
+        const total = Number(summary && summary.totalQuestions);
+        const correct = Number(summary && summary.correctAnswers);
+        if (!Number.isFinite(total) || !Number.isFinite(correct)) return 0;
+        return Math.max(0, total - correct);
+    }
+
+    const REVIEW_PLANS_KEY = 'practice.reviewPlans';
+
+    function normalizeReviewLibraryConfigurationId(value) {
+        const id = value === null || value === undefined ? '' : String(value).trim();
+        return id || null;
+    }
+
+    function articleReviewPlanId(libraryConfigurationId, examId) {
+        const libraryId = normalizeReviewLibraryConfigurationId(libraryConfigurationId) || '';
+        return 'article:' + encodeURIComponent(libraryId) + ':' + encodeURIComponent(String(examId || '').trim());
+    }
+
+    function reviewTaskId(plan) {
+        return 'article:' + encodeURIComponent(plan.id);
+    }
+
+    // Practice Review ships with article plans only. Ignore pre-release formats;
+    // queue reads never scan history or create/migrate a scheduling document.
+    function currentReviewPlans(value) {
+        return asArray(value).filter(plan => plan && plan.unit === 'article'
+            && hasOwn(plan, 'libraryConfigurationId')
+            && plan.libraryConfigurationId === normalizeReviewLibraryConfigurationId(plan.libraryConfigurationId)
+            && typeof plan.examId === 'string' && plan.examId.trim() === plan.examId && plan.examId
+            && plan.id === articleReviewPlanId(plan.libraryConfigurationId, plan.examId)
+            && typeof plan.recordId === 'string' && plan.recordId
+            && (plan.entryIndex === null || (Number.isInteger(plan.entryIndex) && plan.entryIndex >= 0))
+            && plan.summary && typeof plan.latestCompletedAt === 'string'
+            && plan.latestCompletedAt === validIso(plan.latestCompletedAt) && safeReviewState(plan.reviewState));
+    }
+
+    async function readReviewPlans() {
+        const current = await kernel.read(REVIEW_PLANS_KEY, { withMeta: true });
+        return Object.assign({}, current, { data: currentReviewPlans(current.data) });
+    }
+
+    async function reviewPlanChange(layers, source, existing, foldedChildIds = []) {
+        const current = await readReviewPlans();
+        const plans = asArray(current.data).map(clone);
+        const summary = layers.summary;
+        // An annotation resave of the same historical record is not a new attempt.
+        const isNew = !(existing && existing.summary && existing.summary.data);
+        // Read explicit type aliases before the light projection drops them.
+        if (isNew && isRealPracticeRecord(summary) && practiceType(source) === 'reading') {
+            const entries = asArray(source.suiteEntries);
+            const candidates = entries.length ? entries : [source];
+            candidates.forEach((raw, index) => {
+                const entry = Object.assign({}, asObject(raw.realData), asObject(raw), {
+                    metadata: Object.assign({}, asObject(source.metadata), asObject(raw.metadata))
+                });
+                const examId = String(entry.examId || entry.metadata.examId || '').trim();
+                if (!examId) return;
+                const libraryConfigurationId = normalizeReviewLibraryConfigurationId(entry.metadata.libraryConfigurationId);
+                const planId = articleReviewPlanId(libraryConfigurationId, examId);
+                const grading = entries.length ? lightSuiteEntry(raw, 'reading') : summary;
+                const correct = grading.correctAnswers;
+                const total = grading.totalQuestions;
+                let quality;
+                try { quality = practiceReviewScheduler.qualityFromScore(correct, total); } catch (_) { return; }
+                const position = plans.findIndex(plan => plan.id === planId);
+                const previous = position >= 0 ? plans[position] : null;
+                const completedAt = validIso(entry.completedAt || entry.timestamp || entry.date) || reviewReferenceTime(summary);
+                const previousCompletedAt = previous?.latestCompletedAt;
+                if (previous && (previous.recordId === summary.id
+                    || (previousCompletedAt && completedAt < previousCompletedAt))) return;
+                // Perfect first attempts do not create a task. An existing task
+                // still advances when its latest reattempt reaches full marks.
+                if (!previous && Number(correct) === Number(total)) return;
+                const state = safeReviewState(previous?.reviewState) || practiceReviewScheduler.createInitialState(completedAt);
+                // A completion can be persisted after a later manual review. It is
+                // still the newest replay source, but its automatic grade must not
+                // move an already-newer schedule backwards.
+                const scheduleTime = state.updatedAt;
+                const preserveNewerSchedule = Boolean(previous && scheduleTime && completedAt < scheduleTime);
+                const compact = Object.fromEntries(['id', 'type', 'title', 'date', 'duration', 'totalQuestions', 'correctAnswers', 'accuracy', 'percentage', 'metadata']
+                    .filter(key => summary[key] !== undefined).map(key => [key, clone(summary[key])]));
+                const recordSummary = Object.assign({}, compact, {
+                    examId, title: entry.title || entry.metadata.examTitle || summary.title,
+                    metadata: Object.assign({}, asObject(compact.metadata), { libraryConfigurationId }),
+                    totalQuestions: Number(total), correctAnswers: Number(correct),
+                    accuracy: Number(correct) / Number(total), percentage: Number(correct) * 100 / Number(total),
+                    date: completedAt, duration: Number(entry.duration) || summary.duration
+                });
+                delete recordSummary.suiteEntrySummaries;
+                const plan = { id: planId, unit: 'article', examId, libraryConfigurationId, recordId: summary.id,
+                    entryIndex: entries.length ? index : null, summary: recordSummary, latestCompletedAt: completedAt,
+                    reviewState: foldedChildIds.includes(previous?.recordId) || preserveNewerSchedule ? state
+                        : practiceReviewScheduler.scheduleOutcome(state, quality, completedAt,
+                            'completion:' + summary.id + ':' + examId) };
+                if (position >= 0) plans[position] = plan;
+                else plans.push(plan);
+            });
+        }
+        return { logicalKey: REVIEW_PLANS_KEY, data: plans,
+            expectedRevision: current.envelope ? current.envelope.revision : 0 };
+    }
+
+    function practiceTimeValue(record) {
+        const raw = record && (record.date || record.completedAt || record.timestamp);
+        const parsed = Date.parse(raw);
+        return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+    }
+
+    // 队列顺序是产品承诺的一部分（先到期、再按计划时间、错题多的先做），
+    // 最后必须落到一个稳定键，否则同分记录在两次渲染间会互换位置。
+    function reviewQueueComparator(left, right) {
+        if (left.isDue !== right.isDue) return left.isDue ? -1 : 1;
+        const dueOrder = String(left.reviewState.nextReview).localeCompare(String(right.reviewState.nextReview));
+        if (dueOrder) return dueOrder;
+        if (left.wrongCount !== right.wrongCount) return right.wrongCount - left.wrongCount;
+        const leftTime = practiceTimeValue(left);
+        const rightTime = practiceTimeValue(right);
+        if (leftTime !== rightTime) return leftTime - rightTime;
+        return String(left.id || '').localeCompare(String(right.id || ''));
+    }
+
+    function localDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    // “未来 7 天负荷”只由当前 reviewState 推导：今日格子额外吃下所有逾期任务，
+    // 因为它们就是用户今天真正要做的量。这里不生产任何无法从状态还原的分母
+    // （例如“原计划 N / 已完成 M”），避免 UI 承诺数据层无法保证的口径。
+    function buildReviewQueueStats(records, now) {
+        const start = new Date(now); start.setHours(0, 0, 0, 0);
+        const buckets = Array.from({ length: 7 }, (_unused, index) => {
+            const date = new Date(start); date.setDate(date.getDate() + index);
+            return { date: date.toISOString(), dateKey: localDateKey(date), count: 0, includesOverdue: index === 0 };
+        });
+        const dayMs = 24 * 60 * 60 * 1000;
+        let dueToday = 0;
+        let overdue = 0;
+        let completedToday = 0;
+        for (const record of records) {
+            const due = new Date(record.reviewState.nextReview);
+            const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+            const dayOffset = Math.round((dueDay.getTime() - start.getTime()) / dayMs);
+            if (dayOffset < 0) {
+                overdue += 1;
+                buckets[0].count += 1;
+            } else if (dayOffset < buckets.length) {
+                if (dayOffset === 0) dueToday += 1;
+                buckets[dayOffset].count += 1;
+            }
+            const reviewed = record.reviewState.lastReviewed ? new Date(record.reviewState.lastReviewed) : null;
+            if (reviewed && localDateKey(reviewed) === localDateKey(start)) completedToday += 1;
+        }
+        return {
+            dueToday,
+            overdue,
+            dueNow: dueToday + overdue,
+            completedToday,
+            total: records.length,
+            futureSevenDayTotal: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
+            buckets
+        };
     }
 
     function accuracyRatio(record) {
@@ -7142,7 +7381,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         async list(options = {}) {
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
-            if (projection === 'light' || projection === 'summary') return resolveBrowseSummaries(await kernel.listEntities('practiceSummaries'));
+            if (projection === 'light' || projection === 'summary') {
+                return (await resolveBrowseSummaries(await kernel.listEntities('practiceSummaries'))).map(withCurrentExamIds);
+            }
             const stores = projection === 'detail' || projection === 'medium'
                 ? ['practiceSummaries', 'practiceDetails']
                 : undefined;
@@ -7152,10 +7393,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             return asArray(snapshot.practiceSummaries).map(summary => {
                 const id = practiceLayerId(summary);
                 const detail = details.get(id);
-                return joinPracticeRecord(upgradeBrowseSummary(summary, detail), detail, annotations.get(id), projection);
+                return withCurrentExamIds(joinPracticeRecord(upgradeBrowseSummary(summary, detail), detail, annotations.get(id), projection));
             }).filter(Boolean);
         },
-        async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
+        async get(recordId, options = {}) { await ready; return withCurrentExamIds(await joinedPractice(String(recordId || ''), options.projection || 'full')); },
         // Positive journal evidence only: retention can remove old receipts, so
         // absence is never proof that an operation did not commit. This read-only
         // reconciliation does not resubmit, clear recovery, or alter sessions.
@@ -7184,7 +7425,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 receipt = await retryMergeConflict(command || {}, async () => {
                     const existing = await practiceLayersForUpsert(recordId);
                     return kernel.mutateEntities(practiceUpserts(recordId, layers, existing),
-                        { ...mutation, documentChanges: await sealReadingTiming(recordInput, recordId, existing.detail?.data) });
+                        { ...mutation, documentChanges: [await reviewPlanChange(layers, recordInput, existing), ...await sealReadingTiming(recordInput, recordId, existing.detail?.data)] });
                 });
                 return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
 
@@ -7212,7 +7453,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     const existing = await practiceLayersForUpsert(recordId);
                     const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
                     return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
-                        { ...mutation, documentChanges: await sealReadingTiming(input, recordId, existing.detail?.data, children) });
+                        { ...mutation, documentChanges: [await reviewPlanChange(layers, input, existing, Array.from(children)), ...await sealReadingTiming(input, recordId, existing.detail?.data, children)] });
                 });
                 return Object.assign({}, receipt, { record: await joinedPractice(recordId, 'full') });
 
@@ -7221,20 +7462,108 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 throw error;
             }
         },
+        async listReviewQueue(options = {}) {
+            await ready;
+            const nowIsoValue = validIso(options.now) || nowIso();
+            const now = new Date(nowIsoValue);
+            const current = await readReviewPlans();
+            const records = [];
+            for (const plan of asArray(current.data)) {
+                const reviewState = safeReviewState(plan.reviewState);
+                if (!reviewState || !plan.recordId || !plan.summary) continue;
+                records.push(Object.assign({}, clone(plan.summary), {
+                    id: reviewTaskId(plan),
+                    recordId: plan.recordId, reviewPlanId: plan.id, reviewUnit: plan.unit,
+                    reviewExamId: plan.examId, reviewEntryIndex: plan.entryIndex,
+                    reviewLibraryConfigurationId: plan.libraryConfigurationId,
+                    reviewState, wrongCount: reviewWrongCount(plan.summary), isDue: new Date(reviewState.nextReview) <= now
+                }));
+            }
+            records.sort(reviewQueueComparator);
+            return {
+                generatedAt: nowIsoValue,
+                records,
+                stats: buildReviewQueueStats(records, now)
+            };
+        },
+        async getReviewTask(taskId) {
+            await ready;
+            const { data } = await readReviewPlans();
+            const id = String(taskId || '');
+            const plan = asArray(data).find(row => row.id === id || row.recordId === id
+                || reviewTaskId(row) === id);
+            return plan ? clone(plan) : null;
+        },
+        async getReviewState(recordId) {
+            const task = await practice.getReviewTask(recordId);
+            if (task) return safeReviewState(task.reviewState);
+            const id = String(recordId || '').trim();
+            if (!id || !(await kernel.readEntity('practiceSummaries', id))) throw new AppDataError('VALIDATION', 'Unknown practice record');
+            return null;
+        },
+        async recordReviewOutcome(command) {
+            await ready; assertObject(command, 'recordReviewOutcome command is required');
+            const recordId = String(command.recordId || '').trim();
+            const attemptId = String(command.reviewAttemptId || '').trim();
+            const quality = String(command.quality || '').toLowerCase();
+            const reviewedAt = validIso(command.reviewedAt || nowIso());
+            if (!recordId || !attemptId || !reviewedAt || !practiceReviewScheduler.VALID_QUALITIES.includes(quality)) {
+                throw new AppDataError('VALIDATION', 'Valid recordId, reviewAttemptId, quality and reviewedAt are required');
+            }
+            const mutation = mutationOptions(command, 'practice-review-outcome', command);
+            let resultState;
+            const receipt = await retryMergeConflict(command, async () => {
+                const current = await readReviewPlans();
+                const plans = asArray(current.data).map(clone);
+                const task = plans.find(row => command.reviewPlanId ? row.id === command.reviewPlanId : row.recordId === recordId);
+                if (!task) throw new AppDataError(command.reviewPlanId ? 'CONFLICT' : 'VALIDATION', 'Review task is not scheduled');
+                if (task.recordId !== recordId) throw new AppDataError('CONFLICT', 'Review task was replaced by a newer attempt');
+                if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== Number(current.envelope?.revision || 0)) {
+                    throw new AppDataError('CONFLICT', 'Review plan revision conflict');
+                }
+                const normalized = safeReviewState(task.reviewState);
+                if (!normalized) throw new AppDataError('VALIDATION', 'Invalid review state');
+                if (normalized.appliedReviewAttemptIds.includes(attemptId)) {
+                    resultState = normalized;
+                    return Object.assign(await kernel.journalNoop(mutation), { noop: true, duplicate: true });
+                }
+                const scheduleTime = normalized.updatedAt;
+                if (scheduleTime && reviewedAt < scheduleTime) {
+                    throw new AppDataError('CONFLICT', 'Review outcome is older than the current schedule');
+                }
+                resultState = practiceReviewScheduler.scheduleOutcome(normalized, quality, reviewedAt, attemptId);
+                task.reviewState = resultState;
+                const documentChanges = [{ logicalKey: REVIEW_PLANS_KEY, data: plans,
+                    expectedRevision: current.envelope?.revision || 0 }];
+                return kernel.mutate(documentChanges, mutation);
+            });
+            return Object.assign({}, receipt, { reviewState: resultState });
+        },
         async updateAnnotations(command) {
             await ready; assertObject(command, 'updateAnnotations command is required'); const recordId = String(command.recordId || '');
             return retryMergeConflict(command, async () => {
                 const current = await practiceLayers(recordId, true); if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${recordId}`);
                 if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== entityRevision(current.annotations)) throw new AppDataError('CONFLICT', `Revision conflict for practice annotations ${recordId}`);
                 const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
+                // 标注补丁只承载内容（highlights/notes/marks/scrollY）。复盘调度状态的唯一
+                // 写入口是 recordReviewOutcome：否则题目页可以借标注同步伪造复盘进度。
+                delete annotations.reviewState;
+                const patch = clone(asObject(command.patch)); delete patch.reviewState;
                 const detail = clone(asObject(current.detail && current.detail.data)); const examId = String(command.examId || current.summary.data.examId || 'default');
+                const resolveExamId = typeof global.resolveReadingExamId === 'function' ? global.resolveReadingExamId : (id) => id;
+                const matchesExamId = (id) => resolveExamId(String(id)) === resolveExamId(examId);
+                // Replay projects canonical IDs, but annotations must keep the keys
+                // used by the stored record and joinPracticeRecord.
                 if (Array.isArray(detail.suiteEntries) && detail.suiteEntries.length) {
-                    if (!detail.suiteEntries.some((entry) => String(entry.examId || asObject(entry.metadata).examId || '') === examId)) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
-                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(asObject(command.patch))) });
+                    const entry = detail.suiteEntries.find((entry) => matchesExamId(entry.examId || asObject(entry.metadata).examId || ''));
+                    if (!entry) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
+                    const storedExamId = String(entry.examId || asObject(entry.metadata).examId || entry.id);
+                    annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [storedExamId]: Object.assign({}, asObject(annotations.suiteEntries)[storedExamId], clone(patch)) });
                 } else {
-                    if (current.summary.data.examId && String(current.summary.data.examId) !== examId) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
-                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(asObject(command.patch))) });
-                    Object.assign(annotations, clone(asObject(command.patch)));
+                    const storedExamId = String(current.summary.data.examId || examId);
+                    if (current.summary.data.examId && !matchesExamId(storedExamId)) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
+                    annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [storedExamId]: Object.assign({}, asObject(annotations.annotations)[storedExamId], clone(patch)) });
+                    Object.assign(annotations, clone(patch));
                 }
                 return kernel.mutateEntities([{
                     type: 'upsert',
@@ -7246,18 +7575,35 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             });
         },
         async delete(command) {
-            await ready; const recordId = String(command && (command.recordId || command.id) || command || ''); if (!recordId) throw new AppDataError('VALIDATION', 'practice record id is required');
-            const found = await kernel.readEntity('practiceSummaries', recordId); if (!found) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete', { recordId })), { deletedCount: 0, noop: true });
-            const receipt = await kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId })), mutationOptions(command, 'practice-delete', { recordId }));
-            return Object.assign({}, receipt, { deletedCount: 1 });
+            const id = String(command && (command.recordId || command.id) || command || '');
+            return practice.deleteMany(Object.assign({}, typeof command === 'object' ? command : {}, { recordIds: [id] }));
         },
         async deleteMany(command) {
-            await ready; assertObject(command, 'practice.deleteMany command is required'); const recordIds = Array.from(new Set(asArray(command.recordIds).map(String).filter(Boolean)));
-            if (!recordIds.length) throw new AppDataError('VALIDATION', 'practice.deleteMany requires recordIds'); const summaries = await kernel.listEntities('practiceSummaries'); const ids = recordIds.filter((id) => summaries.some((item) => practiceRecordMatches(item, [id])));
-            if (!ids.length) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete-many', { recordIds })), { deletedCount: 0, noop: true });
-            const receipt = await kernel.mutateEntities(ids.flatMap((recordId) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId }))), mutationOptions(command, 'practice-delete-many', { recordIds })); return Object.assign({}, receipt, { deletedCount: ids.length });
+            await ready; assertObject(command, 'practice.deleteMany command is required');
+            const recordIds = Array.from(new Set(asArray(command.recordIds).map(String).filter(Boolean)));
+            if (!recordIds.length) throw new AppDataError('VALIDATION', 'practice.deleteMany requires recordIds');
+            return retryMergeConflict(command, async () => {
+                const summaries = await kernel.listEntities('practiceSummaries');
+                const ids = recordIds.filter(id => summaries.some(item => practiceRecordMatches(item, [id])));
+                if (!ids.length) return Object.assign(await kernel.journalNoop(mutationOptions(command, 'practice-delete-many', { recordIds })), { deletedCount: 0, noop: true });
+                const current = await readReviewPlans();
+                const documentChanges = [{ logicalKey: REVIEW_PLANS_KEY,
+                    data: asArray(current.data).filter(plan => !ids.includes(plan.recordId)), expectedRevision: current.envelope?.revision || 0 }];
+                const receipt = await kernel.mutateEntities(ids.flatMap(recordId => PRACTICE_ENTITY_STORES.map(store => ({ type: 'delete', store, recordId }))),
+                    Object.assign({}, mutationOptions(command, 'practice-delete-many', { recordIds }), { documentChanges }));
+                return Object.assign({}, receipt, { deletedCount: ids.length });
+            });
         },
-        async clear(command = {}) { await ready; return kernel.mutateEntities(['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'clear', store })), mutationOptions(command, 'practice-clear', { all: true })); },
+        async clear(command = {}) {
+            await ready;
+            return retryMergeConflict(command, async () => {
+                const current = await readReviewPlans();
+                return kernel.mutateEntities(PRACTICE_ENTITY_STORES.map(store => ({ type: 'clear', store })),
+                    Object.assign({}, mutationOptions(command, 'practice-clear', { all: true }), { documentChanges: [{
+                        logicalKey: REVIEW_PLANS_KEY, data: [], expectedRevision: current.envelope?.revision || 0
+                    }] }));
+            });
+        },
         async listInsights(options = {}) {
             await ready;
             const limit = Math.max(1, Math.min(50, Number(options.limit) || 10));
@@ -7267,11 +7613,11 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     .localeCompare(String(left.date || left.completedAt || left.timestamp || '')))
                 .slice(0, limit);
             return Promise.all(summaries.map(async (summary) => {
-                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return clone(summary);
+                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return withCurrentExamIds(clone(summary));
                 const detail = await kernel.readEntity('practiceDetails', summary.id);
-                return jsonValue(Object.assign({}, clone(summary), {
+                return withCurrentExamIds(jsonValue(Object.assign({}, clone(summary), {
                     questionTypeErrorCounts: questionTypeErrorCounts(detail)
-                }), 'practice insight');
+                }), 'practice insight'));
             }));
         },
         async getStats() { await ready; return computeStats(await kernel.listEntities('practiceSummaries')); },
@@ -8087,6 +8433,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     }
 
     function collectionIdentity(logicalKey, value) {
+        if (logicalKey === REVIEW_PLANS_KEY && value && value.unit === 'article') {
+            return articleReviewPlanId(value.libraryConfigurationId, value.examId);
+        }
         if (logicalKey === 'vocab.readingVocabWords') {
             const word = value && (value.word || value.id);
             return word ? String(word).trim().toLowerCase() : idOf(value, ['id', 'word']);
@@ -8099,14 +8448,41 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         return logicalKey === 'vocab.words' ? identity.trim().toLowerCase() : identity;
     }
 
+    function mergeReviewPlan(existing, incoming) {
+        const stored = asObject(existing);
+        const imported = asObject(incoming);
+        const merged = Object.assign({}, clone(stored), clone(imported));
+        const storedState = safeReviewState(stored.reviewState);
+        const importedState = safeReviewState(imported.reviewState);
+        const storedScheduleTime = storedState.updatedAt;
+        const importedScheduleTime = importedState.updatedAt;
+        const scheduleSource = storedState && (!importedState || storedScheduleTime > importedScheduleTime)
+            ? stored : imported;
+        const storedCompletionTime = stored.latestCompletedAt;
+        const importedCompletionTime = imported.latestCompletedAt;
+        const replaySource = storedCompletionTime > importedCompletionTime
+            ? stored : imported;
+        const replayCompletedAt = replaySource === stored ? storedCompletionTime : importedCompletionTime;
+
+        for (const field of ['recordId', 'entryIndex', 'summary']) {
+            if (hasOwn(replaySource, field)) merged[field] = clone(replaySource[field]);
+            else delete merged[field];
+        }
+        if (replayCompletedAt) merged.latestCompletedAt = replayCompletedAt;
+        else delete merged.latestCompletedAt;
+        if (hasOwn(scheduleSource, 'reviewState')) merged.reviewState = clone(scheduleSource.reviewState);
+        else delete merged.reviewState;
+        return merged;
+    }
+
     function mergeCollection(existing, incoming, logicalKey) {
-        const result = asArray(existing).map((item) => clone(item));
+        const result = (logicalKey === REVIEW_PLANS_KEY ? currentReviewPlans(existing) : asArray(existing)).map(clone);
         const positions = new Map();
         result.forEach((item, index) => {
             const identity = collectionIdentity(logicalKey, item);
             if (identity) positions.set(identity, index);
         });
-        for (const rawItem of asArray(incoming)) {
+        for (const rawItem of (logicalKey === REVIEW_PLANS_KEY ? currentReviewPlans(incoming) : asArray(incoming))) {
             const item = jsonValue(rawItem, `${logicalKey} item`);
             const identity = collectionIdentity(logicalKey, item);
             if (!identity) throw new AppDataError('VALIDATION', `${logicalKey} import item has no stable identity`);
@@ -8126,6 +8502,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     createdAt: Math.min(Number(existingWord.createdAt) || Date.now(), Number(item.createdAt) || Date.now()),
                     updatedAt: Math.max(Number(existingWord.updatedAt) || 0, Number(item.updatedAt) || 0)
                 });
+            } else if (logicalKey === REVIEW_PLANS_KEY && position !== undefined) {
+                mergedItem = mergeReviewPlan(result[position], item);
             }
             if (position !== undefined) result[position] = mergedItem;
             else {
@@ -8228,6 +8606,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             if (!replaceDocuments && envelope.state === 'present') {
                 next = internals.makeEnvelope(entry, mergeImportValue(entry, current.data, envelope.data), { operationId: randomId('import-merge') });
             }
+            if (logicalKey === REVIEW_PLANS_KEY && next.state === 'present') {
+                next = internals.makeEnvelope(entry, currentReviewPlans(next.data), { operationId: randomId('review-import') });
+            }
             snapshot.envelopes[logicalKey] = next;
             keys.push(logicalKey);
             if (next.state === 'cleared') clearedKeys.push(logicalKey);
@@ -8284,6 +8665,25 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 snapshot.entities[store] = rows;
             }
             assertPracticeEntitySetsMatch(snapshot.entities);
+            // Restore current article plans only, with an owner in the final record set.
+            // A history backup without plans does not enroll its old practice records.
+            const planCurrent = await kernel.read(REVIEW_PLANS_KEY, { withMeta: true });
+            // A merged document must retain the revision of the data it used.
+            // A later read cannot make an already-stale merge safe to install.
+            if (!hasOwn(revisionToken.documents, REVIEW_PLANS_KEY)) {
+                revisionToken.documents[REVIEW_PLANS_KEY] = planCurrent.envelope?.revision || 0;
+            }
+            const importedPlans = snapshot.envelopes[REVIEW_PLANS_KEY]?.data;
+            const plans = importedPlans === undefined ? (replacePractice ? [] : planCurrent.data) : importedPlans;
+            const ownerIds = new Set(snapshot.entities.practiceSummaries.map(row => row.recordId));
+            const validPlans = currentReviewPlans(plans).filter(plan => ownerIds.has(plan.recordId));
+            for (const row of snapshot.entities.practiceAnnotations) {
+                delete row.data.reviewState;
+                for (const entry of Object.values(asObject(row.data.suiteEntries))) delete entry.reviewState;
+                row.checksum = checksum(row.data);
+            }
+            snapshot.envelopes[REVIEW_PLANS_KEY] = internals.makeEnvelope(catalog.get(REVIEW_PLANS_KEY), validPlans, { operationId: randomId('review-import') });
+            if (!keys.includes(REVIEW_PLANS_KEY)) keys.push(REVIEW_PLANS_KEY);
         }
 
         snapshot.checksum = checksum({ envelopes: snapshot.envelopes, entities: snapshot.entities });
@@ -9508,6 +9908,16 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         }
         return patch;
     }
+    function currentFavoriteIdentity(key) {
+        try {
+            const parts = JSON.parse(key);
+            if (!Array.isArray(parts) || parts.length !== 3 || typeof global.resolveReadingExamId !== 'function') return key;
+            return JSON.stringify([parts[0], parts[1], global.resolveReadingExamId(parts[2])]);
+        } catch (_) {
+            return key;
+        }
+    }
+
     async function setReadingFavorite(identity, favorite, options = {}) {
         const parts = JSON.parse(identity);
         if (!Array.isArray(parts) || parts.length !== 3 || parts[1] !== 'reading'
@@ -9522,7 +9932,13 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             const browse = asObject(values.browse);
             const favorites = Object.assign({}, asObject(browse.readingFavorites));
             if (favorite) favorites[identity] = true;
-            else delete favorites[identity];
+            else {
+                // Also clear keys saved under a retired ID of the same passage.
+                const passage = currentFavoriteIdentity(identity);
+                for (const key of Object.keys(favorites)) {
+                    if (currentFavoriteIdentity(key) === passage) delete favorites[key];
+                }
+            }
             const next = Object.assign({}, values, {
                 browse: Object.assign({}, browse, { readingFavorites: favorites })
             });
@@ -10042,6 +10458,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     var REMINDER_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
     var ENTRY_ID = 'external-backup-entry-btn';
     var MODAL_ID = 'external-backup-modal';
+    var BANNER_ID = 'external-backup-permission-banner';
+    var BANNER_STACK_ID = 'app-global-banner-stack';
 
     var state = {
         ready: false,
@@ -10063,6 +10481,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         silentFlushTimer: null,
         unsubscribeCommitted: null,
         visibilityHandler: null,
+        statusListeners: [],
         meta: {
             directoryName: null,
             lastWriteAt: null,
@@ -11551,7 +11970,191 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         return modal;
     }
 
+    // ------------------------------------------------------------------
+    // 权限恢复与状态广播
+    //
+    // 启动阶段永远只 queryPermission（见 ensureReady）：自动 requestPermission
+    // 既拿不到 transient activation，也会在用户什么都没点的时候弹系统对话框。
+    // 恢复授权只能由下面的 reauthorize() 承担，且必须由真实点击直接调用。
+    // ------------------------------------------------------------------
+    function onStatusChange(listener) {
+        if (typeof listener !== 'function') return function noop() {};
+        state.statusListeners.push(listener);
+        try {
+            listener(getStatus());
+        } catch (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] status listener failed:', error);
+        }
+        return function unsubscribe() {
+            var index = state.statusListeners.indexOf(listener);
+            if (index >= 0) state.statusListeners.splice(index, 1);
+        };
+    }
+
+    function notifyStatusChange() {
+        if (!state.statusListeners.length) return;
+        var status = getStatus();
+        state.statusListeners.slice().forEach(function invoke(listener) {
+            try {
+                listener(status);
+            } catch (error) {
+                if (global.console && console.warn) console.warn('[ExternalBackup v2] status listener failed:', error);
+            }
+        });
+    }
+
+    /**
+     * 只能由用户点击直接调用：requestPermission 必须是这条路径上的第一个 await，
+     * 否则 transient activation 会在前面的 await 里过期，浏览器会直接拒绝弹窗。
+     */
+    async function reauthorize() {
+        if (!supportsFileSystemAccess()) return { success: false, reason: 'unsupported' };
+        var handle = state.directoryHandle;
+        if (!handle) {
+            // 句柄还没恢复完：此时已经不可能保住本次点击的激活状态，
+            // 只查询一次并请用户再点一次，而不是偷偷弹一个注定失败的窗。
+            await ensureReady();
+            handle = state.directoryHandle;
+            if (!handle) {
+                refreshPanel();
+                return { success: false, reason: 'unbound' };
+            }
+            state.permission = await queryPermission(handle, 'readwrite');
+            refreshPanel();
+            return state.permission === 'granted'
+                ? { success: true, reason: 'granted' }
+                : { success: false, reason: 'activation_lost' };
+        }
+        var permission = 'denied';
+        try {
+            if (typeof handle.requestPermission === 'function') {
+                permission = await handle.requestPermission({ mode: 'readwrite' });
+            }
+        } catch (_) {
+            permission = 'denied';
+        }
+        state.permission = permission;
+        refreshPanel();
+        if (permission !== 'granted') return { success: false, reason: 'denied' };
+        // 待恢复状态下绝不能顺手写盘：那会用本机数据覆盖用户还没读回来的备份。
+        if (state.meta.awaitingRestore) return { success: true, reason: 'restore_required' };
+        if (state.dirty && !state.suspended && !state.resetPreparing) scheduleSilentFlush();
+        return { success: true, reason: 'granted' };
+    }
+
+    function resolveBannerMode(status) {
+        if (!status.supported || !status.bound || status.suspended || status.resetPreparing) return null;
+        if (status.awaitingRestore) return status.permissionGranted ? 'restore' : 'reauthorize-restore';
+        return status.permissionGranted ? null : 'reauthorize';
+    }
+
+    var BANNER_COPY = {
+        'reauthorize': {
+            title: '本地备份权限已失效',
+            detail: '浏览器已收回文件夹访问权限，练习数据暂时无法写入磁盘备份。',
+            action: '恢复备份权限'
+        },
+        'reauthorize-restore': {
+            title: '本地备份权限已失效',
+            detail: '该文件夹里已有备份，恢复权限后请先「从备份恢复」，不会自动覆盖。',
+            action: '恢复备份权限'
+        },
+        'restore': {
+            title: '检测到已有备份',
+            detail: '为避免覆盖磁盘上的备份，自动写入已暂停，请先完成一次恢复。',
+            action: '打开备份面板'
+        }
+    };
+
+    function getGlobalBannerStack() {
+        var stack = global.document.getElementById(BANNER_STACK_ID);
+        if (!stack) {
+            stack = global.document.createElement('div');
+            stack.id = BANNER_STACK_ID;
+            stack.className = 'app-global-banner-stack';
+            global.document.body.appendChild(stack);
+        }
+        return stack;
+    }
+
+    // 非阻塞的全局横幅：只提示，不拦截任何操作；恢复授权成功后自行消失。
+    function renderGlobalBanner() {
+        if (!global.document || !global.document.body) return;
+        var status = getStatus();
+        var mode = resolveBannerMode(status);
+        var existing = global.document.getElementById(BANNER_ID);
+        if (!mode) {
+            if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+            return;
+        }
+        var copy = BANNER_COPY[mode];
+        var banner = existing;
+        if (!banner) {
+            banner = global.document.createElement('div');
+            banner.id = BANNER_ID;
+            banner.className = 'app-global-banner app-global-banner--backup';
+            banner.setAttribute('role', 'region');
+            banner.setAttribute('aria-live', 'polite');
+            banner.setAttribute('aria-label', '本地备份状态');
+            getGlobalBannerStack().appendChild(banner);
+            banner.addEventListener('click', handleBannerClick);
+        }
+        banner.dataset.mode = mode;
+        while (banner.firstChild) banner.removeChild(banner.firstChild);
+        var body = global.document.createElement('div');
+        body.className = 'app-global-banner__body';
+        var title = global.document.createElement('strong');
+        title.className = 'app-global-banner__title';
+        title.textContent = copy.title;
+        var detail = global.document.createElement('span');
+        detail.className = 'app-global-banner__detail';
+        detail.textContent = copy.detail;
+        body.appendChild(title);
+        body.appendChild(detail);
+        banner.appendChild(body);
+        var actions = global.document.createElement('div');
+        actions.className = 'app-global-banner__actions';
+        var button = global.document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn app-global-banner__btn';
+        button.dataset.backupBannerAction = mode === 'restore' ? 'open' : 'reauthorize';
+        button.textContent = copy.action;
+        actions.appendChild(button);
+        banner.appendChild(actions);
+    }
+
+    function handleBannerClick(event) {
+        var target = event.target && event.target.closest ? event.target.closest('[data-backup-banner-action]') : null;
+        if (!target) return;
+        event.preventDefault();
+        if (target.dataset.backupBannerAction === 'open') {
+            openModal();
+            return;
+        }
+        // 用户点击 → 直接进 reauthorize()，中间不插入任何 await。
+        target.disabled = true;
+        reauthorize().then(function (result) {
+            if (result && result.success) {
+                notify(result.reason === 'restore_required'
+                    ? '备份权限已恢复，请先从备份恢复数据'
+                    : '备份权限已恢复', 'success');
+            } else if (result && result.reason === 'activation_lost') {
+                notify('请再点一次「恢复备份权限」', 'warning');
+            } else {
+                notify('未获得文件夹访问权限', 'warning');
+            }
+        }).catch(function (error) {
+            if (global.console && console.warn) console.warn('[ExternalBackup v2] reauthorize failed:', error);
+            notify('恢复备份权限失败', 'error');
+        }).finally(function () {
+            target.disabled = false;
+            refreshPanel();
+        });
+    }
+
     function refreshPanel() {
+        notifyStatusChange();
+        renderGlobalBanner();
         if (!global.document) return;
         var status = getStatus();
         var statusElement = global.document.getElementById('external-backup-status');
@@ -11574,7 +12177,12 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         var restoreButton = global.document.getElementById('external-backup-restore-btn');
         var unbindButton = global.document.getElementById('external-backup-unbind-btn');
         if (bindButton) bindButton.disabled = !status.supported || status.writing;
-        if (writeButton) writeButton.disabled = !status.bound || status.writing;
+        // awaitingRestore 时禁止"立即写入"：磁盘上已有备份还没恢复回来，
+        // 一次写入就会把它覆盖掉。这里改成明确的恢复引导。
+        if (writeButton) {
+            writeButton.disabled = !status.bound || status.writing || status.awaitingRestore;
+            writeButton.title = status.awaitingRestore ? '检测到已有备份，请先完成恢复' : '';
+        }
         if (restoreButton) restoreButton.disabled = !status.bound || status.writing;
         if (unbindButton) unbindButton.disabled = !status.bound || status.writing;
     }
@@ -11726,6 +12334,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         restoreFromLatest: restoreFromLatest,
         restorePayload: restorePayload,
         getStatus: getStatus,
+        onStatusChange: onStatusChange,
+        reauthorize: reauthorize,
         markDirty: markDirty,
         flushSilentlyIfPermitted: flushSilentlyIfPermitted,
         refreshPanel: refreshPanel,
@@ -13915,6 +14525,43 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         return kind === 'pdf' ? value + '.pdf' : value + '.html';
     }
 
+    function isListeningExam(exam) {
+        if (!exam || typeof exam !== 'object') {
+            return false;
+        }
+
+        const examType = typeof exam.type === 'string'
+            ? exam.type.trim().toLowerCase()
+            : '';
+        const examId = typeof exam.id === 'string'
+            ? exam.id.trim().toLowerCase()
+            : '';
+        const examPath = typeof exam.path === 'string'
+            ? exam.path.trim().replace(/\\/g, '/').toLowerCase()
+            : '';
+
+        // An explicit canonical type is authoritative. Legacy identifiers and
+        // directory layouts are consulted only when the type is absent or is
+        // not one of the canonical reading/listening values.
+        if (examType === 'reading') {
+            return false;
+        }
+
+        return examType === 'listening'
+            || examId.startsWith('listening-')
+            || examPath.includes('listeningpractice/')
+            || /^p[1-4]\//.test(examPath);
+    }
+
+    function isPdfAvailable(exam) {
+        if (!exam || typeof exam !== 'object'
+            || typeof exam.pdfFilename !== 'string'
+            || !exam.pdfFilename.trim()) {
+            return false;
+        }
+        return exam.hasPdf === true;
+    }
+
     function stripQueryAndHash(url) {
         if (!url) {
             return '';
@@ -14187,7 +14834,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         try {
             const resolved = new URL(url, global.location && global.location.href ? global.location.href : undefined);
             const protocol = (resolved.protocol || '').toLowerCase();
-            if (protocol === 'file:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
+            if (protocol === 'file:' || protocol === 'blob:' || protocol === 'app:' || protocol === 'chrome-extension:' || protocol === 'capacitor:' || protocol === 'ionic:') {
                 return true;
             }
             if (global.location && global.location.protocol === 'file:' && !isAbsolutePath(url)) {
@@ -14202,6 +14849,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     }
 
     const resourceProbeCache = new Map();
+    const approvedRuntimePdfResolutions = new WeakSet();
 
     function probeResource(url) {
         if (!url) {
@@ -14234,19 +14882,42 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     }
 
     async function resolveResource(exam, kind = 'html') {
-        const attempts = getResourceAttempts(exam, kind);
+        const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        const attempts = getResourceAttempts(exam, resourceKind);
         for (let i = 0; i < attempts.length; i += 1) {
             const entry = attempts[i];
             try {
                 const ok = await probeResource(entry.path);
                 if (ok) {
-                    return { url: entry.path, attempts };
+                    const resolution = Object.freeze({
+                        url: entry.path,
+                        attempts,
+                        source: entry.label,
+                        kind: resourceKind
+                    });
+                    if (resourceKind === 'pdf'
+                        && entry.label === 'runtime'
+                        && /^blob:/i.test(String(entry.path || '').trim())) {
+                        approvedRuntimePdfResolutions.add(resolution);
+                    }
+                    return resolution;
                 }
             } catch (error) {
                 console.warn('[ResourceCore] 资源探测失败:', entry, error);
             }
         }
-        return { url: '', attempts };
+        return Object.freeze({ url: '', attempts, source: '', kind: resourceKind });
+    }
+
+    function isApprovedPdfResolution(resolution, url) {
+        return Boolean(
+            resolution
+            && approvedRuntimePdfResolutions.has(resolution)
+            && resolution.kind === 'pdf'
+            && resolution.source === 'runtime'
+            && resolution.url === url
+            && /^blob:/i.test(String(url || '').trim())
+        );
     }
 
     global.ResourceCore = {
@@ -14272,6 +14943,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         buildResourcePath,
         getResourceAttempts,
         resolveResource,
+        isApprovedPdfResolution,
+        isListeningExam,
+        isPdfAvailable,
         sanitizeFilename,
         encodePathSegments,
         detectScriptBasePrefix,
@@ -14445,7 +15119,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-low-06.js",
     "title": "Biomimicry 仿生学",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/",
     "filename": "103. P2 - Biomimicry 仿生学.html",
@@ -14453,7 +15127,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/103. P2 - Biomimicry 仿生学.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-052.biomimicry",
     "questionTypes": [
       "matching-information",
@@ -14761,7 +15435,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-16.js",
     "title": "The Importance of Law 法律的意义",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/112. P2 - The Importance of Law 法律的意义【高】/",
     "filename": "112. P2 - The Importance of Law 法律的意义【高】.html",
@@ -14769,7 +15443,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/112. P2 - The Importance of Law 法律的意义.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-015.the-importance-of-law",
     "questionTypes": [
       "heading-matching",
@@ -14794,7 +15468,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-17.js",
     "title": "Herbal Medicines 新西兰草药",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/",
     "filename": "113. P2 - Herbal Medicines 新西兰草药【高】.html",
@@ -14802,7 +15476,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/113. P2 - Herbal Medicines 新西兰草药.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-039.herbal-medicines",
     "questionTypes": [
       "matching-information",
@@ -14858,7 +15532,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-19.js",
     "title": "Mind Music 脑海中的音乐(心灵音乐)",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/",
     "filename": "115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html",
@@ -14866,7 +15540,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/115. P2 - Mind Music 脑海中的音乐(心灵音乐).pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-021.mind-music",
     "questionTypes": [
       "matching-information",
@@ -14953,7 +15627,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-medium-22.js",
     "title": "Neanderthal Technology 尼安德特人的生存技艺",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/",
     "filename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
@@ -14961,7 +15635,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/118. P3 - Neanderthal Technology 尼安德特人的生存技艺.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-034.neanderthal-technology",
     "questionTypes": [
       "heading-matching",
@@ -15147,7 +15821,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-medium-29.js",
     "title": "The extinction of the cave bear 洞熊的灭绝",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/",
     "filename": "124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
@@ -15155,7 +15829,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/124. P1 - The extinction of the cave bear 洞熊的灭绝.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b008.p1-037.extinction-cave-bear",
     "questionTypes": [
       "true-false-not-given",
@@ -15292,7 +15966,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-low-34.js",
     "title": "The Slow Food Organization 慢食运动组织",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
     "filename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
@@ -15300,7 +15974,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-040.slow-food-organization",
     "questionTypes": [
       "true-false-not-given",
@@ -15676,7 +16350,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-low-46.js",
     "title": "Sydney Opera House 悉尼歌剧院",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/14. P1 - Sydney Opera House 悉尼歌剧院/",
     "filename": "14. P1 - Sydney Opera House 悉尼歌剧院.html",
@@ -15684,7 +16358,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/14. P1 - Sydney Opera House 悉尼歌剧院.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-017.sydney-opera-house",
     "questionTypes": [
       "true-false-not-given",
@@ -15798,7 +16472,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-low-50.js",
     "title": "Jellyfish – The Dominant Species 水母·海洋中的优势物种",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/",
     "filename": "143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html",
@@ -15806,7 +16480,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p2-022.jellyfish-dominant-species",
     "questionTypes": [
       "matching-information",
@@ -15952,7 +16626,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-low-55.js",
     "title": "Improving Patient Safety 药品包装设计",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/",
     "filename": "148. P3 - Improving Patient Safety 药品包装设计.html",
@@ -15960,7 +16634,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-032.patient-safety",
     "questionTypes": [
       "matching-features",
@@ -16115,7 +16789,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-medium-60.js",
     "title": "Sorry—who are you 脸盲症",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/",
     "filename": "152. P1 - Sorry—who are you 脸盲症【次】.html",
@@ -16123,7 +16797,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/152. P1 - Sorry—who are you 脸盲症.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p1-024.sorry-who-are-you",
     "questionTypes": [
       "true-false-not-given",
@@ -16144,7 +16818,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-low-61.js",
     "title": "Carnivorous plants 食虫植物",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/",
     "filename": "153. P1 - Carnivorous plants 食虫植物.html",
@@ -16152,7 +16826,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/153. P1 - Carnivorous plants 食虫植物.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-041.carnivorous-plants",
     "questionTypes": [
       "note-completion",
@@ -16204,7 +16878,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-medium-63.js",
     "title": "A Brief History of Humans and Food 人类食物的历史",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/",
     "filename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
@@ -16212,7 +16886,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/155. P1 - A Brief History of Humans and Food 人类食物的历史.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-021.humans-food",
     "questionTypes": [
       "true-false-not-given",
@@ -16297,7 +16971,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-medium-66.js",
     "title": "Mercator - The Map Maker 地理制图师",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/",
     "filename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
@@ -16305,7 +16979,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/158. P3 - Mercator - The Map Maker 地理制图师.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.mercator-the-map-maker",
     "questionTypes": [
       "true-false-not-given",
@@ -16388,7 +17062,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-low-69.js",
     "title": "An important language development 楔形文字",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
     "filename": "160. P1 - An important language development 楔形文字.html",
@@ -16396,7 +17070,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/160. P1 - An important language development 楔形文字.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-043.important-language-development",
     "questionTypes": [
       "true-false-not-given",
@@ -16446,7 +17120,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-low-71.js",
     "title": "Sea Change for Salinity 土地盐碱化",
     "category": "P3",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/",
     "filename": "162. P3 - Sea Change for Salinity 土地盐碱化.html",
@@ -16454,7 +17128,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/162. P3 - Sea Change for Salinity 土地盐碱化.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-054.sea-change-salinity",
     "questionTypes": [
       "matching-information",
@@ -16599,7 +17273,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-low-76.js",
     "title": "Sign, Baby, Sign! 美国手语",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/",
     "filename": "167. P3 - Sign, Baby, Sign! 美国手语.html",
@@ -16607,6 +17281,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "table-completion",
       "true-false-not-given"
@@ -16897,7 +17572,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-medium-86.js",
     "title": "Urban Regeneration 柏林公园改造",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/",
     "filename": "176. P2 - Urban Regeneration 柏林公园改造.html",
@@ -16905,7 +17580,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/176. P2 - Urban Regeneration 柏林公园改造.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-037.urban-regeneration",
     "questionTypes": [
       "heading-matching",
@@ -16996,7 +17671,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-high-89.js",
     "title": "Looking at daily life in ancient Rome  古罗马的日常",
     "category": "P3",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/",
     "filename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
@@ -17004,7 +17679,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-050.ancient-rome",
     "questionTypes": [
       "multiple-choice",
@@ -17184,7 +17859,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-low-95.js",
     "title": "The strange world of sight 奇异的视觉世界",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/",
     "filename": "184. P3 - The strange world of sight 奇异的视觉世界.html",
@@ -17192,7 +17867,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/184. P3 - The strange world of sight 奇异的视觉世界.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-006.strange-world-sight",
     "questionTypes": [
       "multiple-choice",
@@ -17279,7 +17954,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-low-98.js",
     "title": "Petrol power an eco-revolution 交通的革命",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/",
     "filename": "187. P3 - Petrol power an eco-revolution 交通的革命.html",
@@ -17287,7 +17962,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-023.petrol-power",
     "questionTypes": [
       "multiple-choice",
@@ -17457,7 +18132,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-low-104.js",
     "title": "1115纸笔Should we stop eating meat 是否应该吃素",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素/",
     "filename": "192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html",
@@ -17465,7 +18140,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-024.stop-eating-meat",
     "questionTypes": [
       "matching-information",
@@ -17664,7 +18339,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-low-111.js",
     "title": "The Rise and Fall of Detective Stories 侦探小说的兴衰",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/",
     "filename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
@@ -17672,7 +18347,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b008.p1-064.rise-fall-detective-stories",
     "questionTypes": [
       "true-false-not-given",
@@ -17751,7 +18426,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-low-114.js",
     "title": "Triumph of the City 城市的胜利",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/",
     "filename": "28. P1 - Triumph of the City 城市的胜利.html",
@@ -17759,7 +18434,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/28. P1 - Triumph of the City 城市的胜利.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p1-052.triumph-of-the-city",
     "questionTypes": [
       "note-completion",
@@ -17780,7 +18455,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-medium-115.js",
     "title": "Tunnelling under the Thames",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】/",
     "filename": "29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.html",
@@ -17788,7 +18463,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/29. P1 - Tunnelling under the Thames 泰晤士河隧道.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-022.tunnelling-thames",
     "questionTypes": [
       "true-false-not-given",
@@ -17896,7 +18571,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-medium-119.js",
     "title": "Wood 新西兰木材产业",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/",
     "filename": "32. P1 - Wood 新西兰木材产业【次】.html",
@@ -17904,7 +18579,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/32. P1 - Wood 新西兰木材产业.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-053.wood",
     "questionTypes": [
       "true-false-not-given",
@@ -17925,7 +18600,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-120.js",
     "title": "A new look for Talbot Park 奥克兰社区改造",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/",
     "filename": "ai_studio_code (9).html",
@@ -17933,7 +18608,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/33. P2 - A new look for Talbot Park 奥克兰社区改造.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-014.talbot-park",
     "questionTypes": [
       "heading-matching",
@@ -17991,7 +18666,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-low-122.js",
     "title": "Biophilic Design 亲自然设计",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/",
     "filename": "35. P2 - Biophilic Design 亲自然设计.html",
@@ -17999,7 +18674,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/35. P2 - Biophilic Design 亲自然设计.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-040.biophilic-design",
     "questionTypes": [
       "matching-information",
@@ -18024,7 +18699,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-123.js",
     "title": "Bird Migration 鸟类迁徙",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/",
     "filename": "36. P2 - Bird Migration 鸟类迁徙【高】.html",
@@ -18032,7 +18707,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-010.bird-migration",
     "questionTypes": [
       "heading-matching",
@@ -18181,7 +18856,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-128.js",
     "title": "How Well Do We Concentrate_  多任务处理",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": null,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/40. P2 - How Well Do We Concentrate_  多任务处理【高】/",
     "filename": "40. P2 - How Well Do We Concentrate_  多任务处理【高】.html",
@@ -18189,7 +18864,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/40. P2 - How Well Do We Concentrate_  多任务处理.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p2-050.how-well-do-people-concentrate",
     "questionTypes": [
       "matching-information",
@@ -18276,7 +18951,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-131.js",
     "title": "Learning from the Romans 罗马混凝土",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/",
     "filename": "43. P2 - Learning from the Romans 罗马混凝土【高】.html",
@@ -18284,7 +18959,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/43. P2 - Learning from the Romans 罗马混凝土.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-007.learning-from-the-romans",
     "questionTypes": [
       "matching-information",
@@ -18470,7 +19145,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-137.js",
     "title": "Surviving city life 动物适应城市",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/49. P2 - Surviving city life 动物适应城市【高】/",
     "filename": "49. P2 - Surviving city life 动物适应城市【高】.html",
@@ -18478,7 +19153,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/49. P2 - Surviving city life 动物适应城市.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-046.surviving-city-life",
     "questionTypes": [
       "heading-matching",
@@ -18596,7 +19271,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-141.js",
     "title": "The fascinating world of attine ants 切叶蚁",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/52. P2 - The fascinating world of attine ants 切叶蚁【高】/",
     "filename": "52. P2 - The fascinating world of attine ants 切叶蚁【高】.html",
@@ -18604,7 +19279,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/52. P2 - The fascinating world of attine ants 切叶蚁.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-009.attine-ants",
     "questionTypes": [
       "matching-information",
@@ -18629,7 +19304,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-low-142.js",
     "title": "The fashion industry 时尚产业",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/",
     "filename": "53. P2 - The fashion industry 时尚产业.html",
@@ -18637,7 +19312,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/53. P2 - The fashion industry 时尚产业.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-018.fashion-industry",
     "questionTypes": [
       "heading-matching",
@@ -18794,7 +19469,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-low-147.js",
     "title": "Who wrote Shakespeare's plays 莎士比亚",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": null,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/",
     "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
@@ -18802,7 +19477,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-041.who-wrote-shakespeare",
     "questionTypes": [
       "matching-information",
@@ -19106,7 +19781,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-high-157.js",
     "title": "Flower Power 鲜花的力量(花之力)",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/",
     "filename": "67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
@@ -19114,7 +19789,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/67. P3 - Flower Power 鲜花的力量(花之力).pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-021.flower-power",
     "questionTypes": [
       "heading-matching",
@@ -19220,7 +19895,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-high-161.js",
     "title": "Insect-inspired robots 昆虫机器人",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/",
     "filename": "70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
@@ -19228,7 +19903,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/70. P3 - Insect-inspired robots 昆虫机器人.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-044.insect-inspired-robots",
     "questionTypes": [
       "matching-information",
@@ -19379,7 +20054,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-low-166.js",
     "title": "Life on Mars_ 火星地球化改造",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/",
     "filename": "75. P3 - Life on Mars_ 火星地球化改造.html",
@@ -19387,6 +20062,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/75. P3 - Life on Mars 火星地球化改造.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "yes-no-not-given",
       "multiple-choice",
@@ -19443,7 +20119,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-medium-168.js",
     "title": "Marketing and the information age 信息时代营销",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/",
     "filename": "77. P3 - Marketing and the information age 信息时代营销【次】.html",
@@ -19451,7 +20127,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/77. P3 - Marketing and the information age 信息时代营销.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-045.marketing-information-age",
     "questionTypes": [
       "matching-information",
@@ -19476,7 +20152,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-medium-169.js",
     "title": "（无题目）  Music Language We All Speak 音乐语言",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/",
     "filename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
@@ -19484,6 +20160,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "heading-matching",
       "matching-features",
@@ -20317,7 +20994,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-high-194.js",
     "title": "The history of the British wool industry 英国羊毛产业的历史",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "三月/2.P1 次高频/",
     "filename": "194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html",
@@ -20325,7 +21002,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/194. P1 - The history of the British wool industry 英国羊毛产业的历史.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-050.british-wool-industry",
     "questionTypes": [
       "true-false-not-given",
@@ -20373,7 +21050,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-low-223.js",
     "title": "Effect and Cause 湖泊海啸研究",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "三月/",
     "filename": "223. P1 - Effect and Cause 湖泊海啸研究.html",
@@ -20381,7 +21058,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/223. P1 - Effect and Cause 湖泊海啸研究.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-051.effect-and-cause",
     "questionTypes": [
       "true-false-not-given",
@@ -20462,39 +21139,6 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
       ]
     }
   },
-  "p2-high-192": {
-    "examId": "p2-high-192",
-    "dataKey": "p2-high-192",
-    "script": "./p2-high-192.js",
-    "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
-    "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": 3.5,
-    "path": "三月/4.P2 次高频/",
-    "filename": "192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b004.p2-024.stop-eating-meat",
-    "questionTypes": [
-      "matching-information",
-      "summary-completion",
-      "matching-features"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "summary-completion": [
-        "text_entry"
-      ],
-      "matching-features": [
-        "option_mapping"
-      ]
-    }
-  },
   "p2-medium-209": {
     "examId": "p2-medium-209",
     "dataKey": "p2-medium-209",
@@ -20558,72 +21202,6 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
       ],
       "sentence-completion": [
         "text_entry"
-      ]
-    }
-  },
-  "p2-low-051": {
-    "examId": "p2-low-051",
-    "dataKey": "p2-low-051",
-    "script": "./p2-low-051.js",
-    "title": "The dingo debate 澳洲野犬_澳洲野狗",
-    "category": "P2",
-    "frequency": "低频",
-    "difficultyScore": null,
-    "path": "三月/4.P2 次高频/",
-    "filename": "51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b008.p2-064.the-dingo-debate",
-    "questionTypes": [
-      "matching-information",
-      "matching-features",
-      "sentence-completion"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "matching-features": [
-        "option_mapping"
-      ],
-      "sentence-completion": [
-        "text_entry"
-      ]
-    }
-  },
-  "p2-medium-058": {
-    "examId": "p2-medium-058",
-    "dataKey": "p2-medium-058",
-    "script": "./p2-medium-058.js",
-    "title": "Who wrote Shakespeare's plays 莎士比亚",
-    "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": 4,
-    "path": "三月/4.P2 次高频/",
-    "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b005.p2-041.who-wrote-shakespeare",
-    "questionTypes": [
-      "matching-information",
-      "summary-completion",
-      "matching-features"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "summary-completion": [
-        "text_entry"
-      ],
-      "matching-features": [
-        "option_mapping"
       ]
     }
   },
@@ -20800,7 +21378,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "三月/5.P3 高频/",
     "filename": "P3 - Risk taking.html",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - Risk taking.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -20894,7 +21472,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-low-078.js",
     "title": "P3 (ds做出来的) - Music Language We All Speak 音乐语言",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "三月/6.P3 次高频/",
     "filename": "78. P3 (ds做出来的) - Music Language We All Speak 音乐语言.html",
@@ -20902,6 +21480,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "short-answer",
       "true-false-not-given",
@@ -20991,7 +21570,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-high-228.js",
     "title": "On art and artists 艺术与艺术家",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "ReadingPractice/PDF/",
     "filename": "228. P3 - On art and artists 艺术与艺术家.pdf",
@@ -20999,7 +21578,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/228. P3 - On art and artists 艺术与艺术家.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-019.on-art-and-artists",
     "questionTypes": [
       "matching-information",
@@ -21115,7 +21694,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-high-232.js",
     "title": "The origin and development of applause 掌声的历史",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "ReadingPractice/PDF/",
     "filename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
@@ -21123,7 +21702,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.origin-and-development-of-applause",
     "questionTypes": [
       "heading-matching",
@@ -21252,7 +21831,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "ReadingPractice/PDF/",
     "filename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -21318,7 +21897,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "ReadingPractice/PDF/",
     "filename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -21351,7 +21930,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "ReadingPractice/PDF/",
     "filename": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -21384,7 +21963,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "assets/generated/reading-exams/",
     "filename": "reading-practice-unified.html",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P2 - Coins – the first form of money.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -21412,15 +21991,15 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p1-high-240.js",
     "title": "The Origins of Weather Forecasting 天气预报",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 2.5,
     "path": "ReadingPractice/PDF/",
     "filename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-026.weather-forecasting",
     "questionTypes": [
       "true-false-not-given",
@@ -21446,7 +22025,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "ReadingPractice/PDF/",
     "filename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -21479,7 +22058,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "ReadingPractice/PDF/",
     "filename": "P3 - How a prehistoric predator took to the skies.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - How a prehistoric predator took to the skies.pdf",
     "sourceKind": "generated-reading",
     "questionTypes": [
@@ -21505,15 +22084,15 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p3-medium-241.js",
     "title": "Who looks after the children in today's Britain? 育儿分工",
     "category": "P3",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "ReadingPractice/PDF/",
     "filename": "P3 - Who looks after the children in today's Britain.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - Who looks after the children in today's Britain.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-036.who-looks-after-children",
     "questionTypes": [
       "matching-information",
@@ -21543,7 +22122,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "",
     "filename": "",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P2 - The internal body clock 生物钟.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -21576,7 +22155,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "path": "",
     "filename": "",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - Look who was talking.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -21600,7 +22179,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-medium-245.js",
     "title": "Understanding climate change 理解气候变化",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
@@ -21608,7 +22187,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": false,
     "pdfFilename": "",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.climate",
     "questionTypes": [
       "summary-completion",
@@ -21699,7 +22278,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "script": "./p2-medium-248.js",
     "title": "Introduction to a book about the assessment of carbon footprints 碳足迹",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
@@ -21707,7 +22286,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     "hasPdf": false,
     "pdfFilename": "",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b011.new-014.introduction-to-a-book-about-the-assessment-of-carbon-footprints",
     "questionTypes": [
       "matching-information",
@@ -21856,6 +22435,22 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
   }
 };
 
+  // Released duplicates of one passage. A retired ID keeps resolving to the
+  // entry that superseded it, but only canonical entries are listed.
+  const RETIRED_EXAM_IDS = {
+    "p2-high-192": "p2-low-104",
+    "p2-low-051": "p2-low-140",
+    "p2-medium-058": "p2-low-147"
+  };
+  Object.keys(RETIRED_EXAM_IDS).forEach(function aliasRetiredExam(id) {
+    Object.defineProperty(manifest, id, { value: manifest[RETIRED_EXAM_IDS[id]], enumerable: false });
+  });
+
+  function resolveReadingExamId(id) {
+    const key = id == null ? '' : String(id);
+    return Object.prototype.hasOwnProperty.call(RETIRED_EXAM_IDS, key) ? RETIRED_EXAM_IDS[key] : key;
+  }
+
   function clonePathRoot() {
     return Object.assign({}, PATH_ROOT);
   }
@@ -21902,6 +22497,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
   }
 
   global.__READING_EXAM_MANIFEST__ = manifest;
+  global.__READING_EXAM_ALIASES__ = Object.freeze(Object.assign({}, RETIRED_EXAM_IDS));
+  global.resolveReadingExamId = resolveReadingExamId;
   global.__READING_EXAM_INDEX__ = buildReadingExamIndex();
   global.__READING_EXAM_INDEX__.pathRoot = clonePathRoot();
   global.__READING_EXAM_PATH_ROOT__ = clonePathRoot();
@@ -22964,6 +23561,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             filename: htmlRecord ? getBaseName(htmlRecord.path) : undefined,
             pdfFilename: pdfRecord ? getBaseName(pdfRecord.path) : undefined,
             hasHtml: !!htmlRecord,
+            hasPdf: !!pdfRecord,
             sourcePath,
             importKey,
             sourceKind: 'file-picker',
@@ -23477,6 +24075,130 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     class LibraryManager {
         constructor(options = {}) {
             this.options = options || {};
+            this._libraryIntentGeneration = 0;
+            this._libraryCommitIntentGeneration = 0;
+            this._pendingLibraryCommitIntentGeneration = 0;
+            this._libraryCommitTail = Promise.resolve();
+            this._libraryCommitPendingCount = 0;
+            this._activeLibraryPreparationCounts = new Map();
+            this._exclusiveLibraryMutationGeneration = 0;
+            this._lastDurablyActivatedLibraryState = null;
+        }
+
+        beginLibraryIntent() {
+            this._libraryIntentGeneration += 1;
+            return this._libraryIntentGeneration;
+        }
+
+        canPrepareLibraryIntent(generation) {
+            return Number.isInteger(generation)
+                && generation > 0
+                && generation === this._libraryIntentGeneration
+                && generation >= this._libraryCommitIntentGeneration;
+        }
+
+        claimLibraryCommitIntent(generation) {
+            const hasAcceptedReservation = generation === this._pendingLibraryCommitIntentGeneration
+                && generation > this._libraryCommitIntentGeneration;
+            if (!hasAcceptedReservation && !this.canPrepareLibraryIntent(generation)) return false;
+            if (
+                this._exclusiveLibraryMutationGeneration > 0
+                && this._exclusiveLibraryMutationGeneration !== generation
+            ) return false;
+            this._libraryCommitIntentGeneration = generation;
+            if (this._pendingLibraryCommitIntentGeneration <= generation) {
+                this._pendingLibraryCommitIntentGeneration = 0;
+            }
+            return true;
+        }
+
+        reserveLibraryCommitIntent(generation) {
+            if (!this.canPrepareLibraryIntent(generation)) return false;
+            if (
+                this._exclusiveLibraryMutationGeneration > 0
+                && this._exclusiveLibraryMutationGeneration !== generation
+            ) {
+                // A destructive mutation already owns the serialized commit slot.
+                // Record the latest accepted successor separately from that owner.
+                // Rejected requests must not cancel it before cleanup hands off
+                // the slot; only another commit-capable reservation can replace it.
+                this._pendingLibraryCommitIntentGeneration = generation;
+                return true;
+            }
+            return this.claimLibraryCommitIntent(generation);
+        }
+
+        isLibraryIntentCurrent(generation) {
+            return generation === this._libraryCommitIntentGeneration;
+        }
+
+        rememberDurablyActivatedLibraryState(key, dataset) {
+            const normalizedKey = typeof key === 'string' && key.trim() ? key.trim() : null;
+            if (!normalizedKey || !Array.isArray(dataset) || dataset.length === 0) return;
+            this._lastDurablyActivatedLibraryState = {
+                key: normalizedKey,
+                dataset: cloneArray(dataset)
+            };
+        }
+
+        clearDurablyActivatedLibraryState(key) {
+            const normalizedKey = typeof key === 'string' && key.trim() ? key.trim() : null;
+            if (
+                normalizedKey === null
+                || this._lastDurablyActivatedLibraryState?.key === normalizedKey
+            ) {
+                this._lastDurablyActivatedLibraryState = null;
+            }
+        }
+
+        beginActiveLibraryPreparation(generation) {
+            const pending = this._activeLibraryPreparationCounts.get(generation) || 0;
+            this._activeLibraryPreparationCounts.set(generation, pending + 1);
+        }
+
+        finishActiveLibraryPreparation(generation) {
+            const pending = this._activeLibraryPreparationCounts.get(generation) || 0;
+            if (pending <= 1) {
+                this._activeLibraryPreparationCounts.delete(generation);
+                return;
+            }
+            this._activeLibraryPreparationCounts.set(generation, pending - 1);
+        }
+
+        hasUncommittedActiveLibraryPreparation() {
+            for (const [generation, pending] of this._activeLibraryPreparationCounts.entries()) {
+                if (pending > 0 && generation !== this._libraryCommitIntentGeneration) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        async runSerializedLibraryMutation(mutation) {
+            const previousCommit = this._libraryCommitTail;
+            let releaseCommit;
+            this._libraryCommitTail = new Promise((resolve) => {
+                releaseCommit = resolve;
+            });
+            this._libraryCommitPendingCount += 1;
+            await previousCommit;
+            try {
+                return await mutation();
+            } finally {
+                this._libraryCommitPendingCount = Math.max(0, this._libraryCommitPendingCount - 1);
+                releaseCommit();
+            }
+        }
+
+        async runLibraryCommitForIntent(generation, commit) {
+            return this.runSerializedLibraryMutation(async () => {
+                if (
+                    !this.isLibraryIntentCurrent(generation)
+                    && !this.claimLibraryCommitIntent(generation)
+                ) return false;
+                if (!this.isLibraryIntentCurrent(generation)) return false;
+                return commit();
+            });
         }
 
         get resourceCore() {
@@ -23650,23 +24372,80 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         }
 
         normalizeIndexForCustomConfig(index) {
-            return Array.isArray(index)
-                ? index.map((exam) => this.absolutizeDefaultExamPath(exam))
-                : [];
+            if (!Array.isArray(index)) {
+                return [];
+            }
+
+            const generatedReadingPdfAvailability = new Map();
+            this.getDefaultReadingIndex().forEach((exam) => {
+                if (
+                    exam
+                    && exam.sourceKind === 'generated-reading'
+                    && typeof exam.id === 'string'
+                    && exam.id
+                ) {
+                    generatedReadingPdfAvailability.set(exam.id, exam.hasPdf === true);
+                }
+            });
+
+            return index.map((exam) => {
+                const normalized = this.absolutizeDefaultExamPath(exam);
+                if (!normalized || typeof normalized !== 'object') {
+                    return normalized;
+                }
+
+                if (
+                    normalized.sourceKind === 'file-picker'
+                    && !Object.prototype.hasOwnProperty.call(normalized, 'hasPdf')
+                ) {
+                    normalized.hasPdf = typeof normalized.pdfFilename === 'string'
+                        && normalized.pdfFilename.trim().length > 0;
+                }
+
+                if (
+                    normalized.sourceKind === 'generated-reading'
+                    && typeof normalized.id === 'string'
+                    && generatedReadingPdfAvailability.has(normalized.id)
+                ) {
+                    normalized.hasPdf = generatedReadingPdfAvailability.get(normalized.id);
+                }
+
+                return normalized;
+            });
         }
 
-        finishLibraryLoading(startTime, index) {
+        async normalizeIndexForCustomConfigReady(index) {
+            const rows = Array.isArray(index) ? index : [];
+            const needsCanonicalReadingManifest = rows.some((exam) => {
+                return exam && exam.sourceKind === 'generated-reading';
+            });
+            if (needsCanonicalReadingManifest && typeof global.ensureExamDataScripts === 'function') {
+                await global.ensureExamDataScripts();
+            }
+            return this.normalizeIndexForCustomConfig(rows);
+        }
+
+        finishLibraryLoading(startTime, index, intentGeneration) {
+            const isCurrent = () => intentGeneration === undefined
+                || this.isLibraryIntentCurrent(intentGeneration);
+            if (!isCurrent()) return 0;
             const loadTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() - startTime : 0;
             if (typeof global.reportBootStage === 'function') {
-                global.reportBootStage('题库装载完成', 75);
+                try { global.reportBootStage('题库装载完成', 75); } catch (_) { }
             }
+            if (!isCurrent()) return loadTime;
             try { global.updateOverview && global.updateOverview(index); } catch (_) { }
-            refreshListeningAvailabilityUI(index);
+            if (!isCurrent()) return loadTime;
+            try { refreshListeningAvailabilityUI(index); } catch (_) { }
+            if (!isCurrent()) return loadTime;
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { index: cloneArray(index) } }));
             } catch (_) { }
+            if (!isCurrent()) return loadTime;
             if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
-                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+                try {
+                    global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+                } catch (_) { }
             }
             return loadTime;
         }
@@ -23687,7 +24466,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 ? configurationId.trim()
                 : null;
             if (id === null) return this.resolveDefaultIndex();
-            return this.normalizeIndexForCustomConfig(await global.AppData.library.getIndex(id))
+            return (await this.normalizeIndexForCustomConfigReady(await global.AppData.library.getIndex(id)))
                 .map((exam) => ({ ...exam, libraryConfigurationId: id }));
         }
 
@@ -23751,12 +24530,38 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
         }
 
         async loadActiveLibrary(forceReload = false) {
+            return this.loadActiveLibraryForIntent(forceReload, this.beginLibraryIntent());
+        }
+
+        async loadActiveLibraryForIntent(forceReload, intentGeneration) {
+            this.beginActiveLibraryPreparation(intentGeneration);
+            try {
+                return await this.prepareActiveLibraryForIntent(forceReload, intentGeneration);
+            } finally {
+                this.finishActiveLibraryPreparation(intentGeneration);
+            }
+        }
+
+        async prepareActiveLibraryForIntent(forceReload, intentGeneration) {
             const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('加载题库索引', 35);
             }
+            if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
 
-            const rawKey = await this.getActiveLibraryConfigurationKey();
+            const priorCommit = this._libraryCommitTail;
+            await priorCommit;
+            if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
+
+            let rawKey;
+            try {
+                rawKey = await this.getActiveLibraryConfigurationKey();
+            } catch (error) {
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
+                console.warn('[LibraryManager] 读取活动题库失败:', error);
+                return [];
+            }
+            if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
             const activeConfigKey = typeof rawKey === 'string' && rawKey.trim() ? rawKey.trim() : null;
             const isDefaultConfig = activeConfigKey === null;
 
@@ -23764,27 +24569,64 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             try {
                 if (!isDefaultConfig) {
                     cachedData = await global.AppData.library.getIndex(activeConfigKey);
-                } else {
-                    await global.AppData.library.activate(null);
                 }
             } catch (error) {
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
                 console.warn('[LibraryManager] 读取题库缓存失败:', error);
+                return [];
             }
+            if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
 
             if (!isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-                const updatedIndex = this.normalizeIndexForCustomConfig(cachedData)
-                    .map((exam) => ({ ...exam, libraryConfigurationId: activeConfigKey }));
+                let updatedIndex;
+                let currentPathMap;
+                try {
+                    updatedIndex = (await this.normalizeIndexForCustomConfigReady(cachedData))
+                        .map((exam) => ({ ...exam, libraryConfigurationId: activeConfigKey }));
+                    if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
+                    currentPathMap = await this.loadPathMapForConfiguration(activeConfigKey);
+                } catch (error) {
+                    if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
+                    console.error('[LibraryManager] 准备活动题库失败:', error);
+                    return [];
+                }
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
                 if (typeof global.assignExamSequenceNumbers === 'function') global.assignExamSequenceNumbers(updatedIndex);
-                await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
-                this.finishLibraryLoading(startTime, updatedIndex);
-                return updatedIndex;
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
+                const preparedPathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
+                    ? this.resourceCore.derivePathMapFromIndex(
+                        updatedIndex,
+                        currentPathMap || this.DEFAULT_PATH_MAP
+                    )
+                    : currentPathMap;
+                if (!this.reserveLibraryCommitIntent(intentGeneration)) return [];
+
+                try {
+                    const loaded = await this.runLibraryCommitForIntent(intentGeneration, async () => {
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        const pathMap = await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, {
+                            overrideMap: preparedPathMap,
+                            setActive: false
+                        });
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        this.setActivePathMap(pathMap || preparedPathMap);
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        this.finishLibraryLoading(startTime, updatedIndex, intentGeneration);
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        this.rememberDurablyActivatedLibraryState(activeConfigKey, updatedIndex);
+                        return updatedIndex;
+                    });
+                    return Array.isArray(loaded) ? loaded : [];
+                } catch (error) {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    console.error('[LibraryManager] 提交活动题库加载失败:', error);
+                    return [];
+                }
             }
 
+            const shouldWarnAboutEmptyCustom = !isDefaultConfig;
+            let defaultCommitClaimed = false;
             if (!isDefaultConfig) {
-                const normalized = Array.isArray(cachedData) ? cachedData : [];
-                if (!normalized.length && typeof global.showMessage === 'function') {
-                    global.showMessage('当前题库配置没有数据，已自动切换至默认题库。', 'warning');
-                }
                 // Continue through the built-in manifest path.  Returning the empty
                 // custom index here used to dispatch examIndexLoaded([]) and left an
                 // otherwise valid generated Reading manifest invisible.
@@ -23795,19 +24637,17 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                     try {
                         await global.ensureExamDataScripts();
                     } catch (loadError) {
+                        if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
                         console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', loadError);
                     }
                 }
-                if (typeof global.reportBootStage === 'function') {
-                    global.reportBootStage('解析题库数据', 55);
-                }
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
 
                 const readingExams = this.getDefaultReadingIndex();
                 const listeningExams = this.resolveDefaultTypeIndex('listening');
 
                 if (!readingExams.length && !listeningExams.length) {
                     console.warn('[LibraryManager] 未检测到默认题库脚本中的题源数据');
-                    this.finishLibraryLoading(startTime, []);
                     return [];
                 }
 
@@ -23816,6 +24656,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
                 const updatedIndex = combined;
 
                 const metadata = {
@@ -23831,33 +24672,165 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                         listening: this.resolveScriptPathRoot('listening')
                     }
                 };
-                try { global.examIndexMetadata = metadata; } catch (_) { }
-
                 const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return [];
+                if (!this.reserveLibraryCommitIntent(intentGeneration)) return [];
+                defaultCommitClaimed = true;
 
-                if (isDefaultConfig) {
-                    await this.setActiveLibraryConfiguration(null);
-                }
-                this.setActivePathMap(overrideMap);
-
-                this.finishLibraryLoading(startTime, updatedIndex);
-                return updatedIndex;
+                const loaded = await this.runLibraryCommitForIntent(intentGeneration, async () => {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    if (shouldWarnAboutEmptyCustom) {
+                        await this.setActiveLibraryConfiguration(null);
+                        this.clearDurablyActivatedLibraryState();
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        if (typeof global.showMessage === 'function') {
+                            global.showMessage('当前题库配置没有数据，已自动切换至默认题库。', 'warning');
+                        }
+                    }
+                    if (typeof global.reportBootStage === 'function') {
+                        global.reportBootStage('解析题库数据', 55);
+                    }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    try { global.examIndexMetadata = metadata; } catch (_) { }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    this.setActivePathMap(overrideMap);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    this.clearDurablyActivatedLibraryState();
+                    this.finishLibraryLoading(startTime, updatedIndex, intentGeneration);
+                    return this.isLibraryIntentCurrent(intentGeneration) ? updatedIndex : [];
+                });
+                return Array.isArray(loaded) ? loaded : [];
             } catch (error) {
+                const stillOwnsIntent = defaultCommitClaimed
+                    ? this.isLibraryIntentCurrent(intentGeneration)
+                    : this.canPrepareLibraryIntent(intentGeneration);
+                if (!stillOwnsIntent) return [];
+                if (defaultCommitClaimed) {
+                    try {
+                        await this.reconcileActiveLibraryAfterFailedCommit(intentGeneration);
+                    } catch (recoveryError) {
+                        console.warn('[LibraryManager] 失败加载后的活动题库恢复失败', recoveryError);
+                    }
+                }
                 console.error('[LibraryManager] 加载默认题库失败:', error);
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
                 }
-                this.finishLibraryLoading(startTime, []);
                 return [];
             }
         }
 
-        async updateLibraryConfigurationMetadata(key, examCount) {
+        async loadDefaultLibraryForIntent(intentGeneration, options = {}) {
+            const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const canContinuePreparing = () => options.intentAlreadyClaimed === true
+                ? this.isLibraryIntentCurrent(intentGeneration)
+                : this.canPrepareLibraryIntent(intentGeneration);
+            let defaultIndex;
+            try {
+                defaultIndex = await this.resolveDefaultIndex();
+            } catch (error) {
+                if (!canContinuePreparing()) return [];
+                console.error('[LibraryManager] 准备默认题库失败:', error);
+                return [];
+            }
+            if (!canContinuePreparing() || defaultIndex.length === 0) return [];
+            if (typeof global.assignExamSequenceNumbers === 'function') {
+                global.assignExamSequenceNumbers(defaultIndex);
+            }
+            if (!canContinuePreparing()) return [];
+
+            const readingExams = defaultIndex.filter((exam) => exam && exam.type === 'reading');
+            const listeningExams = defaultIndex.filter((exam) => exam && exam.type === 'listening');
+            const metadata = {
+                source: 'default-script',
+                generatedAt: Date.now(),
+                counts: {
+                    total: defaultIndex.length,
+                    reading: readingExams.length,
+                    listening: listeningExams.length
+                },
+                pathRoot: {
+                    reading: this.resolveScriptPathRoot('reading'),
+                    listening: this.resolveScriptPathRoot('listening')
+                }
+            };
+            const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
+            if (
+                options.intentAlreadyClaimed !== true
+                && !this.reserveLibraryCommitIntent(intentGeneration)
+            ) return [];
+
+            try {
+                const loaded = await this.runLibraryCommitForIntent(intentGeneration, async () => {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    await this.setActiveLibraryConfiguration(null);
+                    this.clearDurablyActivatedLibraryState();
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    try { global.examIndexMetadata = metadata; } catch (_) { }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    this.setActivePathMap(overrideMap);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                    if (options.asConfigurationSwitch === true) {
+                        refreshListeningAvailabilityUI(defaultIndex);
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        if (typeof global.setBrowseFilterState === 'function') {
+                            global.setBrowseFilterState('all', 'all');
+                        }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        if (typeof global.setFilteredExamsState === 'function') {
+                            global.setFilteredExamsState([]);
+                        }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        try { global.updateSystemInfo && global.updateSystemInfo(defaultIndex); } catch (_) { }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        try { global.updateOverview && global.updateOverview(defaultIndex); } catch (_) { }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        try { global.loadExamList && global.loadExamList(defaultIndex); } catch (_) { }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        try {
+                            global.dispatchEvent(new CustomEvent('examIndexLoaded', {
+                                detail: { key: null, index: cloneArray(defaultIndex) }
+                            }));
+                        } catch (error) {
+                            console.warn('[LibraryManager] 题库切换事件派发失败', error);
+                        }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                            global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+                        }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return [];
+                        if (!options.skipConfigRefresh) {
+                            this.scheduleLibraryConfigRefresh(null, intentGeneration);
+                        }
+                    } else {
+                        this.finishLibraryLoading(startTime, defaultIndex, intentGeneration);
+                    }
+                    return this.isLibraryIntentCurrent(intentGeneration) ? defaultIndex : [];
+                });
+                return Array.isArray(loaded) ? loaded : [];
+            } catch (error) {
+                if (
+                    options.recoverOnCommitFailure !== false
+                    && this.isLibraryIntentCurrent(intentGeneration)
+                ) {
+                    try {
+                        await this.reconcileActiveLibraryAfterFailedCommit(intentGeneration);
+                    } catch (recoveryError) {
+                        console.warn('[LibraryManager] 默认题库提交失败后的恢复失败', recoveryError);
+                    }
+                }
+                console.error('[LibraryManager] 激活默认题库失败:', error);
+                return [];
+            }
+        }
+
+        async updateLibraryConfigurationMetadata(key, examCount, intentGeneration) {
             if (!key) {
-                return;
+                return true;
             }
             try {
                 let configs = await this.getLibraryConfigurations();
+                if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
                 if (!Array.isArray(configs)) {
                     configs = [];
                 }
@@ -23890,10 +24863,17 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 });
                 if (mutated) {
                     const target = updated.find((entry) => entry && entry.key === key);
-                    if (target) await global.AppData.library.updateConfiguration(target);
+                    if (target) {
+                        if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
+                        await global.AppData.library.updateConfiguration(target);
+                        if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    }
                 }
+                return true;
             } catch (error) {
+                if (intentGeneration !== undefined && !this.isLibraryIntentCurrent(intentGeneration)) return false;
                 console.warn('[LibraryManager] 无法刷新题库配置元数据', error);
+                return false;
             }
         }
 
@@ -23938,13 +24918,19 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 const listening = this.resolveDefaultTypeIndex('listening');
                 currentIndex = reading.concat(listening);
             }
-            return this.normalizeIndexForCustomConfig(currentIndex);
+            return this.normalizeIndexForCustomConfigReady(currentIndex);
         }
 
         async buildImportBaseIndex(activeKey, type, mode) {
             const base = await this.resolveBaseLibraryIndex(activeKey);
             const otherType = type === 'reading' ? 'listening' : 'reading';
             let next = base.slice();
+
+            const needsDefaultReading = !next.some((exam) => exam && exam.type === 'reading')
+                && (otherType === 'reading' || (mode === 'incremental' && type === 'reading'));
+            if (needsDefaultReading && typeof global.ensureExamDataScripts === 'function') {
+                await global.ensureExamDataScripts();
+            }
 
             if (!next.some((exam) => exam && exam.type === otherType)) {
                 next = next.concat(this.resolveDefaultTypeIndex(otherType));
@@ -24040,8 +25026,23 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 throw new Error('没有可导入的题源');
             }
 
+            const shouldActivate = options.activate !== false;
+            const intentGeneration = shouldActivate ? this.beginLibraryIntent() : undefined;
+            let activationEligible = shouldActivate;
+            const refreshActivationEligibility = () => {
+                if (
+                    activationEligible
+                    && !this.canPrepareLibraryIntent(intentGeneration)
+                ) {
+                    activationEligible = false;
+                }
+                return activationEligible;
+            };
+
             const activeKey = await this.getActiveLibraryConfigurationKey();
+            refreshActivationEligibility();
             const baseIndex = await this.buildImportBaseIndex(activeKey, type, mode);
+            refreshActivationEligibility();
             const mergeResult = this.mergeLibraryEntries(baseIndex, additions, type, mode);
             const newIndex = this.normalizeIndexForCustomConfig(mergeResult.index);
             if (typeof global.assignExamSequenceNumbers === 'function') {
@@ -24049,6 +25050,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             }
 
             const key = options.key || await this.buildUniqueImportedConfigKey('library_import');
+            refreshActivationEligibility();
             const name = options.name || this.buildImportedConfigName(type, mode, options.label);
             const counts = countIndexTypes(newIndex);
             const sourceReport = options.discoveryResult && options.discoveryResult.report
@@ -24068,21 +25070,24 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 }
             };
 
-            const pathFallback = await this.loadPathMapForConfiguration(activeKey);
-            const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
-                ? this.resourceCore.derivePathMapFromIndex(newIndex, pathFallback || this.DEFAULT_PATH_MAP)
-                : (pathFallback || null);
             await global.AppData.library.import({
                 id: key,
                 configuration: Object.assign({}, metadata, { id: key, key, name, examCount: newIndex.length, timestamp: Date.now() }),
                 index: newIndex,
                 operationId: options.operationId
             });
-            if (options.activate !== false) this.setActivePathMap(pathMap);
+            refreshActivationEligibility();
 
             let applied = true;
-            if (options.activate !== false) {
-                applied = await this.applyLibraryConfiguration(key, newIndex, { skipConfigRefresh: false });
+            if (shouldActivate) {
+                applied = activationEligible
+                    ? await this.applyLibraryConfigurationForIntent(
+                        key,
+                        newIndex,
+                        { skipConfigRefresh: false },
+                        intentGeneration
+                    )
+                    : false;
             }
 
             return {
@@ -24100,11 +25105,179 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             };
         }
 
+        async switchLibraryConfig(key) {
+            const shouldResumeActivePreparation = this.hasUncommittedActiveLibraryPreparation();
+            const intentGeneration = this.beginLibraryIntent();
+            const nextKey = typeof key === 'string' && key.trim() ? key.trim() : null;
+            let activeKey = null;
+            let activeReadSucceeded = false;
+            try {
+                activeKey = await this.getActiveLibraryConfigurationKey();
+                activeReadSucceeded = true;
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return false;
+            } catch (error) {
+                if (!this.canPrepareLibraryIntent(intentGeneration)) return false;
+                console.warn('[LibraryConfig] 无法读取当前题库配置', error);
+            }
+
+            if (
+                activeReadSucceeded
+                && activeKey === nextKey
+                && this._libraryCommitPendingCount === 0
+            ) {
+                if (shouldResumeActivePreparation) {
+                    await this.loadActiveLibraryForIntent(true, intentGeneration);
+                }
+                if (this.canPrepareLibraryIntent(intentGeneration) && typeof global.showMessage === 'function') {
+                    global.showMessage('当前题库已激活', 'info');
+                }
+                return false;
+            }
+
+            if (nextKey === null) {
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('正在切换题库配置...', 'info');
+                }
+                const loaded = await this.loadDefaultLibraryForIntent(intentGeneration, {
+                    asConfigurationSwitch: true,
+                    skipConfigRefresh: false
+                });
+                const applied = Array.isArray(loaded) && loaded.length > 0;
+                if (applied && this.isLibraryIntentCurrent(intentGeneration) && typeof global.showMessage === 'function') {
+                    global.showMessage('题库配置已切换', 'success');
+                }
+                return applied;
+            }
+
+            const dataset = await this.fetchLibraryDataset(nextKey);
+            if (!this.canPrepareLibraryIntent(intentGeneration)) return false;
+            if (!Array.isArray(dataset) || dataset.length === 0) {
+                if (shouldResumeActivePreparation) {
+                    await this.loadActiveLibraryForIntent(true, intentGeneration);
+                }
+                if (this.canPrepareLibraryIntent(intentGeneration) && typeof global.showMessage === 'function') {
+                    global.showMessage('目标题库没有题目，请先加载该题库数据', 'warning');
+                }
+                return false;
+            }
+
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('正在切换题库配置...', 'info');
+            }
+            const applied = await this.applyLibraryConfigurationForIntent(
+                nextKey,
+                dataset,
+                { skipConfigRefresh: false, requireStoredConfiguration: true },
+                intentGeneration
+            );
+            if (applied && this.isLibraryIntentCurrent(intentGeneration) && typeof global.showMessage === 'function') {
+                global.showMessage('题库配置已切换', 'success');
+            }
+            return applied;
+        }
+
+        scheduleLibraryConfigRefresh(key, intentGeneration) {
+            if (typeof global.renderLibraryConfigList !== 'function') return;
+            setTimeout(async () => {
+                if (!this.isLibraryIntentCurrent(intentGeneration)) return;
+                try {
+                    await global.renderLibraryConfigList({
+                        allowDelete: true,
+                        activeKey: key,
+                        isCurrent: () => this.isLibraryIntentCurrent(intentGeneration)
+                    });
+                } catch (error) {
+                    console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
+                }
+            }, 0);
+        }
+
         async applyLibraryConfiguration(key, dataset, options = {}) {
+            return this.applyLibraryConfigurationForIntent(
+                key,
+                dataset,
+                options,
+                this.beginLibraryIntent()
+            );
+        }
+
+        async reconcileActiveLibraryAfterFailedCommit(intentGeneration, preparedState = {}) {
+            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+            let activeKey = null;
+            try {
+                activeKey = await this.getActiveLibraryConfigurationKey();
+            } catch (error) {
+                console.warn('[LibraryManager] 无法读取失败提交后的活动题库', error);
+                return false;
+            }
+            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+            const normalizedActiveKey = typeof activeKey === 'string' && activeKey.trim()
+                ? activeKey.trim()
+                : null;
+            if (normalizedActiveKey === null) {
+                return this.loadDefaultLibraryForIntent(intentGeneration, {
+                    asConfigurationSwitch: true,
+                    skipConfigRefresh: false,
+                    intentAlreadyClaimed: true,
+                    recoverOnCommitFailure: false
+                });
+            }
+            const preparedKey = typeof preparedState.key === 'string' && preparedState.key.trim()
+                ? preparedState.key.trim()
+                : null;
+            const hasMatchingPreparedDataset = preparedKey === normalizedActiveKey
+                && Array.isArray(preparedState.dataset)
+                && preparedState.dataset.length > 0;
+            const durablePreparedState = this._lastDurablyActivatedLibraryState || {};
+            const hasMatchingDurablePreparedDataset = durablePreparedState.key === normalizedActiveKey
+                && Array.isArray(durablePreparedState.dataset)
+                && durablePreparedState.dataset.length > 0;
+            let dataset;
+            if (
+                hasMatchingPreparedDataset
+                && preparedState.activationCompleted === true
+            ) {
+                dataset = cloneArray(preparedState.dataset);
+            } else if (hasMatchingDurablePreparedDataset) {
+                dataset = cloneArray(durablePreparedState.dataset);
+            } else {
+                try {
+                    dataset = await this.fetchLibraryDataset(normalizedActiveKey);
+                } catch (error) {
+                    console.warn('[LibraryManager] 无法读取失败提交前的活动题库数据', error);
+                    return false;
+                }
+            }
+            if (
+                !this.isLibraryIntentCurrent(intentGeneration)
+                || !Array.isArray(dataset)
+                || dataset.length === 0
+            ) return false;
+            return this.applyLibraryConfigurationForIntent(
+                normalizedActiveKey,
+                dataset,
+                {
+                    skipConfigRefresh: false,
+                    intentAlreadyClaimed: true,
+                    recoverOnCommitFailure: false
+                },
+                intentGeneration
+            );
+        }
+
+        async applyLibraryConfigurationForIntent(key, dataset, options = {}, intentGeneration) {
+            const canContinuePreparing = () => options.intentAlreadyClaimed === true
+                ? this.isLibraryIntentCurrent(intentGeneration)
+                : this.canPrepareLibraryIntent(intentGeneration);
             const configurationId = typeof key === 'string' && key.trim() ? key.trim() : null;
-            const rawExams = Array.isArray(dataset) ? dataset : await this.fetchLibraryDataset(key);
-            const exams = Array.isArray(rawExams)
-                ? rawExams.map((exam) => ({ ...exam, libraryConfigurationId: configurationId })) : [];
+            let rawExams = dataset;
+            if (!Array.isArray(rawExams)) {
+                rawExams = await this.fetchLibraryDataset(key);
+                if (!canContinuePreparing()) return false;
+            }
+            const exams = (await this.normalizeIndexForCustomConfigReady(rawExams))
+                .map((exam) => ({ ...exam, libraryConfigurationId: configurationId }));
+            if (!canContinuePreparing()) return false;
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');
@@ -24112,54 +25285,112 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
                 return false;
             }
 
-            await this.setActiveLibraryConfiguration(key);
             const currentPathMap = await this.loadPathMapForConfiguration(key);
+            if (!canContinuePreparing()) return false;
             const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
                 ? this.resourceCore.derivePathMapFromIndex(exams, currentPathMap || this.DEFAULT_PATH_MAP)
                 : (currentPathMap || null);
-            this.setActivePathMap(pathMap);
+            if (
+                options.intentAlreadyClaimed !== true
+                && !this.reserveLibraryCommitIntent(intentGeneration)
+            ) return false;
 
-            refreshListeningAvailabilityUI(exams);
-            if (typeof global.setBrowseFilterState === 'function') {
-                global.setBrowseFilterState('all', 'all');
-            }
-            if (typeof global.setFilteredExamsState === 'function') {
-                global.setFilteredExamsState([]);
-            }
-
-            await this.updateLibraryConfigurationMetadata(key, exams.length);
-            await this.savePathMapForConfiguration(key, exams, {
-                overrideMap: pathMap,
-                setActive: true
-            });
-
-            try { global.updateSystemInfo && global.updateSystemInfo(exams); } catch (_) { }
-            try { global.updateOverview && global.updateOverview(exams); } catch (_) { }
-            try { global.loadExamList && global.loadExamList(exams); } catch (_) { }
-
+            let activationCompleted = false;
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
-            } catch (error) {
-                console.warn('[LibraryManager] 题库切换事件派发失败', error);
-            }
-            if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
-                global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
-            }
-
-            if (!options.skipConfigRefresh && typeof global.renderLibraryConfigList === 'function') {
-                setTimeout(() => {
-                    try {
-                        global.renderLibraryConfigList({
-                            allowDelete: true,
-                            activeKey: key
+                return await this.runLibraryCommitForIntent(intentGeneration, async () => {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    if (options.requireStoredConfiguration === true) {
+                        let configurations;
+                        let storedDataset;
+                        try {
+                            configurations = await this.getLibraryConfigurations();
+                            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                            storedDataset = await this.fetchLibraryDataset(configurationId);
+                        } catch (error) {
+                            if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                            console.warn('[LibraryManager] 无法重新验证目标题库配置', error);
+                            return false;
+                        }
+                        if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                        const configurationExists = (Array.isArray(configurations) ? configurations : []).some((config) => {
+                            if (typeof config === 'string') return config.trim() === configurationId;
+                            if (!config || typeof config !== 'object') return false;
+                            const storedKey = typeof config.key === 'string' && config.key.trim()
+                                ? config.key.trim()
+                                : (typeof config.id === 'string' ? config.id.trim() : '');
+                            return storedKey === configurationId;
                         });
-                    } catch (error) {
-                        console.warn('[LibraryManager] 重渲染题库配置列表失败', error);
+                        if (!configurationExists || !Array.isArray(storedDataset) || storedDataset.length === 0) {
+                            return false;
+                        }
                     }
-                }, 0);
-            }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    await this.setActiveLibraryConfiguration(key);
+                    activationCompleted = true;
+                    this.rememberDurablyActivatedLibraryState(configurationId, exams);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    await this.updateLibraryConfigurationMetadata(key, exams.length, intentGeneration);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    const savedPathMap = await this.savePathMapForConfiguration(key, exams, {
+                        overrideMap: pathMap,
+                        setActive: false
+                    });
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
 
-            return true;
+                    this.setActivePathMap(savedPathMap || pathMap);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    refreshListeningAvailabilityUI(exams);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    if (typeof global.setBrowseFilterState === 'function') {
+                        global.setBrowseFilterState('all', 'all');
+                    }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    if (typeof global.setFilteredExamsState === 'function') {
+                        global.setFilteredExamsState([]);
+                    }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+
+                    try { global.updateSystemInfo && global.updateSystemInfo(exams); } catch (_) { }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    try { global.updateOverview && global.updateOverview(exams); } catch (_) { }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    try { global.loadExamList && global.loadExamList(exams); } catch (_) { }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+
+                    try {
+                        global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key, index: cloneArray(exams) } }));
+                    } catch (error) {
+                        console.warn('[LibraryManager] 题库切换事件派发失败', error);
+                    }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+                    if (typeof global.startPracticeRecordsSyncInBackground === 'function') {
+                        global.startPracticeRecordsSyncInBackground('library-loaded', { forceRender: true });
+                    }
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) return false;
+
+                    if (!options.skipConfigRefresh) {
+                        this.scheduleLibraryConfigRefresh(key, intentGeneration);
+                    }
+
+                    return true;
+                });
+            } catch (error) {
+                if (
+                    options.recoverOnCommitFailure !== false
+                    && this.isLibraryIntentCurrent(intentGeneration)
+                ) {
+                    try {
+                        await this.reconcileActiveLibraryAfterFailedCommit(intentGeneration, {
+                            key: configurationId,
+                            dataset: exams,
+                            activationCompleted
+                        });
+                    } catch (recoveryError) {
+                        console.warn('[LibraryManager] 失败提交后的活动题库恢复失败', recoveryError);
+                    }
+                }
+                throw error;
+            }
         }
 
         async deleteLibraryConfiguration(key) {
@@ -24167,67 +25398,102 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
             if (!configKey) {
                 return { deleted: false, reason: 'invalid-key' };
             }
-            const activeKey = await this.getActiveLibraryConfigurationKey();
-            if (activeKey === configKey) {
-                return { deleted: false, reason: 'active-config' };
-            }
-
-            let configs = await this.getLibraryConfigurations();
-            configs = Array.isArray(configs) ? configs : [];
-            let found = false;
-            const nextConfigs = [];
-
-            configs.forEach((config) => {
-                if (!config) {
-                    return;
+            const intentGeneration = this.beginLibraryIntent();
+            const result = await this.runSerializedLibraryMutation(async () => {
+                if (!this.canPrepareLibraryIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
                 }
-                if (typeof config === 'string') {
-                    const itemKey = config.trim();
-                    if (!itemKey) {
+
+                const activeKey = await this.getActiveLibraryConfigurationKey();
+                if (!this.canPrepareLibraryIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
+                }
+                if (activeKey === configKey) {
+                    return { deleted: false, reason: 'active-config' };
+                }
+
+                let configs = await this.getLibraryConfigurations();
+                if (!this.canPrepareLibraryIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
+                }
+                configs = Array.isArray(configs) ? configs : [];
+                let found = false;
+                const nextConfigs = [];
+
+                configs.forEach((config) => {
+                    if (!config) return;
+                    if (typeof config === 'string') {
+                        const itemKey = config.trim();
+                        if (!itemKey) return;
+                        if (itemKey === configKey) {
+                            found = true;
+                            return;
+                        }
+                        nextConfigs.push(config);
                         return;
                     }
+
+                    const itemKey = typeof config.key === 'string' && config.key.trim()
+                        ? config.key.trim()
+                        : (typeof config.id === 'string' ? config.id.trim() : '');
+                    if (!itemKey) return;
                     if (itemKey === configKey) {
                         found = true;
                         return;
                     }
                     nextConfigs.push(config);
-                    return;
+                });
+
+                if (!found) {
+                    return { deleted: false, reason: 'not-found' };
+                }
+                if (!this.claimLibraryCommitIntent(intentGeneration)) {
+                    return { deleted: false, reason: 'superseded' };
                 }
 
-                const itemKey = typeof config.key === 'string' ? config.key.trim() : '';
-                if (!itemKey) {
-                    return;
+                this._exclusiveLibraryMutationGeneration = intentGeneration;
+                try {
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) {
+                        return { deleted: false, reason: 'superseded' };
+                    }
+                    await global.AppData.library.remove(configKey);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) {
+                        return { deleted: false, reason: 'superseded' };
+                    }
+                    await this.deletePathMapForConfiguration(configKey);
+                    if (!this.isLibraryIntentCurrent(intentGeneration)) {
+                        return { deleted: false, reason: 'superseded' };
+                    }
+                    this.clearDurablyActivatedLibraryState(configKey);
+
+                    return {
+                        deleted: true,
+                        key: configKey,
+                        remaining: nextConfigs.length
+                    };
+                } finally {
+                    if (this._exclusiveLibraryMutationGeneration === intentGeneration) {
+                        this._exclusiveLibraryMutationGeneration = 0;
+                    }
                 }
-                if (itemKey === configKey) {
-                    found = true;
-                    return;
-                }
-                nextConfigs.push(config);
             });
-
-            if (!found) {
-                return { deleted: false, reason: 'not-found' };
-            }
-
-            await global.AppData.library.remove(configKey);
-            await this.deletePathMapForConfiguration(configKey);
-
-            return {
-                deleted: true,
-                key: configKey,
-                remaining: nextConfigs.length
-            };
+            return result && typeof result === 'object'
+                ? result
+                : { deleted: false, reason: 'superseded' };
         }
 
         async loadLibrary(keyOrForceReload) {
+            const appliesNamedConfiguration = typeof keyOrForceReload === 'string'
+                && keyOrForceReload !== 'default'
+                && keyOrForceReload.length > 0;
+            const intentGeneration = this.beginLibraryIntent();
             if (keyOrForceReload === 'default' || keyOrForceReload === null) {
-                await this.setActiveLibraryConfiguration(null);
-                return this.loadActiveLibrary(true);
+                return this.loadDefaultLibraryForIntent(intentGeneration);
             }
-            if (typeof keyOrForceReload === 'string' && keyOrForceReload) {
-                return this.applyLibraryConfiguration(keyOrForceReload);
+            if (appliesNamedConfiguration) {
+                return this.applyLibraryConfigurationForIntent(keyOrForceReload, undefined, {}, intentGeneration);
             }
-            return this.loadActiveLibrary(!!keyOrForceReload);
+            return this.loadActiveLibraryForIntent(!!keyOrForceReload, intentGeneration);
         }
     }
 
@@ -24243,7 +25509,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.2-fix","buildId
     async function switchLibraryConfig(key) {
         const manager = getInstance();
         const nextKey = typeof key === 'string' && key.trim() ? key.trim() : null;
-        return manager.applyLibraryConfiguration(nextKey);
+        return manager.switchLibraryConfig(nextKey);
     }
 
     async function loadLibrary(keyOrForceReload) {

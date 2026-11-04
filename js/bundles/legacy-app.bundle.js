@@ -1775,7 +1775,10 @@
             discoveryResult: discoveryResult,
             activate: true
           });
-          window.showMessage && window.showMessage('新的题库配置已创建并激活：识别 ' + additions.length + ' 个题目', 'success');
+          var importMessage = created.applied
+            ? '新的题库配置已创建并激活：识别 ' + additions.length + ' 个题目'
+            : '新的题库配置已创建；已保留较新的当前题库选择';
+          window.showMessage && window.showMessage(importMessage, created.applied ? 'success' : 'info');
           return _fallbackBuildUploadReport(discoveryResult, {
             status: 'success',
             mode: mode,
@@ -1783,10 +1786,17 @@
             configName: created.name,
             counts: created.counts,
             merge: created.merge,
-            message: '新的题库配置已创建并激活'
+            message: importMessage
           });
         } catch (managerError) {
-          console.warn('[Fallback] LibraryManager 导入配置创建失败，使用旧降级路径:', managerError);
+          console.warn('[Fallback] LibraryManager 导入配置创建失败:', managerError);
+          var managerMessage = '题库导入失败：' + (managerError && managerError.message ? managerError.message : '未知错误');
+          window.showMessage && window.showMessage(managerMessage, 'error');
+          return _fallbackBuildUploadReport(discoveryResult, {
+            status: 'error',
+            mode: mode,
+            message: managerMessage
+          });
         }
       }
 

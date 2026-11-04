@@ -162,7 +162,7 @@
     "script": "./p2-low-06.js",
     "title": "Biomimicry 仿生学",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/",
     "filename": "103. P2 - Biomimicry 仿生学.html",
@@ -170,7 +170,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/103. P2 - Biomimicry 仿生学.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-052.biomimicry",
     "questionTypes": [
       "matching-information",
@@ -478,7 +478,7 @@
     "script": "./p2-high-16.js",
     "title": "The Importance of Law 法律的意义",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/112. P2 - The Importance of Law 法律的意义【高】/",
     "filename": "112. P2 - The Importance of Law 法律的意义【高】.html",
@@ -486,7 +486,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/112. P2 - The Importance of Law 法律的意义.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-015.the-importance-of-law",
     "questionTypes": [
       "heading-matching",
@@ -511,7 +511,7 @@
     "script": "./p2-high-17.js",
     "title": "Herbal Medicines 新西兰草药",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/",
     "filename": "113. P2 - Herbal Medicines 新西兰草药【高】.html",
@@ -519,7 +519,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/113. P2 - Herbal Medicines 新西兰草药.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-039.herbal-medicines",
     "questionTypes": [
       "matching-information",
@@ -575,7 +575,7 @@
     "script": "./p2-high-19.js",
     "title": "Mind Music 脑海中的音乐(心灵音乐)",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/",
     "filename": "115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html",
@@ -583,7 +583,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/115. P2 - Mind Music 脑海中的音乐(心灵音乐).pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-021.mind-music",
     "questionTypes": [
       "matching-information",
@@ -670,7 +670,7 @@
     "script": "./p3-medium-22.js",
     "title": "Neanderthal Technology 尼安德特人的生存技艺",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/",
     "filename": "118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
@@ -678,7 +678,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/118. P3 - Neanderthal Technology 尼安德特人的生存技艺.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-034.neanderthal-technology",
     "questionTypes": [
       "heading-matching",
@@ -864,7 +864,7 @@
     "script": "./p1-medium-29.js",
     "title": "The extinction of the cave bear 洞熊的灭绝",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/",
     "filename": "124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
@@ -872,7 +872,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/124. P1 - The extinction of the cave bear 洞熊的灭绝.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b008.p1-037.extinction-cave-bear",
     "questionTypes": [
       "true-false-not-given",
@@ -1009,7 +1009,7 @@
     "script": "./p1-low-34.js",
     "title": "The Slow Food Organization 慢食运动组织",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
     "filename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
@@ -1017,7 +1017,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-040.slow-food-organization",
     "questionTypes": [
       "true-false-not-given",
@@ -1393,7 +1393,7 @@
     "script": "./p1-low-46.js",
     "title": "Sydney Opera House 悉尼歌剧院",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/14. P1 - Sydney Opera House 悉尼歌剧院/",
     "filename": "14. P1 - Sydney Opera House 悉尼歌剧院.html",
@@ -1401,7 +1401,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/14. P1 - Sydney Opera House 悉尼歌剧院.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-017.sydney-opera-house",
     "questionTypes": [
       "true-false-not-given",
@@ -1515,7 +1515,7 @@
     "script": "./p2-low-50.js",
     "title": "Jellyfish – The Dominant Species 水母·海洋中的优势物种",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/",
     "filename": "143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html",
@@ -1523,7 +1523,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p2-022.jellyfish-dominant-species",
     "questionTypes": [
       "matching-information",
@@ -1669,7 +1669,7 @@
     "script": "./p3-low-55.js",
     "title": "Improving Patient Safety 药品包装设计",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/",
     "filename": "148. P3 - Improving Patient Safety 药品包装设计.html",
@@ -1677,7 +1677,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-032.patient-safety",
     "questionTypes": [
       "matching-features",
@@ -1832,7 +1832,7 @@
     "script": "./p1-medium-60.js",
     "title": "Sorry—who are you 脸盲症",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/",
     "filename": "152. P1 - Sorry—who are you 脸盲症【次】.html",
@@ -1840,7 +1840,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/152. P1 - Sorry—who are you 脸盲症.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p1-024.sorry-who-are-you",
     "questionTypes": [
       "true-false-not-given",
@@ -1861,7 +1861,7 @@
     "script": "./p1-low-61.js",
     "title": "Carnivorous plants 食虫植物",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/",
     "filename": "153. P1 - Carnivorous plants 食虫植物.html",
@@ -1869,7 +1869,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/153. P1 - Carnivorous plants 食虫植物.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-041.carnivorous-plants",
     "questionTypes": [
       "note-completion",
@@ -1921,7 +1921,7 @@
     "script": "./p1-medium-63.js",
     "title": "A Brief History of Humans and Food 人类食物的历史",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/",
     "filename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
@@ -1929,7 +1929,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/155. P1 - A Brief History of Humans and Food 人类食物的历史.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-021.humans-food",
     "questionTypes": [
       "true-false-not-given",
@@ -2014,7 +2014,7 @@
     "script": "./p3-medium-66.js",
     "title": "Mercator - The Map Maker 地理制图师",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/",
     "filename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
@@ -2022,7 +2022,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/158. P3 - Mercator - The Map Maker 地理制图师.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.mercator-the-map-maker",
     "questionTypes": [
       "true-false-not-given",
@@ -2105,7 +2105,7 @@
     "script": "./p1-low-69.js",
     "title": "An important language development 楔形文字",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
     "filename": "160. P1 - An important language development 楔形文字.html",
@@ -2113,7 +2113,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/160. P1 - An important language development 楔形文字.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-043.important-language-development",
     "questionTypes": [
       "true-false-not-given",
@@ -2163,7 +2163,7 @@
     "script": "./p3-low-71.js",
     "title": "Sea Change for Salinity 土地盐碱化",
     "category": "P3",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/",
     "filename": "162. P3 - Sea Change for Salinity 土地盐碱化.html",
@@ -2171,7 +2171,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/162. P3 - Sea Change for Salinity 土地盐碱化.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-054.sea-change-salinity",
     "questionTypes": [
       "matching-information",
@@ -2316,7 +2316,7 @@
     "script": "./p3-low-76.js",
     "title": "Sign, Baby, Sign! 美国手语",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/",
     "filename": "167. P3 - Sign, Baby, Sign! 美国手语.html",
@@ -2324,6 +2324,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "table-completion",
       "true-false-not-given"
@@ -2614,7 +2615,7 @@
     "script": "./p2-medium-86.js",
     "title": "Urban Regeneration 柏林公园改造",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/",
     "filename": "176. P2 - Urban Regeneration 柏林公园改造.html",
@@ -2622,7 +2623,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/176. P2 - Urban Regeneration 柏林公园改造.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-037.urban-regeneration",
     "questionTypes": [
       "heading-matching",
@@ -2713,7 +2714,7 @@
     "script": "./p3-high-89.js",
     "title": "Looking at daily life in ancient Rome  古罗马的日常",
     "category": "P3",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/",
     "filename": "179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
@@ -2721,7 +2722,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-050.ancient-rome",
     "questionTypes": [
       "multiple-choice",
@@ -2901,7 +2902,7 @@
     "script": "./p3-low-95.js",
     "title": "The strange world of sight 奇异的视觉世界",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/",
     "filename": "184. P3 - The strange world of sight 奇异的视觉世界.html",
@@ -2909,7 +2910,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/184. P3 - The strange world of sight 奇异的视觉世界.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-006.strange-world-sight",
     "questionTypes": [
       "multiple-choice",
@@ -2996,7 +2997,7 @@
     "script": "./p3-low-98.js",
     "title": "Petrol power an eco-revolution 交通的革命",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/",
     "filename": "187. P3 - Petrol power an eco-revolution 交通的革命.html",
@@ -3004,7 +3005,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/187. P3 - Petrol power an eco-revolution 交通的革命.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-023.petrol-power",
     "questionTypes": [
       "multiple-choice",
@@ -3174,7 +3175,7 @@
     "script": "./p2-low-104.js",
     "title": "1115纸笔Should we stop eating meat 是否应该吃素",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素/",
     "filename": "192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html",
@@ -3182,7 +3183,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-024.stop-eating-meat",
     "questionTypes": [
       "matching-information",
@@ -3381,7 +3382,7 @@
     "script": "./p1-low-111.js",
     "title": "The Rise and Fall of Detective Stories 侦探小说的兴衰",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/",
     "filename": "25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
@@ -3389,7 +3390,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b008.p1-064.rise-fall-detective-stories",
     "questionTypes": [
       "true-false-not-given",
@@ -3468,7 +3469,7 @@
     "script": "./p1-low-114.js",
     "title": "Triumph of the City 城市的胜利",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/",
     "filename": "28. P1 - Triumph of the City 城市的胜利.html",
@@ -3476,7 +3477,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/28. P1 - Triumph of the City 城市的胜利.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p1-052.triumph-of-the-city",
     "questionTypes": [
       "note-completion",
@@ -3497,7 +3498,7 @@
     "script": "./p1-medium-115.js",
     "title": "Tunnelling under the Thames",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】/",
     "filename": "29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.html",
@@ -3505,7 +3506,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/29. P1 - Tunnelling under the Thames 泰晤士河隧道.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-022.tunnelling-thames",
     "questionTypes": [
       "true-false-not-given",
@@ -3613,7 +3614,7 @@
     "script": "./p1-medium-119.js",
     "title": "Wood 新西兰木材产业",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/",
     "filename": "32. P1 - Wood 新西兰木材产业【次】.html",
@@ -3621,7 +3622,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/32. P1 - Wood 新西兰木材产业.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-053.wood",
     "questionTypes": [
       "true-false-not-given",
@@ -3642,7 +3643,7 @@
     "script": "./p2-high-120.js",
     "title": "A new look for Talbot Park 奥克兰社区改造",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/",
     "filename": "ai_studio_code (9).html",
@@ -3650,7 +3651,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/33. P2 - A new look for Talbot Park 奥克兰社区改造.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-014.talbot-park",
     "questionTypes": [
       "heading-matching",
@@ -3708,7 +3709,7 @@
     "script": "./p2-low-122.js",
     "title": "Biophilic Design 亲自然设计",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/",
     "filename": "35. P2 - Biophilic Design 亲自然设计.html",
@@ -3716,7 +3717,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/35. P2 - Biophilic Design 亲自然设计.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-040.biophilic-design",
     "questionTypes": [
       "matching-information",
@@ -3741,7 +3742,7 @@
     "script": "./p2-high-123.js",
     "title": "Bird Migration 鸟类迁徙",
     "category": "P2",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/",
     "filename": "36. P2 - Bird Migration 鸟类迁徙【高】.html",
@@ -3749,7 +3750,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-010.bird-migration",
     "questionTypes": [
       "heading-matching",
@@ -3898,7 +3899,7 @@
     "script": "./p2-high-128.js",
     "title": "How Well Do We Concentrate_  多任务处理",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": null,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/40. P2 - How Well Do We Concentrate_  多任务处理【高】/",
     "filename": "40. P2 - How Well Do We Concentrate_  多任务处理【高】.html",
@@ -3906,7 +3907,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/40. P2 - How Well Do We Concentrate_  多任务处理.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b007.p2-050.how-well-do-people-concentrate",
     "questionTypes": [
       "matching-information",
@@ -3993,7 +3994,7 @@
     "script": "./p2-high-131.js",
     "title": "Learning from the Romans 罗马混凝土",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/",
     "filename": "43. P2 - Learning from the Romans 罗马混凝土【高】.html",
@@ -4001,7 +4002,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/43. P2 - Learning from the Romans 罗马混凝土.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-007.learning-from-the-romans",
     "questionTypes": [
       "matching-information",
@@ -4187,7 +4188,7 @@
     "script": "./p2-high-137.js",
     "title": "Surviving city life 动物适应城市",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/49. P2 - Surviving city life 动物适应城市【高】/",
     "filename": "49. P2 - Surviving city life 动物适应城市【高】.html",
@@ -4195,7 +4196,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/49. P2 - Surviving city life 动物适应城市.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-046.surviving-city-life",
     "questionTypes": [
       "heading-matching",
@@ -4313,7 +4314,7 @@
     "script": "./p2-high-141.js",
     "title": "The fascinating world of attine ants 切叶蚁",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/52. P2 - The fascinating world of attine ants 切叶蚁【高】/",
     "filename": "52. P2 - The fascinating world of attine ants 切叶蚁【高】.html",
@@ -4321,7 +4322,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/52. P2 - The fascinating world of attine ants 切叶蚁.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-009.attine-ants",
     "questionTypes": [
       "matching-information",
@@ -4346,7 +4347,7 @@
     "script": "./p2-low-142.js",
     "title": "The fashion industry 时尚产业",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/",
     "filename": "53. P2 - The fashion industry 时尚产业.html",
@@ -4354,7 +4355,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/53. P2 - The fashion industry 时尚产业.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b004.p2-018.fashion-industry",
     "questionTypes": [
       "heading-matching",
@@ -4511,7 +4512,7 @@
     "script": "./p2-low-147.js",
     "title": "Who wrote Shakespeare's plays 莎士比亚",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": null,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/",
     "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
@@ -4519,7 +4520,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b005.p2-041.who-wrote-shakespeare",
     "questionTypes": [
       "matching-information",
@@ -4823,7 +4824,7 @@
     "script": "./p3-high-157.js",
     "title": "Flower Power 鲜花的力量(花之力)",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 3.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/",
     "filename": "67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
@@ -4831,7 +4832,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/67. P3 - Flower Power 鲜花的力量(花之力).pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-021.flower-power",
     "questionTypes": [
       "heading-matching",
@@ -4937,7 +4938,7 @@
     "script": "./p3-high-161.js",
     "title": "Insect-inspired robots 昆虫机器人",
     "category": "P3",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/",
     "filename": "70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
@@ -4945,7 +4946,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/70. P3 - Insect-inspired robots 昆虫机器人.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-044.insect-inspired-robots",
     "questionTypes": [
       "matching-information",
@@ -5096,7 +5097,7 @@
     "script": "./p3-low-166.js",
     "title": "Life on Mars_ 火星地球化改造",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "高频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/",
     "filename": "75. P3 - Life on Mars_ 火星地球化改造.html",
@@ -5104,6 +5105,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/75. P3 - Life on Mars 火星地球化改造.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "yes-no-not-given",
       "multiple-choice",
@@ -5160,7 +5162,7 @@
     "script": "./p3-medium-168.js",
     "title": "Marketing and the information age 信息时代营销",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/",
     "filename": "77. P3 - Marketing and the information age 信息时代营销【次】.html",
@@ -5168,7 +5170,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/77. P3 - Marketing and the information age 信息时代营销.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-045.marketing-information-age",
     "questionTypes": [
       "matching-information",
@@ -5193,7 +5195,7 @@
     "script": "./p3-medium-169.js",
     "title": "（无题目）  Music Language We All Speak 音乐语言",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/",
     "filename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
@@ -5201,6 +5203,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "heading-matching",
       "matching-features",
@@ -6034,7 +6037,7 @@
     "script": "./p1-high-194.js",
     "title": "The history of the British wool industry 英国羊毛产业的历史",
     "category": "P1",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 2.5,
     "path": "三月/2.P1 次高频/",
     "filename": "194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html",
@@ -6042,7 +6045,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/194. P1 - The history of the British wool industry 英国羊毛产业的历史.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-050.british-wool-industry",
     "questionTypes": [
       "true-false-not-given",
@@ -6090,7 +6093,7 @@
     "script": "./p1-low-223.js",
     "title": "Effect and Cause 湖泊海啸研究",
     "category": "P1",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "三月/",
     "filename": "223. P1 - Effect and Cause 湖泊海啸研究.html",
@@ -6098,7 +6101,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/223. P1 - Effect and Cause 湖泊海啸研究.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b003.p1-051.effect-and-cause",
     "questionTypes": [
       "true-false-not-given",
@@ -6179,39 +6182,6 @@
       ]
     }
   },
-  "p2-high-192": {
-    "examId": "p2-high-192",
-    "dataKey": "p2-high-192",
-    "script": "./p2-high-192.js",
-    "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素",
-    "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": 3.5,
-    "path": "三月/4.P2 次高频/",
-    "filename": "192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b004.p2-024.stop-eating-meat",
-    "questionTypes": [
-      "matching-information",
-      "summary-completion",
-      "matching-features"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "summary-completion": [
-        "text_entry"
-      ],
-      "matching-features": [
-        "option_mapping"
-      ]
-    }
-  },
   "p2-medium-209": {
     "examId": "p2-medium-209",
     "dataKey": "p2-medium-209",
@@ -6275,72 +6245,6 @@
       ],
       "sentence-completion": [
         "text_entry"
-      ]
-    }
-  },
-  "p2-low-051": {
-    "examId": "p2-low-051",
-    "dataKey": "p2-low-051",
-    "script": "./p2-low-051.js",
-    "title": "The dingo debate 澳洲野犬_澳洲野狗",
-    "category": "P2",
-    "frequency": "低频",
-    "difficultyScore": null,
-    "path": "三月/4.P2 次高频/",
-    "filename": "51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b008.p2-064.the-dingo-debate",
-    "questionTypes": [
-      "matching-information",
-      "matching-features",
-      "sentence-completion"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "matching-features": [
-        "option_mapping"
-      ],
-      "sentence-completion": [
-        "text_entry"
-      ]
-    }
-  },
-  "p2-medium-058": {
-    "examId": "p2-medium-058",
-    "dataKey": "p2-medium-058",
-    "script": "./p2-medium-058.js",
-    "title": "Who wrote Shakespeare's plays 莎士比亚",
-    "category": "P2",
-    "frequency": "高频",
-    "difficultyScore": 4,
-    "path": "三月/4.P2 次高频/",
-    "filename": "58. P2 - Who wrote Shakespeare's plays 莎士比亚【次】.html",
-    "hasHtml": true,
-    "hasPdf": true,
-    "pdfFilename": "ReadingPractice/PDF/58. P2 - Who wrote Shakespeare's plays 莎士比亚.pdf",
-    "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
-    "zyzPassageId": "passage.b005.p2-041.who-wrote-shakespeare",
-    "questionTypes": [
-      "matching-information",
-      "summary-completion",
-      "matching-features"
-    ],
-    "questionTypeDetails": {
-      "matching-information": [
-        "option_mapping"
-      ],
-      "summary-completion": [
-        "text_entry"
-      ],
-      "matching-features": [
-        "option_mapping"
       ]
     }
   },
@@ -6517,7 +6421,7 @@
     "path": "三月/5.P3 高频/",
     "filename": "P3 - Risk taking.html",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - Risk taking.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -6611,7 +6515,7 @@
     "script": "./p3-low-078.js",
     "title": "P3 (ds做出来的) - Music Language We All Speak 音乐语言",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "三月/6.P3 次高频/",
     "filename": "78. P3 (ds做出来的) - Music Language We All Speak 音乐语言.html",
@@ -6619,6 +6523,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf",
     "sourceKind": "generated-reading",
+    "frequencyMonth": "2026-11",
     "questionTypes": [
       "short-answer",
       "true-false-not-given",
@@ -6708,7 +6613,7 @@
     "script": "./p3-high-228.js",
     "title": "On art and artists 艺术与艺术家",
     "category": "P3",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "ReadingPractice/PDF/",
     "filename": "228. P3 - On art and artists 艺术与艺术家.pdf",
@@ -6716,7 +6621,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/228. P3 - On art and artists 艺术与艺术家.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-019.on-art-and-artists",
     "questionTypes": [
       "matching-information",
@@ -6832,7 +6737,7 @@
     "script": "./p2-high-232.js",
     "title": "The origin and development of applause 掌声的历史",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 4,
     "path": "ReadingPractice/PDF/",
     "filename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
@@ -6840,7 +6745,7 @@
     "hasPdf": true,
     "pdfFilename": "ReadingPractice/PDF/232. P2 - The origin and development of applause 掌声的历史.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.origin-and-development-of-applause",
     "questionTypes": [
       "heading-matching",
@@ -6969,7 +6874,7 @@
     "path": "ReadingPractice/PDF/",
     "filename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -7035,7 +6940,7 @@
     "path": "ReadingPractice/PDF/",
     "filename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -7068,7 +6973,7 @@
     "path": "ReadingPractice/PDF/",
     "filename": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -7101,7 +7006,7 @@
     "path": "assets/generated/reading-exams/",
     "filename": "reading-practice-unified.html",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P2 - Coins – the first form of money.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -7129,15 +7034,15 @@
     "script": "./p1-high-240.js",
     "title": "The Origins of Weather Forecasting 天气预报",
     "category": "P1",
-    "frequency": "中频",
+    "frequency": "高频",
     "difficultyScore": 2.5,
     "path": "ReadingPractice/PDF/",
     "filename": "240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/240. P1 - The Origins of Weather Forecasting 天气预报.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b002.p1-026.weather-forecasting",
     "questionTypes": [
       "true-false-not-given",
@@ -7163,7 +7068,7 @@
     "path": "ReadingPractice/PDF/",
     "filename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -7196,7 +7101,7 @@
     "path": "ReadingPractice/PDF/",
     "filename": "P3 - How a prehistoric predator took to the skies.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - How a prehistoric predator took to the skies.pdf",
     "sourceKind": "generated-reading",
     "questionTypes": [
@@ -7222,15 +7127,15 @@
     "script": "./p3-medium-241.js",
     "title": "Who looks after the children in today's Britain? 育儿分工",
     "category": "P3",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 4.5,
     "path": "ReadingPractice/PDF/",
     "filename": "P3 - Who looks after the children in today's Britain.pdf",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - Who looks after the children in today's Britain.pdf",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b006.p3-036.who-looks-after-children",
     "questionTypes": [
       "matching-information",
@@ -7260,7 +7165,7 @@
     "path": "",
     "filename": "",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P2 - The internal body clock 生物钟.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -7293,7 +7198,7 @@
     "path": "",
     "filename": "",
     "hasHtml": true,
-    "hasPdf": true,
+    "hasPdf": false,
     "pdfFilename": "ReadingPractice/PDF/P3 - Look who was talking.pdf",
     "sourceKind": "generated-reading",
     "frequencyMonth": "2026-10",
@@ -7317,7 +7222,7 @@
     "script": "./p2-medium-245.js",
     "title": "Understanding climate change 理解气候变化",
     "category": "P2",
-    "frequency": "低频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
@@ -7325,7 +7230,7 @@
     "hasPdf": false,
     "pdfFilename": "",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.climate",
     "questionTypes": [
       "summary-completion",
@@ -7416,7 +7321,7 @@
     "script": "./p2-medium-248.js",
     "title": "Introduction to a book about the assessment of carbon footprints 碳足迹",
     "category": "P2",
-    "frequency": "高频",
+    "frequency": "中频",
     "difficultyScore": 3.5,
     "path": "",
     "filename": "",
@@ -7424,7 +7329,7 @@
     "hasPdf": false,
     "pdfFilename": "",
     "sourceKind": "generated-reading",
-    "frequencyMonth": "2026-10",
+    "frequencyMonth": "2026-11",
     "zyzPassageId": "passage.b011.new-014.introduction-to-a-book-about-the-assessment-of-carbon-footprints",
     "questionTypes": [
       "matching-information",
@@ -7573,6 +7478,22 @@
   }
 };
 
+  // Released duplicates of one passage. A retired ID keeps resolving to the
+  // entry that superseded it, but only canonical entries are listed.
+  const RETIRED_EXAM_IDS = {
+    "p2-high-192": "p2-low-104",
+    "p2-low-051": "p2-low-140",
+    "p2-medium-058": "p2-low-147"
+  };
+  Object.keys(RETIRED_EXAM_IDS).forEach(function aliasRetiredExam(id) {
+    Object.defineProperty(manifest, id, { value: manifest[RETIRED_EXAM_IDS[id]], enumerable: false });
+  });
+
+  function resolveReadingExamId(id) {
+    const key = id == null ? '' : String(id);
+    return Object.prototype.hasOwnProperty.call(RETIRED_EXAM_IDS, key) ? RETIRED_EXAM_IDS[key] : key;
+  }
+
   function clonePathRoot() {
     return Object.assign({}, PATH_ROOT);
   }
@@ -7619,6 +7540,8 @@
   }
 
   global.__READING_EXAM_MANIFEST__ = manifest;
+  global.__READING_EXAM_ALIASES__ = Object.freeze(Object.assign({}, RETIRED_EXAM_IDS));
+  global.resolveReadingExamId = resolveReadingExamId;
   global.__READING_EXAM_INDEX__ = buildReadingExamIndex();
   global.__READING_EXAM_INDEX__.pathRoot = clonePathRoot();
   global.__READING_EXAM_PATH_ROOT__ = clonePathRoot();

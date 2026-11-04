@@ -9,8 +9,8 @@
   "meta": {
     "title": "The history of the British wool industry 英国羊毛产业的历史",
     "category": "P1",
-    "frequency": "low",
-    "frequencyMonth": "2026-10"
+    "frequency": "medium",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

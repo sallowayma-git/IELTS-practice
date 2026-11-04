@@ -9,12 +9,12 @@
   "meta": {
     "title": "The origin and development of applause 掌声的历史",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "232. P2 - The origin and development of applause 掌声的历史.pdf",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [
