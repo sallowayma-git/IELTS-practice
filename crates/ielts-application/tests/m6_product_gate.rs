@@ -13,18 +13,14 @@
 //! Attempt B: same skill error
 //!   → preference candidate extractor produces candidate (preference.coach.*)
 //!   → candidate stays pending (NOT promoted to active preference)
-//! Attempt C: same skill improves
-//!   → link_coach_outcome(strategy_assignment_id, future_observation_id, learning)
 //! ```
 //!
 //! Assertions:
 //! - Feedback is an interaction fact; it does NOT auto-become a preference.
-//! - Satisfaction outcome (thumbs_up) and learning outcome are on separate rows.
 //! - Re-ask linkage is exact (parent → new user message).
 //! - Strategy assignment persists with contextSnapshotId provenance.
-//! - Outcome link connects to the future observation.
 //!
-//! Uses a FakeStore implementing all four M6 store ports — no SQLite, no
+//! Uses a FakeStore implementing the M6 store ports — no SQLite, no
 //! provider, no sidecar. The test verifies the closed-loop DATA FLOW, not model
 //! quality.
 
@@ -35,9 +31,9 @@ use ielts_application::{
     LearnerModelStore, MemoryStore, MemoryProposalOrigin, MemoryProposalValidator,
 };
 use ielts_domain::{
-    Activity, CoachFeedbackKind, CoachFollowupType, CoachOutcomeKind, CoachStrategyId,
+    Activity, CoachFeedbackKind, CoachFollowupType, CoachStrategyId,
     ExplicitPreference, ExplicitPreferenceUpsert, LearnerStateQuery, LearnerStateSnapshot,
-    LinkCoachOutcomeCommand, LearningEventEvidenceBatch, MemoryCandidateBatchReceipt,
+    LearningEventEvidenceBatch, MemoryCandidateBatchReceipt,
     MemoryCandidateInput, MemoryCandidatePersistenceInput, MemoryContextPreview,
     MemoryContextQuery, MemoryForgetCommand, MemoryMutationProposal,
     MemoryMutationProposalBatch, MemoryMutationReceipt, MemoryPromotionCommand, MemoryScope,
@@ -56,7 +52,6 @@ struct ClosedLoopFakeStore {
     feedback: Mutex<Vec<RecordCoachFeedbackCommand>>,
     reask: Mutex<Vec<RecordReaskLinkCommand>>,
     assignments: Mutex<Vec<RecordCoachStrategyAssignmentCommand>>,
-    outcomes: Mutex<Vec<LinkCoachOutcomeCommand>>,
     promotions: Mutex<Vec<MemoryPromotionCommand>>,
     explicit_preferences: Mutex<Vec<ExplicitPreferenceUpsert>>,
     /// Tracks which preference candidate canonical keys have been submitted
@@ -148,19 +143,6 @@ impl CoachFeedbackStore for ClosedLoopFakeStore {
             memory_ids_used: command.memory_ids_used.clone(),
             context_snapshot_id: command.context_snapshot_id.clone(),
             followup_type: command.followup_type,
-            created_at: "2026-08-16T00:00:00Z".into(),
-        })
-    }
-
-    fn link_coach_outcome(
-        &self,
-        command: &LinkCoachOutcomeCommand,
-    ) -> Result<ielts_domain::CoachOutcomeLinkRecord, ApplicationError> {
-        self.outcomes.lock().unwrap().push(command.clone());
-        Ok(ielts_domain::CoachOutcomeLinkRecord {
-            strategy_assignment_id: command.strategy_assignment_id.clone(),
-            future_observation_id: command.future_observation_id.clone(),
-            outcome_kind: command.outcome_kind,
             created_at: "2026-08-16T00:00:00Z".into(),
         })
     }
@@ -635,57 +617,6 @@ fn feedback_is_fact_not_preference_and_candidate_stays_pending() {
 }
 
 #[test]
-fn satisfaction_and_learning_outcomes_are_on_separate_rows() {
-    let store = ClosedLoopFakeStore::default();
-    let service = CoachFeedbackService::new(&store);
-
-    // Record a strategy assignment first.
-    let assignment = service
-        .record_strategy_assignment(&RecordCoachStrategyAssignmentCommand {
-            user_id: "local".into(),
-            coach_message_id: "cmsg-b".into(),
-            strategy_id: CoachStrategyId::EvidenceFirstV1,
-            skills_addressed: vec!["reading.matching_headings".into()],
-            memory_ids_used: vec![],
-            context_snapshot_id: Some("ctx-b".into()),
-            followup_type: CoachFollowupType::Explain,
-        })
-        .unwrap();
-
-    // M6-10: satisfaction outcome (thumbs_up) — interaction dimension.
-    let satisfaction = service
-        .link_outcome(&LinkCoachOutcomeCommand {
-            strategy_assignment_id: assignment.id.clone(),
-            future_observation_id: "lobs-feedback-b".into(),
-            outcome_kind: CoachOutcomeKind::Satisfaction,
-        })
-        .unwrap();
-    assert_eq!(satisfaction.outcome_kind, CoachOutcomeKind::Satisfaction);
-
-    // M6-10: learning outcome (later skill observation) — learning dimension.
-    let learning = service
-        .link_outcome(&LinkCoachOutcomeCommand {
-            strategy_assignment_id: assignment.id.clone(),
-            future_observation_id: "lobs-skill-improvement-c".into(),
-            outcome_kind: CoachOutcomeKind::Learning,
-        })
-        .unwrap();
-    assert_eq!(learning.outcome_kind, CoachOutcomeKind::Learning);
-
-    // The two outcomes are on SEPARATE rows and reference DIFFERENT evidence.
-    let outcomes = store.outcomes.lock().unwrap();
-    assert_eq!(outcomes.len(), 2);
-    assert_ne!(outcomes[0].outcome_kind, outcomes[1].outcome_kind);
-    assert_ne!(
-        outcomes[0].future_observation_id,
-        outcomes[1].future_observation_id
-    );
-    // Both link back to the same strategy assignment.
-    assert_eq!(outcomes[0].strategy_assignment_id, assignment.id);
-    assert_eq!(outcomes[1].strategy_assignment_id, assignment.id);
-}
-
-#[test]
 fn reask_linkage_is_exact_and_not_inferred_from_transcript() {
     let store = ClosedLoopFakeStore::default();
     let service = CoachFeedbackService::new(&store);
@@ -737,14 +668,12 @@ fn feedback_retry_is_idempotent_on_message_and_kind() {
 }
 
 #[test]
-fn closed_loop_attempt_a_to_c_links_outcome_to_future_observation() {
-    // This is the full M6 Product Gate loop (§8173-8186):
+fn closed_loop_attempt_a_to_b_keeps_candidate_pending() {
+    // The M6 Product Gate loop (§8173-8186), Attempts A and B:
     //   Attempt A (Matching Headings error)
     //     → feedback(incorrect) + strategy_assignment(evidence_first_v1)
     //   Attempt B (same skill error)
     //     → preference candidate appears (pending, not promoted)
-    //   Attempt C (same skill improves)
-    //     → link_coach_outcome(learning) connects the strategy to the future observation
     let store = ClosedLoopFakeStore::default();
     let coach_service = CoachFeedbackService::new(&store);
     let memory_service = ielts_application::MemoryService::new(&store);
@@ -758,7 +687,7 @@ fn closed_loop_attempt_a_to_c_links_outcome_to_future_observation() {
             payload: None,
         })
         .unwrap();
-    let assignment_a = coach_service
+    coach_service
         .record_strategy_assignment(&RecordCoachStrategyAssignmentCommand {
             user_id: "local".into(),
             coach_message_id: "cmsg-a".into(),
@@ -831,43 +760,14 @@ fn closed_loop_attempt_a_to_c_links_outcome_to_future_observation() {
         "pending candidate must not surface as active preference in the context preview"
     );
 
-    // --- Attempt C: same skill improves → outcome link ---
-    // M6-10: link the strategy assignment to the future observation that
-    // confirms the skill moved. This is a LEARNING outcome, not satisfaction.
-    let outcome = coach_service
-        .link_outcome(&LinkCoachOutcomeCommand {
-            strategy_assignment_id: assignment_a.id.clone(),
-            future_observation_id: "lobs-attempt-c-matching-headings-improved".into(),
-            outcome_kind: CoachOutcomeKind::Learning,
-        })
-        .unwrap();
-
-    assert_eq!(outcome.outcome_kind, CoachOutcomeKind::Learning);
-    assert_eq!(
-        outcome.future_observation_id,
-        "lobs-attempt-c-matching-headings-improved"
-    );
-    assert_eq!(outcome.strategy_assignment_id, assignment_a.id);
-
-    // Full closed-loop invariant: the outcome link connects the strategy
-    // assignment from Attempt A to the future observation from Attempt C.
-    let outcomes = store.outcomes.lock().unwrap();
-    assert_eq!(outcomes.len(), 1);
-    assert_eq!(outcomes[0].outcome_kind, CoachOutcomeKind::Learning);
-    assert_eq!(
-        outcomes[0].strategy_assignment_id,
-        assignment_a.id
-    );
-    assert_eq!(
-        outcomes[0].future_observation_id,
-        "lobs-attempt-c-matching-headings-improved"
-    );
+    // The strategy provenance of Attempt A is intact.
+    assert_eq!(store.assignments.lock().unwrap().len(), 1);
 }
 
 #[test]
 fn no_feedback_path_still_works() {
-    // M6 test: "no feedback path still works" — a strategy assignment and
-    // outcome link can be recorded without any user feedback at all.
+    // M6 test: "no feedback path still works" — a strategy assignment
+    // can be recorded without any user feedback at all.
     let store = ClosedLoopFakeStore::default();
     let coach_service = CoachFeedbackService::new(&store);
 
@@ -884,17 +784,7 @@ fn no_feedback_path_still_works() {
         .unwrap();
     assert_eq!(assignment.strategy_id, CoachStrategyId::ConciseDirectV1);
 
-    let outcome = coach_service
-        .link_outcome(&LinkCoachOutcomeCommand {
-            strategy_assignment_id: assignment.id.clone(),
-            future_observation_id: "lobs-future".into(),
-            outcome_kind: CoachOutcomeKind::Learning,
-        })
-        .unwrap();
-    assert_eq!(outcome.outcome_kind, CoachOutcomeKind::Learning);
-
-    // No feedback was recorded, but the strategy + outcome provenance is intact.
+    // No feedback was recorded, but the strategy provenance is intact.
     assert!(store.feedback.lock().unwrap().is_empty());
     assert_eq!(store.assignments.lock().unwrap().len(), 1);
-    assert_eq!(store.outcomes.lock().unwrap().len(), 1);
 }

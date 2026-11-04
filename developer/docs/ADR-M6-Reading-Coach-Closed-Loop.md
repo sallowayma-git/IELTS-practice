@@ -54,3 +54,25 @@ TechSpa `topic_drill.py` 做到了"评估 → weak point → spaced repetition �
 - `ATTEMPT_REVIEW_SYSTEM_PROMPT` 更新为描述 M6-03 Reading Review Context 优先级（CURRENT ATTEMPT → RELEVANT HISTORY → PERSONAL MEMORY → TEACHING PREFERENCE）。
 - M6 product gate 测试（7 tests）证明闭环数据流：feedback 是事实不自动变 preference、satisfaction ≠ learning、re-ask linkage exact、strategy assignment 含 contextSnapshotId、outcome link 连到 future observation。
 - 仓库级门禁 27/27 不回归。
+
+## 修订（2026-11-04）：outcome link 已移除
+
+上文 D4、"当前限制" 第 4 条以及 Consequences 中涉及 M6-10 outcome link 的内容描述的是历史设计，不是现状。`coach_outcome_links_v0`（迁移 0017 创建、0024 修外键）已由迁移 `0036_drop_coach_outcome_links.sql` 删除，连同 `coach_link_outcome` 命令、`LinkCoachOutcomeCommand` / `CoachOutcomeLinkRecord` / `CoachOutcomeKind`、`link_coach_outcome` 持久化函数和 `CoachFeedbackStore::link_coach_outcome` 端口。
+
+**原因**
+
+- 没有任何写入者。唯一的入口 `coach_link_outcome` 在 DB 层始终失败（fail-closed）：宿主没有可信的「教练回答 -> 之后某条观察」的归属证据（context 快照与教练线程、作答之间没有宿主拥有的绑定），所以拒绝授权任何新链接；它也从未出现在 webview 的 capability 白名单里。表里只有读取方（观察重建时的保存/恢复、备份校验），没有数据。
+- 因果归因本身不可靠。「教练回答之后某个技能观察变好了」无法区分是教练的功劳还是重做、遗忘曲线或题目难度；把它存成链接只会给下游一个看似可信的伪证据。
+- D4 的不变量（满意度 != 学习效果）并不依赖这张表：满意度是 `coach_feedback` 的事实，学习结果是观察层的事实，两者本来就在不同的表里。
+
+**替代方案**
+
+- 策略满意度直接联结：`coach_strategy_assignments_v0.coach_message_id = coach_feedback.coach_message_id`（每条助手消息至多一行策略、至多一个裁决反馈），不需要中间表。
+- 周报的 `afterCoach`（重做前是否问过教练的计数对比）是确定性 SQL，不读这张表，原样保留。它只报告计数对比，不声称因果。
+- 若以后确实需要「策略 -> 学习效果」，应在有宿主拥有的归属证据之后重新设计，而不是复活这张表。
+
+**兼容性**
+
+- 迁移 0036 是 `DROP TABLE IF EXISTS`，可重复执行；该表是纯子表（引用 `coach_strategy_assignments_v0` 与 `learner_observations`，没有视图、触发器、外键指向它），其两个索引随表删除。迁移前快照（`backups/pre-migrate-*.db`）保留原行。
+- 用旧版本导出的、含该表的备份包（格式 <= 22）仍可恢复：该表列入备份模块的 `DROPPED_TABLES`，恢复时接受并忽略（不校验列、不建表、不要求存在）；新导出的备份不再包含它。测试：`crates/ielts-db/tests/backup_release_history.rs` 中 `backups_exported_before_migration_0036_restore_without_the_outcome_link_table`、`the_ignored_outcome_link_table_is_not_validated_against_the_current_schema`；迁移测试 `migration_36_drops_the_outcome_link_table_and_its_rows_with_foreign_keys_on`。
+- 随之删除的测试：`satisfaction_and_learning_outcomes_are_on_separate_rows` 与 outcome link 相关的 DB 层测试（`coach_outcome_link_fk.rs`、`coach_feedback.rs` 中的 fail-closed 用例）；M6 product gate 的完整闭环测试缩短为 Attempt A -> B（feedback、strategy assignment、pending candidate）。

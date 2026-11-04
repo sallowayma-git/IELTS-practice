@@ -382,10 +382,8 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
     let build = build_projection(&events);
 
     // Apply only the difference, keyed by the deterministic observation id:
-    // unchanged rows are left alone, so the coach links and strategy outcomes
-    // that point at them are never touched. A row whose evidence changed is
-    // deleted and reinserted (evidence deletes cascade to the observation), so
-    // the dependents of those few rows are saved and reattached as before.
+    // unchanged rows are left alone. A row whose evidence changed is deleted
+    // and reinserted (evidence deletes cascade to the observation).
     let stored = load_stored_records(conn)?;
     let built = build
         .records
@@ -410,7 +408,6 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
             write.push(record.clone());
         }
     }
-    let dependents = save_observation_dependents(conn)?;
     let mut delete_statement =
         conn.prepare("DELETE FROM learner_observations WHERE id = ?1 AND projector_key = ?2")?;
     for id in &remove {
@@ -425,7 +422,6 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
         [],
     )?;
     insert_records(conn, &write)?;
-    restore_observation_dependents(conn, &dependents)?;
 
     let output_hash = output_hash(&build.records);
     let run_id = format!("lpr-{}", uuid::Uuid::new_v4());
@@ -464,47 +460,6 @@ pub(crate) fn learning_observations_rebuild_in_transaction(
         input_hash,
         output_hash,
     })
-}
-
-/// Rows outside the projection that reference this projector's observations:
-/// `coach_outcome_links_v0` (ON DELETE CASCADE).
-struct ObservationDependents {
-    /// (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
-    outcome_links: Vec<(String, String, String, String)>,
-}
-
-fn save_observation_dependents(conn: &Connection) -> DbResult<ObservationDependents> {
-    let mut statement = conn.prepare(
-        "SELECT l.strategy_assignment_id, l.future_observation_id, l.outcome_kind, l.created_at
-         FROM coach_outcome_links_v0 l
-         JOIN learner_observations o ON o.id = l.future_observation_id
-         WHERE o.projector_key = ?1",
-    )?;
-    let outcome_links = statement
-        .query_map(params![LEARNING_OBSERVATION_PROJECTOR_KEY], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(ObservationDependents { outcome_links })
-}
-
-/// Reattach saved dependents whose observation survived the rebuild. A row
-/// whose observation is gone (its source events were deleted) stays removed,
-/// exactly as its declared ON DELETE action intends.
-fn restore_observation_dependents(
-    conn: &Connection,
-    dependents: &ObservationDependents,
-) -> DbResult<()> {
-    let mut link_statement = conn.prepare(
-        "INSERT OR IGNORE INTO coach_outcome_links_v0
-           (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
-         SELECT ?1, ?2, ?3, ?4
-         WHERE EXISTS (SELECT 1 FROM learner_observations WHERE id = ?2)",
-    )?;
-    for (assignment_id, observation_id, kind, created_at) in &dependents.outcome_links {
-        link_statement.execute(params![assignment_id, observation_id, kind, created_at])?;
-    }
-    Ok(())
 }
 
 /// Hashes for the cheap freshness check: the ledger's input hash and the

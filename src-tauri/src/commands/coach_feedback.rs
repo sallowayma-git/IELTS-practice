@@ -2,7 +2,7 @@
 use ielts_application::CoachFeedbackService;
 #[cfg(feature = "learning-observation-v1")]
 use ielts_domain::{
-    CommandResponse, ErrorEnvelope, LinkCoachOutcomeCommand, RecordCoachFeedbackCommand,
+    CommandResponse, ErrorEnvelope, RecordCoachFeedbackCommand,
     RecordCoachStrategyAssignmentCommand, RecordReaskLinkCommand,
 };
 #[cfg(feature = "learning-observation-v1")]
@@ -48,19 +48,6 @@ pub fn coach_record_strategy_assignment(
 ) -> CommandResponse<ielts_domain::CoachStrategyAssignmentRecord> {
     let store = ApplicationStore::new(db.inner());
     respond(CoachFeedbackService::new(&store).record_strategy_assignment(&command))
-}
-
-/// M6-10: link a strategy assignment to a future observation. Satisfaction and
-/// learning outcomes are recorded on separate rows; a thumbs-up is never
-/// treated as a learning outcome.
-#[tauri::command]
-#[cfg(feature = "learning-observation-v1")]
-pub fn coach_link_outcome(
-    db: State<'_, AppDb>,
-    command: LinkCoachOutcomeCommand,
-) -> CommandResponse<ielts_domain::CoachOutcomeLinkRecord> {
-    let store = ApplicationStore::new(db.inner());
-    respond(CoachFeedbackService::new(&store).link_outcome(&command))
 }
 
 /// Durable feedback already recorded in a coach thread, so a reopened panel

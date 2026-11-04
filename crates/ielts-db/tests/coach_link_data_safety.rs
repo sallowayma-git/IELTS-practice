@@ -1,11 +1,8 @@
 //! P0 data-safety regressions for coach result links.
 //!
-//! 1. Deleting ONE history attempt runs the M2 projection rebuild, which used to
-//!    `DELETE FROM learner_observations WHERE projector_key = ...` and then
-//!    re-insert. `coach_outcome_links_v0.future_observation_id` cascades on that
-//!    delete, so every coach link in the database was wiped even though the rebuilt
-//!    observations come back with the same deterministic ids. Only links to the
-//!    deleted attempt's observations may disappear.
+//! 1. Deleting ONE history attempt runs the M2 projection rebuild. The
+//!    observations of the surviving attempts must come back with the same
+//!    deterministic ids, and the deleted attempt's observations must go.
 //! 2. A backup containing coach strategy assignments with a
 //!    `context_snapshot_id` could not be restored on a fresh device: the
 //!    referenced `agent_context_snapshots` table was not part of the backup, so
@@ -112,26 +109,8 @@ fn insert_coach_assignment(conn: &Connection, id: &str, message_id: &str, snapsh
     .unwrap();
 }
 
-fn link(conn: &Connection, assignment: &str, observation: &str) {
-    conn.execute(
-        "INSERT INTO coach_outcome_links_v0
-           (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
-         VALUES (?1, ?2, 'learning', '2026-08-16T00:00:00Z')",
-        params![assignment, observation],
-    )
-    .unwrap();
-}
-
-fn linked_observations(conn: &Connection) -> Vec<String> {
-    let mut stmt = conn
-        .prepare("SELECT future_observation_id FROM coach_outcome_links_v0 ORDER BY 1")
-        .unwrap();
-    let rows = stmt.query_map([], |row| row.get(0)).unwrap();
-    rows.map(Result::unwrap).collect()
-}
-
 #[test]
-fn deleting_one_attempt_keeps_coach_links_owned_by_other_attempts() {
+fn deleting_one_attempt_keeps_the_observation_ids_of_other_attempts() {
     let dir = tempdir().unwrap();
     let conn = open(&dir.path().join("delete.db"));
     insert_attempt(&conn, "att-keep");
@@ -142,26 +121,24 @@ fn deleting_one_attempt_keeps_coach_links_owned_by_other_attempts() {
     let keep_obs = observation_for_event(&conn, "ev-keep");
     let drop_obs = observation_for_event(&conn, "ev-drop");
 
-    let message = coach_message(&conn);
-    insert_coach_assignment(&conn, "asg-1", &message, None);
-    link(&conn, "asg-1", &keep_obs);
-    link(&conn, "asg-1", &drop_obs);
-
     assert!(delete_attempt(&conn, "att-drop").unwrap());
 
     // The surviving attempt's observation keeps its deterministic id ...
     assert_eq!(observation_for_event(&conn, "ev-keep"), keep_obs);
-    // ... and its coach links survive the projection rebuild.
-    assert_eq!(
-        linked_observations(&conn),
-        vec![keep_obs.clone()],
-        "deleting one attempt must only remove coach links to that attempt"
-    );
+    // ... and the deleted attempt's observation is gone.
+    let dropped: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM learner_observations WHERE id = ?1",
+            params![drop_obs],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(dropped, 0);
 
     // A plain rebuild (the learning_observations_rebuild command) is also
-    // non-destructive for links whose observation still exists.
+    // non-destructive for observations whose evidence is unchanged.
     ielts_db::learning_observations_rebuild(&conn).unwrap();
-    assert_eq!(linked_observations(&conn), vec![keep_obs]);
+    assert_eq!(observation_for_event(&conn, "ev-keep"), keep_obs);
 }
 
 fn insert_context_snapshot(conn: &Connection, id: &str) {
