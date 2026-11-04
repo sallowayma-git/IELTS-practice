@@ -42,6 +42,10 @@ STRATEGIES = {
     "concise_direct_v1",
 }
 KINDS = {"preference", "difficulty", "strategy_outcome"}
+# Mirror ielts_domain::TeachingNoteScope / TeachingNoteHorizon. A note without the
+# field means the host's default: profile, recent.
+SCOPES = {"profile", "question"}
+HORIZONS = {"session", "recent", "durable"}
 LANGS = {"zh", "en", "mixed"}
 ENV_KEYS = ("COACH_EVAL_BASE_URL", "COACH_EVAL_API_KEY", "COACH_EVAL_MODEL")
 
@@ -116,8 +120,10 @@ def validate_expect(name: str, expect: Any) -> list[str]:
     notes = expect.get("notes")
     if notes not in (True, False, "either"):
         return [f"{name}: expect.notes must be true, false or \"either\""]
-    allowed = {"notes", "kind", "remember", "skillKeyPrefix"} if notes is True else {"notes"}
+    allowed = {"notes", "scope", "kind", "remember", "skillKeyPrefix", "horizon"} if notes is True else {"notes", "scope"}
     problems = [f"{name}: expect.{key} is not allowed with notes={notes}" for key in sorted(set(expect) - allowed)]
+    if expect.get("scope") not in SCOPES | {"either"}:
+        problems.append(f"{name}: expect.scope must be one of {sorted(SCOPES | {'either'})}")
     if notes is not True:
         return problems
     kinds = expect.get("kind")
@@ -128,6 +134,11 @@ def validate_expect(name: str, expect: Any) -> list[str]:
     prefix = expect.get("skillKeyPrefix", "reading.")
     if not isinstance(prefix, str) or not prefix.startswith("reading."):
         problems.append(f"{name}: expect.skillKeyPrefix must start with \"reading.\"")
+    horizons = expect.get("horizon", ["recent"])
+    if not isinstance(horizons, list) or not horizons or not set(horizons) <= HORIZONS - {"session"}:
+        problems.append(f"{name}: expect.horizon must be a non-empty list of {sorted(HORIZONS - {'session'})}")
+    if expect.get("scope") == "question":
+        problems.append(f"{name}: a case that expects a note must expect a profile note")
     return problems
 
 
@@ -143,6 +154,8 @@ def validate_coverage(cases: list[dict[str, Any]]) -> list[str]:
         "3 remember=true cases": sum(expect.get("remember") is True for expect in with_notes) >= 3,
         "every note kind": all(any(kind in (expect.get("kind") or []) for expect in with_notes) for kind in KINDS),
         "a case that must avoid socratic_prompt_v1": any("socratic_prompt_v1" in case.get("avoidStrategies", []) for case in cases),
+        "5 question-scoped cases": sum(expect.get("scope") == "question" for expect in expects) >= 5,
+        "3 durable profile cases": sum("durable" in (expect.get("horizon") or []) and expect.get("remember") is True for expect in with_notes) >= 3,
     }
     return [f"coverage: corpus lacks {need}" for need, ok in wanted.items() if not ok]
 
@@ -193,6 +206,14 @@ def parse_reply(raw: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) and isinstance(value.get("answer"), str) and value["answer"].strip() else None
 
 
+def scope_of(note: dict[str, Any]) -> str:
+    return note["scope"] if note.get("scope") in SCOPES else "profile"
+
+
+def horizon_of(note: dict[str, Any]) -> str:
+    return note["horizon"] if note.get("horizon") in HORIZONS else "recent"
+
+
 def score(case: dict[str, Any], raw: str) -> dict[str, bool | None]:
     """One metric per promise; None when the case does not test it."""
     reply = parse_reply(raw)
@@ -204,7 +225,11 @@ def score(case: dict[str, Any], raw: str) -> dict[str, bool | None]:
     result["strategy_first"] = reply is not None and 0 <= first < answer_at
     result["strategy_known"] = strategy in STRATEGIES
     result["notes"] = None if expect["notes"] == "either" else bool(notes) == expect["notes"]
-    result["kind"] = result["remember"] = result["skill"] = None
+    result["kind"] = result["remember"] = result["skill"] = result["horizon"] = None
+    # Every note the model wrote must be about what the case says it is about.
+    result["scope"] = None
+    if notes and expect["scope"] != "either":
+        result["scope"] = all(scope_of(note) == expect["scope"] for note in notes)
     if expect["notes"] is True and notes:
         result["kind"] = any(note.get("kind") in expect["kind"] for note in notes)
         wants = expect["remember"]
@@ -212,13 +237,14 @@ def score(case: dict[str, Any], raw: str) -> dict[str, bool | None]:
         prefix = expect.get("skillKeyPrefix")
         if prefix:
             result["skill"] = any(str(note.get("skillKey", "")).startswith(prefix) for note in notes)
+        result["horizon"] = any(horizon_of(note) in expect.get("horizon", ["recent"]) for note in notes)
     avoid = case.get("avoidStrategies")
     result["avoids"] = None if not avoid else strategy not in avoid
     return result
 
 
 def report(rows: list[tuple[dict[str, Any], dict[str, bool | None]]]) -> float:
-    metrics = ["valid", "strategy_first", "strategy_known", "notes", "kind", "remember", "skill", "avoids"]
+    metrics = ["valid", "strategy_first", "strategy_known", "notes", "scope", "kind", "remember", "horizon", "skill", "avoids"]
     total_hit = total = 0
     print(f"\n{'metric':<16}{'hits':>6}{'of':>6}{'rate':>8}")
     for metric in metrics:
