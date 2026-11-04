@@ -33,6 +33,7 @@ pub mod secrets;
 pub mod settings;
 pub mod soul;
 pub mod sqlite;
+pub mod system_context;
 pub mod vocab;
 pub mod weekly_pack;
 pub mod weekly_report;
@@ -67,6 +68,7 @@ pub use safety::*;
 pub use secrets::*;
 pub use settings::*;
 pub use sqlite::*;
+pub use system_context::{build_coach_system_context, coach_profile_message, COACH_PROFILE_LABEL};
 pub use vocab::*;
 pub use weekly_pack::*;
 pub use weekly_report::{
