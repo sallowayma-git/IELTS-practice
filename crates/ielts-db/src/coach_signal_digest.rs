@@ -330,15 +330,28 @@ pub fn digest_notes(notes: &[CoachNote], now: DateTime<Utc>, windows: SignalWind
     entries
 }
 
-/// What makes two notes the same signal. A strategy outcome is the strategy and
-/// what it did (`helped` is not `not_helped`, one strategy is not another), not
-/// the skill it happened on: the rule "the same strategy gave the same result on
-/// different passages" counts exactly these.
+/// What makes two notes the same signal, by kind (the same rule as the host's
+/// own note identity in `teaching_notes`):
+///
+/// - a strategy outcome is the strategy and what it did (`helped` is not
+///   `not_helped`, one strategy is not another), not the skill it happened on: the
+///   rule "the same strategy gave the same result on different passages" counts
+///   exactly these;
+/// - a difficulty is the skill it is about (or its text without one): "the learner
+///   keeps getting this kind of question wrong" is one signal however it is worded;
+/// - a preference is its own text. A skill key only says where it was said, not
+///   what was asked for: "keep answers short" and "explain in detail" on the same
+///   skill are two preferences, and counting them as one signal that recurred would
+///   let a one-off preference earn promotion into long-term memory.
 fn subject(content: &NoteContent) -> (NoteKind, String) {
-    if let (NoteKind::StrategyOutcome, Some(strategy), Some(outcome)) =
-        (content.kind, content.strategy.as_deref(), content.outcome.as_deref())
-    {
-        return (content.kind, format!("{}|{outcome}", normalize(strategy)));
+    match content.kind {
+        NoteKind::StrategyOutcome => {
+            if let (Some(strategy), Some(outcome)) = (content.strategy.as_deref(), content.outcome.as_deref()) {
+                return (content.kind, format!("{}|{outcome}", normalize(strategy)));
+            }
+        }
+        NoteKind::Preference => return (content.kind, normalize(&content.text)),
+        NoteKind::Difficulty => {}
     }
     let skill = content.skill_key.as_deref().map(normalize).filter(|skill| !skill.is_empty());
     (content.kind, skill.unwrap_or_else(|| normalize(&content.text)))

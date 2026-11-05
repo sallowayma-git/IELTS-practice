@@ -400,3 +400,56 @@ fn the_profile_slice_keeps_a_durable_note_for_fourteen_days_and_a_recent_one_for
     let profile = build_coach_system_context_at(&conn, "local", now()).unwrap();
     assert_eq!(profile.recent_signals, slice);
 }
+
+#[test]
+fn different_preferences_on_one_skill_are_different_signals() {
+    // The reviewed case: one passage says the learner likes brief answers, another
+    // that they like detailed explanations. Both carry the same skill key. They are
+    // two preferences, each said once, on one passage each: neither recurred.
+    let (_dir, conn) = open();
+    let (a, b) = (thread(&conn, Some("P1")), thread(&conn, Some("P2")));
+    let brief = with(preference("该学习者喜欢简短的回答"), "skillKey", json!(SKILL));
+    let detailed = with(preference("该学习者喜欢详细的讲解"), "skillKey", json!(SKILL));
+    answer(&conn, &a, json!([with(with(brief, "remember", json!(true)), "horizon", json!("durable"))]), &ago(Duration::hours(30)));
+    answer(&conn, &b, json!([detailed]), &ago(Duration::hours(3)));
+
+    let got = digest(&conn);
+    assert_eq!(got.len(), 2, "two preferences, however alike their skill key");
+    for entry in &got {
+        assert_eq!((entry.repeat_count, entry.distinct_assets), (1, 1), "{}", entry.text);
+    }
+    // The older note's `remember` and durable horizon belong to the older note only.
+    let detailed = got.iter().find(|entry| entry.text == "该学习者喜欢详细的讲解").unwrap();
+    assert!(!detailed.remember);
+    assert_eq!(detailed.horizon, TeachingNoteHorizon::Recent);
+    let brief = got.iter().find(|entry| entry.text == "该学习者喜欢简短的回答").unwrap();
+    assert!(brief.remember);
+    assert_eq!(brief.horizon, TeachingNoteHorizon::Durable);
+}
+
+#[test]
+fn the_same_preference_on_two_passages_is_one_signal_that_recurred() {
+    // Counting recurrence still works for a preference: same text, same signal,
+    // whatever skill key either note carried.
+    let (_dir, conn) = open();
+    let (a, b) = (thread(&conn, Some("P1")), thread(&conn, Some("P2")));
+    // Case, hyphens, underscores and runs of spacing do not make another preference
+    // (the host's own note identity says the same); a different wording would.
+    answer(&conn, &a, json!([with(preference("Short  Examples first"), "skillKey", json!(SKILL))]), &ago(Duration::hours(30)));
+    answer(&conn, &b, json!([preference("short-examples first")]), &ago(Duration::hours(3)));
+    let got = digest(&conn);
+    assert_eq!(got.len(), 1);
+    assert_eq!((got[0].repeat_count, got[0].distinct_assets), (2, 2));
+}
+
+#[test]
+fn difficulties_still_group_by_skill_however_they_are_worded() {
+    // The change is for preferences only: a recurring difficulty is about the skill.
+    let (_dir, conn) = open();
+    let (a, b) = (thread(&conn, Some("P1")), thread(&conn, Some("P2")));
+    answer(&conn, &a, json!([difficulty(SKILL, "判断题总是错")]), &ago(Duration::hours(30)));
+    answer(&conn, &b, json!([difficulty(SKILL, "NOT GIVEN 总是分不清")]), &ago(Duration::hours(3)));
+    let got = digest(&conn);
+    assert_eq!(got.len(), 1);
+    assert_eq!((got[0].repeat_count, got[0].distinct_assets), (2, 2));
+}
