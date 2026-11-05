@@ -411,7 +411,7 @@
         const appVersion = field(options, 'appVersion', setup);
         const buildId = field(options, 'buildId', setup);
         const defaults = {
-            appVersion: matches(appVersion, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? appVersion : 'unknown',
+            appVersion: matches(appVersion, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.\d{1,3})?(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? appVersion : 'unknown',
             buildId: matches(buildId, /^(?:sha256:[a-f0-9]{64}|git:[a-f0-9]{40})$/) ? buildId : 'unknown',
             environment: environment(field(options, 'environment', setup), setup)
         };
@@ -458,7 +458,7 @@
             const build = wire ? field(input, 'buildId', context) : defaults.buildId;
             const event = {
                 schemaVersion: SCHEMA_VERSION,
-                appVersion: matches(version, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? version : 'unknown',
+                appVersion: matches(version, /^\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.\d{1,3})?(?:-(?:alpha|beta|rc|fix)(?:\.\d{1,4})?)?$/) ? version : 'unknown',
                 buildId: matches(build, /^(?:sha256:[a-f0-9]{64}|git:[a-f0-9]{40})$/) ? build : 'unknown',
                 ...identity,
                 fingerprint: '',

@@ -2,7 +2,9 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-[v0.6.3.1 Release Notes](RELEASE_NOTE-0.6.3.1.md)
+[v0.6.3.2 Release Notes](RELEASE_NOTE-0.6.3.2.md)
+
+[Download v0.6.3.2 runtime ZIP](https://github.com/sallowayma-git/IELTS-practice/releases/download/v0.6.3.2/ielts-practice-0.6.3.2.zip) · [Release and verification report](https://github.com/sallowayma-git/IELTS-practice/releases/tag/v0.6.3.2)
 
 [![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-blue)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
@@ -44,10 +46,12 @@ The system provides question-bank browsing, reading practice, optional listening
 
 **Run locally:**
 
-1. Download and extract the full project. Keep the directory structure intact — do not copy `index.html` alone.
+1. Download and fully extract the runtime ZIP linked above. Keep the directory structure intact — do not copy `index.html` alone.
 2. Open `index.html` in your browser.
 3. Go to **Library (题库浏览)** and confirm the question list loads.
 4. If the browser blocks a pop-up when you start a practice, allow it and try again.
+
+The runtime ZIP contains 527 files and runs without Node.js or build tools. The separate 543-file tagged tree also retains approved documentation, README demos, and legacy reading files. This README's development guides and build commands refer to the [qualified source checkout](https://github.com/sallowayma-git/IELTS-practice/tree/eb233ac75a38779ed1e01b6116aeb24837ab24cc); `developer/` and `scripts/` are absent from both the runtime ZIP and the tagged tree. See the release notes for the complete distinction and publication evidence.
 
 `index.html` is the only entry point; older entry pages mentioned in legacy docs are no longer valid. If your browser restricts `file://` resources, serve the project root instead:
 
@@ -90,6 +94,8 @@ If a practice opens but the score is not saved, check pop-up permissions, consol
 ### Listening Practice
 
 Listening practice connects through a listening index and the record bridge. For copyright compliance, the public repository and standard release packages do not include listening audio, question sources, PDFs, the full `ListeningPractice/` directory, or pre-generated listening indexes.
+
+The application wrapper at `assets/generated/listening-exams/listening-practice-unified.html` is included; it does not supply a local listening library.
 
 To enable listening locally, prepare your own resources and place the generated index at:
 
@@ -193,8 +199,9 @@ index.html
 css/
 js/bundles/
 assets/
-ReadingPractice/
 ```
+
+`ReadingPractice/` is an optional local resource directory and is absent from the published v0.6.3.2 runtime ZIP. Generated HTML reading exercises are included; opening a PDF requires the corresponding local file, and known missing PDFs have no active PDF action.
 
 Key source directories:
 
@@ -216,6 +223,8 @@ Release packages should contain only the files users need at runtime — no sour
 
 ## Build & Release
 
+Run these commands from a source checkout containing `developer/` and `scripts/`, with Node.js installed. The Bash packaging script also requires `zip` and `zipinfo`. For v0.6.3.2, use the qualified source linked above: the version argument names the output archive and does not update the embedded application version.
+
 `index.html` loads prebuilt `js/bundles/*.bundle.js`. After editing any source file, rebuild the bundles — never edit them by hand:
 
 ```bash
@@ -226,17 +235,21 @@ Create a release package (the script rebuilds bundles first, then packs the runt
 
 ```bash
 # Linux / Git Bash
-bash developer/release.sh 0.6.2-fix
+INCLUDE_LOCAL_LISTENING=0 bash developer/release.sh 0.6.3.2
+```
+
+```powershell
 # Windows PowerShell
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
+$env:INCLUDE_LOCAL_LISTENING = "0"
+powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.3.2
 ```
 
 Output: `dist/ielts-practice-{version}.zip`.
 
-Standard packages exclude your local `ListeningPractice/` directory and listening assets. To bundle self-prepared listening resources into a personal-use package, first make sure `assets/generated/listening-exams/manifest.js` and `listening-index.compat.js` exist, then build with:
+Standard packages retain the application listening wrapper and exclude local listening indexes, media, and your `ListeningPractice/` directory. To bundle self-prepared listening resources into a personal-use package, first make sure `assets/generated/listening-exams/manifest.js` and `listening-index.compat.js` exist, then build with:
 
 ```bash
-INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
+INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.3.2
 # PowerShell: set $env:INCLUDE_LOCAL_LISTENING = "1" before running release.ps1
 ```
 
@@ -265,7 +278,7 @@ These are mandatory after changes to runtime code, bank indexes, asset paths, pr
 
 ### Styles broken or features missing after opening the page
 
-Usually an incomplete directory or wrong asset path. Verify that `css/`, `js/bundles/`, `assets/`, and `ReadingPractice/` exist with relative paths intact, and extract release packages fully. Never run `index.html` alone from another directory.
+Usually an incomplete directory or wrong asset path. Verify that `css/`, `js/bundles/`, and `assets/` exist with relative paths intact, and extract release packages fully. `ReadingPractice/` is needed only for separately supplied local resources. Never run `index.html` alone from another directory.
 
 ### Clicking a practice opens no window
 

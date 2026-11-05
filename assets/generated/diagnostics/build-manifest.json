@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "appVersion": "0.6.2-fix",
-  "buildId": "sha256:d9404c33ad0accd3150927159200c8c2976251fb624934eea3d37b3845ef77a5",
+  "appVersion": "0.6.3.2",
+  "buildId": "sha256:1b0d80cab9f6c7d9ecf10a4c92b68f6595bfa8479595bcf4625ca776f7d54a26",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -538,7 +538,7 @@
     },
     {
       "path": "developer/package.json",
-      "sha256": "2e307fe66f50185670cae7b92dfd1ba149f2bc13f761fe3b96ec381d620c2683"
+      "sha256": "dcb01d2c056ccf4604d7cf7b584814acfcae047743214098f56525c28bafa985"
     },
     {
       "path": "index.html",
@@ -550,7 +550,7 @@
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "d8571e5a9af0512f46ab61536763d44dbd4bbae02d85687a2920d18f98163389"
+      "sha256": "89d1c2d6cff01b7e09bd93253de03e4834db17faafbc102976c34b5f9dd0e040"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -566,11 +566,11 @@
     },
     {
       "path": "js/bundles/listening-record-bridge.bundle.js",
-      "sha256": "24e885646b321f8f0764e34746cdcf3a6af494bbc3df7734db5aa5b771e538cc"
+      "sha256": "fcd3b7d7aae309f1113620a638fefbff12de5f0305b28aaf5e129a212f3b7d3a"
     },
     {
       "path": "js/bundles/listening-wrapper.bundle.js",
-      "sha256": "408715753124964e5936c17c70b2c293a3214d02ade7179c01456c2f00e5814d"
+      "sha256": "f2b11cb818acd8e04053dfeb95e3b4d71cdb9142726a78e5b5c6264681771e83"
     },
     {
       "path": "js/bundles/more.bundle.js",
@@ -578,7 +578,7 @@
     },
     {
       "path": "js/bundles/practice-page-enhancer.bundle.js",
-      "sha256": "95d483ab10d67b76ca6bfc357b2c0216c0de56596ca51ee0b00a29e97ea6b9c9"
+      "sha256": "d10cb8a5a01f1a70b26418b2847732db28e2bc1875e14581e00ac3917195d53a"
     },
     {
       "path": "js/bundles/practice.bundle.js",
@@ -590,7 +590,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "606c4b5b55dbe31e51c987e2f92cee65518c62b58a00c66699a97f8edcea67f9"
+      "sha256": "f0c157cd8534c188e52b70813cea73ef06c07c374f52d84d5982d220845749c7"
     },
     {
       "path": "js/bundles/reading-tools.bundle.js",
@@ -622,7 +622,7 @@
     },
     {
       "path": "js/diagnostics/diagnosticContract.js",
-      "sha256": "c6e757387b7a9aa03dfa3ca64b42e97ed28c7b09ffba3ead10882ac84c46937a"
+      "sha256": "a07f2c8a8d8fe79feeb9a5b5b36c85aad2db3bcb9b336612498c5f1ccc74d3e5"
     },
     {
       "path": "scripts/build-bundles.mjs",

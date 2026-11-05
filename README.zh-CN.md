@@ -2,7 +2,9 @@
 
 [English](README.md) | **简体中文**
 
-[v0.6.3.1 更新说明](RELEASE_NOTE-0.6.3.1.md)
+[v0.6.3.2 更新说明](RELEASE_NOTE-0.6.3.2.md)
+
+[下载 v0.6.3.2 运行 ZIP](https://github.com/sallowayma-git/IELTS-practice/releases/download/v0.6.3.2/ielts-practice-0.6.3.2.zip) · [Release 与验证报告](https://github.com/sallowayma-git/IELTS-practice/releases/tag/v0.6.3.2)
 
 [![Ask DeepWiki](https://img.shields.io/badge/Ask_DeepWiki-blue)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
@@ -51,11 +53,13 @@ Firefox、Safari 和移动浏览器可以使用，但对 `file://`、PDF、音�
 
 ### 本地直接运行
 
-1. 下载或解压完整项目目录。
+1. 从上方链接下载并完整解压运行 ZIP。
 2. 保持目录结构完整，不要只复制 `index.html`。
 3. 双击打开根目录下的 `index.html`。
 4. 进入“题库浏览”确认题库列表是否正常显示。
 5. 点击任意练习项时，如浏览器提示弹窗拦截，请允许该页面打开新窗口。
+
+运行 ZIP 包含 527 个文件，使用时无需 Node.js 或构建工具。单独的 543 文件标签树还保留已批准的文档、README 演示和旧阅读文件。本文的开发文档及构建命令适用于[已验收源码检出](https://github.com/sallowayma-git/IELTS-practice/tree/eb233ac75a38779ed1e01b6116aeb24837ab24cc)；运行 ZIP 和标签树均不包含 `developer/`、`scripts/`。完整文件范围与发布证据见更新说明。
 
 当前入口只有 `index.html`。旧文档中出现过的 `improved-working-system.html` 不再是有效入口。
 
@@ -127,6 +131,8 @@ assets/generated/reading-explanations/
 ### 听力练习
 
 听力练习通过听力索引和记录桥接模块接入。出于版权合规考虑，公开仓库和普通发布包默认不包含听力音频、配套题源、PDF、完整 `ListeningPractice/` 目录或预生成听力索引。
+
+应用听力包装页 `assets/generated/listening-exams/listening-practice-unified.html` 包含在分发中；它本身不提供本地听力题库。
 
 如需在个人本地环境启用听力练习，可自行准备听力资源，并按可选扩展路径放置生成索引：
 
@@ -296,8 +302,9 @@ index.html
 css/
 js/bundles/
 assets/
-ReadingPractice/
 ```
+
+`ReadingPractice/` 是可选本地资源目录，已发布的 v0.6.3.2 运行 ZIP 不包含该目录。包内包含生成的 HTML 阅读练习；打开 PDF 仍需要相应本地文件，已知缺失的 PDF 不提供可点击入口。
 
 主要源码目录：
 
@@ -322,6 +329,8 @@ scripts/             构建脚本
 
 ## 构建与发布
 
+以下命令须在包含 `developer/`、`scripts/` 的源码检出中执行，并安装 Node.js；Bash 打包还需要 `zip` 和 `zipinfo`。构建 v0.6.3.2 时使用上方链接的已验收源码：版本参数只决定输出压缩包名称，不会修改应用内嵌版本。
+
 ### 生成 bundle
 
 `index.html` 当前加载 `js/bundles/*.bundle.js`。修改源码后必须重新生成 bundle：
@@ -337,13 +346,14 @@ node scripts/build-bundles.mjs
 Linux / Git Bash：
 
 ```bash
-bash developer/release.sh 0.6.2-fix
+INCLUDE_LOCAL_LISTENING=0 bash developer/release.sh 0.6.3.2
 ```
 
 Windows PowerShell：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
+$env:INCLUDE_LOCAL_LISTENING = "0"
+powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.3.2
 ```
 
 输出位置：
@@ -356,17 +366,17 @@ dist/ielts-practice-{version}.zip
 
 ### 包含本地听力资源
 
-普通发布包默认排除完整 `ListeningPractice/` 目录和听力生成资产。如果需要将自备本地听力资源打入个人自用发布包，使用：
+普通发布包保留应用听力包装页，默认排除本地听力索引、媒体和完整 `ListeningPractice/` 目录。如果需要将自备本地听力资源打入个人自用发布包，使用：
 
 ```bash
-INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
+INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.3.2
 ```
 
 PowerShell：
 
 ```powershell
 $env:INCLUDE_LOCAL_LISTENING = "1"
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
+powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.3.2
 ```
 
 该模式要求存在：
@@ -475,7 +485,7 @@ assets/generated/reading-explanations/
 assets/generated/listening-exams/
 ```
 
-公开仓库和普通发布包可能不包含该目录。运行时题库数量以生成资产中的 manifest 和当前题库配置为准。README 不再写固定题量，避免题库更新后文档失真。
+公开仓库和普通发布包保留该目录中的应用听力包装页，本地听力索引和题源则属于可选资源。运行时题库数量以生成资产中的 manifest 和当前题库配置为准。README 不再写固定题量，避免题库更新后文档失真。
 
 ## 常见问题
 
@@ -487,10 +497,9 @@ assets/generated/listening-exams/
 css/
 js/bundles/
 assets/
-ReadingPractice/
 ```
 
-如果使用发布包，确认压缩包解压完整。不要将 `index.html` 单独复制到其他目录运行。
+`ReadingPractice/` 只在使用另行提供的本地资源时需要。如果使用发布包，确认压缩包解压完整。不要将 `index.html` 单独复制到其他目录运行。
 
 ### 点击练习后没有打开窗口
 
