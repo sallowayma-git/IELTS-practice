@@ -5,14 +5,14 @@
     <div class="reading-note-drawer-head">
       <div class="reading-note-drawer-title">
         <h3>Notes</h3>
-        <button class="reading-note-outline-add" type="button" title="New note" @click="$emit('open-editor')">+</button>
+        <button class="reading-note-outline-add" type="button" title="New note" :tabindex="drawerTabindex" @click="$emit('open-editor')">+</button>
       </div>
-      <button class="reading-note-close" type="button" aria-label="关闭笔记列表" @click="$emit('close-drawer')">×</button>
+      <button class="reading-note-close" type="button" aria-label="关闭笔记列表" :tabindex="drawerTabindex" @click="$emit('close-drawer')">×</button>
     </div>
     <div class="reading-note-list">
       <div v-if="!entries.length" class="reading-note-empty">No notes yet.</div>
       <div v-for="(note, index) in entries" :key="note.id || note.text + index" class="reading-note-row">
-        <button class="reading-note-open" type="button" :title="note.text" @click="$emit('locate', note)">{{ note.text }}</button>
+        <button class="reading-note-open" type="button" :title="note.text" :tabindex="drawerTabindex" @click="$emit('locate', note)">{{ note.text }}</button>
       </div>
     </div>
   </aside>
@@ -44,7 +44,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 const props = defineProps({
   drawerOpen: { type: Boolean, default: false },
@@ -59,6 +59,9 @@ defineEmits(['open-editor', 'close-editor', 'close-drawer', 'locate', 'update:te
 // The opensource editor is a fixed, draggable dialog; centred here.
 const editorStyle = { display: 'flex', left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }
 const textarea = ref(null)
+// A closed drawer is only slid off-screen (its computed style is part of the exam
+// freeze, so it is not display:none / inert): keep its buttons out of Tab order.
+const drawerTabindex = computed(() => (props.drawerOpen ? undefined : -1))
 
 watch(() => props.editorOpen, async (open) => {
   if (!open) return

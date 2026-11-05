@@ -148,9 +148,13 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
     handleFloatingPanelKeydown(event, settingsPanel.value)
   }
 
+  // `notesPanel` wraps the notes drawer and the editor; only the editor is the
+  // modal dialog. Trapping Tab over the whole wrapper let focus walk into the
+  // drawer's buttons (closed and off-screen, or open and behind the modal).
   function handleNotesDialogKeydown(event: KeyboardEvent) {
     if (!notesPanelOpen.value) return
-    handleFloatingPanelKeydown(event, notesPanel.value)
+    const dialog = notesPanel.value?.querySelector<HTMLElement>('[role="dialog"]') ?? null
+    handleFloatingPanelKeydown(event, dialog)
   }
 
   function setSuiteAutoAdvance(value: unknown) {
