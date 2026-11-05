@@ -969,6 +969,8 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
     def test_constants(self) -> None:
         self.assertEqual(DEFAULT_COGNITIVE_DEADLINE_MS, 400_000)
         self.assertEqual(MIN_OBSERVATIONS, 8)
+        # Mirrors of the host's promotion rule (`PROMOTE_MIN_*` in ielts_db::weekly_pack).
+        self.assertEqual((weekly_module.PROMOTE_MIN_REPEATS, weekly_module.PROMOTE_MIN_ASSETS), (2, 2))
         self.assertEqual(fallback_result("why").fallback_reason, "why")
 
 
