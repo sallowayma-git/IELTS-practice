@@ -4,7 +4,7 @@
 //! consolidation (or the learner, on a preference card) turns notes into a
 //! `preference` or `strategy` memory, the memory cites the `coach.question.asked`
 //! observation of the learner message the coach answered (`weekly_pack` puts it on
-//! the coach line, paired by the answer, not by what a note quotes). This read walks
+//! the signal built from the note, paired by the answer, not by what a note quotes). This read walks
 //! the same lineage the other way, with no new table: memory evidence ->
 //! observation -> coach message ids, so a memory can always answer "which exchange
 //! said so?". Read-only; the lineage is the memory's own `memory_evidence` rows.
