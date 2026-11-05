@@ -19,22 +19,43 @@ pub const WEEKLY_MAX_MUTATIONS: usize = 8;
 pub struct WeeklyEvidence {
     pub observation_ids: BTreeSet<String>,
     pub memory_ids: BTreeSet<String>,
+    /// The observations of the learner messages behind any coach signal of the
+    /// pack, and those among them behind a signal that earns long-term memory
+    /// (said by the learner as "remember this", or repeated in several answers on
+    /// several passages). Empty when the pack carried no signal.
+    pub signal_ids: BTreeSet<String>,
+    pub promoted_signal_ids: BTreeSet<String>,
 }
 
 impl WeeklyEvidence {
-    /// A weekly mutation is new / reinforce / supersede / archive, cites only
-    /// observations of the pack, and targets only memories of the pack.
+    /// A weekly mutation is one of the lifecycle actions the weekly pass owns
+    /// (new, reinforce, refine, improve, regress, contradict, supersede, archive),
+    /// cites only observations of the pack, targets only memories of the pack, and
+    /// rests on enough evidence: a claim made or strengthened from coach signals
+    /// must cite at least one signal that earns promotion. One remark on one
+    /// passage, not asked to be remembered, is not evidence for a lasting memory.
     pub fn admits(&self, proposal: &MemoryMutationProposal) -> bool {
-        let action_allowed = matches!(
-            proposal,
-            MemoryMutationProposal::Add { .. }
-                | MemoryMutationProposal::Reinforce { .. }
-                | MemoryMutationProposal::Supersede { .. }
-                | MemoryMutationProposal::Archive { .. }
-        );
+        let action_allowed = !matches!(proposal, MemoryMutationProposal::Noop {});
         action_allowed
             && proposal.evidence_observation_ids().iter().all(|id| self.observation_ids.contains(id))
             && proposal.target_memory_id().is_none_or(|id| self.memory_ids.contains(id))
+            && self.rests_on_enough_evidence(proposal)
+    }
+
+    /// Adding or strengthening a claim (`ADD`, `REINFORCE`, `REFINE`, `SUPERSEDE`)
+    /// that cites coach signals needs a promoted one among them. Retiring or
+    /// re-grading a memory cites practice evidence, not signals, and is not gated.
+    fn rests_on_enough_evidence(&self, proposal: &MemoryMutationProposal) -> bool {
+        let makes_a_claim = matches!(
+            proposal,
+            MemoryMutationProposal::Add { .. }
+                | MemoryMutationProposal::Reinforce { .. }
+                | MemoryMutationProposal::Refine { .. }
+                | MemoryMutationProposal::Supersede { .. }
+        );
+        let cited = proposal.evidence_observation_ids();
+        let on_signals = cited.iter().any(|id| self.signal_ids.contains(id));
+        !makes_a_claim || !on_signals || cited.iter().any(|id| self.promoted_signal_ids.contains(id))
     }
 
     /// Split a model's mutations into those the pack supports and a count of
@@ -139,6 +160,7 @@ mod tests {
         WeeklyEvidence {
             observation_ids: ["obs-1", "obs-2"].map(String::from).into_iter().collect(),
             memory_ids: ["mem-1"].map(String::from).into_iter().collect(),
+            ..WeeklyEvidence::default()
         }
     }
 
@@ -167,9 +189,51 @@ mod tests {
         // An id the pack never offered is invented evidence; so is a foreign target.
         assert!(!pack.admits(&add(&["obs-1", "obs-9"])));
         assert!(!pack.admits(&targeted("REINFORCE", "mem-9", &["obs-1"])));
-        // Weekly passes do not refine, improve, regress or contradict.
-        assert!(!pack.admits(&targeted("REGRESS", "mem-1", &["obs-1"])));
         assert!(!pack.admits(&MemoryMutationProposal::Noop {}));
+    }
+
+    #[test]
+    fn the_weekly_pass_owns_the_whole_memory_lifecycle() {
+        let pack = evidence();
+        for action in ["IMPROVE", "REGRESS", "CONTRADICT"] {
+            assert!(pack.admits(&targeted(action, "mem-1", &["obs-1"])), "{action}");
+            assert!(!pack.admits(&targeted(action, "mem-9", &["obs-1"])), "{action}: foreign target");
+            assert!(!pack.admits(&targeted(action, "mem-1", &["obs-9"])), "{action}: invented evidence");
+        }
+        let refine = serde_json::from_value::<MemoryMutationProposal>(serde_json::json!({
+            "action": "REFINE", "targetMemoryId": "mem-1", "proposedStatement": "Reads the stem and options first.",
+            "evidenceObservationIds": ["obs-1"],
+        }))
+        .unwrap();
+        assert!(pack.admits(&refine));
+    }
+
+    fn with_signals() -> WeeklyEvidence {
+        WeeklyEvidence {
+            observation_ids: ["obs-1", "obs-2", "obs-3", "obs-4"].map(String::from).into_iter().collect(),
+            memory_ids: ["mem-1"].map(String::from).into_iter().collect(),
+            // obs-2 stands behind a one-off remark, obs-3 behind a repeated signal.
+            signal_ids: ["obs-2", "obs-3"].map(String::from).into_iter().collect(),
+            promoted_signal_ids: ["obs-3"].map(String::from).into_iter().collect(),
+        }
+    }
+
+    #[test]
+    fn a_claim_resting_only_on_a_one_off_signal_is_not_admitted() {
+        let pack = with_signals();
+        // Practice evidence alone is not a signal claim.
+        assert!(pack.admits(&add(&["obs-1"])));
+        // A one-off remark alone is not enough, for any claim-making action...
+        assert!(!pack.admits(&add(&["obs-2"])));
+        assert!(!pack.admits(&targeted("REINFORCE", "mem-1", &["obs-2"])));
+        assert!(!pack.admits(&add(&["obs-1", "obs-2"])), "practice lines do not launder a weak signal");
+        // ...a promoted signal is, alone or beside a weak one...
+        assert!(pack.admits(&add(&["obs-3"])));
+        assert!(pack.admits(&add(&["obs-2", "obs-3"])));
+        assert!(pack.admits(&targeted("REINFORCE", "mem-1", &["obs-3"])));
+        // ...and retiring or re-grading a memory is not a claim from a signal.
+        assert!(pack.admits(&targeted("ARCHIVE", "mem-1", &["obs-2"])));
+        assert!(pack.admits(&targeted("IMPROVE", "mem-1", &["obs-2"])));
     }
 
     #[test]

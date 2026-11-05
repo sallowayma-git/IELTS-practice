@@ -48,6 +48,13 @@ class MemoryNamespace(StrEnum):
     GOAL = "goal"
 
 
+class MemoryHorizon(StrEnum):
+    """How long a proposed memory is expected to stay true (an ADD may say)."""
+
+    RECENT = "recent"
+    DURABLE = "durable"
+
+
 class Activity(StrEnum):
     READING = "reading"
     WRITING = "writing"
@@ -72,10 +79,12 @@ class AddProposal:
     scope: ActivityScope
     statement: str
     evidence_observation_ids: tuple[str, ...]
+    # Absent means durable; the host (not the model) turns ``recent`` into an expiry.
+    horizon: MemoryHorizon | None = None
     action: ClassVar[MemoryProposalAction] = MemoryProposalAction.ADD
 
     def to_wire(self) -> dict[str, Any]:
-        return {
+        wire: dict[str, Any] = {
             "action": self.action.value,
             "namespace": self.namespace.value,
             "canonicalKey": self.canonical_key,
@@ -83,6 +92,9 @@ class AddProposal:
             "statement": self.statement,
             "evidenceObservationIds": list(self.evidence_observation_ids),
         }
+        if self.horizon is not None:
+            wire["horizon"] = self.horizon.value
+        return wire
 
     def as_dict(self) -> dict[str, Any]:
         return self.to_wire()
@@ -206,6 +218,7 @@ _ADD_FIELDS = frozenset(
         "evidenceObservationIds",
     }
 )
+_ADD_OPTIONAL_FIELDS = frozenset({"horizon"})
 _TARGET_FIELDS = frozenset({"action", "targetMemoryId", "evidenceObservationIds"})
 _REFINE_FIELDS = frozenset(
     {"action", "targetMemoryId", "proposedStatement", "evidenceObservationIds"}
@@ -326,7 +339,8 @@ def _parse_proposal(raw: Any, path: str) -> MemoryProposal:
             "unknown_action", f"{path}.action", f"unsupported action {action_value!r}"
         ) from error
 
-    _require_exact_fields(proposal, _ACTION_FIELDS[action], path)
+    optional = _ADD_OPTIONAL_FIELDS if action is MemoryProposalAction.ADD else frozenset()
+    _require_exact_fields(proposal, _ACTION_FIELDS[action], path, optional)
     if action is MemoryProposalAction.NOOP:
         return NoopProposal()
     if action is MemoryProposalAction.ADD:
@@ -356,6 +370,9 @@ def _parse_add(proposal: dict[str, Any], path: str) -> AddProposal:
         evidence_observation_ids=_evidence_ids(
             proposal["evidenceObservationIds"], path
         ),
+        horizon=_horizon(proposal.get("horizon"), f"{path}.horizon")
+        if "horizon" in proposal
+        else None,
     )
 
 
@@ -390,9 +407,12 @@ def _parse_supersede(proposal: dict[str, Any], path: str) -> SupersedeProposal:
 
 
 def _require_exact_fields(
-    value: dict[str, Any], expected: frozenset[str], path: str
+    value: dict[str, Any],
+    expected: frozenset[str],
+    path: str,
+    optional: frozenset[str] = frozenset(),
 ) -> None:
-    unknown = sorted(set(value).difference(expected))
+    unknown = sorted(set(value).difference(expected | optional))
     if unknown:
         raise MemoryProposalParseError(
             "schema_unknown_field", path, f"unknown fields: {unknown!r}"
@@ -431,6 +451,16 @@ def _namespace(value: Any, path: str) -> MemoryNamespace:
     except ValueError as error:
         raise MemoryProposalParseError(
             "invalid_namespace", path, f"unsupported namespace {namespace!r}"
+        ) from error
+
+
+def _horizon(value: Any, path: str) -> MemoryHorizon:
+    horizon = _string(value, path)
+    try:
+        return MemoryHorizon(horizon)
+    except ValueError as error:
+        raise MemoryProposalParseError(
+            "invalid_horizon", path, "horizon must be 'recent' or 'durable'"
         ) from error
 
 

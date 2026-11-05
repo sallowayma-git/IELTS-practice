@@ -13,6 +13,7 @@ from ielts_agent.memory_proposals import (
     MAX_MEMORY_KEY_BYTES,
     MAX_MEMORY_PROPOSALS,
     MAX_MEMORY_STATEMENT_BYTES,
+    MemoryHorizon,
     MemoryProposalAction,
     MemoryProposalParseError,
     parse_memory_proposal_batch,
@@ -96,6 +97,27 @@ class MemoryProposalBoundaryTests(unittest.TestCase):
             [proposal.action for proposal in parsed.proposals],
             list(MemoryProposalAction),
         )
+
+    def test_an_add_may_carry_a_horizon_and_an_old_add_means_what_it_meant(self) -> None:
+        old = parse_memory_proposal_batch(batch([add_proposal()])).proposals[0]
+        self.assertIsNone(old.horizon)
+        self.assertNotIn("horizon", old.to_wire(), "an absent horizon is not written back as a default")
+        for word in ("recent", "durable"):
+            proposal = parse_memory_proposal_batch(batch([add_proposal(horizon=word)])).proposals[0]
+            self.assertEqual(proposal.horizon, MemoryHorizon(word))
+            self.assertEqual(proposal.to_wire(), add_proposal(horizon=word))
+
+    def test_a_horizon_must_be_recent_or_durable(self) -> None:
+        for bad in ("session", "Recent", "", "30d"):
+            error = self.assert_rejected(batch([add_proposal(horizon=bad)]), "invalid_horizon")
+            self.assertEqual(error.path, "$.proposals[0].horizon")
+        for bad in (30, None, ["recent"], {"days": 30}, True):
+            self.assert_rejected(batch([add_proposal(horizon=bad)]), "schema_type_error")
+
+    def test_only_an_add_may_carry_a_horizon(self) -> None:
+        for action in ("REINFORCE", "IMPROVE", "REGRESS", "CONTRADICT", "ARCHIVE"):
+            self.assert_rejected(batch([target_proposal(action, horizon="recent")]), "schema_unknown_field")
+        self.assert_rejected(batch([{"action": "NOOP", "horizon": "recent"}]), "schema_unknown_field")
 
     def test_unknown_action_fields_and_array_index_mutation_are_rejected(self) -> None:
         self.assert_rejected(batch([{"action": "DELETE"}]), "unknown_action")

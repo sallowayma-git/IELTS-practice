@@ -24,6 +24,7 @@ pub mod learning_tools;
 pub mod local_day;
 pub mod memory;
 pub mod memory_card;
+pub mod memory_forgetting;
 pub mod memory_provenance;
 pub mod learner;
 pub mod llm_usage;
@@ -65,6 +66,9 @@ pub use memory::*;
 pub use memory_card::{
     active_card_memory, load_memory_card, memory_card_key, set_memory_card_state, MemoryCardSource, CARD_CONFIRMED,
     CARD_DISMISSED,
+};
+pub use memory_forgetting::{
+    sweep_forgotten_memories, ForgetReport, IMPROVED_FORGET_DAYS, STALE_FORGET_DAYS, STALE_RECALL_FLOOR,
 };
 pub use memory_provenance::{memory_coach_sources, CoachMessageSource};
 pub use learner::*;

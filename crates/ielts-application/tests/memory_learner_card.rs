@@ -14,7 +14,7 @@ use ielts_db::{
 };
 use ielts_domain::{
     Activity, ExplicitPreference, ExplicitPreferenceUpsert, MemoryCandidateBatchReceipt, MemoryCandidateInput,
-    MemoryCandidatePersistenceInput, MemoryContextPreview, MemoryContextQuery, MemoryMutationProposal,
+    MemoryCandidatePersistenceInput, MemoryContextPreview, MemoryHorizon, MemoryContextQuery, MemoryMutationProposal,
     MemoryMutationProposalBatch, MemoryMutationReceipt, MemoryNamespace, MemoryPromotionCommand, MemoryScope,
     MemorySourceClass, MemoryValidationSnapshot, MAX_ACTIVE_MEMORY_PER_SCOPE, MEMORY_PROPOSAL_SCHEMA_VERSION,
 };
@@ -404,6 +404,7 @@ fn a_full_scope_makes_room_for_the_learners_card_and_never_evicts_it_later() {
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: "该学习者希望讲解简短一些。".into(),
         evidence_observation_ids: vec![evidence],
+        horizon: None,
     };
     let outcome = service
         .apply_cognitive_mutations(
@@ -509,6 +510,7 @@ fn the_learner_write_path_only_creates_and_the_candidate_path_stays_cognitive() 
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: "again".into(),
         evidence_observation_ids: vec![evidence.clone()],
+        horizon: None,
     };
     assert!(ielts_db::create_learner_memory(fx.conn(), &input(add.clone(), MemorySourceClass::UserExplicit), "u", "r").is_err());
     // Another source class is not a learner memory.
@@ -517,4 +519,131 @@ fn the_learner_write_path_only_creates_and_the_candidate_path_stays_cognitive() 
     assert!(persist_memory_candidate_batch(fx.conn(), &input(add, MemorySourceClass::UserExplicit)).is_err());
     assert_eq!(memory_card_key("m", 0), memory_card_key("m", 0));
     assert_ne!(memory_card_key("m", 0), memory_card_key("m", 1));
+}
+
+fn weekly_add(fx: &Fixture, key: &str, horizon: Option<MemoryHorizon>) -> Option<String> {
+    ielts_db::learning_observations_rebuild(fx.conn()).unwrap();
+    let evidence: String = fx
+        .conn()
+        .query_row("SELECT id FROM learner_observations WHERE observation_type = 'coach.question.asked'", [], |row| row.get(0))
+        .unwrap();
+    let proposal = MemoryMutationProposal::Add {
+        namespace: MemoryNamespace::Preference,
+        canonical_key: format!("preference.reading.{key}"),
+        scope: MemoryScope::Activity { key: Activity::Reading },
+        statement: "该学习者在判断题上希望讲解简短。".into(),
+        evidence_observation_ids: vec![evidence],
+        horizon,
+    };
+    let outcome = MemoryService::new(&fx.store)
+        .apply_cognitive_mutations(
+            &SubmitMemoryCandidatesCommand {
+                request_id: format!("weekly-{key}"),
+                user_id: "local".into(),
+                run_id: None,
+                batch: MemoryMutationProposalBatch { schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION, proposals: vec![proposal] },
+            },
+            MemorySourceClass::Consolidated,
+            "weekly dream",
+        )
+        .unwrap();
+    assert_eq!(outcome.applied.len(), 1, "{outcome:?}");
+    outcome.applied[0].memory_id.clone()
+}
+
+fn valid_to(fx: &Fixture, memory: &str) -> (Option<String>, String) {
+    fx.conn()
+        .query_row("SELECT valid_to, first_observed_at FROM memory_items WHERE id = ?1", [memory], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_recent_add_expires_thirty_days_after_it_is_written_and_a_durable_or_plain_add_never() {
+    let fx = fixture();
+    let recent = weekly_add(&fx, "recent_wish", Some(MemoryHorizon::Recent)).unwrap();
+    let (expiry, written) = valid_to(&fx, &recent);
+    let (expiry, written) = (
+        chrono::DateTime::parse_from_rfc3339(&expiry.expect("a recent memory expires")).unwrap(),
+        chrono::DateTime::parse_from_rfc3339(&written).unwrap(),
+    );
+    assert_eq!(expiry - written, chrono::Duration::days(30));
+
+    for (key, horizon) in [("durable_wish", Some(MemoryHorizon::Durable)), ("plain_wish", None)] {
+        let memory = weekly_add(&fx, key, horizon).unwrap();
+        assert_eq!(valid_to(&fx, &memory).0, None, "{key}");
+    }
+}
+
+#[test]
+fn the_card_path_never_sets_an_expiry_and_a_recent_proposal_cannot_ask_for_one_there() {
+    let fx = fixture();
+    let memory = fx.cards().confirm("local", &fx.answer, 0, "先给例子再讲证据").unwrap();
+    assert_eq!(valid_to(&fx, &memory).0, None);
+
+    // Even a learner-sourced ADD that names `recent` is refused at the validator, and the
+    // write itself ignores it for a user_explicit candidate.
+    let evidence: String = fx
+        .conn()
+        .query_row("SELECT id FROM learner_observations WHERE observation_type = 'coach.question.asked'", [], |row| row.get(0))
+        .unwrap();
+    let snapshot = load_memory_validation_snapshot(fx.conn(), "local", &[evidence.clone()]).unwrap();
+    let batch = MemoryMutationProposalBatch {
+        schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION,
+        proposals: vec![MemoryMutationProposal::Add {
+            namespace: MemoryNamespace::Preference,
+            canonical_key: "preference.reading.owned_recent".into(),
+            scope: MemoryScope::Activity { key: Activity::Reading },
+            statement: "owned".into(),
+            evidence_observation_ids: vec![evidence],
+            horizon: Some(MemoryHorizon::Recent),
+        }],
+    };
+    let validation = ielts_application::MemoryProposalValidator::default().validate(
+        &batch,
+        ielts_application::MemoryProposalOrigin::RustTrusted { source_class: MemorySourceClass::UserExplicit },
+        &snapshot,
+    );
+    assert_eq!(validation.decisions[0].issues[0].code, "horizon_not_allowed");
+    let input = MemoryCandidatePersistenceInput {
+        request_id: "owned-recent".into(),
+        user_id: "local".into(),
+        run_id: None,
+        source_class: MemorySourceClass::UserExplicit,
+        batch,
+        validation,
+        snapshot,
+    };
+    assert!(ielts_db::create_learner_memory(fx.conn(), &input, "u", "r").is_err(), "the refused ADD is not written");
+}
+
+#[test]
+fn a_recent_memory_leaves_the_coach_profile_when_it_expires_and_the_weekly_sweep_archives_it() {
+    let fx = fixture();
+    let recent = weekly_add(&fx, "recent_wish", Some(MemoryHorizon::Recent)).unwrap();
+    let durable = weekly_add(&fx, "durable_wish", Some(MemoryHorizon::Durable)).unwrap();
+    let now = chrono::Utc::now();
+    let day = chrono::Duration::days;
+
+    let profile = |at| ielts_db::build_coach_system_context_at(fx.conn(), "local", at).unwrap().memory_ids();
+    let mut both = vec![recent.clone(), durable.clone()];
+    both.sort();
+    let sorted = |mut ids: Vec<String>| {
+        ids.sort();
+        ids
+    };
+    assert_eq!(sorted(profile(now + day(29))), both, "still valid on day 29");
+    assert_eq!(profile(now + day(31)), vec![durable.clone()], "expired memories leave the profile at once");
+
+    // The weekly pass then archives it, with the reason, and the durable one stays.
+    let report = ielts_db::sweep_forgotten_memories(fx.conn(), "local", now + day(31)).unwrap();
+    assert_eq!(report.expired, vec![recent.clone()]);
+    assert_eq!(memory_row(fx.conn(), &recent).3, "archived");
+    assert_eq!(memory_row(fx.conn(), &durable).3, "active");
+    let reason: String = fx
+        .conn()
+        .query_row("SELECT reason FROM memory_mutations WHERE memory_id = ?1 AND operation = 'archive'", [&recent], |row| row.get(0))
+        .unwrap();
+    assert_eq!(reason, "expired");
 }

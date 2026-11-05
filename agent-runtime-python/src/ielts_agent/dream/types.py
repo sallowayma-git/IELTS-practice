@@ -221,19 +221,32 @@ class JournalEnrichment(_StrictModel):
         return list(value)
 
 
-# The memory mutations a weekly pass may propose (new / reinforce / supersede /
-# archive), in the wire shape every cognitive proposal uses. Rust re-validates.
-WEEKLY_MUTATION_ACTIONS: frozenset[str] = frozenset({"ADD", "REINFORCE", "SUPERSEDE", "ARCHIVE"})
+# The memory mutations a weekly pass may propose, in the wire shape every
+# cognitive proposal uses. Rust re-validates. Every lifecycle action the weekly pass may propose. The host re-validates all of
+# them (and holds a claim made from coach signals to the promotion rule).
+WEEKLY_MUTATION_ACTIONS: frozenset[str] = frozenset(
+    {"ADD", "REINFORCE", "REFINE", "IMPROVE", "REGRESS", "CONTRADICT", "SUPERSEDE", "ARCHIVE"}
+)
 
 # Fields each mutation may carry, and nothing else survives to the host.
 WEEKLY_MUTATION_FIELDS: dict[str, frozenset[str]] = {
-    "ADD": frozenset({"namespace", "canonicalKey", "scope", "statement", "evidenceObservationIds"}),
+    "ADD": frozenset(
+        {"namespace", "canonicalKey", "scope", "statement", "evidenceObservationIds", "horizon"}
+    ),
     "REINFORCE": frozenset({"targetMemoryId", "evidenceObservationIds"}),
+    "REFINE": frozenset({"targetMemoryId", "proposedStatement", "evidenceObservationIds"}),
+    "IMPROVE": frozenset({"targetMemoryId", "evidenceObservationIds"}),
+    "REGRESS": frozenset({"targetMemoryId", "evidenceObservationIds"}),
+    "CONTRADICT": frozenset({"targetMemoryId", "evidenceObservationIds"}),
     "SUPERSEDE": frozenset(
         {"targetMemoryId", "namespace", "canonicalKey", "scope", "proposedStatement", "evidenceObservationIds"}
     ),
     "ARCHIVE": frozenset({"targetMemoryId", "evidenceObservationIds"}),
 }
+
+# How long a new memory is expected to stay true. Optional on ADD; absent means
+# ``durable``. The host turns ``recent`` into an expiry 30 days after the write.
+WEEKLY_MEMORY_HORIZONS: frozenset[str] = frozenset({"recent", "durable"})
 
 MEMORY_NAMESPACES: frozenset[str] = frozenset(
     {"knowledge", "language", "strategy", "behavior", "metacognition", "preference", "goal"}
@@ -370,6 +383,7 @@ __all__ = [
     "WEEKLY_BODY_MAX_PARAGRAPHS",
     "WEEKLY_DREAM_SCHEMA_VERSION",
     "WEEKLY_GROUP_MAX_ITEMS",
+    "WEEKLY_MEMORY_HORIZONS",
     "WEEKLY_MUTATION_ACTIONS",
     "WEEKLY_MUTATION_FIELDS",
     "WEEKLY_PROFILE_EDIT_MAX",

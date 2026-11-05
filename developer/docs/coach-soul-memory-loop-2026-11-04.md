@@ -63,7 +63,7 @@
 ### 仍未做
 
 - ~~第二阶段（预整合落库）~~：评估后取消，由下面的「第二阶段：统一信号汇总」取代（不落库）。
-- 第三阶段（周整合的晋升与遗忘）：周整合读取 `horizon` / `scope`，让 `durable` 信号优先晋升，`recent` 过期，`session` 不进周包；周整合提示词本阶段未改。
+- ~~第三阶段（周整合的晋升与遗忘）~~：见下面的「第三阶段：晋升与遗忘」。
 - 近期信号依赖模型自己正确声明 `scope`：写错成 `profile` 的题目级笔记仍会进入信号（但最多 4 条、只存活 2 天；只有带卡片的笔记才能被学习者一键否决）。评测语料的 `scope` 指标用来观察这一风险。
 
 ## 第二阶段：统一信号汇总（signal digest）
@@ -110,5 +110,106 @@
 
 ### 仍未做
 
-- 第三阶段（周整合的晋升与遗忘）：周包带上 `repeat_count` / `distinct_assets` / `first_seen` / `last_seen`，周整合据此决定晋升（多个回答、多篇文章、跨天复现者优先；`durable` 优先）与遗忘（`recent` 过期、`session` 不进周包）；周整合提示词本阶段未改，周包格式未变。
+- ~~第三阶段（周整合的晋升与遗忘）~~：已做，见「第三阶段：晋升与遗忘」。
 - 教练画像标签仍写「last two days」，实际 `durable` 信号可活 14 天；标签文字单独精简，本阶段未动。
+
+## 第三阶段：晋升与遗忘
+
+目标：周整合既要能把「跨天、跨文章反复出现」的信号做成泛化的长期记忆（晋升），也要让记忆不是只增不减（遗忘）。**不变量不变：长期记忆只由周整合写入。**晋升由周整合里的模型变更提案完成；遗忘是同一遍里不调用模型的确定性清理，只做归档，不删除。不新增模型调用，一次周整合的输入仍受 `WEEKLY_PACK_TOKEN_CAP`（6000）约束。
+
+### 周包带汇总信号（`WEEKLY_PACK_SCHEMA_VERSION` 3 → 4）
+
+- 教练笔记不再按天拼成教练行里的短语（`coach note, ...`），而是周包新增顶层 `signals`：对本周窗口用 `read_coach_notes(NoteRange::between)` + `digest_notes(now = 窗口终点, recent_days = durable_days = 窗口天数)`，窗口内的笔记不会被「两天/十四天」窗口裁掉。同一信号在多个回答里说过只算一条，并说清楚说了几次、在几篇文章上。
+- 教练行（`kind: coach`）现在只剩反馈与重问，`ids` 只有该次作答的得分观察。
+- 教练区预算 `WEEKLY_COACH_TOKEN_BUDGET`（1200）= 信号 + 教练行：信号先拿，至多 `WEEKLY_SIGNAL_TOKEN_BUDGET`（800）和 12 条，最强的在前，整条放不下就停；教练行用剩下的。顺序确定（`remember` → `repeatCount` → 最近 → 消息 id → 笔记序号）。
+- 文本过同一套提示词防线（`read_entry` 与周报共用 `read_note` 的接受规则：安全、≤ 200 字符、`obs-`/`mem-` 令牌被去掉、引号冒号分号变空格、`strategy_outcome` 必须有 `helped`/`not_helped`）。`scope = question`、`horizon = session`、该消息卡片已被学习者确认/拒绝的笔记不会出现（周报的教练事实仍按旧规则全数计入，不受影响）。
+- **可回溯**：每条信号的 `ids` 是它的来源回答（至多 3 个，最新优先）所回答的学习者消息的 `coach.question.asked` 观察 id（沿用 `answered_learner_observation`）；这些 id 计入 `evidence_ids()`，所以引用它们的变更会被宿主接受，`memory_coach_sources` 照常反查到学习者原话。没有任何可追溯来源的信号不进周包（引用不了就不是证据）。
+- `strategy_outcome` 的聚合键改为（策略, 结果），不再按 skill：「同一策略在 ≥ 2 篇不同文章上结果一致」才数得出来。这同时改变了教练画像近期信号对策略笔记的合并方式（更准确）。
+- 「已有记忆」条目新增 `lastObservedAt`（原 `lastObserved`，值仍是日期）、`improvementState`（`baseline` 时省略）、`recallCount`（为 0 时省略），不增加常见情形的 token，`MEMORY_CHARS` 等上限不变。
+
+示例（`to_value()` 的相关部分）：
+
+```json
+{
+  "schemaVersion": 4,
+  "signals": [
+    {"kind": "preference", "text": "以后都先讲结论", "remember": true, "horizon": "durable",
+     "repeatCount": 1, "distinctAssets": 1, "firstSeen": "2026-10-07", "lastSeen": "2026-10-07",
+     "ids": ["obs-1a2b"]},
+    {"kind": "difficulty", "skill": "reading.tfng", "text": "判断题还是混淆", "remember": false,
+     "horizon": "recent", "repeatCount": 3, "distinctAssets": 2, "firstSeen": "2026-10-04",
+     "lastSeen": "2026-10-08", "ids": ["obs-9f01", "obs-77ce", "obs-31d4"]}
+  ],
+  "memories": [
+    {"memoryId": "mem-…", "namespace": "behavior", "scope": "activity:reading",
+     "canonicalKey": "behavior.reading.premature_commitment", "statement": "…", "version": 3,
+     "lastObservedAt": "2026-10-01", "improvementState": "improved", "recallCount": 4}
+  ]
+}
+```
+
+### 晋升门槛
+
+| 信号 | 结果 |
+|---|---|
+| `remember = true` 且 `horizon = durable` | 可 ADD 一条 `preference` 记忆（中等措辞，不再「目前看来」式试探） |
+| `repeatCount ≥ 2` 且 `distinctAssets ≥ 2` | 可 ADD；已有同义记忆则 REINFORCE |
+| 只出现一次且非 `remember`（或只在一篇文章上重复） | **不产生变更**（宁缺毋滥） |
+| `strategy` 命名空间 | 同一策略 + 同一结果在 ≥ 2 篇不同文章上（`strategy_outcome` 信号 `distinctAssets ≥ 2`） |
+
+硬规则（提示词只是劝告，下面两处是校验）：`PackSignal::earns_promotion` 是唯一判据；Python `_validate_mutation` 与宿主 `WeeklyEvidence::admits` 各校验一次：**ADD / REINFORCE / REFINE / SUPERSEDE 若引用了信号的 id，则其中必须至少有一个属于达标信号**，否则丢弃（计入 `rejected`）。只引用练习行的变更不受此限（它们走原来的「置信度阶梯」）；ARCHIVE / IMPROVE / REGRESS / CONTRADICT 不是「从信号提出主张」，不受此限。Python 的阈值常量 `PROMOTE_MIN_*` 与 Rust 的 `PROMOTE_MIN_*` 各写一份，有测试各自固定。
+
+### 周整合可用的变更类型
+
+此前周整合的提示词与宿主准入（`WeeklyEvidence::admits`、Python `WEEKLY_MUTATION_ACTIONS`）都只认 ADD / REINFORCE / SUPERSEDE / ARCHIVE，领域层与 DB 层早就实现的 REFINE / IMPROVE / REGRESS / CONTRADICT 在周整合里被拒收，所以 `IMPROVE` 把 `improvement_state` 置为 `improved` 之后也没有任何后续动作。本阶段把八种全部放行并写进提示词，各自适用场景：
+
+- ADD 新泛化规则（可选 `horizon`）；REINFORCE 同一模式出现在新证据（不同文章）上；REFINE 规则对但措辞/范围要收紧（`proposedStatement`）；
+- IMPROVE：学习者在某技能上明显好转（周包里有对应的重做/正确/分数事实）时，对相关**推断型困惑类**记忆使用；宿主据此在三周后遗忘它；
+- REGRESS：`improvementState = improved` 的记忆，困难又回来了；CONTRADICT：证据反对但不足以替换；SUPERSEDE：被新规则取代；ARCHIVE：不再成立或不再有用（`lastObservedAt` 很久、`recallCount` 为 0 或缺省）。
+- 不变：`user_explicit` / `system_policy` 记忆不在 `memories` 里，不能成为目标；`refuse_protected_target` 在写入处再拦一次。REINFORCE / IMPROVE / REGRESS 仍须有比该记忆已有证据更新的观察（`verify_new_lifecycle_evidence`）。
+
+### `horizon` 与 `valid_to`
+
+- `MemoryMutationProposal::Add` 新增可选 `horizon`（`recent` | `durable`，`ielts_domain::MemoryHorizon`）。缺省 = `durable`；序列化时 `None` 不写出该键，所以旧提案 JSON（包括已落库的 `memory_candidates.proposal_json`）仍然合法、字节不变；非法取值（含 `session`、大小写不对、非字符串）在反序列化处就被拒。
+- 贯通路径：提示词 → Python `_validate_mutation`（`WEEKLY_MEMORY_HORIZONS`，只 ADD 可带）→ 宿主 `MemoryMutationProposal` 反序列化 → `MemoryProposalValidator`（`validate_horizon`）→ `memory_candidates.proposal_json` → `apply_proposal` → `valid_until` → `insert_active_memory` 的 `valid_to`。
+- 钟在宿主：`recent` → 写入时刻 + `RECENT_MEMORY_VALIDITY_DAYS`（30 天）；`durable`/缺省 → 不设。模型只说类别，不给日期。
+- `user_explicit` / `system_policy` 永不设 `valid_to`：校验器对这两类来源的 `recent` 报 `horizon_not_allowed`，`valid_until` 在写入处再忽略一次；卡片确认路径（`create_learner_memory`）不传 horizon，未改动。SUPERSEDE 没有 horizon：被取代的 `recent` 记忆的替代者不过期（已知局限）。
+- 读取侧原本就过滤 `valid_to`（`system_context::memory_rows`），所以过期记忆在被周整合归档之前就已经不进教练画像。
+
+### 遗忘：`sweep_forgotten_memories(conn, user_id, now)`
+
+位置：`crates/ielts-db/src/memory_forgetting.rs`；调用点：`src-tauri/src/app/daily_worker.rs::weekly_due_after_forgetting`，即 `run_weekly_if_due` 判定「本周窗口已到期」之后的第一步，在证据是否足够、有没有供应商、构建周包之前。因此：证据太少而跳过模型调用、没有配置供应商而无模型收尾、正常整合——三条路径都会清理；清理发生在周包构建之前，模型看不到也不会去引用刚过期的记忆。自动学习关闭或不到周整合时间则不清理。清理失败只记日志，不使周整合失败（`forget_before_weekly` 返回 `None`）。
+
+| 规则 | 条件（`now` 可注入） | 审计 `reason` |
+|---|---|---|
+| 过期 | `status='active'`、来源不是 `user_explicit`/`system_policy`、`valid_to <= now` | `expired` |
+| 已提分 | 推断型（`inferred`/`consolidated`/`observed`）、`improvement_state='improved'`、`COALESCE(last_observed_at, updated_at) < now - 21 天` | `improved` |
+| 久未使用 | 推断型、命名空间 ∈ {`preference`,`strategy`,`behavior`,`metacognition`}、`recall_count < 3`、「最近一次观察或召回」`< now - 90 天` | `stale` |
+
+- 阈值常量：`IMPROVED_FORGET_DAYS = 21`、`STALE_FORGET_DAYS = 90`、`STALE_RECALL_FLOOR = 3`。边界：过期含「刚好」（`<=`），其余两条要严格早于阈值（刚好 21/90 天不清理，多 1 秒清理）。
+- `improved` 的 21 天从 IMPROVE 起算：IMPROVE 会把 `last_observed_at` 置为当时；之后任何 REINFORCE/CONTRADICT 也会刷新它。
+- 偏离需求的一处：「久未使用」用 `MAX(last_observed_at 或 updated_at, last_recalled_at)` 而不是 `COALESCE(last_recalled_at, last_observed_at, updated_at)`。后者在「很久以前被召回过、昨天刚被周整合强化」时会误判为久未使用。
+- 永不被清理：`user_explicit`、`system_policy`（三条规则都排除）、`goal` 命名空间（不会因安静而归档；推断型 `goal` 仍可被「已提分」归档）、`predicted` 来源（既不进提示词也不会被提分/久未使用判定）、`knowledge`/`language` 命名空间不适用「久未使用」、非 `active` 状态、其他用户。
+- 机制：与 #256 `capacity` 归档同一条路径——`archive_memory_record`（写 `memory_mutations` 一行：`operation='archive'`、`actor_type='dream'`、`actor_id='weekly_dream'`、`reason`）+ `propagate_support_change_in_transaction`；外加版本比较（`archive_memory_record_at`：选出的版本与归档时不一致则不动）。整个清扫是一个 `BEGIN IMMEDIATE` 事务，全做或全不做；一个记忆同时满足多条规则时按「过期 → 已提分 → 久未使用」顺序只归档一次。
+- 幂等：归档后的记忆不再匹配任何规则，同一 `now` 再跑一次不产生任何改动；容量逻辑只数 `active`，清理释放的位置自然进入 #256 的计算，不改变其规则。
+- 与旧的 `consolidation_archive_stale`（按命名空间策略的手动命令）互不依赖。
+
+### 迁移
+
+无。`memory_mutations.reason` 是自由文本（无 CHECK），`valid_to` 列自迁移 0014 起就存在，`memory_candidates.proposal_json` 本来就整条保存提案。
+
+### 不变量如何保持
+
+- 唯一写入者：晋升只经 `run_weekly_consolidation` → `MemoryService::apply_cognitive_mutations`（与此前一致）；遗忘只由 `run_weekly_if_due` 在周整合到期时触发。教练线程、日报、卡片之外没有新的写路径；卡片路径（`user_explicit`）不改。
+- 学习者的记忆：`user_explicit`/`system_policy` 不在周包 `memories` 里（Python 与宿主都只允许目标在包内）、`refuse_protected_target` 拒绝对它们的推断型变更、`validate_horizon`/`valid_until` 不给它们设有效期、清扫的三条规则都排除它们。
+- 隐私：账本 `request_hash=unlinked`、`error_json` 不含供应商原文的约束未动；信号文本与其它教练笔记一样是学习者可见的、经提示词防线的数据。
+
+### 已知局限
+
+- 信号的 `ids` 至多 3 条，`repeatCount` 更大时只有最近 3 次可引用。
+- 晋升门槛是「引用了信号就必须有达标信号」；模型完全不引用信号、只引用练习行却复述信号内容，宿主无法识别（提示词与置信度阶梯约束）。
+- 被 SUPERSEDE 的 `recent` 记忆，其替代者不继承有效期；`recent` 的 30 天从写入起算，不因 REINFORCE 顺延。
+- 遗忘不出现在周报的「记忆变化」里（它读候选记录，不读 `memory_mutations`）；审计在 `memory_mutations`，原因 `expired`/`improved`/`stale`。
+- `recall_count` 只在新线程首轮冻结画像时增加，「久未使用」对不常开教练的学习者偏激进（要求 90 天无观察也无召回、且少于 3 次召回）。
+- `weekly_pack`/周报预览等在非周整合时刻调用时，尚未被清扫的过期记忆仍会出现在 `memories` 里（清扫总是先于模型看到的周包）。
+- 周包里 `lastObserved` 重命名为 `lastObservedAt`（值仍为日期），读取旧字段的外部消费者需同步。

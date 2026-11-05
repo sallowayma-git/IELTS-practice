@@ -233,6 +233,7 @@ impl<'a> MemoryService<'a> {
                 scope: command.scope,
                 statement: command.statement.clone(),
                 evidence_observation_ids: command.evidence_observation_ids.clone(),
+                horizon: None,
             }],
         };
         let snapshot = self.store.validation_snapshot(&command.user_id, &command.evidence_observation_ids)?;

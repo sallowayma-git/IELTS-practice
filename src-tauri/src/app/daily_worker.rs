@@ -4,7 +4,8 @@
 //! * the daily pass: build the day's deterministic journal (a summary of facts,
 //!   no model, no dream);
 //! * the weekly pass: the single weekly consolidation, the only model call the
-//!   worker makes and the only place memory is written. It is first attempted on
+//!   worker makes and the only place memory is written (what it promotes by the
+//!   model's mutations, and what it forgets by three deterministic rules). It is first attempted on
 //!   a Saturday or Sunday, and an attempt that failed is retried on the following
 //!   days (once per local day) until it completes or has failed
 //!   `WEEKLY_MAX_FAILED_ATTEMPTS` times; then that weekend is given up and the
@@ -134,6 +135,43 @@ fn weekly_window_due<Tz: chrono::TimeZone>(
     Ok(weekly_attempt_due(completed, attempted_today, failures, is_weekend(now)).then_some(window))
 }
 
+/// Let go of what the learner has outgrown or what has expired (`ielts_db::
+/// sweep_forgotten_memories`): the deterministic half of the weekly pass. It
+/// writes memory, but only archives, only by the three fixed rules, and only here,
+/// so the weekly pass stays the single writer of long-term memory. A failure is
+/// logged and never stops the pass: forgetting is housekeeping, and the next run
+/// does the same job.
+fn forget_before_weekly(db: &AppDb, now: DateTime<chrono::Utc>) -> Option<ielts_db::ForgetReport> {
+    match db.with_conn(|conn| ielts_db::sweep_forgotten_memories(conn, "local", now)) {
+        Ok(report) => {
+            if report.total() > 0 {
+                tracing::info!(
+                    expired = report.expired.len(),
+                    improved = report.improved.len(),
+                    stale = report.stale.len(),
+                    "memories forgotten by the weekly pass"
+                );
+            }
+            Some(report)
+        }
+        Err(error) => {
+            tracing::warn!(%error, "memory forgetting failed; the weekly pass goes on");
+            None
+        }
+    }
+}
+
+/// The weekly window that is due now, with the pass's deterministic cleanup done
+/// first: forgetting costs no model call, so it runs whenever the weekly pass is
+/// due, whether or not the window holds enough evidence to be worth one, and
+/// before the pack is built, so the model never sees (or targets) a memory that has
+/// just expired.
+fn weekly_due_after_forgetting<Tz: chrono::TimeZone>(db: &AppDb, now: &DateTime<Tz>) -> DbResult<Option<WeeklyWindow>> {
+    let Some(window) = weekly_window_due(db, now)? else { return Ok(None) };
+    forget_before_weekly(db, now.with_timezone(&chrono::Utc));
+    Ok(Some(window))
+}
+
 /// The pure decision behind `weekly_window_due`.
 fn weekly_attempt_due(completed: bool, attempted_today: bool, failures: usize, weekend: bool) -> bool {
     !completed && !attempted_today && failures < WEEKLY_MAX_FAILED_ATTEMPTS && (weekend || failures > 0)
@@ -209,14 +247,15 @@ fn weekly_report_without_narrative(
 /// sidecar's own retries, sidecar) is recorded as a failed run and retried by a
 /// later tick on a later day, at most once per day, until it completes; if it is
 /// still failing when the next weekend arrives, that weekend's window covers
-/// everything since the last completed run. Returns whether a sidecar run was
-/// started.
+/// everything since the last completed run. Whenever the pass is due, expired and
+/// outgrown memories are forgotten first (`weekly_due_after_forgetting`), model or
+/// not. Returns whether a sidecar run was started.
 pub(crate) async fn run_weekly_if_due(app: &tauri::AppHandle, worker: &str) -> DbResult<bool> {
     use ielts_db::{BeginAgentRunCommand, StoredAgentRunStatus};
 
     let db = app.state::<AppDb>();
     let vault = app.state::<AppVault>();
-    let Some(window) = weekly_window_due(&db, &crate::app::clock::now())? else { return Ok(false) };
+    let Some(window) = weekly_due_after_forgetting(&db, &crate::app::clock::now())? else { return Ok(false) };
     if !weekly_has_evidence(&db, &window)? {
         return Ok(false);
     }
@@ -673,6 +712,76 @@ mod tests {
             assert!(!weekly_attempt_due(false, true, 1, weekend), "once per local day");
             assert!(!weekly_attempt_due(true, false, 0, weekend), "completed");
         }
+    }
+
+    /// An inferred memory that expired the day before the Saturday pass.
+    fn expired_memory(db: &AppDb, id: &str) {
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO memory_items (id,user_id,namespace,scope,memory_type,canonical_key,normalized_label,content,status,
+                    source_class,created_by,content_hash,valid_to,last_observed_at,created_at,updated_at)
+                 VALUES (?1,'local','strategy','activity:reading','procedural',?1,'label','该学习者需要先确认证据。','active',
+                    'consolidated','weekly_dream',?1,'2026-10-09T03:00:00Z','2026-10-01T00:00:00Z','2026-09-09T00:00:00Z','2026-09-09T00:00:00Z')",
+                [id],
+            )?;
+            Ok(())
+        }).unwrap();
+    }
+
+    fn memory_status(db: &AppDb, id: &str) -> String {
+        db.with_conn(|conn| Ok(conn.query_row("SELECT status FROM memory_items WHERE id = ?1", [id], |row| row.get(0))?)).unwrap()
+    }
+
+    #[test]
+    fn forgetting_runs_when_the_pass_is_due_even_if_the_week_is_too_thin_for_a_model_call() {
+        let (_dir, db) = test_db("forget-thin.db");
+        expired_memory(&db, "mem-expired");
+        let saturday = at(8, SATURDAY);
+
+        // The week holds nothing: `run_weekly_if_due` would stop before any model call...
+        let window = weekly_due_after_forgetting(&db, &saturday).unwrap().expect("Saturday is due");
+        assert!(!weekly_has_evidence(&db, &window).unwrap(), "no scored observation in the window");
+        // ...but the cleanup, which costs nothing, has already run, with the injected clock.
+        assert_eq!(memory_status(&db, "mem-expired"), "archived");
+        let reason: String = db
+            .with_conn(|conn| Ok(conn.query_row("SELECT reason FROM memory_mutations WHERE memory_id = 'mem-expired'", [], |row| row.get(0))?))
+            .unwrap();
+        assert_eq!(reason, "expired");
+    }
+
+    #[test]
+    fn forgetting_belongs_to_the_weekly_pass_and_waits_for_it() {
+        let (_dir, db) = test_db("forget-weekday.db");
+        expired_memory(&db, "mem-expired");
+        // Not due on a weekday, and not due while learning is paused: nothing is written.
+        assert!(weekly_due_after_forgetting(&db, &at(8, "2026-10-07T03:00:00Z")).unwrap().is_none());
+        db.with_conn(|conn| {
+            ielts_db::upsert_setting(conn, "features", "memory_auto_candidates_v1", &serde_json::json!("disabled"))
+        }).unwrap();
+        assert!(weekly_due_after_forgetting(&db, &at(8, SATURDAY)).unwrap().is_none());
+        assert_eq!(memory_status(&db, "mem-expired"), "active");
+    }
+
+    #[test]
+    fn a_forgetting_failure_never_stops_the_weekly_pass() {
+        let (_dir, db) = test_db("forget-fails.db");
+        expired_memory(&db, "mem-expired");
+        db.with_conn(|conn| {
+            conn.execute_batch(
+                "CREATE TRIGGER boom BEFORE UPDATE ON memory_items BEGIN SELECT RAISE(ABORT, 'boom'); END;",
+            )?;
+            Ok(())
+        }).unwrap();
+        assert!(forget_before_weekly(&db, Utc.with_ymd_and_hms(2026, 10, 10, 3, 0, 0).unwrap()).is_none(), "logged, not raised");
+        let window = weekly_due_after_forgetting(&db, &at(8, SATURDAY)).unwrap();
+        assert_eq!(window.expect("the pass is still due").key, KEY);
+        assert_eq!(memory_status(&db, "mem-expired"), "active", "and nothing was half-done");
+
+        // The next run does the job once the cause is gone, and a repeat changes nothing.
+        db.with_conn(|conn| Ok(conn.execute_batch("DROP TRIGGER boom")?)).unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 10, 10, 3, 0, 0).unwrap();
+        assert_eq!(forget_before_weekly(&db, now).unwrap().expired, vec!["mem-expired".to_string()]);
+        assert_eq!(forget_before_weekly(&db, now).unwrap().total(), 0);
     }
 
     #[test]

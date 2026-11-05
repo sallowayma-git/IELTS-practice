@@ -124,6 +124,7 @@ fn same_key_supersede_approval_replaces_old_conclusion_and_keeps_one_active_iden
             scope,
             statement: original.to_owned(),
             evidence_observation_ids: vec![observation_id.clone()],
+            horizon: None,
         },
     );
     approve(&conn, add_id);

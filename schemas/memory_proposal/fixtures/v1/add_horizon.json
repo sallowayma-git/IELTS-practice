@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "proposals": [
+    {
+      "action": "ADD",
+      "namespace": "behavior",
+      "canonicalKey": "behavior.reading.tfng_not_given_confusion",
+      "scope": {
+        "type": "activity",
+        "key": "reading"
+      },
+      "statement": "该学习者对判断题里 NOT GIVEN 与 FALSE 的区分需要更多练习。",
+      "evidenceObservationIds": ["obs-reading-1"],
+      "horizon": "recent"
+    }
+  ]
+}

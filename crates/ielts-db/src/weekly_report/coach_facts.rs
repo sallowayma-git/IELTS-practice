@@ -20,7 +20,9 @@ use ielts_domain::{CoachStrategyId, TEACHING_NOTE_STRATEGY_CHARS};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
-use crate::coach_signal_digest::{read_coach_notes, CoachNote, NoteContent, NoteKind, NoteRange, SIGNAL_TEXT_CHARS};
+use crate::coach_signal_digest::{
+    read_coach_notes, CoachNote, NoteContent, NoteKind, NoteRange, SignalDigestEntry, SIGNAL_TEXT_CHARS,
+};
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
 use crate::weekly_pack::{field, note_field, note_text, Obs};
@@ -90,6 +92,21 @@ pub(crate) fn read_note(note: &NoteContent) -> Option<ReadNote> {
     let strategy = note.strategy.as_deref().and_then(|raw| note_field(raw, TEACHING_NOTE_STRATEGY_CHARS)).filter(|_| reported);
     let skill = note.skill_key.as_deref().and_then(|raw| note_field(raw, NOTE_SKILL_CHARS));
     Some(ReadNote { fact: NoteFact { verdict, strategy }, skill, text })
+}
+
+/// The weekly reading of one signal of the window's digest: the very rule
+/// [`read_note`] applies to a stored note, so the pack's signals and the report's
+/// note facts never disagree about what is readable.
+pub(crate) fn read_entry(entry: &SignalDigestEntry) -> Option<ReadNote> {
+    read_note(&NoteContent {
+        kind: entry.kind,
+        text: entry.text.clone(),
+        skill_key: entry.skill_key.clone(),
+        outcome: entry.outcome.clone(),
+        strategy: entry.strategy.clone(),
+        remember: entry.remember,
+        horizon: entry.horizon,
+    })
 }
 
 /// The readable notes of the window `(from, to]`, oldest answer first, each with
@@ -363,8 +380,9 @@ fn add_asks(
 }
 
 /// The host-validated teaching notes of the window. A note counts only if the
-/// weekly pack would also show it (same acceptance rule), so the report and
-/// the model's pack never disagree about what the learner said.
+/// weekly pack would also read it (same acceptance rule). The pack then
+/// summarises the window's notes as signals, leaving out `session` notes and those
+/// whose card the learner already settled; the report still counts them all.
 fn add_notes(
     conn: &Connection,
     days: &mut BTreeMap<DayKey, CoachFact>,

@@ -70,7 +70,8 @@
             "canonicalKey": { "$ref": "#/$defs/canonicalKey" },
             "scope": { "$ref": "#/$defs/scope" },
             "statement": { "$ref": "#/$defs/statement" },
-            "evidenceObservationIds": { "$ref": "#/$defs/observationIds" }
+            "evidenceObservationIds": { "$ref": "#/$defs/observationIds" },
+            "horizon": { "enum": ["recent", "durable"] }
           }
         },
         {
