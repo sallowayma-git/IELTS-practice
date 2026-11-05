@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ielts_domain::{
-    ActiveMemorySummary, MemoryMutationProposal, MemoryMutationProposalBatch,
+    ActiveMemorySummary, MemoryHorizon, MemoryMutationProposal, MemoryMutationProposalBatch,
     MemoryNamespace, MemoryObservationEvidence, MemoryProposalDecision,
     MemoryProposalDisposition, MemoryProposalIssue, MemoryProposalValidationReport, MemoryScope,
     MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, MAX_MEMORY_EVIDENCE_IDS,
@@ -160,7 +160,9 @@ impl MemoryProposalValidator {
                 scope: proposal_scope,
                 statement,
                 evidence_observation_ids: ids,
+                horizon,
             } => {
+                issues.extend(validate_horizon(*horizon, source_class));
                 issues.extend(validate_identity(*namespace, canonical_key, *proposal_scope));
                 issues.extend(validate_statement(statement));
                 quarantined |= contains_security_marker(statement);
@@ -358,6 +360,20 @@ fn validate_identity(
         ));
     }
     issues
+}
+
+/// A `recent` memory expires; what the learner confirmed or policy owns never
+/// does, so only inferred and consolidated proposals may ask for it.
+fn validate_horizon(horizon: Option<MemoryHorizon>, source_class: MemorySourceClass) -> Vec<MemoryProposalIssue> {
+    let owned = matches!(source_class, MemorySourceClass::UserExplicit | MemorySourceClass::SystemPolicy);
+    if horizon == Some(MemoryHorizon::Recent) && owned {
+        return vec![issue(
+            "horizon_not_allowed",
+            Some("horizon"),
+            "a learner-confirmed or policy memory does not expire",
+        )];
+    }
+    Vec::new()
 }
 
 fn validate_statement(statement: &str) -> Vec<MemoryProposalIssue> {
@@ -598,6 +614,7 @@ mod tests {
             scope: MemoryScope::Activity { key: Activity::Reading },
             statement: "Use local evidence before committing an answer.".into(),
             evidence_observation_ids: evidence.into_iter().map(str::to_string).collect(),
+            horizon: None,
         }
     }
 
@@ -623,6 +640,36 @@ mod tests {
         assert!(report.batch_issues.is_empty());
         assert_eq!(report.decisions[0].disposition, MemoryProposalDisposition::Pending);
         assert_eq!(report.decisions[0].source_class, Some(MemorySourceClass::Predicted));
+    }
+
+    fn add_with_horizon(horizon: Option<MemoryHorizon>) -> MemoryMutationProposal {
+        match add("strategy.reading.horizon", vec!["obs-reading-1"]) {
+            MemoryMutationProposal::Add { namespace, canonical_key, scope, statement, evidence_observation_ids, .. } => {
+                MemoryMutationProposal::Add { namespace, canonical_key, scope, statement, evidence_observation_ids, horizon }
+            }
+            other => other,
+        }
+    }
+
+    #[test]
+    fn a_recent_horizon_is_for_inferred_memory_only() {
+        let verdict = |origin: MemoryProposalOrigin, horizon| {
+            let report = validator().validate(&batch(vec![add_with_horizon(horizon)]), origin, &snapshot());
+            assert!(report.batch_issues.is_empty());
+            (report.decisions[0].disposition, report.decisions[0].issues.iter().map(|i| i.code.clone()).collect::<Vec<_>>())
+        };
+        let weekly = MemoryProposalOrigin::CognitiveRuntime { source_class: MemorySourceClass::Consolidated };
+        for horizon in [None, Some(MemoryHorizon::Recent), Some(MemoryHorizon::Durable)] {
+            assert_eq!(verdict(weekly, horizon), (MemoryProposalDisposition::Pending, vec![]), "{horizon:?}");
+        }
+        for owned in [MemorySourceClass::UserExplicit, MemorySourceClass::SystemPolicy] {
+            let origin = MemoryProposalOrigin::RustTrusted { source_class: owned };
+            assert_eq!(verdict(origin, None).0, MemoryProposalDisposition::Pending);
+            assert_eq!(verdict(origin, Some(MemoryHorizon::Durable)).0, MemoryProposalDisposition::Pending);
+            let (disposition, issues) = verdict(origin, Some(MemoryHorizon::Recent));
+            assert_eq!(disposition, MemoryProposalDisposition::Rejected, "{owned:?}");
+            assert_eq!(issues, vec!["horizon_not_allowed".to_string()]);
+        }
     }
 
     #[test]
@@ -665,6 +712,7 @@ mod tests {
                 scope: MemoryScope::Activity { key: Activity::Writing },
                 statement: "Writing evidence cannot support reading scope.".into(),
                 evidence_observation_ids: vec!["obs-reading-1".into()],
+                horizon: None,
             },
         ];
         let report = validator().validate(
@@ -811,6 +859,7 @@ mod tests {
             scope: MemoryScope::Activity { key: Activity::Reading },
             statement: statement.into(),
             evidence_observation_ids: vec!["obs-reading-1".into()],
+            horizon: None,
         }
     }
 

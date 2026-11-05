@@ -106,6 +106,7 @@ fn add_proposal(canonical_key: &str, evidence: &[&str]) -> MemoryMutationProposa
         scope: activity_scope(Activity::Reading),
         statement: "Check local evidence before committing an answer.".to_owned(),
         evidence_observation_ids: evidence_ids(evidence),
+        horizon: None,
     }
 }
 
@@ -754,6 +755,7 @@ fn a_memory_the_learner_marked_inaccurate_is_not_re_proposed() {
         scope: activity_scope(Activity::Reading),
         statement: "rushes the tfng questions.".to_owned(),
         evidence_observation_ids: evidence_ids(&[READING_EVIDENCE_ID]),
+        horizon: None,
     };
     let unrelated = add_proposal("strategy.reading.fresh", &[READING_EVIDENCE_ID]);
     let report = MemoryProposalValidator::default().validate(

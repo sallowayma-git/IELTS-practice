@@ -96,6 +96,7 @@ fn add_preference(conn: &Connection, evidence: &str, key: &str) -> String {
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: format!("{key} statement."),
         evidence_observation_ids: vec![evidence.into()],
+        horizon: None,
     };
     let snapshot = load_memory_validation_snapshot(conn, "local", &[evidence.to_owned()]).unwrap();
     let receipt = persist_memory_candidate_batch(

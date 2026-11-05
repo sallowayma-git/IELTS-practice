@@ -112,6 +112,7 @@ fn weekly_add(conn: &Connection, key: &str, statement: &str, evidence: Vec<Strin
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: statement.into(),
         evidence_observation_ids: evidence.clone(),
+        horizon: None,
     };
     let batch = MemoryMutationProposalBatch { schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION, proposals: vec![proposal] };
     let snapshot = load_memory_validation_snapshot(conn, "local", &evidence).unwrap();

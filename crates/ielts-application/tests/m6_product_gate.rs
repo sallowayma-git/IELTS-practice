@@ -479,6 +479,7 @@ fn extract_preference_candidates(
             },
             statement,
             evidence_observation_ids: evidence_observation_ids.to_vec(),
+            horizon: None,
         })
         .collect();
 

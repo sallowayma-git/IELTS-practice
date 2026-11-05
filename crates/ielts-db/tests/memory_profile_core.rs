@@ -134,6 +134,7 @@ fn candidate_is_idempotent_evidence_backed_and_never_auto_promotes() {
         },
         statement: "Check local evidence before committing.".into(),
         evidence_observation_ids: vec![observation_id],
+        horizon: None,
     };
     let input = pending_input(
         &conn,
@@ -185,6 +186,7 @@ fn catalog_lists_active_items_with_evidence_and_hides_private() {
         },
         statement: "Catalog entry: check evidence first.".into(),
         evidence_observation_ids: vec![observation_id.clone()],
+        horizon: None,
     };
     let input = pending_input(&conn, "request-catalog-1", proposal, MemorySourceClass::Inferred);
     let batch = persist_memory_candidate_batch(&conn, &input).unwrap();
@@ -253,6 +255,7 @@ fn improve_regress_archive_and_rebuild_preserve_lineage_and_context_rules() {
             },
             statement: "Commits before checking local evidence.".into(),
             evidence_observation_ids: vec![observation_id.clone()],
+            horizon: None,
         },
         MemorySourceClass::Inferred,
     );
@@ -395,6 +398,7 @@ fn explicit_priority_and_forget_are_deterministic() {
             },
             statement: "Use passage evidence.".into(),
             evidence_observation_ids: vec![observation_id.clone()],
+            horizon: None,
         },
         MemorySourceClass::Inferred,
     );
@@ -423,6 +427,7 @@ fn explicit_priority_and_forget_are_deterministic() {
             },
             statement: "May be overconfident.".into(),
             evidence_observation_ids: vec![observation_id],
+            horizon: None,
         },
         MemorySourceClass::Predicted,
     );
@@ -554,6 +559,7 @@ fn forgotten_approved_candidate_key_and_label_are_absent_from_backup() {
                 scope: MemoryScope::Activity { key: Activity::Reading },
                 statement: statement.into(),
                 evidence_observation_ids: vec![observation_id.clone()],
+                horizon: None,
             },
             MemorySourceClass::Inferred,
         );
@@ -606,6 +612,7 @@ fn forgetting_superseded_target_keeps_replacement_candidate_identity() {
         namespace: MemoryNamespace::Strategy, canonical_key: "strategy.reading.old_check".into(),
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: "Check the sentence.".into(), evidence_observation_ids: vec![observation.clone()],
+        horizon: None,
     });
     promote(&conn, &add, 1);
     let old: String = conn.query_row("SELECT resolved_memory_id FROM memory_candidates WHERE id=?1", [&add], |r| r.get(0)).unwrap();
@@ -687,6 +694,7 @@ fn capacity_add_archives_least_valuable_non_explicit_memory() {
             scope: MemoryScope::Activity { key: Activity::Reading },
             statement: "The new memory lands after eviction.".into(),
             evidence_observation_ids: vec![observation_id],
+            horizon: None,
         },
         MemorySourceClass::Inferred,
     )).unwrap();
@@ -727,6 +735,7 @@ fn add_reading_strategy(conn: &Connection, request: &str, key: &str) {
             scope: MemoryScope::Activity { key: Activity::Reading },
             statement: format!("{key} statement."),
             evidence_observation_ids: vec![observation_id],
+            horizon: None,
         },
         MemorySourceClass::Inferred,
     )).unwrap();
@@ -796,6 +805,7 @@ fn capacity_eviction_skips_memories_the_same_batch_targets() {
                 scope: MemoryScope::Activity { key: Activity::Reading },
                 statement: "The batch-guarded add lands.".into(),
                 evidence_observation_ids: vec![observation_id.clone()],
+                horizon: None,
             },
             MemoryMutationProposal::Reinforce {
                 target_memory_id: "mem-capacity-7".into(),
@@ -854,6 +864,7 @@ fn capacity_eviction_skips_a_memory_an_earlier_candidate_of_the_batch_resolved_i
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: statement.into(),
         evidence_observation_ids: vec![observation_id.clone()],
+        horizon: None,
     };
     let batch = MemoryMutationProposalBatch {
         schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION,
@@ -908,6 +919,7 @@ fn active_memory_capacity_fails_only_when_every_memory_is_protected() {
             },
             statement: "This must remain pending.".into(),
             evidence_observation_ids: vec![observation_id],
+            horizon: None,
         },
         MemorySourceClass::Inferred,
     );
@@ -946,6 +958,7 @@ fn user_archive_preserves_content_evidence_and_rejects_stale_version() {
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: "Preserve this evidence on archive.".into(),
         evidence_observation_ids: vec![observation_id],
+        horizon: None,
     }, MemorySourceClass::Inferred);
     let receipt = persist_memory_candidate_batch(&conn, &input).unwrap();
     promote(&conn, &receipt.candidates[0].id, 1);
@@ -1063,6 +1076,7 @@ fn real_submissions_require_new_observations_for_each_lifecycle_transition() {
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: "Commits before checking passage evidence.".into(),
         evidence_observation_ids: vec![baseline.clone()],
+        horizon: None,
     });
     promote(&conn, &add, 1);
     let memory: String = conn.query_row("SELECT id FROM memory_items", [], |row| row.get(0)).unwrap();
@@ -1133,6 +1147,7 @@ fn lifecycle_evidence_uses_instant_order_not_ids_or_timestamp_spelling() {
         namespace: MemoryNamespace::Strategy, canonical_key: "strategy.reading.temporal".into(),
         scope: MemoryScope::Activity { key: Activity::Reading },
         statement: "Check passage evidence.".into(), evidence_observation_ids: vec![baseline],
+        horizon: None,
     });
     promote(&conn, &add, 1);
     let memory: String = conn.query_row("SELECT id FROM memory_items", [], |row| row.get(0)).unwrap();
