@@ -164,6 +164,8 @@ type RefreshOptions = {
 type ReviewOptions = {
   expectedSessionId?: string
   force?: boolean
+  /** How a failed review is resent: as it was, asking for a short answer, or with the slim attempt context. */
+  mode?: CoachRetryMode
 }
 
 function readSource(source: unknown): any {
@@ -978,12 +980,17 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     const isLive = () => epoch === coachEpoch && isCurrentSubmission(expectedSessionId)
     llmReviewStatus.value = 'running'
     llmReviewMessage.value = 'AI 正在复盘错题...'
-    beginCoachRequest(AUTOMATIC_REVIEW_QUERY)
+    // The same two retry transformations an ordinary question gets (sendCoachQuery):
+    // "short" asks for a brief answer, "compact" sends the slim attempt context.
+    const retryMode: CoachRetryMode = reviewOptions.mode || 'same'
+    const reviewQuery = retryMode === 'short' ? `${AUTOMATIC_REVIEW_QUERY}${COACH_SHORT_ANSWER_SUFFIX}` : AUTOMATIC_REVIEW_QUERY
+    beginCoachRequest(reviewQuery)
     try {
-      const requestPayload = buildCoachPayload(AUTOMATIC_REVIEW_QUERY, {
+      const requestPayload = buildCoachPayload(reviewQuery, {
         surface: 'review_workspace',
         action: 'review_set',
-        promptKind: 'preset'
+        promptKind: 'preset',
+        compact: retryMode === 'compact'
       })
       const response = await readingCoachApi.query(requestPayload, expectedSessionId, {
         onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'review' })
@@ -1022,7 +1029,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       }
       llmReviewStatus.value = 'failed'
       llmReviewMessage.value = formatLlmFailureStatusMessage(reviewFailure)
-      offerCoachRetry(reviewFailure, '', () => runAutomaticReviewCoach({ expectedSessionId }))
+      offerCoachRetry(reviewFailure, '', (mode) => runAutomaticReviewCoach({ expectedSessionId, mode }))
       appendLocalCoachError(llmReviewMessage.value)
     } finally {
       finishCoachRequest(requestId, isLive)

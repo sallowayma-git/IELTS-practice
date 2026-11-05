@@ -282,3 +282,77 @@ test('leaving the page (reset) drops the open stream and any pending bubble', as
   assert.deepEqual(coach.coachTranscript.value, [])
   assert.equal(coach.coachLoading.value, false)
 })
+
+// The whole-attempt review is retried like an ordinary question: the mode the
+// panel offers (short answer, slim context) has to reach the review payload.
+
+test('a truncated whole-attempt review offers a short retry that really asks for a brief review', async () => {
+  const payloads = []
+  const { coach } = harness({
+    query: async (payload) => {
+      payloads.push(payload)
+      throw failure('coach.output_truncated')
+    }
+  })
+  await coach.runAutomaticReviewCoach()
+  assert.equal(coach.coachRetryKind.value, 'truncated')
+  await coach.retryCoachQuery('short')
+
+  const hint = '（请用不超过 5 句话简要回答）'
+  const [first, retry] = payloads
+  assert.equal(first.action, 'review_set')
+  assert.ok(!first.content.endsWith(hint), 'the first review does not ask for brevity')
+  assert.equal(retry.action, 'review_set', 'still the whole-attempt review')
+  assert.equal(retry.content, `${first.content}${hint}`)
+  // Retrying again must not stack the hint.
+  await coach.retryCoachQuery('short')
+  assert.equal(payloads[2].content, `${first.content}${hint}`)
+})
+
+test('a whole-attempt review that overflowed the context is retried with the slim attempt context', async () => {
+  const payloads = []
+  const { coach, state } = harness({
+    query: async (payload) => {
+      payloads.push(payload)
+      throw failure('coach.context_exceeded')
+    }
+  })
+  state.submission = {
+    sessionId: 'attempt-1',
+    answerComparison: { q7: { questionId: 'q7', displayLabel: '7', isCorrect: false, userAnswer: 'A' } },
+    questionTimelineLite: [{ q: 7, ms: 1000 }],
+    analysisSignals: { weak: ['tfng'] },
+    markedQuestions: ['q7'],
+    questionTypePerformance: { tfng: { total: 4 } }
+  }
+  await coach.runAutomaticReviewCoach()
+  assert.equal(coach.coachRetryKind.value, 'context')
+  await coach.retryCoachQuery('compact')
+
+  const [full, compact] = payloads
+  assert.equal(compact.action, 'review_set')
+  assert.equal(compact.content, full.content, 'compact keeps the question as it was')
+  assert.equal(full.attemptContext.questionTimelineLite.length, 1)
+  assert.deepEqual(compact.attemptContext.questionTimelineLite, [])
+  assert.deepEqual(compact.attemptContext.markedQuestions, [])
+  assert.deepEqual(compact.attemptContext.analysisSignals, null)
+  assert.deepEqual(compact.attemptContext.questionTypePerformance, {})
+  assert.equal(compact.attemptContext.wrongQuestions.length, full.attemptContext.wrongQuestions.length, 'what the coach needs is kept')
+})
+
+test('retrying a whole-attempt review as it was resends it unchanged', async () => {
+  const payloads = []
+  const { coach } = harness({
+    query: async (payload) => {
+      payloads.push(payload)
+      if (payloads.length === 1) throw failure('coach.provider_failed', 'provider timeout')
+      return { threadId: 't1', answer: 'review', messages: [answerRow('a1', 'review')] }
+    }
+  })
+  await coach.runAutomaticReviewCoach()
+  assert.equal(coach.coachRetryKind.value, 'plain')
+  await coach.retryCoachQuery('same')
+  assert.equal(payloads.length, 2)
+  assert.equal(payloads[1].content, payloads[0].content)
+  assert.deepEqual(payloads[1].attemptContext, payloads[0].attemptContext)
+})
