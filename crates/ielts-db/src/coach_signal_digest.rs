@@ -239,7 +239,9 @@ impl SignalWindows {
 /// One signal: every in-window note of the same subject, merged.
 ///
 /// The subject is the note `kind` plus its `skillKey` (or, with no skill, its
-/// text), compared ignoring case, hyphens, underscores and spacing.
+/// text), compared ignoring case, hyphens, underscores and spacing. For a
+/// `strategy_outcome` with a strategy and an outcome it is the strategy and the
+/// outcome instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignalDigestEntry {
     pub kind: NoteKind,
@@ -247,6 +249,11 @@ pub struct SignalDigestEntry {
     pub skill_key: Option<String>,
     /// The newest note's text, already safe and short enough for a prompt.
     pub text: String,
+    /// Raw `outcome` (`helped` / `not_helped`) and teaching strategy label of the
+    /// newest note when it is a `strategy_outcome`; every note of one strategy
+    /// signal says the same, because they are merged by strategy and outcome.
+    pub outcome: Option<String>,
+    pub strategy: Option<String>,
     /// At least one of the notes asked to be remembered.
     pub remember: bool,
     /// The longest horizon among the notes: `Durable` beats `Recent`. Never `Session`.
@@ -323,8 +330,16 @@ pub fn digest_notes(notes: &[CoachNote], now: DateTime<Utc>, windows: SignalWind
     entries
 }
 
-/// What makes two notes the same signal.
+/// What makes two notes the same signal. A strategy outcome is the strategy and
+/// what it did (`helped` is not `not_helped`, one strategy is not another), not
+/// the skill it happened on: the rule "the same strategy gave the same result on
+/// different passages" counts exactly these.
 fn subject(content: &NoteContent) -> (NoteKind, String) {
+    if let (NoteKind::StrategyOutcome, Some(strategy), Some(outcome)) =
+        (content.kind, content.strategy.as_deref(), content.outcome.as_deref())
+    {
+        return (content.kind, format!("{}|{outcome}", normalize(strategy)));
+    }
     let skill = content.skill_key.as_deref().map(normalize).filter(|skill| !skill.is_empty());
     (content.kind, skill.unwrap_or_else(|| normalize(&content.text)))
 }
@@ -345,6 +360,8 @@ fn entry(mut hits: Vec<Hit<'_>>) -> SignalDigestEntry {
         kind: last.note.content.kind,
         skill_key: last.note.content.skill_key.clone(),
         text: last.note.content.text.clone(),
+        outcome: last.note.content.outcome.clone(),
+        strategy: last.note.content.strategy.clone(),
         remember: hits.iter().any(|hit| hit.note.content.remember),
         horizon: if durable { TeachingNoteHorizon::Durable } else { TeachingNoteHorizon::Recent },
         repeat_count: answers.len(),

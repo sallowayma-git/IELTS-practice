@@ -1,5 +1,5 @@
 //! The teaching-note loop end to end, against real SQLite and the production
-//! validator: the learner's own words -> a coach line of the weekly pack ->
+//! validator: the learner's own words -> a signal of the weekly pack ->
 //! a weekly-consolidated memory that cites them -> the way back to the
 //! original message -> the next coach thread's context.
 use chrono::{DateTime, Utc};
@@ -161,20 +161,22 @@ fn a_teaching_note_reaches_a_memory_that_can_name_its_message_and_returns_to_the
     );
     let pack = the_pack(&conn);
 
-    // 1. The coach line carries the learner message's observation, then the attempt score.
-    let coach = pack.lines.iter().find(|line| line.kind == "coach").expect("a coach line");
-    assert!(coach.text.contains("coach note, preference: short examples first"), "{}", coach.text);
-    assert_eq!(coach.ids.len(), 2, "{:?}", coach.ids);
-    assert_eq!(observation_type(&conn, &coach.ids[0]), "coach.question.asked");
-    assert_eq!(observation_type(&conn, &coach.ids[1]), "reading.attempt.score");
-    assert!(pack.evidence_ids().contains(&coach.ids[0]), "the host admits a mutation that cites it");
+    // 1. The signal carries the learner message's observation, and the host admits a mutation citing it.
+    assert_eq!(pack.signals.len(), 1, "{:?}", pack.signals);
+    let signal = &pack.signals[0];
+    assert_eq!((signal.kind, signal.text.as_str(), signal.repeat_count, signal.distinct_assets), ("preference", "short examples first", 1, 1));
+    assert_eq!(signal.ids.len(), 1, "{:?}", signal.ids);
+    assert_eq!(observation_type(&conn, &signal.ids[0]), "coach.question.asked");
+    assert!(pack.evidence_ids().contains(&signal.ids[0]), "the host admits a mutation that cites it");
+    // The notes are no longer retold day by day on a coach line.
+    assert!(pack.lines.iter().all(|line| line.kind != "coach"), "{:?}", pack.lines);
 
     // 2. The weekly dream cites it; the production validator and promotion accept it.
     let memory = weekly_add(
         &conn,
         "preference.reading.short_examples_first",
         "学习者希望讲解先给简短例子，再讲规则。",
-        coach.ids.clone(),
+        signal.ids.clone(),
     );
 
     // 3. The way back: memory -> evidence observation -> the learner's own message.
@@ -206,14 +208,20 @@ fn a_current_format_note_needs_no_quote_to_be_traced_to_the_message_it_answered(
         ]),
     );
     let pack = the_pack(&conn);
-    let coach = pack.lines.iter().find(|line| line.kind == "coach").expect("a coach line");
-    assert!(coach.text.contains("coach note, difficulty [reading.tfng]: 判断题里 NOT GIVEN 与 FALSE 经常混淆"), "{}", coach.text);
-    assert!(coach.text.contains("coach note, example_first_v1 helped: 先给例子再讲证据对该学习者更有效"), "{}", coach.text);
-    assert_eq!(coach.ids.len(), 2, "the learner message once, then the attempt score: {:?}", coach.ids);
-    assert_eq!(observation_type(&conn, &coach.ids[0]), "coach.question.asked");
+    let texts: Vec<_> = pack.signals.iter().map(|signal| (signal.kind, signal.skill.as_deref(), signal.text.as_str())).collect();
+    assert!(texts.contains(&("difficulty", Some("reading.tfng"), "判断题里 NOT GIVEN 与 FALSE 经常混淆")), "{texts:?}");
+    let strategy = pack.signals.iter().find(|signal| signal.kind == "strategy_outcome").expect("the strategy outcome");
+    assert_eq!(
+        (strategy.strategy.as_deref(), strategy.outcome, strategy.text.as_str()),
+        (Some("example_first_v1"), Some("helped"), "先给例子再讲证据对该学习者更有效")
+    );
+    let ids: std::collections::BTreeSet<_> = pack.signals.iter().flat_map(|signal| signal.ids.clone()).collect();
+    assert_eq!(ids.len(), 1, "both notes answer the same learner message: {ids:?}");
+    let ids: Vec<String> = ids.into_iter().collect();
+    assert_eq!(observation_type(&conn, &ids[0]), "coach.question.asked");
 
     // A memory built on the line still leads back to the original message.
-    let memory = weekly_add(&conn, "preference.reading.tfng_examples", "该学习者在判断题上需要先给例子的讲法。", coach.ids.clone());
+    let memory = weekly_add(&conn, "preference.reading.tfng_examples", "该学习者在判断题上需要先给例子的讲法。", ids);
     let sources = memory_coach_sources(&conn, "local", &memory).unwrap();
     assert_eq!(sources.len(), 1, "{sources:?}");
     assert_eq!(sources[0].learner_message_id, user.id);

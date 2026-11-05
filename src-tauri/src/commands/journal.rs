@@ -441,7 +441,13 @@ fn apply_weekly_submission(
     let pack = db
         .with_conn(|conn| ielts_db::weekly_pack(conn, &query.user_id, window.start, window.end))
         .map_err(|error| ApplicationError::new("weekly.pack_failed", error.to_string(), true))?;
-    let evidence = WeeklyEvidence { observation_ids: pack.evidence_ids(), memory_ids: pack.memory_ids() };
+    let (signal_ids, promoted_signal_ids) = pack.signal_ids();
+    let evidence = WeeklyEvidence {
+        observation_ids: pack.evidence_ids(),
+        memory_ids: pack.memory_ids(),
+        signal_ids,
+        promoted_signal_ids,
+    };
 
     // Build the report before any memory changes: if the blocks or the narrative
     // cannot be built, the run fails with memory untouched. A model that

@@ -452,13 +452,15 @@ fn the_v3_pack_is_deterministic_and_carries_only_its_own_sections() {
     let (_dir, conn) = pack_fixture();
     let pack = build_pack(&conn);
     let value = pack.to_value();
-    assert_eq!(WEEKLY_PACK_SCHEMA_VERSION, 3);
-    assert_eq!(value["schemaVersion"], json!(3));
+    assert_eq!(WEEKLY_PACK_SCHEMA_VERSION, 4);
+    assert_eq!(value["schemaVersion"], json!(4));
     assert_eq!(value["window"], json!({"start": WINDOW_START, "end": WINDOW_END}));
 
-    // Citable ids come from the lines, targetable memories from `memories`, and
+    // Citable ids come from the lines and from the learner messages behind the
+    // signals (this fixture has none), targetable memories from `memories`, and
     // nothing else.
     let line_ids: BTreeSet<String> = pack.lines.iter().flat_map(|line| line.ids.clone()).collect();
+    assert!(pack.signals.is_empty());
     assert_eq!(pack.evidence_ids(), line_ids);
     let memory_ids: BTreeSet<String> = pack.memories.iter().map(|memory| memory.memory_id.clone()).collect();
     assert_eq!(pack.memory_ids(), memory_ids);
@@ -474,13 +476,16 @@ fn the_v3_pack_is_deterministic_and_carries_only_its_own_sections() {
     for absent in ["facts", "blocks", "soul", "persona"] {
         assert!(value.get(absent).is_none(), "{absent} leaked into the pack");
     }
-    for present in ["schemaVersion", "window", "observationCount", "header", "lines", "memories", "preferences"] {
+    for present in ["schemaVersion", "window", "observationCount", "header", "lines", "signals", "memories", "preferences"] {
         assert!(value.get(present).is_some(), "{present} missing from the pack");
     }
     let keys: BTreeSet<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
     assert!(keys.iter().all(|key| {
-        ["schemaVersion", "window", "observationCount", "header", "lines", "memories", "confirmed", "preferences", "omitted"]
-            .contains(key)
+        [
+            "schemaVersion", "window", "observationCount", "header", "lines", "signals", "memories", "confirmed",
+            "preferences", "omitted",
+        ]
+        .contains(key)
     }));
 
     // The same database and window give the same bytes, header and lines alike.
