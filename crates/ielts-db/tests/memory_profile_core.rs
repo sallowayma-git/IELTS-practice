@@ -1139,6 +1139,43 @@ fn real_submissions_require_new_observations_for_each_lifecycle_transition() {
 }
 
 #[test]
+fn a_memory_the_weekly_pass_improved_is_forgotten_three_weeks_after_the_improvement() {
+    let (dir, conn) = open_db();
+    let asset_path = dir.path().join("lifecycle.json");
+    std::fs::write(&asset_path, serde_json::to_vec(&json!({
+        "examId": "lifecycle-asset", "meta": {"title": "Lifecycle evidence", "category": "P1"},
+        "questionCount": 1, "questionOrder": ["q1"], "answerKey": {"q1": "TRUE"},
+        "passage": {"blocks": [{"html": "<p>The statement is true.</p>"}]},
+        "questionGroups": [{"kind": "tfng", "questionIds": ["q1"]}],
+    })).unwrap()).unwrap();
+    ielts_db::import_asset_payload_file(&conn, &asset_path).unwrap();
+    let baseline = submit_lifecycle_observation(&conn, "forget-baseline", "FALSE");
+    let add = validated_candidate(&conn, "forget-add", MemoryMutationProposal::Add {
+        namespace: MemoryNamespace::Behavior,
+        canonical_key: "behavior.reading.premature_commitment".into(),
+        scope: MemoryScope::Activity { key: Activity::Reading },
+        statement: "Commits before checking passage evidence.".into(),
+        evidence_observation_ids: vec![baseline], horizon: None,
+    });
+    promote(&conn, &add, 1);
+    let memory: String = conn.query_row("SELECT id FROM memory_items", [], |row| row.get(0)).unwrap();
+    let improved = submit_lifecycle_observation(&conn, "forget-improved", "TRUE");
+    let candidate = validated_candidate(&conn, "forget-improve", lifecycle_proposal("IMPROVE", &memory, vec![improved]));
+    promote(&conn, &candidate, 1);
+    assert_eq!(memory_field(&conn, &memory, "improvement_state"), "improved");
+
+    // Improving it started the clock: three weeks of nothing is the end of it.
+    let day = chrono::Duration::days;
+    let now = chrono::Utc::now();
+    assert_eq!(ielts_db::sweep_forgotten_memories(&conn, "local", now + day(20)).unwrap().total(), 0);
+    assert_eq!(memory_field(&conn, &memory, "status"), "active");
+    let report = ielts_db::sweep_forgotten_memories(&conn, "local", now + day(22)).unwrap();
+    assert_eq!(report.improved, vec![memory.clone()]);
+    assert_eq!(memory_field(&conn, &memory, "status"), "archived");
+    assert_eq!(memory_field(&conn, &memory, "improvement_state"), "improved", "the row keeps its history");
+}
+
+#[test]
 fn lifecycle_evidence_uses_instant_order_not_ids_or_timestamp_spelling() {
     let (_dir, conn) = open_db();
     insert_reading_event(&conn, "time-baseline", "2026-08-13T01:00:00Z");

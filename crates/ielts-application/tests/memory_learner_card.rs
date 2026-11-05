@@ -617,3 +617,33 @@ fn the_card_path_never_sets_an_expiry_and_a_recent_proposal_cannot_ask_for_one_t
     };
     assert!(ielts_db::create_learner_memory(fx.conn(), &input, "u", "r").is_err(), "the refused ADD is not written");
 }
+
+#[test]
+fn a_recent_memory_leaves_the_coach_profile_when_it_expires_and_the_weekly_sweep_archives_it() {
+    let fx = fixture();
+    let recent = weekly_add(&fx, "recent_wish", Some(MemoryHorizon::Recent)).unwrap();
+    let durable = weekly_add(&fx, "durable_wish", Some(MemoryHorizon::Durable)).unwrap();
+    let now = chrono::Utc::now();
+    let day = chrono::Duration::days;
+
+    let profile = |at| ielts_db::build_coach_system_context_at(fx.conn(), "local", at).unwrap().memory_ids();
+    let mut both = vec![recent.clone(), durable.clone()];
+    both.sort();
+    let sorted = |mut ids: Vec<String>| {
+        ids.sort();
+        ids
+    };
+    assert_eq!(sorted(profile(now + day(29))), both, "still valid on day 29");
+    assert_eq!(profile(now + day(31)), vec![durable.clone()], "expired memories leave the profile at once");
+
+    // The weekly pass then archives it, with the reason, and the durable one stays.
+    let report = ielts_db::sweep_forgotten_memories(fx.conn(), "local", now + day(31)).unwrap();
+    assert_eq!(report.expired, vec![recent.clone()]);
+    assert_eq!(memory_row(fx.conn(), &recent).3, "archived");
+    assert_eq!(memory_row(fx.conn(), &durable).3, "active");
+    let reason: String = fx
+        .conn()
+        .query_row("SELECT reason FROM memory_mutations WHERE memory_id = ?1 AND operation = 'archive'", [&recent], |row| row.get(0))
+        .unwrap();
+    assert_eq!(reason, "expired");
+}

@@ -828,6 +828,26 @@ pub(crate) fn archive_memory_record(
     Ok(true)
 }
 
+/// [`archive_memory_record`] for an active memory still at `expected_version`
+/// (a compare-and-set): `false`, and nothing written, when it moved on.
+pub(crate) fn archive_memory_record_at(
+    conn: &Connection,
+    memory_id: &str,
+    expected_version: u64,
+    actor_type: &str,
+    actor_id: Option<&str>,
+    reason: &str,
+    now: &str,
+) -> DbResult<bool> {
+    let current: Option<u64> = conn
+        .query_row("SELECT version FROM memory_items WHERE id=?1 AND status='active'", [memory_id], |row| row.get(0))
+        .optional()?;
+    if current != Some(expected_version) {
+        return Ok(false);
+    }
+    archive_memory_record(conn, memory_id, actor_type, actor_id, reason, now)
+}
+
 pub fn forget_memory(conn: &Connection, command: &MemoryForgetCommand) -> DbResult<()> {
     validate_actor(&command.actor_type)?;
     require_text(&command.reason, "reason")?;

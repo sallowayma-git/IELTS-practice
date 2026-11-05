@@ -277,6 +277,13 @@ fn a_signal_says_how_often_on_how_many_passages_and_over_which_days() {
         assert!(repeated.ids.contains(&asked), "{answer}");
     }
     assert!(pack.signals.iter().all(|signal| signal.ids.iter().all(|id| pack.evidence_ids().contains(id))));
+    // The host holds the model to the promotion rule through these two sets: the learner messages
+    // behind any signal, and those behind a signal that earns it. (The remark and the remembered
+    // wish were said in the same answer, so that learner message is behind a strong signal too.)
+    let (behind_any, behind_strong) = pack.signal_ids();
+    let behind = |signal: &PackSignal| signal.ids.iter().cloned().collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(behind_any, pack.signals.iter().flat_map(behind).collect());
+    assert_eq!(behind_strong, behind(&pack.signals[0]).into_iter().chain(behind(&pack.signals[1])).collect());
     // The notes are not retold on a coach line, and a signal's ids add no score observation.
     assert!(pack.lines.iter().all(|line| line.kind != "coach"));
     let value = pack.to_value();
