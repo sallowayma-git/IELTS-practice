@@ -397,7 +397,12 @@ fn signal_text_is_sanitized_clipped_and_checked_before_it_reaches_the_pack() {
     }
     let kept = pack.signals.iter().find(|signal| signal.kind == "strategy_outcome").unwrap();
     assert_eq!((kept.text.as_str(), kept.strategy.as_deref(), kept.outcome), ("ok", None, Some("helped")));
-    assert!(!all.contains("obs-1") && !all.contains("mem-2"), "id tokens never survive in a signal");
+    // Only the notes' own words are under test. The pack as a whole legitimately carries
+    // real observation ids (a random uuid, which may start with any hex digit), so scanning
+    // all of it for "obs-1" fails by chance about one run in four.
+    for signal in &pack.signals {
+        assert!(!signal.text.contains("obs-") && !signal.text.contains("mem-"), "id token left in a signal: {}", signal.text);
+    }
 }
 
 #[test]
