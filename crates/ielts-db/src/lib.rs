@@ -10,6 +10,7 @@ pub mod background_jobs;
 pub mod backup;
 pub mod coach;
 pub mod coach_feedback;
+pub mod coach_signal_digest;
 pub mod cognitive_read;
 pub mod consolidation;
 pub mod context;
@@ -22,17 +23,22 @@ pub mod learning_observations;
 pub mod learning_tools;
 pub mod local_day;
 pub mod memory;
+pub mod memory_card;
+pub mod memory_forgetting;
+pub mod memory_provenance;
 pub mod learner;
 pub mod llm_usage;
 pub mod migrate;
 pub mod modes;
 pub mod perf;
 pub mod reading;
+pub mod recent_signals;
 pub mod safety;
 pub mod secrets;
 pub mod settings;
 pub mod soul;
 pub mod sqlite;
+pub mod system_context;
 pub mod vocab;
 pub mod weekly_pack;
 pub mod weekly_report;
@@ -57,6 +63,14 @@ pub use learning_events::*;
 pub use learning_observations::*;
 pub use learning_tools::*;
 pub use memory::*;
+pub use memory_card::{
+    active_card_memory, load_memory_card, memory_card_key, set_memory_card_state, MemoryCardSource, CARD_CONFIRMED,
+    CARD_DISMISSED,
+};
+pub use memory_forgetting::{
+    sweep_forgotten_memories, ForgetReport, IMPROVED_FORGET_DAYS, STALE_FORGET_DAYS, STALE_RECALL_FLOOR,
+};
+pub use memory_provenance::{memory_coach_sources, CoachMessageSource};
 pub use learner::*;
 pub use llm_usage::*;
 pub use migrate::*;
@@ -67,6 +81,13 @@ pub use safety::*;
 pub use secrets::*;
 pub use settings::*;
 pub use sqlite::*;
+pub use coach_signal_digest::{
+    coach_signal_digest, digest_notes, payload_notes, read_coach_notes, CoachNote, NoteContent, NoteKind, NoteRange,
+    SignalDigestEntry, SignalWindows, COACH_SIGNAL_WINDOWS, RECENT_SIGNAL_DURABLE_DAYS, RECENT_SIGNAL_RECENT_DAYS,
+    SIGNAL_SOURCES_MAX, SIGNAL_TEXT_CHARS,
+};
+pub use recent_signals::{recent_signals, RECENT_SIGNAL_MAX};
+pub use system_context::{build_coach_system_context, build_coach_system_context_at, coach_profile_message, COACH_PROFILE_LABEL};
 pub use vocab::*;
 pub use weekly_pack::*;
 pub use weekly_report::{

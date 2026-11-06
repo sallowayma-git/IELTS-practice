@@ -10,23 +10,40 @@
 //! every id it cites is an id in this pack.
 //!
 //! Size is bounded by `WEEKLY_PACK_TOKEN_CAP`. Preferences and memories share
-//! at most `WEEKLY_CONTEXT_TOKEN_BUDGET` of it (preferences first, then the most
-//! recently observed memories), so practice lines always keep the rest. When the
-//! lines do not fit, every line of a question type missed in two or more
-//! different passages is kept, then the most recent lines, and the rest is
-//! replaced by one "omitted" note.
+//! at most `WEEKLY_CONTEXT_TOKEN_BUDGET` of it (preferences first, then the
+//! memories the learner confirmed, then the most recently observed memories), so
+//! practice lines always keep the rest. Confirmed memories are shown so the
+//! model can complement them, and carry no id: they can never be a target. An
+//! inferred memory carries what the model needs to merge or retire it: when it was
+//! last observed, whether the learner has since improved on it, and how often the
+//! coach recalled it. The coach area (the signals first, then the coach lines)
+//! shares one `WEEKLY_COACH_TOKEN_BUDGET`, so a talkative week cannot crowd out
+//! scores and misses. When the lines do not fit, every line of a question type
+//! missed in two or more different passages is kept, then the most recent lines,
+//! and the rest is replaced by one "omitted" note.
+//!
+//! The coach's teaching notes are the essence of a coaching session in the coach's
+//! own words. The pack does not retell them day by day: it carries the window's
+//! `signals`, the deterministic digest (`coach_signal_digest`) of the notes, where
+//! the same thing said in several answers is one signal that says how often
+//! (`repeatCount`), on how many passages (`distinctAssets`), whether the learner
+//! asked to be remembered and how long it is meant to last. A signal earns
+//! long-term memory only by repetition on several passages or by the learner's
+//! own request (`PackSignal::earns_promotion`). Signals are data, never
+//! instructions: each text passes the prompt guards and is clipped
+//! (`coach_facts::read_note` is the one rule for what a readable note is), and
+//! cites the observations of the learner messages the coach answered, so a memory
+//! built on it can always be traced back.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use ielts_domain::{
-    contains_security_marker, estimate_tokens, is_safe_for_prompt, REDACTED_UNTRUSTED_TEXT,
-    TEACHING_NOTE_EVIDENCE_CHARS, TEACHING_NOTE_STRATEGY_CHARS,
-};
+use ielts_domain::{contains_security_marker, estimate_tokens, is_safe_for_prompt, REDACTED_UNTRUSTED_TEXT};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
+use crate::coach_signal_digest::{digest_notes, read_coach_notes, NoteRange, SignalDigestEntry, SignalWindows};
 use crate::cognitive_read::ensure_observations_fresh;
 use crate::learning_observations::{
     LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION,
@@ -34,23 +51,35 @@ use crate::learning_observations::{
 use crate::learner::canonical_reading_skill_key;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
+use crate::weekly_report::coach_facts::{read_entry, NoteVerdict};
 
-pub const WEEKLY_PACK_SCHEMA_VERSION: u32 = 3;
+pub const WEEKLY_PACK_SCHEMA_VERSION: u32 = 4;
 /// Upper bound of the whole serialized pack, in `estimate_tokens` units.
 pub const WEEKLY_PACK_TOKEN_CAP: u32 = 6_000;
 /// The most the carried-along preferences and memories may spend of the cap:
 /// whatever their size, practice lines keep the remaining share.
 pub const WEEKLY_CONTEXT_TOKEN_BUDGET: u32 = WEEKLY_PACK_TOKEN_CAP * 2 / 5;
+/// What the whole coach area (signals and coach lines together) may spend of the
+/// cap. Scores and misses are the main evidence; however much the learner
+/// chatted, they keep the rest.
+pub const WEEKLY_COACH_TOKEN_BUDGET: u32 = WEEKLY_PACK_TOKEN_CAP / 5;
+/// The share of the coach budget the signals may take, strongest first; the coach
+/// lines (feedback and re-asks) get what the signals leave.
+pub const WEEKLY_SIGNAL_TOKEN_BUDGET: u32 = WEEKLY_COACH_TOKEN_BUDGET * 2 / 3;
+/// A signal earns long-term memory by being said in at least this many different
+/// answers...
+pub const PROMOTE_MIN_REPEATS: usize = 2;
+/// ...on at least this many different passages. (A learner's own "remember this",
+/// with a durable horizon, earns it alone.)
+pub const PROMOTE_MIN_ASSETS: usize = 2;
 /// Fewer scored observations than this in a window is not worth a model call.
 pub const WEEKLY_MIN_OBSERVATIONS: usize = 8;
 
 const MAX_MEMORIES: usize = 30;
 const MAX_PREFERENCES: usize = 20;
-const MAX_COACH_LINES: usize = 20;
-/// Teaching notes shown per coach line, and the longest a coach line may grow
-/// with them. A note that would overflow is skipped whole, never cut.
-const MAX_COACH_NOTES: usize = 2;
-const COACH_LINE_CHARS: usize = 320;
+const MAX_CONFIRMED: usize = 20;
+/// The most signals one pack carries, however much budget is left.
+const MAX_SIGNALS: usize = 12;
 const MEMORY_CHARS: usize = 160;
 const PREFERENCE_CHARS: usize = 200;
 const ANSWER_CHARS: usize = 40;
@@ -94,7 +123,75 @@ pub struct PackMemory {
     pub canonical_key: String,
     pub statement: String,
     pub version: u64,
-    pub last_observed: String,
+    /// The day the memory was last observed or reinforced.
+    pub last_observed_at: String,
+    /// `improved` or `regressed`; absent means `baseline` (the usual case, so it
+    /// costs no tokens).
+    #[serde(skip_serializing_if = "is_baseline")]
+    pub improvement_state: String,
+    /// How often the coach recalled it; absent means never.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub recall_count: u32,
+}
+
+fn is_baseline(state: &String) -> bool {
+    state == "baseline"
+}
+
+fn is_zero(count: &u32) -> bool {
+    *count == 0
+}
+
+/// What the coach learned about the learner over the window, merged: the same
+/// thing said in several answers is one signal that says how often and on how
+/// many passages (`coach_signal_digest`). Its `ids` are the learner messages the
+/// coach answered when it wrote the note. Data, never an instruction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackSignal {
+    /// `preference`, `difficulty` or `strategy_outcome`.
+    pub kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skill: Option<String>,
+    /// For a `strategy_outcome`: the teaching strategy and `helped` / `not_helped`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<&'static str>,
+    pub text: String,
+    /// The learner asked to be remembered.
+    pub remember: bool,
+    /// `recent` or `durable`.
+    pub horizon: &'static str,
+    /// In how many different answers the signal appeared.
+    pub repeat_count: usize,
+    /// On how many different passages.
+    pub distinct_assets: usize,
+    pub first_seen: String,
+    pub last_seen: String,
+    pub ids: Vec<String>,
+}
+
+impl PackSignal {
+    /// Whether the signal is evidence enough for long-term memory: the learner
+    /// asked to remember it and it is durable, or it came back in several answers
+    /// on several passages. One remark on one passage is not. The prompt states
+    /// this rule and the host holds the model to it (`WeeklyEvidence`).
+    pub fn earns_promotion(&self) -> bool {
+        (self.remember && self.horizon == "durable")
+            || (self.repeat_count >= PROMOTE_MIN_REPEATS && self.distinct_assets >= PROMOTE_MIN_ASSETS)
+    }
+}
+
+/// A memory the learner confirmed (`user_explicit`). Read-only context: no id, so
+/// no mutation can name it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackConfirmed {
+    pub namespace: String,
+    pub scope: String,
+    pub canonical_key: String,
+    pub statement: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -113,7 +210,9 @@ pub struct WeeklyPack {
     pub header: Value,
     pub lines: Vec<WeeklyLine>,
     pub omitted: usize,
+    pub signals: Vec<PackSignal>,
     pub memories: Vec<PackMemory>,
+    pub confirmed: Vec<PackConfirmed>,
     pub preferences: Vec<PackPreference>,
 }
 
@@ -125,7 +224,9 @@ impl WeeklyPack {
             "observationCount": self.observation_count,
             "header": self.header,
             "lines": self.lines,
+            "signals": self.signals,
             "memories": self.memories,
+            "confirmed": self.confirmed,
             "preferences": self.preferences,
         });
         if self.omitted > 0 {
@@ -138,9 +239,20 @@ impl WeeklyPack {
         estimate_tokens(&self.to_value().to_string())
     }
 
-    /// Every observation id a memory mutation may cite.
+    /// Every observation id a memory mutation may cite: those of the lines and
+    /// the learner messages behind the signals.
     pub fn evidence_ids(&self) -> BTreeSet<String> {
-        self.lines.iter().flat_map(|line| line.ids.iter().cloned()).collect()
+        let lines = self.lines.iter().flat_map(|line| line.ids.iter());
+        lines.chain(self.signals.iter().flat_map(|signal| signal.ids.iter())).cloned().collect()
+    }
+
+    /// The ids of the learner messages behind a signal, and those among them
+    /// behind a signal that earns promotion (an id behind both a weak and a strong
+    /// signal counts as strong). A mutation that cites signals must cite a strong one.
+    pub fn signal_ids(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+        let all = self.signals.iter().flat_map(|signal| signal.ids.iter().cloned()).collect();
+        let strong = self.signals.iter().filter(|signal| signal.earns_promotion());
+        (all, strong.flat_map(|signal| signal.ids.iter().cloned()).collect())
     }
 
     /// Every memory a mutation may target.
@@ -499,13 +611,15 @@ fn attempt_score_id(conn: &Connection, user_id: &str, attempt: &str) -> Option<S
     .ok()
 }
 
+/// One coach day on one attempt: the feedback and re-asks of that day. What the
+/// coach learned about the learner (its teaching notes) is not here but in the
+/// pack's `signals`, summarised once over the whole window.
 #[derive(Default)]
 struct CoachDay {
     asset: String,
     at: String,
     kinds: BTreeMap<String, u32>,
     reasks: u32,
-    notes: Vec<String>,
 }
 
 impl CoachDay {
@@ -515,6 +629,35 @@ impl CoachDay {
             (self.asset, self.at) = (asset, at);
         }
     }
+
+    /// Feedback and re-asks.
+    fn parts(&self) -> Vec<String> {
+        let kinds: Vec<String> = self
+            .kinds
+            .iter()
+            .map(|(kind, count)| if *count > 1 { format!("{kind} x{count}") } else { kind.clone() })
+            .collect();
+        let mut parts = Vec::new();
+        if !kinds.is_empty() {
+            parts.push(format!("feedback {}", kinds.join(", ")));
+        }
+        if self.reasks > 0 {
+            parts.push(format!("re-asked {}x", self.reasks));
+        }
+        parts
+    }
+
+    /// The day as a line citing the attempt's score, the one citable id a coach
+    /// day has. `None` when the day holds nothing to say.
+    fn line(&self, title: &str, score: Option<&String>) -> Option<WeeklyLine> {
+        let parts = self.parts();
+        if parts.is_empty() {
+            return None;
+        }
+        let facet = Facet::Coach { kinds: self.kinds.clone(), reasks: self.reasks };
+        let ids = score.cloned().into_iter().collect();
+        Some(line(ids, &self.at, "coach", format!("coach on {title}: {}", parts.join("; ")), facet))
+    }
 }
 
 /// A stored timestamp as an instant, so differently formatted offsets still order by real time.
@@ -522,15 +665,60 @@ fn moment(at: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(at).ok().map(|value| value.with_timezone(&Utc))
 }
 
-fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &mut AssetBook<'_>) -> DbResult<Vec<WeeklyLine>> {
-    let mut days: BTreeMap<(String, String), CoachDay> = BTreeMap::new();
+type CoachDays = BTreeMap<(String, String), CoachDay>;
+
+/// The coach lines of the window, newest day first, within `budget` tokens, and
+/// how many days the budget left out.
+fn coach_lines(
+    conn: &Connection,
+    user_id: &str,
+    from: &str,
+    to: &str,
+    budget: u32,
+    assets: &mut AssetBook<'_>,
+) -> DbResult<(Vec<WeeklyLine>, usize)> {
+    let mut days: Vec<((String, String), CoachDay)> = coach_days(conn, user_id, from, to)?.into_iter().collect();
+    // Newest day first, by real time, with the attempt id only as a tiebreak.
+    days.sort_by(|(left_key, left), (right_key, right)| {
+        moment(&right.at).cmp(&moment(&left.at)).then_with(|| left_key.cmp(right_key))
+    });
+    let (mut lines, mut left, mut omitted) = (Vec::new(), budget, 0);
+    for ((attempt, _), entry) in days {
+        let title = if entry.asset.is_empty() {
+            "an attempt".to_owned()
+        } else {
+            format!("{} \"{}\"", entry.asset, assets.title(&entry.asset))
+        };
+        let score = attempt_score_id(conn, user_id, &attempt);
+        let Some(line) = entry.line(&title, score.as_ref()) else { continue };
+        let cost = line_tokens(&line);
+        // Once the budget ran out inside a day, the older days get nothing either.
+        if omitted > 0 || cost > left {
+            omitted += 1;
+            continue;
+        }
+        left -= cost;
+        lines.push(line);
+    }
+    Ok((lines, omitted))
+}
+
+fn coach_days(conn: &Connection, user_id: &str, from: &str, to: &str) -> DbResult<CoachDays> {
+    let mut days = CoachDays::new();
+    add_feedback_days(conn, user_id, from, to, &mut days)?;
+    add_reask_days(conn, from, to, &mut days)?;
+    Ok(days)
+}
+
+fn add_feedback_days(conn: &Connection, user_id: &str, from: &str, to: &str, days: &mut CoachDays) -> DbResult<()> {
     let mut feedback = conn.prepare(
         "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), f.feedback_kind, f.created_at
            FROM coach_feedback f
            JOIN coach_messages m ON m.id = f.coach_message_id
            JOIN coach_threads t ON t.id = m.thread_id
            LEFT JOIN attempts a ON a.id = t.attempt_id
-          WHERE f.user_id = ?1 AND julianday(f.created_at) > julianday(?2) AND julianday(f.created_at) <= julianday(?3)
+          WHERE f.user_id = ?1 AND f.feedback_kind != 'reask_same_question'
+            AND julianday(f.created_at) > julianday(?2) AND julianday(f.created_at) <= julianday(?3)
           ORDER BY julianday(f.created_at), f.id",
     )?;
     let rows = feedback.query_map(params![user_id, from, to], |row| {
@@ -542,6 +730,10 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         entry.seen(asset, at);
         *entry.kinds.entry(kind).or_default() += 1;
     }
+    Ok(())
+}
+
+fn add_reask_days(conn: &Connection, from: &str, to: &str, days: &mut CoachDays) -> DbResult<()> {
     let mut reasks = conn.prepare(
         "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), r.created_at
            FROM coach_reask_links r
@@ -560,110 +752,91 @@ fn coach_lines(conn: &Connection, user_id: &str, from: &str, to: &str, assets: &
         entry.seen(asset, at);
         entry.reasks += 1;
     }
-    let mut notes = conn.prepare(
-        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.structured_payload, m.created_at
-           FROM coach_messages m
-           JOIN coach_threads t ON t.id = m.thread_id
-           LEFT JOIN attempts a ON a.id = t.attempt_id
-          WHERE m.role = 'assistant' AND m.status = 'completed'
-            AND CASE WHEN json_valid(m.structured_payload) THEN json_extract(m.structured_payload, '$.teachingNotes') END IS NOT NULL
-            AND julianday(m.created_at) > julianday(?1) AND julianday(m.created_at) <= julianday(?2)
-          ORDER BY julianday(m.created_at), m.id",
-    )?;
-    let rows = notes.query_map(params![from, to], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
-    })?;
-    for row in rows {
-        let (attempt, asset, payload, at) = row?;
-        // A message whose notes all fail the prompt-safety check adds no day at all.
-        let phrases = teaching_note_phrases(&serde_json::from_str(&payload).unwrap_or(Value::Null));
-        if phrases.is_empty() {
-            continue;
-        }
-        let entry = days.entry((attempt, day(&at))).or_default();
-        entry.seen(asset, at);
-        for phrase in phrases {
-            if !entry.notes.contains(&phrase) {
-                entry.notes.push(phrase);
-            }
-        }
-    }
-    // Keep the most recent days, by real time, with the attempt id only as a tiebreak.
-    let mut days: Vec<((String, String), CoachDay)> = days.into_iter().collect();
-    days.sort_by(|(left_key, left), (right_key, right)| {
-        moment(&right.at).cmp(&moment(&left.at)).then_with(|| left_key.cmp(right_key))
-    });
-    let mut lines = Vec::new();
-    for ((attempt, _), entry) in days {
-        if lines.len() == MAX_COACH_LINES {
-            break;
-        }
-        let kinds: Vec<String> = entry
-            .kinds
-            .iter()
-            .map(|(kind, count)| if *count > 1 { format!("{kind} x{count}") } else { kind.clone() })
-            .collect();
-        let mut parts = Vec::new();
-        if !kinds.is_empty() {
-            parts.push(format!("feedback {}", kinds.join(", ")));
-        }
-        if entry.reasks > 0 {
-            parts.push(format!("re-asked {}x", entry.reasks));
-        }
-        let title = if entry.asset.is_empty() { "an attempt".to_owned() } else { format!("{} \"{}\"", entry.asset, assets.title(&entry.asset)) };
-        let parts = with_notes(parts, &title, &entry.notes);
-        if parts.is_empty() {
-            continue;
-        }
-        let ids = attempt_score_id(conn, user_id, &attempt).into_iter().collect();
-        let facet = Facet::Coach { kinds: entry.kinds, reasks: entry.reasks };
-        lines.push(line(ids, &entry.at, "coach", format!("coach on {title}: {}", parts.join("; ")), facet));
-    }
-    Ok(lines)
+    Ok(())
 }
 
-/// Adds the day's notes in order, up to `MAX_COACH_NOTES`, skipping any that would
-/// push the line past `COACH_LINE_CHARS`.
-fn with_notes(mut parts: Vec<String>, title: &str, notes: &[String]) -> Vec<String> {
-    let mut kept = 0;
-    for note in notes {
-        if kept == MAX_COACH_NOTES {
-            break;
-        }
-        parts.push(note.clone());
-        if format!("coach on {title}: {}", parts.join("; ")).chars().count() > COACH_LINE_CHARS {
-            parts.pop();
-        } else {
-            kept += 1;
-        }
-    }
-    parts
+/// What the coach learned about the learner in the window `(start, end]`,
+/// summarised once: the digest of the window's teaching notes
+/// (`coach_signal_digest`), with the window's length as every horizon so that
+/// nothing inside the window is aged out, strongest signal first, at most
+/// `MAX_SIGNALS` and `budget` tokens of it. Also how many signals were left out.
+///
+/// A signal is data, never an instruction: its text and labels pass the same
+/// prompt guards as any coach note (`read_entry`, one acceptance rule with the
+/// report). Each carries the `coach.question.asked` observations of the learner
+/// messages the coach answered when it wrote the note, so a memory built on it can
+/// always be traced back; a signal that cannot be traced to any is left out.
+fn coach_signals(
+    conn: &Connection,
+    user_id: &str,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    budget: u32,
+) -> DbResult<(Vec<PackSignal>, usize)> {
+    let notes = read_coach_notes(conn, NoteRange::between(&instant(start), &instant(end)))?;
+    let days = ((end - start).num_seconds() + 86_399).div_euclid(86_400).max(1);
+    let entries = digest_notes(&notes, end, SignalWindows { recent_days: days, durable_days: days });
+    let traced: Vec<PackSignal> = entries.iter().filter_map(|entry| pack_signal(conn, user_id, entry)).collect();
+    let total = traced.len();
+    let (kept, _) = take_fitting(traced.into_iter().take(MAX_SIGNALS).collect(), budget);
+    let omitted = total - kept.len();
+    Ok((kept, omitted))
 }
 
-/// The phrases for one assistant message's stored notes. The host validated them
-/// at write time; they are checked again here because they are read into the prompt.
-fn teaching_note_phrases(payload: &Value) -> Vec<String> {
-    payload["teachingNotes"].as_array().into_iter().flatten().filter_map(teaching_note_phrase).collect()
+fn pack_signal(conn: &Connection, user_id: &str, entry: &SignalDigestEntry) -> Option<PackSignal> {
+    let read = read_entry(entry)?;
+    let mut ids: Vec<String> = Vec::new();
+    for message in &entry.source_message_ids {
+        let source = answered_learner_observation(conn, user_id, message);
+        if let Some(id) = source.filter(|id| !ids.contains(id)) {
+            ids.push(id);
+        }
+    }
+    if ids.is_empty() {
+        return None;
+    }
+    let (kind, outcome) = match read.fact.verdict {
+        NoteVerdict::Wished => ("preference", None),
+        NoteVerdict::Difficulty => ("difficulty", None),
+        NoteVerdict::Helped => ("strategy_outcome", Some("helped")),
+        NoteVerdict::NotHelped => ("strategy_outcome", Some("not_helped")),
+    };
+    Some(PackSignal {
+        kind,
+        skill: read.skill,
+        strategy: read.fact.strategy,
+        outcome,
+        text: read.text,
+        remember: entry.remember,
+        horizon: entry.horizon.as_str(),
+        repeat_count: entry.repeat_count,
+        distinct_assets: entry.distinct_assets,
+        first_seen: day(&instant(entry.first_seen)),
+        last_seen: day(&instant(entry.last_seen)),
+        ids,
+    })
 }
 
-/// One phrase per stored teaching note. Only the learner's verified quote and the
-/// coach's strategy label reach the prompt: the model's own `text` never does, so
-/// it cannot pass as the learner's words or steer the weekly pass.
-fn teaching_note_phrase(note: &Value) -> Option<String> {
-    let evidence = note_field(field(note, "evidence"), TEACHING_NOTE_EVIDENCE_CHARS)?;
-    match field(note, "kind") {
-        "preference" => Some(format!("learner asked: \"{evidence}\"")),
-        "strategy_outcome" => {
-            let strategy = note_field(field(note, "strategy"), TEACHING_NOTE_STRATEGY_CHARS)?;
-            let verdict = match field(note, "outcome") {
-                "helped" => "helped",
-                "not_helped" => "did not help",
-                _ => return None,
-            };
-            Some(format!("coach tried \"{strategy}\": {verdict} (learner: \"{evidence}\")"))
-        }
-        _ => None,
-    }
+/// The `coach.question.asked` observation of the learner message an assistant
+/// message answered (the closest user message before it in the thread): the
+/// citable form of "what the learner actually wrote". It is the pairing that
+/// matters, not what the note quotes, so a note needs no verbatim evidence.
+pub fn answered_learner_observation(conn: &Connection, user_id: &str, assistant_message: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT o.id
+           FROM coach_messages a
+           JOIN coach_messages u ON u.thread_id = a.thread_id AND u.role = 'user'
+            AND u.sequence = (SELECT MAX(sequence) FROM coach_messages
+                               WHERE thread_id = a.thread_id AND role = 'user' AND sequence < a.sequence)
+           JOIN learner_observations o ON o.observation_type = 'coach.question.asked'
+            AND o.user_id = ?2 AND o.projector_key = ?3 AND o.projector_version = ?4
+            AND json_extract(o.payload_json, '$.messageId') = u.id
+          WHERE a.id = ?1
+          ORDER BY o.id LIMIT 1",
+        params![assistant_message, user_id, LEARNING_OBSERVATION_PROJECTOR_KEY, LEARNING_OBSERVATION_PROJECTOR_VERSION],
+        |row| row.get(0),
+    )
+    .ok()
 }
 
 /// A stored field on its way into the prompt. Typographic quotes, colons,
@@ -672,7 +845,17 @@ fn teaching_note_phrase(note: &Value) -> Option<String> {
 /// deleted: `cite:obs-14` must not fuse into a citable-looking token), whitespace
 /// is flattened, and any token containing an `obs-`/`mem-` id is dropped. A value
 /// still over `max` characters is skipped whole, never cut mid-word.
-fn note_field(raw: &str, max: usize) -> Option<String> {
+pub(crate) fn note_field(raw: &str, max: usize) -> Option<String> {
+    sanitized(raw).filter(|text| text.chars().count() <= max)
+}
+
+/// Free text from the coach, sanitized as `note_field` does and checked whole
+/// (so a marker cannot hide past the cut), then clipped to `max` characters.
+pub(crate) fn note_text(raw: &str, max: usize) -> Option<String> {
+    sanitized(raw).map(|text| clip(&text, max))
+}
+
+fn sanitized(raw: &str) -> Option<String> {
     let separated: String = raw
         .chars()
         .map(ascii_punctuation)
@@ -683,7 +866,7 @@ fn note_field(raw: &str, max: usize) -> Option<String> {
         .filter(|token| !is_id_token(token))
         .collect::<Vec<_>>()
         .join(" ");
-    (!text.is_empty() && text.chars().count() <= max && is_safe_for_prompt(&text)).then_some(text)
+    (!text.is_empty() && is_safe_for_prompt(&text)).then_some(text)
 }
 
 /// The ASCII form of the typographic look-alikes this sanitizer cares about.
@@ -846,7 +1029,8 @@ fn cap_lines(lines: Vec<WeeklyLine>, budget: u32) -> (Vec<WeeklyLine>, usize) {
 
 pub(crate) fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackMemory>> {
     let mut statement = conn.prepare(
-        "SELECT id, namespace, scope, canonical_key, content, version, COALESCE(last_observed_at, updated_at)
+        "SELECT id, namespace, scope, canonical_key, content, version, COALESCE(last_observed_at, updated_at),
+                improvement_state, recall_count
            FROM memory_items
           WHERE user_id = ?1 AND status = 'active' AND sensitivity = 'normal'
             AND source_class NOT IN ('user_explicit','system_policy','predicted')
@@ -863,7 +1047,9 @@ pub(crate) fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<
             canonical_key: row.get(3)?,
             statement: clip(&content, MEMORY_CHARS),
             version: row.get::<_, i64>(5)? as u64,
-            last_observed: day(&row.get::<_, String>(6)?),
+            last_observed_at: day(&row.get::<_, String>(6)?),
+            improvement_state: row.get(7)?,
+            recall_count: row.get::<_, i64>(8)?.max(0) as u32,
         })
         .map(|memory| is_safe_for_prompt(&content).then_some(memory))
     })?;
@@ -871,6 +1057,30 @@ pub(crate) fn active_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<
     // added) is left out of the pack, so the model can neither read nor target it.
     let memories = rows.collect::<Result<Vec<_>, _>>()?;
     Ok(memories.into_iter().flatten().collect())
+}
+
+/// The memories the learner confirmed, newest first. A stored statement that fails
+/// today's guards is left out, like any other memory.
+fn confirmed_memories(conn: &Connection, user_id: &str) -> DbResult<Vec<PackConfirmed>> {
+    let mut statement = conn.prepare(
+        "SELECT namespace, scope, canonical_key, content
+           FROM memory_items
+          WHERE user_id = ?1 AND status = 'active' AND sensitivity = 'normal' AND source_class = 'user_explicit'
+            AND scope IN ('activity:reading','activity:writing') AND trim(content) != ''
+          ORDER BY julianday(COALESCE(last_observed_at, updated_at)) DESC, id
+          LIMIT ?2",
+    )?;
+    let rows = statement.query_map(params![user_id, MAX_CONFIRMED as i64], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+    })?;
+    let mut confirmed = Vec::new();
+    for row in rows {
+        let (namespace, scope, canonical_key, content) = row?;
+        if is_safe_for_prompt(&content) {
+            confirmed.push(PackConfirmed { namespace, scope, canonical_key, statement: clip(&content, PREFERENCE_CHARS) });
+        }
+    }
+    Ok(confirmed)
 }
 
 fn explicit_preferences(conn: &Connection, user_id: &str) -> DbResult<Vec<PackPreference>> {
@@ -898,7 +1108,12 @@ pub fn weekly_pack(conn: &Connection, user_id: &str, start: DateTime<Utc>, end: 
     let mut lines = reading_lines(conn, &window, &mut assets);
     lines.extend(redo_lines(&window, &mut assets));
     lines.extend(writing_lines(&window));
-    lines.extend(coach_lines(conn, user_id, &from, &to, &mut assets)?);
+    let (signals, signals_omitted) = coach_signals(conn, user_id, start, end, WEEKLY_SIGNAL_TOKEN_BUDGET)?;
+    let signal_cost: u32 = signals.iter().map(item_tokens).sum();
+    let line_budget = WEEKLY_COACH_TOKEN_BUDGET.saturating_sub(signal_cost);
+    let (coach, lines_omitted) = coach_lines(conn, user_id, &from, &to, line_budget, &mut assets)?;
+    let coach_omitted = signals_omitted + lines_omitted;
+    lines.extend(coach);
     lines.extend(review_lines(conn, user_id, &from, &to, &mut assets)?);
     lines.sort_by(|left, right| line_order(left).cmp(&line_order(right)));
 
@@ -909,15 +1124,22 @@ pub fn weekly_pack(conn: &Connection, user_id: &str, start: DateTime<Utc>, end: 
         end: to,
         lines: Vec::new(),
         omitted: 0,
+        signals,
         memories: Vec::new(),
+        confirmed: Vec::new(),
         preferences: Vec::new(),
     };
-    (pack.preferences, pack.memories) =
-        fit_context(explicit_preferences(conn, user_id)?, active_memories(conn, user_id)?, WEEKLY_CONTEXT_TOKEN_BUDGET);
+    (pack.preferences, pack.confirmed, pack.memories) = fit_context(
+        explicit_preferences(conn, user_id)?,
+        confirmed_memories(conn, user_id)?,
+        active_memories(conn, user_id)?,
+        WEEKLY_CONTEXT_TOKEN_BUDGET,
+    );
     // The omitted note is part of what must fit, so reserve for it up front.
-    pack.omitted = lines.len();
+    pack.omitted = lines.len() + coach_omitted;
     let budget = WEEKLY_PACK_TOKEN_CAP.saturating_sub(pack.estimated_tokens());
     (pack.lines, pack.omitted) = cap_lines(lines, budget);
+    pack.omitted += coach_omitted;
     enforce_cap(&mut pack);
     Ok(pack)
 }
@@ -944,26 +1166,32 @@ fn take_fitting<T: Serialize>(items: Vec<T>, budget: u32) -> (Vec<T>, u32) {
 }
 
 /// Bound the carried-along context: explicit preferences first (the learner said
-/// them), then memories in recency order, until `budget` is spent.
+/// them), then the memories the learner confirmed, then memories in recency order,
+/// until `budget` is spent.
 fn fit_context(
     preferences: Vec<PackPreference>,
+    confirmed: Vec<PackConfirmed>,
     memories: Vec<PackMemory>,
     budget: u32,
-) -> (Vec<PackPreference>, Vec<PackMemory>) {
+) -> (Vec<PackPreference>, Vec<PackConfirmed>, Vec<PackMemory>) {
     let (preferences, left) = take_fitting(preferences, budget);
+    let (confirmed, left) = take_fitting(confirmed, left);
     let (memories, _) = take_fitting(memories, left);
-    (preferences, memories)
+    (preferences, confirmed, memories)
 }
 
 /// Last line of defence for the cap: the per-item estimates above already sum to
 /// at least the whole, so this only trims if that ever stops being true. Oldest
-/// lines go first, then the least recent memories, then preferences.
+/// lines go first, then the weakest signals, then the least recent memories, then
+/// confirmed memories, then preferences.
 fn enforce_cap(pack: &mut WeeklyPack) {
     while pack.estimated_tokens() > WEEKLY_PACK_TOKEN_CAP {
         if !pack.lines.is_empty() {
             pack.lines.remove(0);
             pack.omitted += 1;
-        } else if pack.memories.pop().is_none() && pack.preferences.pop().is_none() {
+        } else if pack.signals.pop().is_some() {
+            pack.omitted += 1;
+        } else if pack.memories.pop().is_none() && pack.confirmed.pop().is_none() && pack.preferences.pop().is_none() {
             break;
         }
     }

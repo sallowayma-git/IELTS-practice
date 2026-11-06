@@ -6,8 +6,9 @@ use ielts_domain::{
     MemoryCandidateInput,
     MemoryCandidatePersistenceInput, MemoryCatalog, MemoryCatalogQuery, MemoryContextPreview,
     MemoryContextQuery, MemoryArchiveCommand, MemoryForgetCommand,
-    MemoryMutationProposalBatch, MemoryMutationReceipt, MemoryPromotionCommand, MemorySourceClass,
-    MemoryValidationSnapshot, MAX_USER_NOTE_PREFERENCES,
+    MemoryMutationProposal, MemoryMutationProposalBatch, MemoryMutationReceipt, MemoryNamespace,
+    MemoryProposalDisposition, MemoryProposalValidationReport, MemoryPromotionCommand, MemoryScope, MemorySourceClass,
+    MemoryValidationSnapshot, MAX_USER_NOTE_PREFERENCES, MEMORY_PROPOSAL_SCHEMA_VERSION,
 };
 
 use crate::ApplicationError;
@@ -20,6 +21,24 @@ pub struct SubmitMemoryCandidatesCommand {
     pub user_id: String,
     pub run_id: Option<String>,
     pub batch: MemoryMutationProposalBatch,
+}
+
+/// One memory the learner wrote or confirmed themselves (a coach preference
+/// card, say). It enters through the same validator and promotion as every other
+/// memory; only its origin differs.
+#[derive(Debug, Clone)]
+pub struct CreateLearnerMemoryCommand {
+    /// Names the write in logs and audit; one request, one memory.
+    pub request_id: String,
+    pub user_id: String,
+    pub namespace: MemoryNamespace,
+    pub canonical_key: String,
+    pub scope: MemoryScope,
+    pub statement: String,
+    /// Observations the memory rests on (the learner's own message, for a coach card).
+    pub evidence_observation_ids: Vec<String>,
+    pub actor_id: String,
+    pub reason: String,
 }
 
 /// What happened to one batch of cognitive mutations.
@@ -83,6 +102,18 @@ pub trait MemoryStore {
 
     fn archive_memory(&self, command: &MemoryArchiveCommand) -> Result<(), ApplicationError>;
     fn forget_memory(&self, command: &MemoryForgetCommand) -> Result<(), ApplicationError>;
+
+    /// Write a validated `user_explicit` memory the learner wrote or confirmed, in one
+    /// transaction (see `ielts_db::create_learner_memory`). Stores that only serve the
+    /// model's proposals need not implement it.
+    fn create_learner_memory(
+        &self,
+        _input: &MemoryCandidatePersistenceInput,
+        _actor_id: &str,
+        _reason: &str,
+    ) -> Result<MemoryMutationReceipt, ApplicationError> {
+        Err(ApplicationError::new("memory.unsupported", "this store cannot create learner memories", false))
+    }
 }
 
 pub struct MemoryService<'a> {
@@ -185,6 +216,47 @@ impl<'a> MemoryService<'a> {
         self.store.promote_candidate(command)
     }
 
+    /// Create a `user_explicit` memory for what the learner wrote or confirmed. The
+    /// same validator as every proposal (the trusted origin may claim `user_explicit`),
+    /// then one transaction writes the memory with its evidence and audit row. A
+    /// learner memory is never evicted by capacity governance and can only be created,
+    /// never used to change another memory.
+    pub fn create_learner_memory(
+        &self,
+        command: &CreateLearnerMemoryCommand,
+    ) -> Result<MemoryMutationReceipt, ApplicationError> {
+        let batch = MemoryMutationProposalBatch {
+            schema_version: MEMORY_PROPOSAL_SCHEMA_VERSION,
+            proposals: vec![MemoryMutationProposal::Add {
+                namespace: command.namespace,
+                canonical_key: command.canonical_key.clone(),
+                scope: command.scope,
+                statement: command.statement.clone(),
+                evidence_observation_ids: command.evidence_observation_ids.clone(),
+                horizon: None,
+            }],
+        };
+        let snapshot = self.store.validation_snapshot(&command.user_id, &command.evidence_observation_ids)?;
+        let source_class = MemorySourceClass::UserExplicit;
+        let validation =
+            self.validator.validate(&batch, MemoryProposalOrigin::RustTrusted { source_class }, &snapshot);
+        let accepted = validation.batch_issues.is_empty()
+            && matches!(validation.decisions.as_slice(), [decision] if decision.disposition == MemoryProposalDisposition::Pending);
+        if !accepted {
+            return Err(refusal(&validation));
+        }
+        let input = MemoryCandidatePersistenceInput {
+            request_id: command.request_id.clone(),
+            user_id: command.user_id.clone(),
+            run_id: None,
+            source_class,
+            batch,
+            validation,
+            snapshot,
+        };
+        self.store.create_learner_memory(&input, &command.actor_id, &command.reason)
+    }
+
     /// Validate a learner-authored preference before it reaches the store, so a
     /// refused write comes back with a stable code and a message the learner
     /// can read. The store validates again; this is the friendly gate.
@@ -236,6 +308,18 @@ impl<'a> MemoryService<'a> {
     pub fn forget_memory(&self, command: &MemoryForgetCommand) -> Result<(), ApplicationError> {
         self.store.forget_memory(command)
     }
+}
+
+/// Why the validator did not accept a learner's memory, in its own words.
+fn refusal(report: &MemoryProposalValidationReport) -> ApplicationError {
+    let decision = report.decisions.first();
+    let issue = report
+        .batch_issues
+        .first()
+        .or_else(|| decision.and_then(|decision| decision.issues.first()));
+    let code = decision.map_or("rejected", |decision| decision.disposition.as_str());
+    let message = issue.map_or_else(|| format!("memory was not created ({code})"), |issue| issue.message.clone());
+    ApplicationError::new(format!("memory.{code}"), message, false)
 }
 
 fn preference_error(issue: ExplicitPreferenceIssue) -> ApplicationError {

@@ -127,6 +127,7 @@ fn service_uses_fresh_evidence_and_host_owned_source_authority() {
                 },
                 statement: "Use the local paragraph before answering.".into(),
                 evidence_observation_ids: vec![observation_id],
+                horizon: None,
             }],
         },
     };
@@ -187,6 +188,7 @@ fn injection_evidence_is_quarantined_without_retaining_raw_proposal() {
                         },
                         statement: "Candidate statement.".into(),
                         evidence_observation_ids: vec![observation_id],
+                        horizon: None,
                     }],
                 },
             },

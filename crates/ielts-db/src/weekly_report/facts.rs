@@ -8,13 +8,16 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde_json::Value;
 
 use crate::cognitive_read::ensure_observations_fresh;
 use crate::reading::scoring::normalize_question_id;
 use crate::sqlite::DbResult;
 use crate::weekly_pack::{evaluation_of, field, instant, window_observations, AssetBook, Obs};
+
+pub use super::coach_facts::{AskedQuestion, CoachFact, NoteFact, NoteVerdict, RedoQuestion, StrategyFeedback, Tally};
+use super::coach_facts::coach_week;
 
 /// One finished reading attempt.
 #[derive(Debug, Clone, PartialEq)]
@@ -86,16 +89,6 @@ pub struct WritingFact {
     pub day: NaiveDate,
 }
 
-/// Coach use on one attempt on one day.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoachFact {
-    pub attempt_id: String,
-    pub asset_id: String,
-    pub day: NaiveDate,
-    pub feedback: BTreeMap<String, u32>,
-    pub reasks: u32,
-}
-
 /// Everything the block skills read about one window.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct WeekFacts {
@@ -106,6 +99,12 @@ pub struct WeekFacts {
     pub redos: Vec<RedoFact>,
     pub writing: Vec<WritingFact>,
     pub coach: Vec<CoachFact>,
+    /// Questions the learner asked the coach about, one entry per ask.
+    pub coach_questions: Vec<AskedQuestion>,
+    /// Earlier misses redone in the window, with whether the coach was asked first.
+    pub coach_redos: Vec<RedoQuestion>,
+    /// What the learner signalled about each teaching strategy, by strategy id.
+    pub coach_strategies: Vec<StrategyFeedback>,
     /// Per question type: (answered right, answered wrong). Blanks are neither.
     pub type_totals: BTreeMap<String, (u32, u32)>,
 }
@@ -163,7 +162,7 @@ pub fn criterion_label(criterion: &str) -> String {
     .to_owned()
 }
 
-fn local_day(at: &str, offset: FixedOffset) -> NaiveDate {
+pub(super) fn local_day(at: &str, offset: FixedOffset) -> NaiveDate {
     DateTime::parse_from_rfc3339(at)
         .map(|instant| instant.with_timezone(&offset).date_naive())
         .unwrap_or_else(|_| NaiveDate::parse_from_str(at.get(..10).unwrap_or(""), "%Y-%m-%d").unwrap_or_default())
@@ -330,57 +329,6 @@ fn writing_facts(conn: &Connection, window: &[Obs], offset: FixedOffset) -> Vec<
         .collect()
 }
 
-fn coach_facts(conn: &Connection, user_id: &str, from: &str, to: &str, offset: FixedOffset) -> DbResult<Vec<CoachFact>> {
-    let mut days: BTreeMap<(String, NaiveDate), CoachFact> = BTreeMap::new();
-    fn entry(
-        days: &mut BTreeMap<(String, NaiveDate), CoachFact>,
-        attempt: String,
-        asset: String,
-        day: NaiveDate,
-    ) -> &mut CoachFact {
-        days.entry((attempt.clone(), day)).or_insert_with(|| CoachFact {
-            attempt_id: attempt,
-            asset_id: asset,
-            day,
-            feedback: BTreeMap::new(),
-            reasks: 0,
-        })
-    }
-    let mut feedback = conn.prepare(
-        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), f.feedback_kind, f.created_at
-           FROM coach_feedback f
-           JOIN coach_messages m ON m.id = f.coach_message_id
-           JOIN coach_threads t ON t.id = m.thread_id
-           LEFT JOIN attempts a ON a.id = t.attempt_id
-          WHERE f.user_id = ?1 AND julianday(f.created_at) > julianday(?2) AND julianday(f.created_at) <= julianday(?3)
-          ORDER BY julianday(f.created_at), f.id",
-    )?;
-    let rows = feedback.query_map(params![user_id, from, to], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
-    })?;
-    for row in rows {
-        let (attempt, asset, kind, at) = row?;
-        *entry(&mut days, attempt, asset, local_day(&at, offset)).feedback.entry(kind).or_default() += 1;
-    }
-    let mut reasks = conn.prepare(
-        "SELECT COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), r.created_at
-           FROM coach_reask_links r
-           JOIN coach_messages m ON m.id = r.parent_assistant_message_id
-           JOIN coach_threads t ON t.id = m.thread_id
-           LEFT JOIN attempts a ON a.id = t.attempt_id
-          WHERE julianday(r.created_at) > julianday(?1) AND julianday(r.created_at) <= julianday(?2)
-          ORDER BY julianday(r.created_at), r.new_user_message_id",
-    )?;
-    let rows = reasks.query_map(params![from, to], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
-    })?;
-    for row in rows {
-        let (attempt, asset, at) = row?;
-        entry(&mut days, attempt, asset, local_day(&at, offset)).reasks += 1;
-    }
-    Ok(days.into_values().collect())
-}
-
 /// The facts of the window `(start, end]`, with days in the local `offset`.
 /// Deterministic: the same database and window give the same facts.
 pub fn week_facts(
@@ -394,13 +342,17 @@ pub fn week_facts(
     let (from, to) = (instant(start), instant(end));
     let window = window_observations(conn, user_id, &from, &to)?;
     let mut assets = AssetBook::new(conn);
+    let coach = coach_week(conn, user_id, &window, &from, &to, offset)?;
     Ok(WeekFacts {
         days: window_days(start, end, offset),
         reading: reading_facts(conn, &window, &mut assets, offset),
         misses: miss_facts(&window, &mut assets, offset),
         redos: redo_facts(&window, &mut assets, offset),
         writing: writing_facts(conn, &window, offset),
-        coach: coach_facts(conn, user_id, &from, &to, offset)?,
+        coach: coach.days,
+        coach_questions: coach.asked,
+        coach_redos: coach.redone,
+        coach_strategies: coach.strategies,
         type_totals: type_totals(&window),
     })
 }

@@ -14,6 +14,8 @@ pub mod learning;
 pub mod learner;
 #[cfg(feature = "memory-core-v1")]
 pub mod memory;
+#[cfg(feature = "memory-core-v1")]
+pub mod memory_card;
 pub mod modes;
 pub mod ota;
 pub mod paths;

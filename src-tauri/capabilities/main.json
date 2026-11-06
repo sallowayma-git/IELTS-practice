@@ -45,6 +45,8 @@
     "allow-annotation-upsert",
     "allow-background-job-status",
     "allow-clear-history",
+    "allow-coach-confirm-memory-card",
+    "allow-coach-dismiss-memory-card",
     "allow-coach-ensure-thread",
     "allow-coach-list-feedback",
     "allow-coach-list-messages",

@@ -18,6 +18,8 @@ use serde_json::{json, Value};
 const MAX_QUESTION_TYPES: usize = 2;
 const MAX_REPEATED_TYPES: usize = 2;
 const MAX_COACH_KINDS: usize = 2;
+const MAX_COACH_STRATEGIES: usize = 3;
+const MAX_STRATEGY_SIGNALS: usize = 3;
 const MAX_ESSAYS: usize = 2;
 const MAX_PLAN_ITEMS: usize = 2;
 
@@ -239,11 +241,73 @@ fn coach_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
             "count",
             FactFormat::Number,
             "coach_signals",
-            default(),
+            assets(row),
         );
     }
     add_number(facts, "coach.reasks", "本周教练重问次数", data, "reasks", FactFormat::Number, "coach_signals", default());
     add_number(facts, "coach.attempts", "本周使用教练的练习数", data, "attempts", FactFormat::Number, "coach_signals", default());
+    add_number(facts, "coach.asks", "本周向教练提问次数", data, "asks", FactFormat::Number, "coach_signals", default());
+    if let Some(notes) = data.get("teachingNotes") {
+        for (id, label, key) in [
+            ("coach.notes.wished", "学习者提出讲法要求的次数", "wished"),
+            ("coach.notes.helped", "学习者反馈讲法有帮助的次数", "helped"),
+            ("coach.notes.notHelped", "学习者反馈讲法没帮助的次数", "notHelped"),
+            ("coach.notes.difficulty", "教练记录的反复出现的难点次数", "difficulty"),
+        ] {
+            add_number(facts, id, label, notes, key, FactFormat::Number, "coach_signals", default());
+        }
+    }
+    strategy_feedback_facts(facts, data);
+    if let Some(repeated) = data.get("repeatedAsks") {
+        add_number(facts, "coach.repeatedAsks.questions", "反复追问的题数", repeated, "questions", FactFormat::Number, "coach_signals", assets(repeated));
+        add_number(facts, "coach.repeatedAsks.asks", "反复追问的提问次数", repeated, "asks", FactFormat::Number, "coach_signals", assets(repeated));
+    }
+    if let Some(after) = data.get("afterCoach") {
+        for (id, label, key) in [
+            ("coach.afterCoach.explainedFixed", "问过教练的错题重做后改对的次数", "explainedFixed"),
+            ("coach.afterCoach.explainedStillWrong", "问过教练的错题重做后仍错的次数", "explainedStillWrong"),
+            ("coach.afterCoach.unexplainedFixed", "没问过教练的错题重做后改对的次数", "unexplainedFixed"),
+            ("coach.afterCoach.unexplainedStillWrong", "没问过教练的错题重做后仍错的次数", "unexplainedStillWrong"),
+        ] {
+            add_number(facts, id, label, after, key, FactFormat::Number, "coach_signals", assets(after));
+        }
+    }
+}
+
+/// Per teaching strategy: how many passages it was signalled on, and each of its
+/// busiest signals. Every fact carries the passages it came from, so a claim
+/// about "the same direction on two different passages" can be checked.
+fn strategy_feedback_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
+    let rows = data.get("strategyFeedback").and_then(Value::as_array).into_iter().flatten();
+    for row in rows.take(MAX_COACH_STRATEGIES) {
+        let Some(strategy) = row.get("strategy").and_then(Value::as_str) else { continue };
+        let name = row.get("label").and_then(Value::as_str).unwrap_or(strategy);
+        add_number(
+            facts,
+            &format!("coach.strategy.{strategy}.articles"),
+            &format!("「{name}」讲法涉及的文章数"),
+            row,
+            "articles",
+            FactFormat::Number,
+            "coach_signals",
+            assets(row),
+        );
+        let signals = row.get("signals").and_then(Value::as_array).into_iter().flatten();
+        for signal in signals.take(MAX_STRATEGY_SIGNALS) {
+            let Some(kind) = signal.get("kind").and_then(Value::as_str) else { continue };
+            let what = signal.get("label").and_then(Value::as_str).unwrap_or(kind);
+            add_number(
+                facts,
+                &format!("coach.strategy.{strategy}.{kind}"),
+                &format!("「{name}」讲法下「{what}」次数"),
+                signal,
+                "count",
+                FactFormat::Number,
+                "coach_signals",
+                assets(signal),
+            );
+        }
+    }
 }
 
 fn plan_facts(facts: &mut BTreeMap<String, WeeklyFact>, data: &Value) {
@@ -411,6 +475,48 @@ mod tests {
                 ], "totalMinutes": 30}),
             ),
         ]
+    }
+
+    #[test]
+    fn coach_signals_project_asks_notes_repeats_and_redo_outcomes_with_their_passages() {
+        let blocks = vec![block(
+            BlockKind::CoachSignals,
+            json!({
+                "feedback": [{"kind": "too_long", "label": "太长", "count": 2, "assetIds": ["p1", "p2"]}],
+                "reasks": 1, "asks": 6, "attempts": 3,
+                "teachingNotes": {"wished": 1, "helped": 2, "notHelped": 0},
+                "repeatedAsks": {"questions": 2, "asks": 5, "assetIds": ["p1"]},
+                "afterCoach": {"explainedFixed": 3, "explainedStillWrong": 1, "unexplainedFixed": 1,
+                               "unexplainedStillWrong": 2, "assetIds": ["p1", "p3"]},
+            }),
+        )];
+        let facts = project_weekly_facts(&blocks, None, day(11));
+        let value = |id: &str| facts[id].value.clone();
+        assert_eq!(value("coach.asks"), json!(6));
+        assert_eq!(value("coach.notes.helped"), json!(2));
+        assert_eq!(value("coach.notes.notHelped"), json!(0));
+        assert_eq!(value("coach.repeatedAsks.asks"), json!(5));
+        assert_eq!(value("coach.afterCoach.explainedFixed"), json!(3));
+        assert_eq!(value("coach.afterCoach.unexplainedStillWrong"), json!(2));
+        // The passages behind a signal travel with it: Soul edits need two of them.
+        assert_eq!(facts["coach.too_long.count"].provenance.asset_ids, vec!["p1", "p2"]);
+        assert_eq!(facts["coach.afterCoach.explainedFixed"].provenance.asset_ids, vec!["p1", "p3"]);
+        assert_eq!(facts["coach.repeatedAsks.questions"].provenance.asset_ids, vec!["p1"]);
+        // Labels are distinct, so a citation matches exactly one fact.
+        let labels: std::collections::BTreeSet<&str> = facts.values().map(|fact| fact.label.as_str()).collect();
+        assert_eq!(labels.len(), facts.len());
+    }
+
+    #[test]
+    fn an_old_coach_block_without_the_new_keys_still_projects() {
+        let blocks = vec![block(
+            BlockKind::CoachSignals,
+            json!({"feedback": [{"kind": "too_long", "label": "太长", "count": 2}], "reasks": 4, "attempts": 2}),
+        )];
+        let facts = project_weekly_facts(&blocks, None, day(11));
+        let ids: Vec<&str> = facts.keys().map(String::as_str).collect();
+        assert_eq!(ids, vec!["coach.attempts", "coach.reasks", "coach.too_long.count"]);
+        assert!(facts["coach.too_long.count"].provenance.asset_ids.is_empty());
     }
 
     #[test]

@@ -332,6 +332,47 @@ fn provider_payload_cannot_claim_strategy_or_memory_provenance() {
     }
 }
 
+fn assignment(conn: &Connection, message: &str) -> (String, String) {
+    conn.query_row(
+        "SELECT strategy_id,followup_type FROM coach_strategy_assignments_v0 WHERE coach_message_id=?1",
+        [message], |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap()
+}
+
+#[test]
+fn the_models_chosen_strategy_is_what_gets_recorded_with_a_matching_followup() {
+    let expected = [
+        ("evidence_first_v1", "explain"),
+        ("example_first_v1", "example"),
+        ("step_by_step_v1", "step_by_step"),
+        ("contrastive_v1", "contrast"),
+        ("socratic_prompt_v1", "socratic_prompt"),
+        ("concise_direct_v1", "concise_direct"),
+    ];
+    for (strategy, followup) in expected {
+        let (_dir, conn, thread, user) = fixture();
+        let run = begin(&conn, &thread, &user);
+        let message = complete_traced_coach(&conn, &run, &thread, "because", json!({"strategy": strategy, "answer": "because"}), &response()).unwrap();
+        assert_eq!(assignment(&conn, &message.id), (strategy.into(), followup.into()));
+        let payload = message.structured_payload.unwrap();
+        assert_eq!(payload["strategyId"], strategy);
+        assert!(payload.get("strategy").is_none(), "the raw claim is replaced by the validated strategyId");
+        assert_eq!(run_result(&conn, &run)["strategyId"], strategy, "the run receipt names it too");
+    }
+}
+
+#[test]
+fn a_missing_or_unknown_strategy_falls_back_to_evidence_first_and_is_still_recorded() {
+    for claim in [json!(null), json!("made_up_v9"), json!(""), json!(3), json!("EVIDENCE_FIRST_V1")] {
+        let (_dir, conn, thread, user) = fixture();
+        let run = begin(&conn, &thread, &user);
+        let payload = if claim.is_null() { json!({"answer": "because"}) } else { json!({"strategy": claim, "answer": "because"}) };
+        let message = complete_traced_coach(&conn, &run, &thread, "because", payload, &response()).unwrap();
+        assert_eq!(assignment(&conn, &message.id), ("evidence_first_v1".into(), "explain".into()), "{claim}");
+        assert_eq!(message.structured_payload.unwrap()["strategyId"], "evidence_first_v1");
+    }
+}
+
 fn run_result(conn: &Connection, run: &str) -> Value {
     let raw: String = conn
         .query_row("SELECT result_json FROM agent_runs WHERE id=?1", [run], |row| row.get(0))

@@ -33,13 +33,13 @@ const route = useRoute()
 const framelessRouteNames = new Set([
   'PracticeReading',
   'PracticeReadingSuite',
-  'PracticeReadingReview',
-  // The unified reading page owns its whole viewport (opensource paper skin);
-  // neither shell skin applies, so it runs under a neutral root class.
-  'ReadingUnified'
+  'PracticeReadingReview'
 ])
+// The reading exam routes own their whole viewport under the unified IELTS
+// skin; neither shell skin applies, so they run under a neutral root class.
+const unifiedExamRouteNames = new Set(['PracticeReading', 'PracticeReadingReview'])
 const shellSkinClass = computed(() => {
-  if (route.name === 'ReadingUnified') return 'atlas-unified'
+  if (unifiedExamRouteNames.has(route.name)) return 'atlas-unified'
   return showShellNav.value ? 'atlas-paper' : 'atlas-exam'
 })
 const showShellNav = computed(() => !framelessRouteNames.has(route.name))

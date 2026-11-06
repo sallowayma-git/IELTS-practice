@@ -234,6 +234,12 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0035_soul.sql"),
                 rebuilds: None,
             },
+            Migration {
+                version: 36,
+                name: "drop_coach_outcome_links",
+                sql: include_str!("../../migrations/0036_drop_coach_outcome_links.sql"),
+                rebuilds: None,
+            },
         ]
     })
 }
@@ -553,6 +559,42 @@ mod tests {
             .unwrap();
         assert_eq!(left, 0);
         assert_eq!(current_version(&conn).unwrap(), latest_version());
+    }
+
+    #[test]
+    fn migration_36_drops_the_outcome_link_table_and_its_rows_with_foreign_keys_on() {
+        let mut conn = history_at(35);
+        conn.execute_batch(
+            "INSERT INTO coach_threads (id, status, created_at, updated_at)
+               VALUES ('t', 'active', 'now', 'now');
+             INSERT INTO coach_messages (id, thread_id, role, content, status, created_at, sequence)
+               VALUES ('m', 't', 'assistant', 'body', 'completed', 'now', 1);
+             INSERT INTO coach_strategy_assignments_v0
+               (id, user_id, coach_message_id, strategy_id, skills_addressed_json,
+                memory_ids_used_json, context_snapshot_id, followup_type, created_at)
+               VALUES ('a', 'local', 'm', 'evidence_first_v1', '[]', '[]', NULL, 'explain', 'now');
+             PRAGMA foreign_keys = OFF;
+             INSERT INTO coach_outcome_links_v0
+               (strategy_assignment_id, future_observation_id, outcome_kind, created_at)
+               VALUES ('a', 'obs', 'learning', 'now');
+             PRAGMA foreign_keys = ON;",
+        )
+        .unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), vec![36]);
+        let left: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE sql LIKE '%coach_outcome_links%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0, "table and both indexes are gone");
+        // The parent rows are untouched.
+        let assignments: i64 = conn
+            .query_row("SELECT COUNT(*) FROM coach_strategy_assignments_v0", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(assignments, 1);
+        verify_idempotent(&mut conn).unwrap();
     }
 
     /// Only the self-reference matters here, so the chain is written with

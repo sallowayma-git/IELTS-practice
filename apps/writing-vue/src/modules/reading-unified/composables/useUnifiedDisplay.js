@@ -1,9 +1,8 @@
 /**
- * Display preferences for the unified reading page — mirrors the opensource
- * page's Options panel state (font size 4 steps, light/dark background,
- * annotation visibility, question-nav visibility). Persisted via the shared
- * Tauri preferences store under runified_* keys; deliberately separate from
- * the frozen PracticeReadingPage preference set.
+ * Display preferences of the reading exam page — mirrors the opensource
+ * Options panel state (font size, light/dark background, annotation
+ * visibility, question-nav visibility). Persisted via the shared Tauri
+ * preferences store under runified_* keys.
  */
 import { computed, ref, watch } from 'vue'
 import { useTauriPreferences } from '@/composables/useTauriPreferences.js'
@@ -13,7 +12,7 @@ const DARK_KEY = 'runified_dark_mode'
 const ANNOTATIONS_KEY = 'runified_annotations'
 const NAV_KEY = 'runified_question_nav'
 
-export const unifiedFontSizes = ['small', 'normal', 'large', 'xlarge']
+export const unifiedFontSizes = ['small', 'normal', 'large']
 
 function isFontSize(value) {
   return unifiedFontSizes.includes(value)

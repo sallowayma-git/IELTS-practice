@@ -28,6 +28,7 @@ DELETED_COMMANDS = {
     "prompt_rollback", "prompt_list_versions", "prompt_get_active",
     "prompt_propose_candidate", "skill_list_versions", "teaching_strategy_select",
     "teaching_strategy_promote_candidate", "teaching_strategy_user_state",
+    "coach_link_outcome",
 }
 
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-confirm-memory-card"
+description = "Enables the coach_confirm_memory_card command without any pre-configured scope."
+commands.allow = ["coach_confirm_memory_card"]
+
+[[permission]]
+identifier = "deny-coach-confirm-memory-card"
+description = "Denies the coach_confirm_memory_card command without any pre-configured scope."
+commands.deny = ["coach_confirm_memory_card"]

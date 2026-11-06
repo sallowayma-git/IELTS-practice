@@ -187,6 +187,10 @@ def main() -> int:
             "Current document drift",
             [sys.executable, "developer/tests/ci/check_doc_drift.py"],
         ),
+        run_command(
+            "Coach eval corpus format",
+            [sys.executable, "developer/tests/tools/coach-eval/eval_coach.py", "--validate-only"],
+        ),
         run_command("Vue typecheck", [NPM, "--prefix", "apps/writing-vue", "run", "typecheck"]),
         run_command(
             "Reading payload contract",
@@ -251,7 +255,11 @@ def main() -> int:
         run_command("Notebook weekly report", ["node", "developer/tests/js/notebookWeekly.test.mjs"]),
         run_command("Integrated UI and mock contracts", ["node", "--test", "developer/tests/js/integrationContracts.test.mjs", "developer/tests/js/dashboardCore.test.js", "developer/tests/js/readingTags.test.js", "developer/tests/js/moodFor.test.js"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
-        run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
+        run_command("Reading Coach streaming, lifecycle and panel contract", ["node", "--test", "developer/tests/js/readingCoachStreaming.test.mjs", "developer/tests/js/readingCoachLifecycle.test.mjs", "developer/tests/js/readingCoachPanelContract.test.mjs"]),
+        run_command("Reading Coach preference card and feedback entry points", ["node", "--test", "developer/tests/js/readingCoachMemoryCard.test.mjs"]),
+        run_command("Reading question flags (mark for review)", ["node", "--test", "developer/tests/js/readingQuestionFlag.test.mjs"]),
+        run_command("Reading notes dialog focus trap", ["node", "--test", "developer/tests/js/readingNotesFocusTrap.test.mjs"]),
+        run_command("Reading AI review is opt-in",["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
         run_command("Vue production build", [NPM, "--prefix", "apps/writing-vue", "run", "build"]),
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),

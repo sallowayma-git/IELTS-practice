@@ -7,6 +7,7 @@
 pub mod agent;
 pub mod agent_thread;
 pub mod coach;
+pub mod coach_strategies;
 mod coach_stream;
 pub mod coach_feedback;
 pub mod cognitive_read;

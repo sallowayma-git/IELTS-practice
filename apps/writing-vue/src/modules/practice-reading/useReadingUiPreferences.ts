@@ -1,19 +1,10 @@
-import { computed, nextTick, ref, watch, type Ref } from 'vue'
+import { nextTick, ref, watch, type Ref } from 'vue'
 import { useTauriPreferences } from '@/composables/useTauriPreferences.js'
 import { upsertAnnotation, listAnnotations, deleteAnnotation } from '@/api/enrichment-repository.js'
 
 const NOTES_STORAGE_PREFIX = 'practice_reading_notes_'
 const SUITE_AUTO_ADVANCE_STORAGE_KEY = 'suite_auto_advance_after_submit'
-const FONT_KEY = 'reading_font_size'
-const LEGACY_THEME_KEY = 'reading_theme_mode'
-
-export const readingFontSizeOptions = [
-  { value: 'normal', label: 'A' },
-  { value: 'large', label: 'A', style: { fontSize: '1.1rem' } },
-  { value: 'xlarge', label: 'A', style: { fontSize: '1.25rem' } }
-] as const
-
-export type ReadingFontSize = (typeof readingFontSizeOptions)[number]['value']
+const LEGACY_KEYS = ['reading_font_size', 'reading_theme_mode']
 
 type AssetLike = { id?: string | null } | null | undefined
 
@@ -38,10 +29,6 @@ function removeLocal(key: string) {
   }
 }
 
-function isFontSize(value: string | null | undefined): value is ReadingFontSize {
-  return readingFontSizeOptions.some((option) => option.value === value)
-}
-
 /**
  * Reading chrome preferences — Tauri SQLite settings only.
  * One-shot migrates leftover localStorage keys into frontend-preferences.
@@ -55,22 +42,12 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
   const notesTextarea = ref<HTMLTextAreaElement | null>(null)
   const notesText = ref('')
   const notesError = ref('')
-  const readingFontSize = ref<ReadingFontSize>('normal')
   const suiteAutoAdvance = ref(true)
   let suppressNotesPersist = false
   let notesLoadSequence = 0
   let notesPersistTimer: ReturnType<typeof setTimeout> | null = null
   let noteAnnotationId: string | null = null
   let floatingPanelReturnFocus: HTMLElement | null = null
-
-  const readingPageClassList = computed(() => ({
-    [`font-${readingFontSize.value}`]: true
-  }))
-  const readingPageStyle = computed(() => ({
-    '--reading-font-scale': readingFontSize.value === 'xlarge'
-      ? '1.18'
-      : (readingFontSize.value === 'large' ? '1.08' : '1')
-  }))
 
   function notesKey(assetId: string) {
     return `${NOTES_STORAGE_PREFIX}${assetId}`
@@ -90,9 +67,8 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
 
   async function initializeReadingPreferences() {
     await preferences.hydrateStrict()
-    const storedFont = await migrateLocalIfMissing(FONT_KEY)
-    if (isFontSize(storedFont)) readingFontSize.value = storedFont
-    removeLocal(LEGACY_THEME_KEY)
+    // Display preferences (font, background) moved to the unified exam skin.
+    LEGACY_KEYS.forEach(removeLocal)
     const storedSuiteFlow = await migrateLocalIfMissing(SUITE_AUTO_ADVANCE_STORAGE_KEY)
     if (storedSuiteFlow === 'true' || storedSuiteFlow === 'false') {
       suiteAutoAdvance.value = storedSuiteFlow === 'true'
@@ -172,15 +148,13 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
     handleFloatingPanelKeydown(event, settingsPanel.value)
   }
 
+  // `notesPanel` wraps the notes drawer and the editor; only the editor is the
+  // modal dialog. Trapping Tab over the whole wrapper let focus walk into the
+  // drawer's buttons (closed and off-screen, or open and behind the modal).
   function handleNotesDialogKeydown(event: KeyboardEvent) {
     if (!notesPanelOpen.value) return
-    handleFloatingPanelKeydown(event, notesPanel.value)
-  }
-
-  function selectReadingFont(value: string) {
-    if (!isFontSize(value)) return
-    readingFontSize.value = value
-    preferences.set(FONT_KEY, value)
+    const dialog = notesPanel.value?.querySelector<HTMLElement>('[role="dialog"]') ?? null
+    handleFloatingPanelKeydown(event, dialog)
   }
 
   function setSuiteAutoAdvance(value: unknown) {
@@ -295,17 +269,13 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
     notesTextarea: notesTextarea as Ref<HTMLTextAreaElement | null>,
     notesText,
     notesError,
-    readingFontSize,
     suiteAutoAdvance,
-    readingPageClassList,
-    readingPageStyle,
     initializeReadingPreferences,
     toggleSettingsPanel,
     toggleNotesPanel,
     handleSettingsDialogKeydown,
     handleNotesDialogKeydown,
     closeFloatingPanels,
-    selectReadingFont,
     setSuiteAutoAdvance,
     loadReadingNotes,
     clearReadingNotesDraft

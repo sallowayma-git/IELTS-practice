@@ -124,7 +124,7 @@ impl CoachStore for ApplicationStore<'_> {
             // `list_coach_messages(.., None, limit)` is an ASC cursor and would
             // return the oldest `limit` rows, dropping the question the user
             // just asked once a thread grows past it.
-            .with_conn(|conn| ielts_db::list_recent_coach_messages(conn, thread_id, limit))
+            .with_conn(|conn| ielts_db::list_recent_coach_turns(conn, thread_id, limit))
             .map_err(enrichment_error)
     }
 
@@ -181,15 +181,6 @@ impl CoachFeedbackStore for ApplicationStore<'_> {
     ) -> Result<ielts_domain::CoachStrategyAssignmentRecord, ApplicationError> {
         self.db
             .with_conn(|conn| ielts_db::record_coach_strategy_assignment(conn, command))
-            .map_err(coach_feedback_error)
-    }
-
-    fn link_coach_outcome(
-        &self,
-        command: &ielts_domain::LinkCoachOutcomeCommand,
-    ) -> Result<ielts_domain::CoachOutcomeLinkRecord, ApplicationError> {
-        self.db
-            .with_conn(|conn| ielts_db::link_coach_outcome(conn, command))
             .map_err(coach_feedback_error)
     }
 }
@@ -528,6 +519,17 @@ impl MemoryStore for ApplicationStore<'_> {
     ) -> Result<(), ApplicationError> {
         self.db
             .with_conn(|conn| ielts_db::forget_memory(conn, command))
+            .map_err(memory_error)
+    }
+
+    fn create_learner_memory(
+        &self,
+        input: &ielts_domain::MemoryCandidatePersistenceInput,
+        actor_id: &str,
+        reason: &str,
+    ) -> Result<ielts_domain::MemoryMutationReceipt, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::create_learner_memory(conn, input, actor_id, reason))
             .map_err(memory_error)
     }
 }

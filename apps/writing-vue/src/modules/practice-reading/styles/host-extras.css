@@ -1,0 +1,1144 @@
+/* Host-only surfaces of the reading exam page, scoped under .runified.
+   The exam chrome (header, panes, nav, options, notes) comes from the
+   generated unified skin; these rules style what the opensource page lacks —
+   coach, analysis, dictionary bubble, memorize locators — in the same flat
+   paper-exam language: skin tokens only (--ink, --line, --control-hover,
+   --correct …), 1px rules, 3px corners, no shadows or warm accents. */
+
+/* ---- shell leaks and layout fixes ---------------------------------- */
+
+/* The app shell gives every button and .q-item a 44px touch floor
+   (.app-shell :where(button, .q-item …)); the exam sizes its own controls. */
+.runified button,
+.runified .q-item {
+  min-height: 0;
+}
+
+/* The passage pane wraps blocks in article > section; the skin's
+   "#left > :first-child" reset must reach the first rendered heading. */
+.runified #left .passage-html > .passage-block:first-child > :first-child {
+  margin-top: 0;
+}
+
+/* Bottom nav: the active part never shrinks below its question chips (review
+   chips carry a 2px frame), so it cannot run into the next part's label; the
+   other parts give way and clip their label instead. Narrow screens scroll
+   the chips (skin rule under 980px). */
+@media (min-width: 981px) {
+  .runified .part-nav-section.active { min-width: max-content; }
+  .runified .part-nav-section:not(.active) { overflow: hidden; }
+}
+
+/* Under 980px the skin stacks the panes and makes the nav sticky against the
+   document scroll; here the fixed exam root is the scroller and sticky cannot
+   leave its grid row, so the nav is pinned to the viewport instead. */
+@media (max-width: 980px) {
+  .runified .practice-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    /* Definite height so the parts' height: 100% resolves (labels centre). */
+    height: var(--footer-height);
+  }
+
+  .runified .shell {
+    padding-bottom: calc(var(--footer-height) + 17px);
+  }
+}
+
+/* ---- shared flat controls ------------------------------------------ */
+
+.runified .btn-text,
+.runified .reading-coach-chip,
+.runified .reading-coach-feedback__option,
+.runified .reading-coach-panel__send,
+.runified .vocab-add,
+.runified .reading-coach-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 33px;
+  padding: 0 14px;
+  border: 1px solid #8f8f8f;
+  border-radius: 3px;
+  background: #fff;
+  color: #333;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.runified .btn-text:hover:not(:disabled),
+.runified .reading-coach-chip:hover:not(:disabled),
+.runified .reading-coach-feedback__option:hover:not(:disabled),
+.runified .vocab-add:hover:not(:disabled),
+.runified .reading-coach-fab:hover {
+  background: var(--control-hover);
+}
+
+.runified .btn-text:disabled,
+.runified .reading-coach-chip:disabled,
+.runified .reading-coach-feedback__option:disabled,
+.runified .reading-coach-panel__send:disabled,
+.runified .vocab-add:disabled {
+  border-color: #d5d5d5;
+  color: #a5a5a5;
+  cursor: not-allowed;
+}
+
+/* Primary action: the submit button's grey square, blue on hover. */
+.runified .reading-coach-panel__send {
+  border-color: #efefef;
+  background: #efefef;
+  color: #333;
+}
+
+.runified .reading-coach-panel__send:hover:not(:disabled) {
+  border-color: #c3d8ec;
+  background: #c3d8ec;
+}
+
+.runified .settings-help {
+  margin: 8px 0 0;
+  color: var(--muted-ink);
+  font-size: 14px;
+}
+
+.runified .settings-help-error {
+  color: var(--incorrect);
+}
+
+/* ---- transient status ---------------------------------------------- */
+
+.runified .endless-message,
+.runified .runified-status {
+  position: fixed;
+  left: 50%;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 6px 12px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.runified .endless-message {
+  top: calc(var(--header-height) + var(--intro-height) + 8px);
+}
+
+.runified .endless-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.runified .runified-status {
+  bottom: calc(var(--footer-height) + 12px);
+}
+
+.runified .runified-status.is-error {
+  border-color: var(--incorrect);
+  background: var(--incorrect-bg);
+  color: var(--incorrect);
+}
+
+/* ---- AI coach ------------------------------------------------------- */
+
+/* The coach stays out of an active attempt, as on the paper exam. */
+.runified.exam-mode #reading-coach-fab,
+.runified.exam-mode #reading-coach-panel {
+  display: none !important;
+}
+
+.runified .reading-coach-fab {
+  position: fixed;
+  right: 16px;
+  /* Clear the bottom practice nav (Exit / Reset / submit). */
+  bottom: calc(var(--footer-height) + 16px);
+  z-index: 3500;
+  touch-action: none;
+  user-select: none;
+}
+
+/* The panel text follows the Options font size (the exam scales through
+   --runified-rem); --coach-px is one design pixel at the chosen size. */
+.runified .reading-coach-panel {
+  --coach-px: calc(var(--runified-rem) / 16);
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--footer-height) + 60px);
+  z-index: 3500;
+  display: none;
+  flex-direction: column;
+  width: min(calc(400 * var(--coach-px)), calc(100vw - 32px));
+  max-height: min(64vh, calc(560 * var(--coach-px)));
+  overflow: hidden;
+  border: 1px solid #8f8f8f;
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+  font-size: calc(15 * var(--coach-px));
+}
+
+.runified .reading-coach-panel.is-open {
+  display: flex;
+}
+
+.runified .reading-coach-panel:focus {
+  outline: none;
+}
+
+.runified .reading-coach-fab:focus-visible,
+.runified .reading-coach-panel :focus-visible {
+  outline: 2px solid #418fc6;
+  outline-offset: 1px;
+}
+
+.runified .reading-coach-panel__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 0 0 16px;
+  border-bottom: 1px solid var(--soft-line);
+  background: var(--intro-bg);
+}
+
+.runified .reading-coach-panel__title {
+  font-size: calc(15 * var(--coach-px));
+  font-weight: 700;
+}
+
+.runified .reading-coach-panel__close {
+  display: grid;
+  width: 44px;
+  height: 100%;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #333;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.runified .reading-coach-panel__close:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.runified .reading-coach-panel__status {
+  flex: 0 0 auto;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--soft-line);
+  color: var(--muted-ink);
+  font-size: calc(13 * var(--coach-px));
+}
+
+.runified .reading-coach-panel__status:empty {
+  display: none;
+}
+
+.runified .reading-coach-panel__status.is-loading::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+  content: "";
+  animation: reading-coach-pulse 1.1s ease-in-out infinite;
+}
+
+/* Notices that belong to no message: history failed to load, nothing selected. */
+.runified .reading-coach-panel__notice {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--incorrect);
+  background: var(--incorrect-bg);
+  color: var(--incorrect);
+  font-size: calc(13 * var(--coach-px));
+}
+
+.runified .reading-coach-panel__notice .reading-coach-chip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.runified .reading-coach-panel__selected-context {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--soft-line);
+  font-size: calc(13 * var(--coach-px));
+}
+
+.runified .reading-coach-panel__selected-context span {
+  color: var(--muted-ink);
+}
+
+.runified .reading-coach-panel__selected-context strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runified .reading-coach-panel__messages {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 80px;
+  padding: 14px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.runified .reading-coach-panel__messages:focus-visible {
+  outline-offset: -2px;
+}
+
+.runified .reading-coach-msg {
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--soft-line);
+  border-radius: 3px;
+  background: #fff;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.runified .reading-coach-msg.assistant {
+  align-self: flex-start;
+  background: var(--intro-bg);
+}
+
+.runified .reading-coach-msg.user {
+  align-self: flex-end;
+  border-color: #c3d8ec;
+  background: #eaf1f8;
+}
+
+.runified .reading-coach-msg.error {
+  border-color: var(--incorrect);
+  background: var(--incorrect-bg);
+  color: var(--incorrect);
+}
+
+/* The answer being written ends in a caret until the reply is validated. */
+.runified .reading-coach-msg[aria-busy="true"]::after {
+  content: "\258D";
+  margin-left: 2px;
+  animation: reading-coach-pulse 1.1s ease-in-out infinite;
+}
+
+.runified .reading-coach-msg__code {
+  max-width: 100%;
+  margin: 6px 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border: 1px solid var(--soft-line);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.04);
+  font: calc(13 * var(--coach-px)) / 1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  white-space: pre;
+}
+
+.runified .reading-coach-msg__code:first-child {
+  margin-top: 0;
+}
+
+.runified .reading-coach-msg__code:last-child {
+  margin-bottom: 0;
+}
+
+.runified .reading-coach-msg code {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.runified .reading-coach-msg__code code {
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+}
+
+.runified .reading-coach-feedback,
+.runified .reading-coach-retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+.runified .reading-coach-retry-note {
+  margin: 0;
+  font-size: calc(13 * var(--coach-px));
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+.runified .reading-coach-feedback__option {
+  height: auto;
+  min-height: calc(28 * var(--coach-px));
+  padding: 0 10px;
+  font-size: calc(13 * var(--coach-px));
+}
+
+.runified .reading-coach-feedback__option.is-selected {
+  border-width: 2px;
+  border-color: #418fc6;
+  background: #eaf1f8;
+  font-weight: 700;
+}
+
+.runified .reading-coach-feedback__note {
+  color: var(--muted-ink);
+  font-size: calc(12 * var(--coach-px));
+}
+
+.runified .reading-coach-feedback__note.is-error {
+  color: var(--incorrect);
+}
+
+/* Which way of explaining this answer used: present, never the headline. */
+.runified .reading-coach-feedback__strategy {
+  margin-left: auto;
+  color: var(--muted-ink);
+  font-size: calc(11 * var(--coach-px));
+  opacity: 0.8;
+}
+
+/* "讲得不对劲？" opens its options in place: no popup to clip in a narrow panel. */
+.runified .reading-coach-feedback__menu {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+/* ---- preference card: "remember this?" under an answer ---------------- */
+
+.runified .reading-coach-card {
+  display: grid;
+  align-self: stretch;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #c3d8ec;
+  border-radius: 3px;
+  background: #f4f8fc;
+  font-size: calc(13 * var(--coach-px));
+  line-height: 1.45;
+}
+
+.runified .reading-coach-card__title {
+  font-weight: 700;
+}
+
+.runified .reading-coach-card__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(46 * var(--coach-px));
+  max-height: calc(120 * var(--coach-px));
+  padding: 5px 8px;
+  border: 1px solid #8f8f8f;
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.runified .reading-coach-card__input:focus {
+  border-color: #418fc6;
+  outline: 2px solid var(--focus-soft);
+  outline-offset: 0;
+}
+
+.runified .reading-coach-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.runified .reading-coach-card__count {
+  flex: 1 1 auto;
+  color: var(--muted-ink);
+  font-size: calc(12 * var(--coach-px));
+}
+
+.runified .reading-coach-card__count.is-over,
+.runified .reading-coach-card__error {
+  color: var(--incorrect);
+}
+
+.runified .reading-coach-card__confirm {
+  border-color: #418fc6;
+  background: #eaf1f8;
+  font-weight: 700;
+}
+
+.runified .reading-coach-card__status,
+.runified .reading-coach-card__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.runified .reading-coach-card__status:empty {
+  display: none;
+}
+
+.runified .reading-coach-card__hint {
+  color: var(--muted-ink);
+  font-size: calc(12 * var(--coach-px));
+}
+
+.runified .reading-coach-panel__actions,
+.runified .reading-coach-panel__followups,
+.runified .reading-coach-panel__jump {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--soft-line);
+}
+
+.runified .reading-coach-panel__jump {
+  justify-content: center;
+  padding: 6px 16px;
+}
+
+/* A chip is a short label, but follow-ups are model text: wrap, never overflow. */
+.runified .reading-coach-chip {
+  height: auto;
+  min-height: calc(30 * var(--coach-px));
+  max-width: 100%;
+  padding: 3px 12px;
+  font-size: calc(13 * var(--coach-px));
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+}
+
+.runified .reading-coach-panel__composer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--soft-line);
+}
+
+.runified .reading-coach-panel__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  min-height: calc(33 * var(--coach-px));
+  max-height: calc(120 * var(--coach-px));
+  padding: 6px 10px;
+  border: 1px solid #8f8f8f;
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: calc(14 * var(--coach-px));
+  line-height: 1.4;
+  overflow-y: auto;
+  resize: none;
+}
+
+.runified .reading-coach-panel__input:focus {
+  border-color: #418fc6;
+  outline: 2px solid var(--focus-soft);
+  outline-offset: 0;
+}
+
+.runified .reading-coach-panel__send {
+  height: auto;
+  min-height: calc(33 * var(--coach-px));
+  font-size: calc(14 * var(--coach-px));
+}
+
+@keyframes reading-coach-pulse {
+  50% { opacity: 0.25; }
+}
+
+@media (max-width: 980px) {
+  .runified .reading-coach-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 70vh;
+    max-height: 70dvh;
+  }
+
+  .runified .reading-coach-fab {
+    right: 10px;
+  }
+
+  /* One scrolling row per chip group keeps the conversation tall enough to read. */
+  .runified .reading-coach-panel__actions,
+  .runified .reading-coach-panel__followups {
+    flex-wrap: nowrap;
+    padding: 8px 12px;
+    overflow-x: auto;
+  }
+
+  .runified .reading-coach-panel__actions .reading-coach-chip,
+  .runified .reading-coach-panel__followups .reading-coach-chip {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+/* ---- results and analysis ------------------------------------------ */
+
+.runified .review-panel .results-table td,
+.runified .review-panel .results-table th {
+  padding: 6px 10px;
+  line-height: 1.4;
+}
+
+.runified .review-panel .result-correct {
+  color: var(--correct);
+  font-weight: 700;
+}
+
+.runified .review-panel .result-incorrect {
+  color: var(--incorrect);
+  font-weight: 700;
+}
+
+.runified .panel-kicker {
+  display: block;
+  color: var(--muted-ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runified .review-panel h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.runified .review-analysis,
+.runified .attempt-review-evidence {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.runified .llm-review-status,
+.runified .attempt-review-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.runified .llm-review-status > strong {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.runified .attempt-review-explanation {
+  padding: 10px 12px;
+  border-left: 3px solid #418fc6;
+  background: var(--intro-bg);
+}
+
+.runified .attempt-review-explanation h4 {
+  margin: 0 0 4px;
+}
+
+.runified .attempt-review-explanation p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.runified .attempt-review-trace {
+  font-size: 13px;
+}
+
+.runified .attempt-review-trace ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.runified .analysis-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--line);
+}
+
+.runified .analysis-strip > div {
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.runified .analysis-strip > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.runified .analysis-strip span,
+.runified .analysis-list li,
+.runified .llm-question-analysis dt {
+  color: var(--muted-ink);
+  font-size: 13px;
+}
+
+.runified .analysis-strip strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.runified .analysis-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.runified .llm-analysis-body {
+  align-items: start;
+}
+
+.runified .analysis-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.runified .analysis-list li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.runified .analysis-list strong,
+.runified .llm-question-analysis > strong {
+  color: var(--ink);
+}
+
+.runified .llm-question-analysis-list {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  min-width: 0;
+}
+
+.runified .llm-question-analysis {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--soft-line);
+  font-size: 14px;
+}
+
+.runified .llm-question-analysis dl {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.runified .llm-question-analysis dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.runified .analysis-kind-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.runified .kind-bar-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.24fr) minmax(0, 1fr) 54px;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.runified .kind-bar-track {
+  height: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.runified .kind-bar-track i {
+  display: block;
+  height: 100%;
+  background: #535353;
+}
+
+@media (max-width: 1100px) {
+  .runified .analysis-strip,
+  .runified .analysis-body {
+    grid-template-columns: 1fr;
+  }
+
+  .runified .analysis-strip > div + div {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+/* ---- dictionary bubble and memorize locators ----------------------- */
+
+.runified .review-dictionary-highlight {
+  background: #c3d8ec;
+  cursor: pointer;
+}
+
+.runified .reading-html .memorize-locator-highlight {
+  background: #eaf1f8;
+  box-shadow: inset 0 -2px 0 #418fc6;
+}
+
+.runified .review-highlight-dictionary-bubble {
+  position: fixed;
+  z-index: 3800;
+  display: grid;
+  gap: 8px;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(60vh, 460px);
+  padding: 12px 14px;
+  overflow-y: auto;
+  border: 1px solid #8f8f8f;
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.runified .vocab-bubble-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.runified .vocab-term {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.runified .vocab-part + .vocab-part {
+  padding-top: 8px;
+  border-top: 1px solid var(--soft-line);
+}
+
+.runified .vocab-part-term {
+  font-size: 15px;
+}
+
+.runified .vocab-meta,
+.runified .vocab-label {
+  color: var(--muted-ink);
+  font-size: 12px;
+}
+
+.runified .vocab-label {
+  font-weight: 700;
+}
+
+.runified .vocab-text {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.runified .vocab-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #333;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.runified .vocab-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- dark mode ------------------------------------------------------ */
+
+.runified.dark-mode .btn-text,
+.runified.dark-mode .reading-coach-chip,
+.runified.dark-mode .reading-coach-feedback__option,
+.runified.dark-mode .vocab-add,
+.runified.dark-mode .reading-coach-fab,
+.runified.dark-mode .reading-coach-panel__input {
+  border-color: #556070;
+  background: #1c2128;
+  color: #e9e9e9;
+}
+
+.runified.dark-mode .btn-text:hover:not(:disabled),
+.runified.dark-mode .reading-coach-chip:hover:not(:disabled),
+.runified.dark-mode .reading-coach-feedback__option:hover:not(:disabled),
+.runified.dark-mode .vocab-add:hover:not(:disabled),
+.runified.dark-mode .reading-coach-fab:hover {
+  background: #262c34;
+}
+
+.runified.dark-mode .reading-coach-panel__send {
+  border-color: #262c34;
+  background: #262c34;
+  color: #e9e9e9;
+}
+
+.runified.dark-mode .reading-coach-panel__send:hover:not(:disabled) {
+  border-color: #1e3346;
+  background: #1e3346;
+}
+
+.runified.dark-mode .reading-coach-panel,
+.runified.dark-mode .review-highlight-dictionary-bubble,
+.runified.dark-mode .endless-message,
+.runified.dark-mode .runified-status {
+  border-color: #556070;
+  background: #14181d;
+  color: var(--ink);
+}
+
+.runified.dark-mode .reading-coach-panel__header,
+.runified.dark-mode .reading-coach-msg.assistant,
+.runified.dark-mode .attempt-review-explanation {
+  border-color: #333b44;
+  background: var(--intro-bg);
+}
+
+.runified.dark-mode .reading-coach-panel__close,
+.runified.dark-mode .vocab-close {
+  color: #e9e9e9;
+}
+
+.runified.dark-mode .reading-coach-msg {
+  border-color: #333b44;
+  background: #14181d;
+}
+
+.runified.dark-mode .reading-coach-msg.user,
+.runified.dark-mode .reading-coach-feedback__option.is-selected {
+  border-color: #418fc6;
+  background: #1e3346;
+}
+
+.runified.dark-mode .reading-coach-msg.error,
+.runified.dark-mode .runified-status.is-error {
+  border-color: var(--incorrect);
+  background: var(--incorrect-bg);
+  color: #f2b8b5;
+}
+
+.runified.dark-mode .reading-coach-panel__notice {
+  border-color: var(--incorrect);
+  background: var(--incorrect-bg);
+  color: #f2b8b5;
+}
+
+.runified.dark-mode .reading-coach-msg__code,
+.runified.dark-mode .reading-coach-msg code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.runified.dark-mode .reading-coach-card {
+  border-color: #2c4a63;
+  background: #1a2530;
+}
+
+.runified.dark-mode .reading-coach-card__input {
+  border-color: #556070;
+  background: #14181d;
+  color: var(--ink);
+}
+
+.runified.dark-mode .reading-coach-card__confirm {
+  border-color: #418fc6;
+  background: #1e3346;
+}
+
+.runified.dark-mode .reading-coach-card__count.is-over,
+.runified.dark-mode .reading-coach-card__error {
+  color: #f2b8b5;
+}
+
+.runified.dark-mode .reading-coach-msg__code {
+  border-color: #333b44;
+}
+
+.runified.dark-mode .reading-coach-msg__code code {
+  background: transparent;
+}
+
+.runified.dark-mode .reading-coach-chip:disabled,
+.runified.dark-mode .reading-coach-feedback__option:disabled,
+.runified.dark-mode .reading-coach-panel__send:disabled {
+  border-color: #333b44;
+  color: #8a949f;
+}
+
+.runified.dark-mode .reading-coach-panel__status,
+.runified.dark-mode .reading-coach-panel__selected-context,
+.runified.dark-mode .reading-coach-panel__actions,
+.runified.dark-mode .reading-coach-panel__followups,
+.runified.dark-mode .reading-coach-panel__jump,
+.runified.dark-mode .reading-coach-panel__composer,
+.runified.dark-mode .vocab-part + .vocab-part {
+  border-color: #333b44;
+}
+
+.runified.dark-mode .kind-bar-track {
+  background: #14181d;
+}
+
+.runified.dark-mode .kind-bar-track i {
+  background: #b8b8b8;
+}
+
+.runified.dark-mode .review-dictionary-highlight,
+.runified.dark-mode .reading-html .memorize-locator-highlight {
+  background: #1e3346;
+}
+
+/* ---- question flags (mark for review) ------------------------------- */
+
+/* A flag exists in the DOM only while its number is hovered/focused or marked
+   (UnifiedPracticeNav), so every rule here is keyed off the flag or a class
+   that only exists with it: an idle nav keeps the skin's exact geometry. The
+   flag hangs off the number's top-right corner as an overlay and never moves
+   the number or its neighbours. */
+.runified {
+  --runified-flag: #c62828;
+  --runified-flag-bg: #fff;
+}
+
+.runified.dark-mode {
+  --runified-flag: #ff7a70;
+  --runified-flag-bg: #14181d;
+}
+
+/* The column becomes the flag's positioning box (the skin leaves it static). */
+.runified .q-column.has-flag {
+  position: relative;
+}
+
+.runified .q-flag {
+  position: absolute;
+  top: -10px;
+  right: -7px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  /* Fixed desktop size: no 44px touch floor on exam controls. */
+  width: 17px;
+  height: 17px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--runified-flag-bg);
+  color: var(--muted-ink);
+  line-height: 0;
+  cursor: pointer;
+  animation: runified-flag-in 120ms ease-out;
+}
+
+.runified .q-flag:hover:not(.is-static),
+.runified .q-flag.is-marked {
+  color: var(--runified-flag);
+}
+
+.runified .q-flag.is-marked {
+  border-color: var(--runified-flag);
+}
+
+/* Read-only (review/replay): the red flag stays, the control does not. */
+.runified .q-flag.is-static {
+  cursor: default;
+}
+
+.runified .q-flag-icon {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.runified .q-flag.is-marked .q-flag-cloth {
+  fill: currentColor;
+}
+
+/* Marked number: a thin red frame inside the chip's own border; no size change. */
+.runified .q-item.is-marked {
+  box-shadow: inset 0 0 0 1px var(--runified-flag);
+}
+
+/* On phones the chips scroll horizontally, which clips vertically too; widen
+   the clip box by the overlay's reach and pull the margin back so the row's
+   layout box (and the nav height) stays put. */
+@media (max-width: 980px) {
+  .runified .part-nav-section.active .part-nav-questions.has-flag {
+    padding-block: 12px;
+    margin-block: -12px;
+  }
+}
+
+@keyframes runified-flag-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runified .q-flag {
+    animation: none;
+    transition: none;
+  }
+}

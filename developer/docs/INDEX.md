@@ -39,6 +39,7 @@
 ## Gate and audit evidence
 
 - [Round 3 adversarial audit](PLAN_V1.3_ADVERSARIAL_AUDIT_ROUND3_REPORT.md)
+- [Coach / Soul / Memory loop audit](coach-soul-memory-loop-2026-11-04.md)
 - [Phase 10 release runbook](phase10-release-runbook.md)
 - [M3-M12 planning findings](../../.planning/agent_backend_audit_20260824/findings.md)
 - Static verification: `python developer/tests/ci/run_static_suite.py`

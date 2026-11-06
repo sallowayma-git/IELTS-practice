@@ -210,7 +210,9 @@ class WorkflowTriggerTests(unittest.TestCase):
 
     def test_pull_requests_freeze_and_smoke_macos_and_linux_sidecars(self) -> None:
         job = workflow_block(self.branch_ci, "sidecar-portability", indent=2)
-        self.assertIn("runner: macos-14", job)
+        self.assertIn(
+            "runner: macos-15\n            target: aarch64-apple-darwin\n            pythonArchitecture: arm64", job
+        )
         self.assertIn("runner: ubuntu-22.04", job)
         self.assertIn(
             "run: python developer/tests/ci/build_agent_runtime_sidecar.py --target ${{ matrix.target }}\n", job

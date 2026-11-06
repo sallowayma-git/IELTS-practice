@@ -1,5 +1,5 @@
 //! M6 coach closed-loop persistence: canonical feedback, re-ask linkage,
-//! strategy assignment provenance, and outcome links.
+//! and strategy assignment provenance.
 //!
 //! These tables record user-interaction facts and teaching-strategy provenance.
 //! They are NOT long-term preferences on their own: M6-07 only promotes repeated
@@ -13,14 +13,11 @@
 //!   new_user_message_id).
 //! - `coach_strategy_assignments_v0` is unique on coach_message_id (one
 //!   strategy per assistant message).
-//! - Existing `coach_outcome_links_v0` rows remain readable by other consumers.
-//!   New attribution fails closed until trusted provenance is available.
 
 use ielts_domain::{
-    CoachFeedbackKind, CoachFeedbackRecord, CoachFollowupType, CoachOutcomeKind,
-    CoachOutcomeLinkRecord, CoachReaskLinkRecord, CoachStrategyAssignmentRecord, CoachStrategyId,
-    LinkCoachOutcomeCommand, RecordCoachFeedbackCommand, RecordCoachStrategyAssignmentCommand,
-    RecordReaskLinkCommand,
+    CoachFeedbackKind, CoachFeedbackRecord, CoachFollowupType, CoachReaskLinkRecord,
+    CoachStrategyAssignmentRecord, CoachStrategyId, RecordCoachFeedbackCommand,
+    RecordCoachStrategyAssignmentCommand, RecordReaskLinkCommand,
 };
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde_json::Value;
@@ -402,18 +399,6 @@ fn load_strategy_assignment(
     .map_err(Into::into)
 }
 
-/// M6-10: validate a requested future-outcome link. v0 cannot authorize new
-/// links: it lacks trusted context ownership and satisfaction projections.
-/// Existing feedback, strategy assignments and explicit re-asks remain usable.
-pub fn link_coach_outcome(
-    conn: &Connection,
-    command: &LinkCoachOutcomeCommand,
-) -> DbResult<CoachOutcomeLinkRecord> {
-    require_text(&command.strategy_assignment_id, "strategy_assignment_id")?;
-    require_text(&command.future_observation_id, "future_observation_id")?;
-    require_outcome_authority(conn, command)
-}
-
 fn require_completed_assistant(conn: &Connection, message_id: &str) -> DbResult<()> {
     let message: Option<(String, String)> = conn.query_row(
         "SELECT role, status FROM coach_messages WHERE id = ?1",
@@ -470,59 +455,6 @@ fn parse_time(value: &str) -> DbResult<chrono::DateTime<chrono::FixedOffset>> {
         .map_err(|_| DbError::Validation("coach linkage requires valid RFC3339 time".into()))
 }
 
-/// v0 stores caller-supplied provenance, not a host-owned snapshot/thread/attempt
-/// binding. Do not infer learning effectiveness from those fields. The current
-/// observation projector also does not project CoachFeedbackProvided events.
-/// Feedback and explicit re-asks remain supported independently of outcome links.
-fn require_outcome_authority(
-    conn: &Connection,
-    command: &LinkCoachOutcomeCommand,
-) -> DbResult<CoachOutcomeLinkRecord> {
-    let assignment: Option<(String, String, String)> = conn.query_row(
-        "SELECT user_id, coach_message_id, created_at FROM coach_strategy_assignments_v0 WHERE id = ?1",
-        [&command.strategy_assignment_id],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    ).optional()?;
-    let (owner, message_id, assigned_at) = assignment
-        .ok_or_else(|| DbError::Validation("coach strategy assignment not found".into()))?;
-    if owner != DEFAULT_USER_ID {
-        return Err(DbError::Validation(
-            "coach outcome assignment owner must be local".into(),
-        ));
-    }
-    let message = load_link_message(conn, &message_id)?;
-    if message.role != "assistant" {
-        return Err(DbError::Validation(
-            "coach outcome assignment must reference an assistant message".into(),
-        ));
-    }
-    let observation: Option<(String, String)> = conn
-        .query_row(
-            "SELECT user_id, observed_at FROM learner_observations WHERE id = ?1",
-            [&command.future_observation_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()?;
-    let (user, observed_at) =
-        observation.ok_or_else(|| DbError::Validation("learner observation not found".into()))?;
-    if user != DEFAULT_USER_ID {
-        return Err(DbError::Validation(
-            "coach outcome observation owner must be local".into(),
-        ));
-    }
-    let observed_at = parse_time(&observed_at)?;
-    if observed_at <= parse_time(&assigned_at)? || observed_at <= parse_time(&message.created_at)? {
-        return Err(DbError::Validation(
-            "coach outcome requires a later observation".into(),
-        ));
-    }
-    let limitation = match command.outcome_kind {
-        CoachOutcomeKind::Learning => "v0 learning attribution unavailable: missing trusted context scope/snapshot binding to coach thread and attempt; same-skill and independent new-asset evidence cannot be authorized",
-        CoachOutcomeKind::Satisfaction => "v0 satisfaction attribution unavailable: no canonical feedback observation projection; use record_coach_feedback for satisfaction facts",
-    };
-    Err(DbError::Validation(limitation.into()))
-}
-
 fn require_text(value: &str, field: &str) -> DbResult<()> {
     if value.trim().is_empty() {
         Err(DbError::Validation(format!("{field} is required")))
@@ -564,28 +496,6 @@ mod tests {
              VALUES
                ('cmsg-parent', 'thread-1', 'assistant', 'body', 'completed', '2026-08-16T00:00:01Z', 1),
                ('cmsg-user', 'thread-1', 'user', 'why?', 'completed', '2026-08-16T00:00:02Z', 2)",
-            [],
-        )
-        .unwrap();
-        // Seed a learner observation so outcome links have a valid target.
-        // learner_observations is a derived projection table; insert a minimal
-        // row that satisfies the FK. The projection run must exist first.
-        conn.execute(
-            "INSERT INTO learning_projection_runs
-               (id, projector_key, projector_version, input_hash, output_hash, status, started_at, finished_at)
-             VALUES
-               ('lpr-1', 'learning_observation_v1', 1, 'in', 'out', 'completed', '2026-08-16T00:00:00Z', '2026-08-16T00:00:00Z')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO learner_observations
-               (id, user_id, observation_type, namespace, scope_kind, scope_key, polarity,
-                value_num, value_text, payload_json, confidence, evidence_strength, observed_at,
-                projector_key, projector_version, source_fingerprint, created_at)
-             VALUES
-               ('lobs-1', 'local', 'reading.question.outcome', 'knowledge', 'activity', 'reading',
-                NULL, 1.0, NULL, '{}', 1.0, 1.0, '2026-08-16T00:00:00Z', 'learning_observation_v1', 1, 'fp', '2026-08-16T00:00:00Z')",
             [],
         )
         .unwrap();
@@ -792,105 +702,5 @@ mod tests {
             )
             .unwrap_err();
         assert!(error.to_string().contains("CHECK constraint failed"));
-    }
-
-    #[test]
-    fn outcome_links_cannot_promote_unattributable_observations() {
-        let (_dir, conn) = open_db();
-        let assignment = seed_history_assignment(
-            &conn,
-            &RecordCoachStrategyAssignmentCommand {
-                user_id: "local".into(),
-                coach_message_id: "cmsg-parent".into(),
-                strategy_id: CoachStrategyId::StepByStepV1,
-                skills_addressed: vec![],
-                memory_ids_used: vec![],
-                context_snapshot_id: None,
-                followup_type: CoachFollowupType::StepByStep,
-            },
-        )
-        .unwrap();
-        let satisfaction = link_coach_outcome(
-            &conn,
-            &LinkCoachOutcomeCommand {
-                strategy_assignment_id: assignment.id.clone(),
-                future_observation_id: "lobs-1".into(),
-                outcome_kind: CoachOutcomeKind::Satisfaction,
-            },
-        )
-        .unwrap_err();
-        let learning = link_coach_outcome(
-            &conn,
-            &LinkCoachOutcomeCommand {
-                strategy_assignment_id: assignment.id.clone(),
-                future_observation_id: "lobs-1".into(),
-                outcome_kind: CoachOutcomeKind::Learning,
-            },
-        )
-        .unwrap_err();
-        assert!(matches!(satisfaction, DbError::Validation(_)));
-        assert!(matches!(learning, DbError::Validation(_)));
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM coach_outcome_links_v0 WHERE strategy_assignment_id = ?1",
-                params![assignment.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn outcome_link_retries_remain_fail_closed() {
-        let (_dir, conn) = open_db();
-        let assignment = seed_history_assignment(
-            &conn,
-            &RecordCoachStrategyAssignmentCommand {
-                user_id: "local".into(),
-                coach_message_id: "cmsg-parent".into(),
-                strategy_id: CoachStrategyId::ContrastiveV1,
-                skills_addressed: vec![],
-                memory_ids_used: vec![],
-                context_snapshot_id: None,
-                followup_type: CoachFollowupType::Contrast,
-            },
-        )
-        .unwrap();
-        let command = LinkCoachOutcomeCommand {
-            strategy_assignment_id: assignment.id.clone(),
-            future_observation_id: "lobs-1".into(),
-            outcome_kind: CoachOutcomeKind::Learning,
-        };
-        assert!(matches!(
-            link_coach_outcome(&conn, &command),
-            Err(DbError::Validation(_))
-        ));
-        assert!(matches!(
-            link_coach_outcome(&conn, &command),
-            Err(DbError::Validation(_))
-        ));
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM coach_outcome_links_v0 WHERE strategy_assignment_id = ?1 AND outcome_kind = 'learning'",
-                params![assignment.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn outcome_link_rejects_unknown_assignment_and_observation() {
-        let (_dir, conn) = open_db();
-        let error = link_coach_outcome(
-            &conn,
-            &LinkCoachOutcomeCommand {
-                strategy_assignment_id: "csa-ghost".into(),
-                future_observation_id: "lobs-1".into(),
-                outcome_kind: CoachOutcomeKind::Learning,
-            },
-        )
-        .unwrap_err();
-        assert!(matches!(error, DbError::Validation(_)));
     }
 }

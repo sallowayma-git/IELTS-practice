@@ -138,7 +138,9 @@ mod tests {
             canonical_key: key.into(),
             statement: String::new(),
             version: 1,
-            last_observed: String::new(),
+            last_observed_at: String::new(),
+            improvement_state: "baseline".into(),
+            recall_count: 0,
         }
     }
 

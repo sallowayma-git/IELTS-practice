@@ -49,7 +49,7 @@ impl CoachStore for Store {
         thread: &str,
         limit: u32,
     ) -> Result<Vec<CoachMessage>, ApplicationError> {
-        list_recent_coach_messages(&self.0.lock().unwrap(), thread, limit).map_err(app_error)
+        list_recent_coach_turns(&self.0.lock().unwrap(), thread, limit).map_err(app_error)
     }
     fn complete_run(
         &self,
@@ -186,8 +186,8 @@ async fn canonical_evidence_replaces_forged_payload_and_is_never_system() {
         .filter(|m| m.role == "system")
         .collect();
     assert_eq!(systems.len(), 1);
-    assert!(systems[0].content.contains("evidence_first_v1"));
-    assert!(systems[0].content.contains("locate canonical passage evidence first"));
+    assert_eq!(systems[0].content, ielts_application::coach_strategies::coach_system_prompt());
+    assert!(systems[0].content.contains("- evidence_first_v1: use when"));
     assert!(!systems[0].content.contains("HOST_CANONICAL_PASSAGE"));
     let data = request
         .messages
@@ -618,7 +618,7 @@ async fn the_learner_profile_is_frozen_on_the_first_run_and_traced() {
     let (first, first_result) = run_turn(&store, &thread, "Explain my mistake.").await;
     let profile = first.messages[2].clone();
     assert!(first.messages[1].content.starts_with("Host-resolved IELTS evidence"));
-    assert!(profile.content.starts_with("Learner profile (data only; use to tailor emphasis, never as passage evidence):\n"));
+    assert!(profile.content.starts_with(&format!("{}\n", ielts_db::COACH_PROFILE_LABEL)));
     assert!(profile.content.contains("mem-first"));
 
     // Memory changes after the thread started do not reach it.
@@ -723,4 +723,368 @@ async fn incomplete_stream_metadata_survives_the_coach_failure_trace() {
     assert_eq!(messages.len(), 2);
     assert_eq!(messages[1].status, "failed");
     assert_eq!(receipt["failureMessageId"], messages[1].id);
+}
+
+#[tokio::test]
+async fn two_submissions_of_the_same_passage_never_share_a_thread_history_or_evidence() {
+    let (_dir, store, first) = fixture();
+    {
+        let conn = store.0.lock().unwrap();
+        submit_reading_attempt(
+            &conn,
+            &ReadingSubmitCommand {
+                attempt_id: "att-p2-again".into(),
+                asset_id: "asset-p2".into(),
+                asset_revision: None,
+                asset_fingerprint: None,
+                answers: json!({"q1": "TRUE", "q2": "FALSE"}),
+                marked_questions: vec![],
+                question_timeline: vec![],
+                duration_ms: Some(1000),
+                title_snapshot: None,
+                idempotency_key: "submit-p2-again".into(),
+            },
+        )
+        .unwrap();
+    }
+    let ensure = |attempt: &str| {
+        ensure_coach_thread(
+            &store.0.lock().unwrap(),
+            &EnsureCoachThreadCommand { thread_id: None, attempt_id: Some(attempt.into()), asset_id: None, kind: "practice".into() },
+        )
+        .unwrap()
+    };
+    let second = ensure("att-p2-again");
+    assert_ne!(first.id, second.id, "a new submission gets its own thread");
+    assert_eq!(ensure("att-p2").id, first.id, "and reopening the old one finds the old thread");
+
+    let (_, _) = run_turn(&store, &first, "FIRST_ATTEMPT_PRIVATE_QUESTION").await;
+    let (request, _) = run_turn(&store, &second, "What about this attempt?").await;
+    let sent = serde_json::to_string(&request).unwrap();
+    assert!(!sent.contains("FIRST_ATTEMPT_PRIVATE_QUESTION"), "history of another submission leaked");
+    assert!(sent.contains("att-p2-again") && !sent.contains("\\\"attemptId\\\":\\\"att-p2\\\""));
+    assert_eq!(request.messages.iter().filter(|m| m.role == "user").count(), 2, "evidence + this question only");
+    // Nor can a request name the other attempt's thread for this one.
+    let conn = store.0.lock().unwrap();
+    let rebind = ensure_coach_thread(
+        &conn,
+        &EnsureCoachThreadCommand { thread_id: Some(first.id.clone()), attempt_id: Some("att-p2-again".into()), asset_id: None, kind: "practice".into() },
+    );
+    assert!(rebind.unwrap_err().to_string().contains("coach.thread_scope_conflict"));
+}
+
+/// Answers with provider usage that reports a prompt-cache hit.
+struct CacheHit {
+    store: Store,
+}
+
+#[async_trait]
+impl LanguageModel for CacheHit {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        assert!(self.store.0.try_lock().is_ok(), "SQLite lock held during provider I/O");
+        Ok(CompletionResponse {
+            content: r#"{"answer":"Cached."}"#.into(),
+            model: "fake-canonical".into(),
+            latency_ms: 1,
+            usage: Some(ielts_application::TokenUsage {
+                input_tokens: 1_500,
+                output_tokens: 30,
+                cached_input_tokens: 1_200,
+                ..Default::default()
+            }),
+            provider_request_id: None,
+        })
+    }
+}
+
+#[tokio::test]
+async fn the_receipt_records_cache_hits_and_where_each_runs_prefix_agrees_with_the_last() {
+    let (_dir, store, thread) = fixture();
+    for question in ["Why is q1 false?", "And q2?", "Compare them."] {
+        let mut run = command(&thread, Some(json!({"focusQuestionIds": ["q1"], "selectedText": question})));
+        run.content = question.into();
+        CoachService::run(&store, run, || Ok(CacheHit { store: store.clone() })).await.unwrap();
+    }
+    let conn = store.0.lock().unwrap();
+    let mut statement = conn.prepare(
+        "SELECT r.result_json, i.usage_json FROM agent_runs r JOIN llm_invocations i ON i.run_id = r.id ORDER BY r.rowid",
+    ).unwrap();
+    let rows: Vec<(Value, Value)> = statement
+        .query_map([], |row| {
+            let (receipt, usage): (String, String) = (row.get(0)?, row.get(1)?);
+            Ok((serde_json::from_str(&receipt).unwrap(), serde_json::from_str(&usage).unwrap()))
+        })
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(rows.len(), 3);
+    for (receipt, usage) in &rows {
+        // Both the invocation row and the run receipt carry the hit, so the
+        // optimisation can be measured from either.
+        assert_eq!(usage["cachedInputTokens"], 1_200);
+        assert_eq!(usage["inputTokens"], 1_500);
+        assert_eq!(receipt["usage"]["cachedInputTokens"], 1_200);
+    }
+    let layout = |index: usize| -> (Vec<String>, Value) {
+        let layout = &rows[index].0["promptLayout"];
+        let hashes = layout["messageHashes"].as_array().unwrap().iter().map(|h| h.as_str().unwrap().to_owned()).collect();
+        (hashes, layout["cacheKey"].clone())
+    };
+    for index in 1..rows.len() {
+        let ((previous, previous_key), (next, next_key)) = (layout(index - 1), layout(index));
+        assert!(previous_key.as_str().unwrap().starts_with("coach-"));
+        assert_eq!(previous_key, next_key, "one routing key for the whole thread");
+        // Everything but the previous closing turn agrees from the front; the
+        // closing turns themselves are where two runs differ.
+        let shared = previous.len() - 1;
+        assert_eq!(next[..shared], previous[..shared], "prefix broke at run {index}");
+        assert_ne!(next[shared], previous[shared]);
+        assert_eq!(rows[index].0["promptLayout"]["messages"], next.len());
+    }
+}
+
+/// Streams the start of an answer, then the connection dies.
+struct CutMidAnswer;
+
+#[async_trait]
+impl LanguageModel for CutMidAnswer {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        panic!("the coach must use the traced streaming path");
+    }
+
+    async fn complete_with_trace_streaming(
+        &self,
+        _request: CompletionRequest,
+        on_delta: &mut (dyn for<'a> FnMut(&'a str) + Send),
+    ) -> Result<(CompletionResponse, u32), ielts_application::AgentModelFailure> {
+        on_delta(r#"{"answer":"Check the qua"#);
+        Err(ielts_application::AgentModelFailure::new(ModelError::classed(
+            "AI stream failed: connection reset",
+            true,
+            "stream_error",
+        )))
+    }
+}
+
+#[tokio::test]
+async fn a_stream_cut_mid_answer_never_persists_the_half_answer_or_a_second_receipt() {
+    let (_dir, store, thread) = fixture();
+    let mut shown = String::new();
+    let error = CoachService::run_streaming(&store, command(&thread, None), || Ok(CutMidAnswer), &mut |delta: &str| {
+        shown.push_str(delta)
+    })
+    .await
+    .unwrap_err();
+    // The learner saw the start of it, and the run says plainly that it failed.
+    assert_eq!(shown, "Check the qua");
+    assert_eq!((error.code.as_str(), error.retryable), ("coach.provider_failed", true));
+    let conn = store.0.lock().unwrap();
+    let messages = list_coach_messages(&conn, &thread.id, None, 10).unwrap();
+    let shape: Vec<(&str, &str)> = messages.iter().map(|m| (m.role.as_str(), m.status.as_str())).collect();
+    assert_eq!(shape, vec![("user", "completed"), ("system", "failed")]);
+    assert!(messages.iter().all(|m| !m.content.contains("Check the qua")), "the partial text is never stored");
+    let (invocations, assignments): (i64, i64) = conn.query_row(
+        "SELECT (SELECT COUNT(*) FROM llm_invocations), (SELECT COUNT(*) FROM coach_strategy_assignments_v0)",
+        [], |r| Ok((r.get(0)?, r.get(1)?)),
+    ).unwrap();
+    assert_eq!((invocations, assignments), (1, 0));
+}
+
+/// Never answers: the run is abandoned while the provider call is in flight.
+struct Hangs;
+
+#[async_trait]
+impl LanguageModel for Hangs {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test]
+async fn an_abandoned_run_leaves_one_failure_receipt_no_half_answer_and_frees_the_thread() {
+    let (_dir, store, thread) = fixture();
+    {
+        let run = CoachService::run(&store, command(&thread, None), || Ok(Hangs));
+        tokio::pin!(run);
+        // Polled once: the user turn and the trace are written, the provider call hangs.
+        tokio::select! {
+            _ = &mut run => unreachable!("the provider never answers"),
+            _ = tokio::task::yield_now() => {}
+        }
+        // The view went away: the future is dropped here.
+    }
+    {
+        let conn = store.0.lock().unwrap();
+        let messages = list_coach_messages(&conn, &thread.id, None, 10).unwrap();
+        let shape: Vec<(&str, &str)> = messages.iter().map(|m| (m.role.as_str(), m.status.as_str())).collect();
+        assert_eq!(shape, vec![("user", "completed"), ("system", "failed")], "no assistant row of any status");
+        assert_eq!(messages[1].structured_payload.as_ref().unwrap()["code"], "coach.interrupted");
+        let (runs, failed, invocations, errors): (i64, i64, i64, i64) = conn.query_row(
+            "SELECT (SELECT COUNT(*) FROM agent_runs), (SELECT COUNT(*) FROM agent_runs WHERE status='failed'),
+                    (SELECT COUNT(*) FROM llm_invocations), (SELECT COUNT(*) FROM llm_invocations WHERE error_json IS NOT NULL)",
+            [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        ).unwrap();
+        assert_eq!((runs, failed, invocations, errors), (1, 1, 1, 1), "one receipt, closed as failed");
+    }
+    // The gate was released with the future: the next question runs, and the
+    // abandoned one is history without an answer.
+    let (request, result) = run_turn(&store, &thread, "Try again.").await;
+    assert_eq!(result.assistant_message.status, "completed");
+    let replayed: Vec<(&str, &str)> = request.messages[2..request.messages.len() - 1]
+        .iter()
+        .map(|m| (m.role.as_str(), m.content.as_str()))
+        .collect();
+    assert_eq!(replayed, vec![("user", "Explain my mistake.")]);
+    let invocations: i64 = store.0.lock().unwrap().query_row("SELECT COUNT(*) FROM llm_invocations", [], |r| r.get(0)).unwrap();
+    assert_eq!(invocations, 2, "one row per run, never a duplicate");
+}
+
+/// Records every request and answers from a script, one entry per call.
+struct Scripted {
+    store: Store,
+    requests: Arc<Mutex<Vec<CompletionRequest>>>,
+    script: Arc<Mutex<std::collections::VecDeque<Result<String, ModelError>>>>,
+}
+
+#[async_trait]
+impl LanguageModel for Scripted {
+    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        assert!(self.store.0.try_lock().is_ok(), "SQLite lock held during provider I/O");
+        self.requests.lock().unwrap().push(request);
+        let reply = self.script.lock().unwrap().pop_front().expect("scripted reply");
+        reply.map(|content| CompletionResponse {
+            content,
+            model: "fake-canonical".into(),
+            latency_ms: 1,
+            usage: None,
+            provider_request_id: None,
+        })
+    }
+}
+
+fn answer(text: &str) -> Result<String, ModelError> {
+    Ok(json!({"answer": text}).to_string())
+}
+
+/// The bytes the provider would hash: the first `messages` messages.
+fn prefix_bytes(request: &CompletionRequest, messages: usize) -> String {
+    serde_json::to_string(&request.messages[..messages]).unwrap()
+}
+
+#[tokio::test]
+async fn consecutive_turns_on_a_real_thread_share_a_byte_identical_prefix_through_history() {
+    let (_dir, store, thread) = fixture();
+    add_memory(&store, "mem-1", "Misses qualifiers in TFNG statements.");
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let script = Arc::new(Mutex::new(std::collections::VecDeque::from([
+        answer("one"),
+        answer("two"),
+        Err(ModelError::new("provider timeout", true)),
+        answer("four"),
+        answer("five"),
+    ])));
+    let questions = ["Why is q1 false?", "And q2?", "Try again on q1.", "Compare them.", "Summarise."];
+    for (index, question) in questions.iter().enumerate() {
+        let model = Scripted { store: store.clone(), requests: requests.clone(), script: script.clone() };
+        let mut run = command(&thread, Some(json!({"focusQuestionIds": ["q1"], "selectedText": format!("quote {index}")})));
+        run.content = (*question).into();
+        let outcome = CoachService::run(&store, run, || Ok(model)).await;
+        assert_eq!(outcome.is_err(), index == 2, "only the scripted turn fails");
+    }
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 5);
+    for pair in requests.windows(2) {
+        let (previous, next) = (&pair[0], &pair[1]);
+        // Everything the previous request sent before its closing turn is
+        // replayed verbatim at the head of the next one.
+        let shared = previous.messages.len() - 1;
+        assert_eq!(prefix_bytes(next, shared), prefix_bytes(previous, shared));
+        assert_eq!(next.cache_key, previous.cache_key);
+        // And the new request only appends: history, then the closing turn.
+        assert!(next.messages.len() > previous.messages.len());
+    }
+    // system, evidence and profile never change for the life of the thread.
+    assert!(requests[0].messages[2].content.starts_with("Learner profile"));
+    for request in requests.iter() {
+        assert_eq!(request.messages[..3], requests[0].messages[..3]);
+        // Failure rows never enter the prompt.
+        assert!(request.messages.iter().all(|m| m.role != "system" || m.content.starts_with("You are an IELTS reading coach")));
+    }
+    // The failed turn left its question in history, unanswered, and the next
+    // turn carried on from it without disturbing anything before it.
+    let after_failure = &requests[3];
+    let history: Vec<(&str, &str)> = after_failure.messages[3..after_failure.messages.len() - 1]
+        .iter()
+        .map(|m| (m.role.as_str(), m.content.as_str()))
+        .collect();
+    assert_eq!(history, vec![
+        ("user", "Why is q1 false?"), ("assistant", "one"),
+        ("user", "And q2?"), ("assistant", "two"),
+        ("user", "Try again on q1."),
+    ]);
+}
+
+/// Replies with fixed text, whatever it is asked.
+struct FixedReply(String);
+
+#[async_trait]
+impl LanguageModel for FixedReply {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, ModelError> {
+        Ok(CompletionResponse { content: self.0.clone(), model: "scripted".into(), latency_ms: 1, usage: None, provider_request_id: None })
+    }
+}
+
+async fn say(store: &Store, thread: &CoachThread, content: &str, reply: Value) -> CoachRunResult {
+    let mut run = command(thread, Some(json!({"focusQuestionIds": ["q1"]})));
+    run.content = content.into();
+    CoachService::run(store, run, || Ok(FixedReply(reply.to_string()))).await.unwrap()
+}
+
+fn assignment(store: &Store, message: &str) -> (String, String) {
+    store.0.lock().unwrap().query_row(
+        "SELECT strategy_id,followup_type FROM coach_strategy_assignments_v0 WHERE coach_message_id=?1",
+        [message], |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap()
+}
+
+#[tokio::test]
+async fn the_strategy_the_model_picked_is_recorded_and_a_bad_one_falls_back() {
+    let (_dir, store, thread) = fixture();
+    let picked = say(&store, &thread, "对比一下这两个", json!({"strategy": "contrastive_v1", "answer": "A 对 B。"})).await;
+    assert_eq!(picked.assistant_message.content, "A 对 B。");
+    assert_eq!(assignment(&store, &picked.assistant_message.id), ("contrastive_v1".into(), "contrast".into()));
+    assert_eq!(picked.assistant_message.structured_payload.unwrap()["strategyId"], "contrastive_v1");
+
+    for reply in [json!({"strategy": "made_up_v9", "answer": "x"}), json!({"answer": "x"})] {
+        let fallback = say(&store, &thread, "再讲一次", reply).await;
+        assert_eq!(assignment(&store, &fallback.assistant_message.id), ("evidence_first_v1".into(), "explain".into()));
+    }
+}
+
+#[tokio::test]
+async fn notes_become_a_card_only_when_asked_to_remember_or_when_a_difficulty_repeats() {
+    let (_dir, store, thread) = fixture();
+    let skill = "reading.tfng.false_vs_not_given";
+    let note = |text: &str| json!({"kind": "difficulty", "text": text, "skillKey": skill});
+
+    let first = say(&store, &thread, "这类题我老错", json!({"strategy": "step_by_step_v1", "answer": "一步步来。", "teachingNotes": [note("该学习者对判断题容易困惑，需要更细致地讲解思路")]})).await;
+    let first = first.assistant_message.structured_payload.unwrap();
+    assert_eq!(first["teachingNotes"].as_array().unwrap().len(), 1);
+    assert!(first.get("memoryCard").is_none(), "one report is not yet a pattern");
+
+    let second = say(&store, &thread, "还是不会判断题", json!({"answer": "再看一遍。", "teachingNotes": [note("该学习者对判断题的 NG 与 False 反复混淆")]})).await;
+    let second = second.assistant_message.structured_payload.unwrap();
+    assert_eq!(second["memoryCard"]["noteIndex"], 0);
+    assert_eq!(second["memoryCard"]["skillKey"], skill);
+
+    let asked = say(&store, &thread, "请记住，以后先给结论", json!({"answer": "好的。", "teachingNotes": [{"kind": "preference", "text": "该学习者希望先听结论再看证据", "remember": true}]})).await;
+    assert_eq!(asked.assistant_message.structured_payload.unwrap()["memoryCard"]["text"], "该学习者希望先听结论再看证据");
+
+    // A turn that is not the learner's own typing keeps no notes, so earns no card.
+    let mut preset = command(&thread, Some(json!({"focusQuestionIds": ["q1"], "promptKind": "preset"})));
+    preset.content = "解释这题".into();
+    let reply = json!({"answer": "好。", "teachingNotes": [{"kind": "preference", "text": "x", "remember": true}]});
+    let result = CoachService::run(&store, preset, || Ok(FixedReply(reply.to_string()))).await.unwrap();
+    let payload = result.assistant_message.structured_payload.unwrap();
+    assert!(payload.get("teachingNotes").is_none() && payload.get("memoryCard").is_none());
 }

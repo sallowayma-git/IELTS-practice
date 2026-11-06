@@ -1,9 +1,8 @@
 //! M6 Coach closed-loop domain contracts.
 //!
 //! These types describe canonical coach feedback facts (user interaction), the
-//! teaching-strategy provenance recorded alongside a coach response, re-ask
-//! linkage, and outcome links between a strategy assignment and a future
-//! observation. They are interaction facts, not long-term preferences: M6-07
+//! teaching-strategy provenance recorded alongside a coach response, and re-ask
+//! linkage. They are interaction facts, not long-term preferences: M6-07
 //! only promotes repeated patterns to memory candidates after later evidence.
 //!
 //! The Rust `CoachService` baseline remains the fallback path; these tables
@@ -16,9 +15,10 @@ pub const COACH_FEEDBACK_SCHEMA_VERSION: u32 = 1;
 pub const MAX_COACH_FEEDBACK_PAYLOAD_BYTES: usize = 8 * 1024;
 pub const MAX_COACH_STRATEGY_SKILLS: usize = 32;
 pub const MAX_COACH_STRATEGY_MEMORY_IDS: usize = 64;
-/// Longest learner quote and strategy label a teaching note may carry. The host
-/// gate rejects anything longer, and the weekly pack reads the same limits, so a
-/// note the host keeps is never skipped later for length.
+/// Longest optional learner quote and longest strategy label a teaching note may
+/// carry. The host rejects a longer strategy label and cuts a longer quote, and
+/// the weekly pack reads the same limits, so a note the host keeps is never
+/// skipped later for length.
 pub const TEACHING_NOTE_EVIDENCE_CHARS: usize = 120;
 pub const TEACHING_NOTE_STRATEGY_CHARS: usize = 80;
 
@@ -170,33 +170,6 @@ impl CoachFollowupType {
     }
 }
 
-/// M6-10: outcome dimension for a strategy assignment. Satisfaction (user
-/// feedback) and learning (later skill observation) are recorded on separate
-/// rows; a thumbs-up is never treated as a learning outcome.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CoachOutcomeKind {
-    Satisfaction,
-    Learning,
-}
-
-impl CoachOutcomeKind {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Satisfaction => "satisfaction",
-            Self::Learning => "learning",
-        }
-    }
-
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "satisfaction" => Some(Self::Satisfaction),
-            "learning" => Some(Self::Learning),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RecordCoachFeedbackCommand {
@@ -264,30 +237,5 @@ pub struct CoachStrategyAssignmentRecord {
     pub memory_ids_used: Vec<String>,
     pub context_snapshot_id: Option<String>,
     pub followup_type: CoachFollowupType,
-    pub created_at: String,
-}
-
-/// M6-10: link a strategy assignment to a future observation. Satisfaction and
-/// learning outcomes are recorded on separate rows.
-///
-/// The v0 DB API currently fails closed: its provenance does not establish a
-/// trusted snapshot/scope binding to the Coach thread and attempt, and the
-/// observation projector does not emit canonical satisfaction observations.
-/// Record satisfaction through RecordCoachFeedbackCommand. This DTO alone
-/// never authorizes learning attribution, even when the referenced IDs exist.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LinkCoachOutcomeCommand {
-    pub strategy_assignment_id: String,
-    pub future_observation_id: String,
-    pub outcome_kind: CoachOutcomeKind,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CoachOutcomeLinkRecord {
-    pub strategy_assignment_id: String,
-    pub future_observation_id: String,
-    pub outcome_kind: CoachOutcomeKind,
     pub created_at: String,
 }

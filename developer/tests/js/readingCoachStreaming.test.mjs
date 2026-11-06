@@ -45,7 +45,8 @@ test('streamed deltas show as a provisional answer until the validated reply rep
   })
   coach.coachQuery.value = 'Why?'
   await coach.askCoach()
-  assert.deepEqual(midStream, [[['assistant', 'Check the qualifier.', false]]])
+  // The learner's own question is on screen from the moment it is sent.
+  assert.deepEqual(midStream, [[['user', 'Why?', false], ['assistant', 'Check the qualifier.', false]]])
   assert.deepEqual(coach.coachTranscript.value.map((entry) => [entry.id, entry.content, entry.persisted]), [
     ['user-1', 'Why?', true],
     ['assistant-1', 'Check the qualifier.', true]

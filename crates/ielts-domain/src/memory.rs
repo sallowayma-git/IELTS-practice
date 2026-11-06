@@ -14,10 +14,17 @@ pub const MAX_MEMORY_EVIDENCE_IDS: usize = 32;
 pub const MAX_MEMORY_KEY_BYTES: usize = 160;
 pub const MAX_MEMORY_STATEMENT_BYTES: usize = 4 * 1024;
 pub const MAX_ACTIVE_MEMORY_PER_SCOPE: usize = 128;
+/// How many `preference`/`goal` memories the model (not the learner, not host
+/// policy) may hold in one scope. Those namespaces are shielded from other
+/// namespaces' capacity evictions, so without this bound they could fill a scope.
+pub const MAX_DERIVED_PREFERENCE_MEMORIES_PER_SCOPE: usize = 32;
 pub const MAX_MEMORY_CONTEXT_ITEMS: u32 = 100;
 pub const MAX_MEMORY_CATALOG_ITEMS: u32 = 200;
 pub const MAX_MEMORY_CANDIDATE_OBSERVATIONS: u32 = 200;
 pub const MAX_EXPLICIT_PREFERENCES: usize = 100;
+/// How long a `recent`-horizon memory stays valid after the weekly consolidation
+/// writes it (`memory_items.valid_to`).
+pub const RECENT_MEMORY_VALIDITY_DAYS: i64 = 30;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -298,6 +305,27 @@ pub fn normalize_memory_statement(statement: &str) -> String {
     statement.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
 
+/// How long a proposed memory is expected to stay true. The model only names the
+/// horizon; the host owns the clock (see [`RECENT_MEMORY_VALIDITY_DAYS`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryHorizon {
+    /// True for now, e.g. a difficulty the learner may soon get past: the memory
+    /// expires [`RECENT_MEMORY_VALIDITY_DAYS`] after it is written.
+    Recent,
+    /// A stable trait or wish: no expiry. The default.
+    Durable,
+}
+
+impl MemoryHorizon {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Recent => "recent",
+            Self::Durable => "durable",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MemoryMutationProposalBatch {
@@ -319,6 +347,12 @@ pub enum MemoryMutationProposal {
         scope: MemoryScope,
         statement: String,
         evidence_observation_ids: Vec<String>,
+        /// How long the memory is expected to stay true. Absent is `durable`: an
+        /// old proposal means what it always meant. Only the weekly consolidation
+        /// sets `recent` (the host then gives the memory an expiry); a learner's
+        /// own memory never expires.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        horizon: Option<MemoryHorizon>,
     },
     Reinforce {
         target_memory_id: String,
@@ -692,4 +726,50 @@ fn default_preference_source() -> String {
 
 fn default_context_limit() -> u32 {
     50
+}
+
+#[cfg(test)]
+mod horizon_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn add(extra: serde_json::Value) -> serde_json::Value {
+        let mut base = json!({
+            "action": "ADD", "namespace": "preference", "canonicalKey": "preference.reading.short_feedback",
+            "scope": {"type": "activity", "key": "reading"}, "statement": "该学习者希望讲解简短。",
+            "evidenceObservationIds": ["obs-1"],
+        });
+        base.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        base
+    }
+
+    #[test]
+    fn an_old_add_without_a_horizon_still_parses_and_writes_back_the_same_bytes() {
+        let old = add(json!({}));
+        let parsed: MemoryMutationProposal = serde_json::from_value(old.clone()).unwrap();
+        assert!(matches!(parsed, MemoryMutationProposal::Add { horizon: None, .. }));
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), old, "no horizon key appears out of nowhere");
+    }
+
+    #[test]
+    fn a_horizon_is_recent_or_durable_and_nothing_else() {
+        for (word, expected) in [("recent", MemoryHorizon::Recent), ("durable", MemoryHorizon::Durable)] {
+            let parsed: MemoryMutationProposal = serde_json::from_value(add(json!({"horizon": word}))).unwrap();
+            assert!(matches!(parsed, MemoryMutationProposal::Add { horizon: Some(found), .. } if found == expected));
+            assert_eq!(serde_json::to_value(&parsed).unwrap()["horizon"], word);
+        }
+        for bad in [json!("session"), json!("Recent"), json!(""), json!(30)] {
+            let parsed = serde_json::from_value::<MemoryMutationProposal>(add(json!({"horizon": bad})));
+            assert!(parsed.is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn only_an_add_carries_a_horizon() {
+        let reinforce = json!({
+            "action": "REINFORCE", "targetMemoryId": "mem-1",
+            "evidenceObservationIds": ["obs-1"], "horizon": "recent",
+        });
+        assert!(serde_json::from_value::<MemoryMutationProposal>(reinforce).is_err());
+    }
 }

@@ -38,25 +38,116 @@ type CoachTranscriptEntry = {
 
 // Subset of the Rust CoachFeedbackKind enum offered in the panel. Labels are
 // Chinese; values are the snake_case wire names (see memory-repository.js).
+// These are the *verdicts*: the host keeps one per answer, so the panel locks
+// after the first. `menu` options live behind "讲得不对劲?" instead of the row.
 export const READING_COACH_FEEDBACK_OPTIONS = [
   { kind: 'thumbs_up', label: '有帮助' },
   { kind: 'thumbs_down', label: '没帮助' },
-  { kind: 'incorrect', label: '讲错了' }
+  { kind: 'incorrect', label: '讲错了', menu: true }
+] as const
+
+// Adjustments say *how* to explain next time. They are not verdicts: any number
+// of them may stack on one answer, each recorded once (idempotent per kind).
+export const READING_COACH_ADJUSTMENT_OPTIONS = [
+  { kind: 'too_long', label: '太长了' },
+  { kind: 'too_short', label: '太简略' },
+  { kind: 'too_abstract', label: '太抽象' },
+  { kind: 'need_example', label: '想要例子' },
+  { kind: 'need_step_by_step', label: '想分步讲' },
+  { kind: 'not_relevant', label: '答非所问' }
 ] as const
 
 export type ReadingCoachFeedbackKind = typeof READING_COACH_FEEDBACK_OPTIONS[number]['kind']
+export type ReadingCoachAdjustmentKind = typeof READING_COACH_ADJUSTMENT_OPTIONS[number]['kind']
 
 export type ReadingCoachFeedbackState = {
   kind: ReadingCoachFeedbackKind | null
   status: 'saving' | 'saved' | 'failed'
 }
 
+export type ReadingCoachAdjustmentStatus = 'saving' | 'saved' | 'failed'
+export type ReadingCoachAdjustmentState = Partial<Record<ReadingCoachAdjustmentKind, ReadingCoachAdjustmentStatus>>
+
+// The strategyId the host stamps on an answer, in the learner's words.
+const COACH_STRATEGY_LABELS: Record<string, string> = {
+  evidence_first_v1: '先讲证据',
+  example_first_v1: '先给例子',
+  step_by_step_v1: '分步讲解',
+  contrastive_v1: '对比辨析',
+  socratic_prompt_v1: '提问引导',
+  concise_direct_v1: '简洁直给'
+}
+
+export const MEMORY_CARD_TEXT_LIMIT = 300
+
+// What a preference card does in the learner's words, per host error code.
+const MEMORY_CARD_NOT_FOUND = '找不到这条对话，请刷新后再试'
+const MEMORY_CARD_RETRY = '保存失败，请重试'
+const MEMORY_CARD_ERRORS: Record<string, string> = {
+  'memory_card.invalid_text': '这条偏好为空、太长或包含不能保存的内容，请修改后再试',
+  'memory_card.rejected': '这条偏好已经记过，或与已有设置冲突',
+  'memory_card.no_source': MEMORY_CARD_NOT_FOUND,
+  'memory_card.not_found': MEMORY_CARD_NOT_FOUND,
+  'memory_card.persistence_failed': MEMORY_CARD_RETRY
+}
+
+/** What this view knows of a card besides the host's `memoryCardState`. */
+type MemoryCardLocal = { status: 'saving' | 'confirmed' | 'dismissed' | 'failed'; text?: string; error?: string }
+
+/** One card as the panel draws it. Dismissed and superseded cards have no view. */
+export type CoachMemoryCardView = {
+  messageId: string
+  noteIndex: number
+  /** The coach's suggested wording, the box's initial value. */
+  text: string
+  state: 'pending' | 'confirmed'
+  /** The wording just saved; empty when the card was confirmed in an earlier visit. */
+  savedText: string
+  /** A request is in flight (any card): no second one may start. */
+  busy: boolean
+  error: string
+}
+
 const READING_COACH_REASK_QUERY = '没太懂，换个讲法把刚才这个问题再讲一遍'
+
+// A failed request offers a way forward instead of a dead-end error bubble.
+// "short" asks for a brief answer (truncated output); "compact" resends with a
+// clipped selection and a slim attempt context (context exceeded).
+export type CoachRetryMode = 'same' | 'short' | 'compact'
+export type CoachRetryKind = '' | 'plain' | 'truncated' | 'context' | 'context_limit'
+
+type CoachRetry = {
+  code: string
+  /** The typed question a failed send put back in the box; retrying consumes it. */
+  draft: string
+  run: (mode: CoachRetryMode) => Promise<unknown>
+  /**
+   * Whether a compact resend would send the model less than this request did.
+   * The host rebuilds the passage, questions and answers itself and does not read
+   * the client's attempt context, so the only thing compaction can shrink is a
+   * selection longer than the clip limit.
+   */
+  compactable: boolean
+}
+
+export const COACH_SHORT_ANSWER_SUFFIX = '（请用不超过 5 句话简要回答）'
+const COMPACT_SELECTION_LIMIT = 200
+const DRAFT_LIMIT = 20
+// Every transcript row the host never stored (pending question, streamed text,
+// failure note) carries this prefix; hydration and a new request sweep them.
+const LOCAL_ENTRY_PREFIX = 'coach-local-'
+
+// Composer drafts live with their thread: switching attempt stashes the current
+// one and brings back the one typed there before. The page is rebuilt per route,
+// so the store outlives any one composable instance.
+const coachDrafts = new Map<string, string>()
 
 type PayloadOptions = {
   action?: string
   surface?: string
   promptKind?: string
+  /** Resend with a clipped selection and slim attempt context. */
+  compact?: boolean
   /** Persisted assistant message this query explicitly re-asks (M6-06 link). */
   reaskParentId?: string
 }
@@ -80,6 +171,8 @@ type RefreshOptions = {
 type ReviewOptions = {
   expectedSessionId?: string
   force?: boolean
+  /** How a failed review is resent: as it was, asking for a short answer, or with the slim attempt context. */
+  mode?: CoachRetryMode
 }
 
 function readSource(source: unknown): any {
@@ -121,6 +214,10 @@ function normalizeCoachTranscript(value: unknown, limit = 40): CoachTranscriptEn
     .slice(-limit)
 }
 
+function isLocalEntry(entry: CoachTranscriptEntry): boolean {
+  return entry.id.startsWith(LOCAL_ENTRY_PREFIX)
+}
+
 function isPanelFeedbackKind(kind: unknown): kind is ReadingCoachFeedbackKind {
   return READING_COACH_FEEDBACK_OPTIONS.some((option) => option.kind === kind)
 }
@@ -158,6 +255,87 @@ export function isFeedbackEligible(entry: CoachTranscriptEntry | null | undefine
   )
 }
 
+function isAdjustmentKind(kind: unknown): kind is ReadingCoachAdjustmentKind {
+  return READING_COACH_ADJUSTMENT_OPTIONS.some((option) => option.kind === kind)
+}
+
+/** Durable adjustment rows (coach_list_feedback) as panel state, keyed by message id. */
+export function adjustmentStateFromRecords(records: unknown): Record<string, ReadingCoachAdjustmentState> {
+  const state: Record<string, ReadingCoachAdjustmentState> = {}
+  for (const item of Array.isArray(records) ? records : []) {
+    const row = asRecord(item)
+    const messageId = String(row?.coachMessageId || '').trim()
+    if (!messageId || !isAdjustmentKind(row?.feedbackKind)) continue
+    state[messageId] = { ...state[messageId], [row!.feedbackKind]: 'saved' }
+  }
+  return state
+}
+
+/** The Chinese name of the explanation strategy behind an answer; '' for old answers or unknown ids. */
+export function coachStrategyLabel(entry: CoachTranscriptEntry | null | undefined): string {
+  const id = entry?.snapshot?.strategyId
+  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(COACH_STRATEGY_LABELS, id)
+    ? COACH_STRATEGY_LABELS[id]
+    : ''
+}
+
+function memoryCardOf(entry: CoachTranscriptEntry): { noteIndex: number; text: string } | null {
+  const card = asRecord(entry.snapshot?.memoryCard)
+  const text = typeof card?.text === 'string' ? card.text.trim() : ''
+  const noteIndex = card?.noteIndex
+  if (!isFeedbackEligible(entry) || !text) return null
+  return typeof noteIndex === 'number' && Number.isInteger(noteIndex) && noteIndex >= 0 ? { noteIndex, text } : null
+}
+
+// What the learner did with a card: the host's word first (it survives reloads),
+// then what this view just did.
+function memoryCardDecision(entry: CoachTranscriptEntry, local: MemoryCardLocal | undefined): 'confirmed' | 'dismissed' | '' {
+  const saved = entry.snapshot?.memoryCardState
+  if (saved === 'confirmed' || saved === 'dismissed') return saved
+  return local?.status === 'confirmed' || local?.status === 'dismissed' ? local.status : ''
+}
+
+/**
+ * Which preference cards the panel shows, by message id. A decided card is
+ * settled: confirmed stays as a one-line receipt, dismissed disappears. Only the
+ * newest card in the thread can still ask; a newer card supersedes every older
+ * undecided one for good (even once the newer one is dismissed), so the
+ * conversation never fills with questions or revives a stale one.
+ */
+export function memoryCardViews(
+  transcript: CoachTranscriptEntry[],
+  local: Record<string, MemoryCardLocal>
+): Record<string, CoachMemoryCardView> {
+  const busy = Object.values(local).some((item) => item.status === 'saving')
+  const views: CoachMemoryCardView[] = []
+  let newestId = ''
+  for (const entry of transcript) {
+    const card = memoryCardOf(entry)
+    if (!card) continue
+    newestId = entry.id
+    const decision = memoryCardDecision(entry, local[entry.id])
+    if (decision === 'dismissed') continue
+    views.push({
+      messageId: entry.id,
+      ...card,
+      state: decision === 'confirmed' ? 'confirmed' : 'pending',
+      savedText: decision === 'confirmed' ? (local[entry.id]?.text || '') : '',
+      busy,
+      error: local[entry.id]?.status === 'failed' ? (local[entry.id].error || '') : ''
+    })
+  }
+  return Object.fromEntries(
+    views.filter((view) => view.state === 'confirmed' || view.messageId === newestId).map((view) => [view.messageId, view])
+  )
+}
+
+function memoryCardFailure(failure: unknown): MemoryCardLocal {
+  const code = errorField(failure, 'code')
+  // Dismiss lost a race with a confirm: the card is settled, show it so.
+  if (code === 'memory_card.already_confirmed') return { status: 'confirmed' }
+  return { status: 'failed', error: MEMORY_CARD_ERRORS[code] || MEMORY_CARD_RETRY }
+}
+
 function hasLlmReview(submission: AnyRecord | null | undefined): boolean {
   return Boolean(
     submission?.singleAttemptAnalysisLlm
@@ -191,6 +369,9 @@ function coachFailureDetail(error: unknown): string | null {
   const code = errorField(error, 'code').toLowerCase()
   if (code === 'coach.output_truncated') return '回答过长，已被截断，请换个更具体的问题再试'
   if (code === 'coach.context_exceeded') return '内容超出模型上下文长度，请缩短选中的原文或问题后再试'
+  if (code === 'coach.auth_failed') return 'API 密钥无效或没有权限，请到设置里检查密钥后再试'
+  if (code === 'coach.rate_limited') return '请求过于频繁或额度已用完，请稍后再试'
+  if (code === 'coach.timeout') return '模型响应超时，请重试'
   return null
 }
 
@@ -217,7 +398,7 @@ function formatLlmFailureStatusMessage(error: unknown): string {
 }
 
 export function useReadingCoach(options: ReadingCoachOptions = {}) {
-  const coachQuery = ref('这题怎么定位证据？')
+  const coachQuery = ref('')
   const coachLoading = ref(false)
   const coachError = ref('')
   const coachResponse = ref<any>(null)
@@ -229,8 +410,19 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   const coachTranscriptState = ref<CoachTranscriptEntry[]>([])
   const coachThreadId = ref('')
   const coachFeedback = ref<Record<string, ReadingCoachFeedbackState>>({})
+  const coachAdjustments = ref<Record<string, ReadingCoachAdjustmentState>>({})
+  const memoryCardLocal = ref<Record<string, MemoryCardLocal>>({})
+  // Notices that belong to no transcript row (history load failed, nothing
+  // selected) and the way forward from the last failed request.
+  const coachNotice = ref('')
+  const coachHistoryFailed = ref(false)
+  const coachRetry = ref<CoachRetry | null>(null)
+  let draftSessionId = ''
+  let localEntrySequence = 0
   let coachRequestSequence = 0
   let coachHydrationSequence = 0
+  // Bumped by every reset: a request that started before one never writes back.
+  let coachEpoch = 0
   // Token of the one request whose streamed deltas may still show. Bumped to
   // close the stream (reset, hydrate, or the request settling), so a late delta
   // from an old request cannot re-add a bubble.
@@ -260,12 +452,22 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   })
   const coachFollowUps = computed(() => coachFollowUpSource.value?.followUps || [])
   const coachReaskableId = computed(() => latestReaskableId(coachTranscriptState.value))
+  const coachMemoryCards = computed(() => memoryCardViews(coachTranscriptState.value, memoryCardLocal.value))
   const canAskCoach = computed(() => Boolean(submission.value && coachQuery.value.trim() && !coachLoading.value))
-  const coachStatusText = computed(() => {
-    if (coachLoading.value) return coachStreamMessage.value || 'AI 教练正在思考...'
-    if (coachError.value) return coachError.value
-    return ''
+  const coachRetryKind = computed<CoachRetryKind>(() => {
+    const code = coachRetry.value?.code
+    if (!coachRetry.value) return ''
+    if (code === 'coach.output_truncated') return 'truncated'
+    // A context overflow is only worth a "compact" retry when compacting changes the
+    // request; otherwise the same request would overflow again, so no retry is offered.
+    if (code === 'coach.context_exceeded') return coachRetry.value.compactable ? 'context' : 'context_limit'
+    return 'plain'
   })
+  // Failures land in the transcript as an error message; the status line only
+  // narrates an in-flight request.
+  const coachStatusText = computed(() => (
+    coachLoading.value ? (coachStreamMessage.value || 'AI 教练正在思考...') : ''
+  ))
   const isReadingCoachEnabled = () => {
     if (typeof options.readCoachEnabled === 'function') {
       return Boolean(options.readCoachEnabled())
@@ -286,9 +488,32 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachTranscriptState.value = coachTranscriptState.value.filter((entry) => entry.status !== 'streaming')
   }
 
+  function stashCoachDraft() {
+    if (!draftSessionId) return
+    coachDrafts.delete(draftSessionId)
+    if (coachQuery.value.trim()) coachDrafts.set(draftSessionId, coachQuery.value)
+    while (coachDrafts.size > DRAFT_LIMIT) {
+      coachDrafts.delete(coachDrafts.keys().next().value as string)
+    }
+  }
+
+  function bindCoachDraft(sessionId: string) {
+    if (sessionId === draftSessionId) return
+    stashCoachDraft()
+    draftSessionId = sessionId
+    coachQuery.value = coachDrafts.get(sessionId) || ''
+  }
+
   function resetReadingCoachState() {
     coachHydrationSequence += 1
+    coachEpoch += 1
     closeCoachStream()
+    stashCoachDraft()
+    draftSessionId = ''
+    coachQuery.value = ''
+    coachNotice.value = ''
+    coachHistoryFailed.value = false
+    coachRetry.value = null
     coachError.value = ''
     coachResponse.value = null
     coachStreamMessage.value = ''
@@ -300,6 +525,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachTranscriptState.value = []
     coachThreadId.value = ''
     coachFeedback.value = {}
+    coachAdjustments.value = {}
+    memoryCardLocal.value = {}
   }
 
   function setReadingCoachOpen(value: unknown) {
@@ -309,6 +536,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   async function hydratePersistedCoachMessages(sessionId: string) {
     const hydrationId = ++coachHydrationSequence
     closeCoachStream()
+    coachHistoryFailed.value = false
     if (!sessionId) {
       coachTranscriptState.value = []
       coachThreadId.value = ''
@@ -322,7 +550,10 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachThreadId.value = String(result.threadId || '')
       const entries = normalizeCoachTranscript(result.messages, Array.isArray(result.messages) ? result.messages.length : 40)
-      coachTranscriptState.value = entries.slice(-40)
+      // A question sent while the history was loading keeps its pending bubble;
+      // its reply replaces the whole list anyway.
+      const inFlight = coachLoading.value ? coachTranscriptState.value.filter(isLocalEntry) : []
+      coachTranscriptState.value = [...entries.slice(-40), ...inFlight]
       const latestAssistant = [...coachTranscriptState.value].reverse().find((entry) => (
         entry.role === 'assistant' && entry.status === 'completed' && !entry.isError
       ))
@@ -347,7 +578,17 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     } catch (error) {
       if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachError.value = errorField(error, 'message') || 'AI 教练历史加载失败'
+      coachHistoryFailed.value = true
+      coachNotice.value = '对话记录加载失败，已有的对话可能暂时看不到。'
     }
+  }
+
+  function reloadCoachHistory() {
+    const sessionId = String(submission.value?.sessionId || submission.value?.attemptId || '').trim()
+    if (!sessionId || coachLoading.value) return
+    coachNotice.value = ''
+    coachError.value = ''
+    void hydratePersistedCoachMessages(sessionId)
   }
 
   // A verdict is stored once per answer; reloading must show it as already
@@ -357,9 +598,19 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       const records = await readingCoachApi.listFeedback(threadId)
       if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachFeedback.value = { ...feedbackStateFromRecords(records), ...coachFeedback.value }
+      mergeAdjustments(adjustmentStateFromRecords(records))
     } catch (feedbackFailure) {
       console.warn('阅读教练反馈加载失败:', feedbackFailure)
     }
+  }
+
+  // What the host already holds is the floor; what this view is doing right now wins.
+  function mergeAdjustments(saved: Record<string, ReadingCoachAdjustmentState>) {
+    const merged = { ...coachAdjustments.value }
+    for (const [messageId, kinds] of Object.entries(saved)) {
+      merged[messageId] = { ...kinds, ...merged[messageId] }
+    }
+    coachAdjustments.value = merged
   }
 
   function hydrateReadingCoachFromSubmission(nextSubmission: AnyRecord | null | undefined, hydrateOptions: HydrateOptions = {}) {
@@ -376,6 +627,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     closeCoachStream()
     coachResponse.value = null
     const sessionId = String(nextSubmission?.sessionId || nextSubmission?.attemptId || '').trim()
+    bindCoachDraft(sessionId)
     if (sessionId) void hydratePersistedCoachMessages(sessionId)
     if (hasLlmReview(nextSubmission)) {
       llmReviewStatus.value = 'success'
@@ -481,12 +733,18 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     return 'single'
   }
 
+  function compactSelectedContext(context: AnyRecord | null, compact: boolean) {
+    if (!context || !compact) return context
+    return { ...context, text: String(context.text || '').slice(0, COMPACT_SELECTION_LIMIT) }
+  }
+
   function buildCoachPayload(query: unknown, payloadOptions: PayloadOptions = {}) {
     options.flushActiveQuestionVisit?.()
     const action = String(payloadOptions.action || 'chat').trim() || 'chat'
     const surface = String(payloadOptions.surface || (action === 'review_set' ? 'review_workspace' : 'chat_widget')).trim()
     const promptKind = String(payloadOptions.promptKind || 'freeform').trim() || 'freeform'
-    const context = refreshSelectedContext()
+    const compact = Boolean(payloadOptions.compact)
+    const context = compactSelectedContext(refreshSelectedContext(), compact)
     return {
       examId: submission.value?.examId || readSource(options.assetIdSource),
       sessionId: submission.value?.sessionId || '',
@@ -499,16 +757,25 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       selectedText: context?.text || '',
       selectedContext: context || null,
       focusQuestionNumbers: resolveCoachFocusQuestionNumbers(context),
-      attemptContext: {
-        submitted: true,
-        score: submission.value?.coachContext?.score ?? submission.value?.scoreInfo?.percentage ?? null,
-        wrongQuestions: resolveCoachWrongQuestions(),
-        selectedAnswers: resolveCoachSelectedAnswers(),
-        analysisSignals: submission.value?.analysisSignals || submission.value?.analysisArtifacts?.analysisSignals || null,
-        markedQuestions: Array.isArray(submission.value?.markedQuestions) ? submission.value.markedQuestions : [],
-        questionTimelineLite: Array.isArray(submission.value?.questionTimelineLite) ? submission.value.questionTimelineLite : [],
-        questionTypePerformance: submission.value?.questionTypePerformance || {}
-      }
+      attemptContext: buildAttemptContext(compact)
+    }
+  }
+
+  // The slim form keeps what the coach needs to talk about this attempt (score,
+  // wrong questions) and drops the bulky telemetry. NOTE: the host builds the model
+  // context itself from the stored attempt and does not read this object, so the
+  // slim form does not shrink what the model receives; see `compactWouldShrink`.
+  function buildAttemptContext(compact: boolean) {
+    const current = submission.value
+    return {
+      submitted: true,
+      score: current?.coachContext?.score ?? current?.scoreInfo?.percentage ?? null,
+      wrongQuestions: resolveCoachWrongQuestions(),
+      selectedAnswers: compact ? {} : resolveCoachSelectedAnswers(),
+      analysisSignals: compact ? null : (current?.analysisSignals || current?.analysisArtifacts?.analysisSignals || null),
+      markedQuestions: !compact && Array.isArray(current?.markedQuestions) ? current.markedQuestions : [],
+      questionTimelineLite: !compact && Array.isArray(current?.questionTimelineLite) ? current.questionTimelineLite : [],
+      questionTypePerformance: compact ? {} : (current?.questionTypePerformance || {})
     }
   }
 
@@ -530,17 +797,51 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     return ''
   }
 
-  function appendLocalCoachError(message: unknown) {
-    coachTranscriptState.value = [...coachTranscriptState.value, {
-      id: `coach-error-${Date.now()}`,
-      role: 'assistant',
-      status: 'failed',
-      content: String(message || '阅读教练请求失败').trim(),
-      isError: true,
+  function localCoachEntry(
+    role: CoachTranscriptEntry['role'],
+    status: string,
+    content: string,
+    isError = false
+  ): CoachTranscriptEntry {
+    localEntrySequence += 1
+    return {
+      id: `${LOCAL_ENTRY_PREFIX}${localEntrySequence}`,
+      role,
+      status,
+      content,
+      isError,
       persisted: false,
       followUps: [],
       snapshot: null
-    }]
+    }
+  }
+
+  function appendLocalCoachError(message: unknown) {
+    coachTranscriptState.value = [
+      ...coachTranscriptState.value,
+      localCoachEntry('assistant', 'failed', String(message || '阅读教练请求失败').trim(), true)
+    ]
+  }
+
+  // A request starts from a clean slate: last failure's note and retry offer
+  // are gone, and the question shows at once instead of after the reply.
+  function beginCoachRequest(question: string) {
+    coachLoading.value = true
+    coachError.value = ''
+    coachNotice.value = ''
+    coachRetry.value = null
+    coachResponse.value = null
+    coachStreamMessage.value = '教练已连接...'
+    coachTranscriptState.value = [
+      ...coachTranscriptState.value.filter((entry) => !isLocalEntry(entry)),
+      localCoachEntry('user', 'pending', question)
+    ]
+  }
+
+  function finishCoachRequest(requestId: number, isLive: () => boolean) {
+    if (coachRequestSequence !== requestId || !isLive()) return
+    coachLoading.value = false
+    coachStreamMessage.value = ''
   }
 
   // Streamed answer text shown before the reply is validated and persisted. The
@@ -549,16 +850,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     const transcript = coachTranscriptState.value
     coachTranscriptState.value = transcript.some((entry) => entry.id === id)
       ? transcript.map((entry) => (entry.id === id ? { ...entry, content: entry.content + text } : entry))
-      : [...transcript, {
-        id,
-        role: 'assistant',
-        status: 'streaming',
-        content: text,
-        isError: false,
-        persisted: false,
-        followUps: [],
-        snapshot: null
-      }]
+      : [...transcript, { ...localCoachEntry('assistant', 'streaming', text), id }]
   }
 
   function dropProvisionalCoachText(id: string) {
@@ -574,11 +866,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     if (!isCurrentSubmission(expectedSessionId)) return
     const nextMessage = formatCoachStreamMessage(streamEvent, mode)
     if (!nextMessage) return
-    if (mode === 'review') {
-      llmReviewMessage.value = nextMessage
-    } else {
-      coachStreamMessage.value = nextMessage
-    }
+    if (mode === 'review') llmReviewMessage.value = nextMessage
+    coachStreamMessage.value = nextMessage
   }
 
   async function refreshSubmissionFromHistory(expectedSessionId: string, refreshOptions: RefreshOptions = {}) {
@@ -618,25 +907,22 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
     const expectedSessionId = String(submission.value.sessionId || '').trim()
     const requestId = ++coachRequestSequence
-    const provisionalId = `coach-stream-${requestId}`
+    const provisionalId = `${LOCAL_ENTRY_PREFIX}stream-${requestId}`
     const streamToken = ++coachStreamToken
     const streamIsOpen = () => streamToken === coachStreamToken
-    coachLoading.value = true
-    coachError.value = ''
-    coachResponse.value = null
-    coachStreamMessage.value = '教练已连接...'
+    const epoch = coachEpoch
+    const isLive = () => epoch === coachEpoch && isCurrentSubmission(expectedSessionId)
+    beginCoachRequest(normalizedQuery)
+    let requestPayload: AnyRecord | null = null
     try {
-      const requestPayload = buildCoachPayload(normalizedQuery, queryOptions)
+      requestPayload = buildCoachPayload(normalizedQuery, queryOptions)
       const response = await readingCoachApi.query(requestPayload, expectedSessionId, {
         onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'coach' }),
         onDelta: (text) => {
-          if (streamIsOpen() && isCurrentSubmission(expectedSessionId)) appendProvisionalCoachText(provisionalId, text)
+          if (streamIsOpen() && isLive()) appendProvisionalCoachText(provisionalId, text)
         }
       })
-      if (!isReadingCoachEnabled()) {
-        return response
-      }
-      if (!isCurrentSubmission(expectedSessionId)) {
+      if (!isReadingCoachEnabled() || !isLive()) {
         return response
       }
       applyCoachResponse(response)
@@ -648,10 +934,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       return response
     } catch (coachFailure) {
       console.error('阅读教练请求失败:', coachFailure)
-      if (!isReadingCoachEnabled()) {
-        return null
-      }
-      if (!isCurrentSubmission(expectedSessionId)) {
+      if (!isReadingCoachEnabled() || !isLive()) {
         return null
       }
       const failureMessage = errorField(coachFailure, 'message')
@@ -661,16 +944,32 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         : failureMessage
           ? `阅读教练请求失败：${failureMessage}`
           : '阅读教练请求失败，请稍后重试'
+      offerCoachRetry(coachFailure, normalizedQuery.replace(COACH_SHORT_ANSWER_SUFFIX, ''), (mode) => sendCoachQuery(
+        mode === 'short' ? `${normalizedQuery.replace(COACH_SHORT_ANSWER_SUFFIX, '')}${COACH_SHORT_ANSWER_SUFFIX}` : normalizedQuery,
+        { ...queryOptions, compact: mode === 'compact' }
+      ), compactWouldShrink(requestPayload))
       appendLocalCoachError(coachError.value)
       return null
     } finally {
       if (streamIsOpen()) closeCoachStream()
       dropProvisionalCoachText(provisionalId)
-      if (coachRequestSequence === requestId && isCurrentSubmission(expectedSessionId)) {
-        coachLoading.value = false
-        coachStreamMessage.value = ''
-      }
+      finishCoachRequest(requestId, isLive)
     }
+  }
+
+  function compactWouldShrink(payload: AnyRecord | null) {
+    return String(payload?.selectedText || '').length > COMPACT_SELECTION_LIMIT
+  }
+
+  function offerCoachRetry(failure: unknown, draft: string, run: CoachRetry['run'], compactable = false) {
+    coachRetry.value = { code: errorField(failure, 'code').toLowerCase(), draft, run, compactable }
+  }
+
+  function retryCoachQuery(mode: CoachRetryMode = 'same') {
+    const retry = coachRetry.value
+    if (!retry || coachLoading.value) return Promise.resolve(null)
+    if (retry.draft && coachQuery.value.trim() === retry.draft) coachQuery.value = ''
+    return retry.run(mode)
   }
 
   async function runAutomaticReviewCoach(reviewOptions: ReviewOptions = {}) {
@@ -680,7 +979,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       llmReviewMessage.value = ''
       return
     }
-    if (!expectedSessionId || llmReviewStatus.value === 'running') {
+    if (!expectedSessionId || llmReviewStatus.value === 'running' || coachLoading.value) {
       return
     }
     if (!isCurrentSubmission(expectedSessionId)) {
@@ -692,13 +991,23 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       return
     }
 
+    const requestId = ++coachRequestSequence
+    const epoch = coachEpoch
+    const isLive = () => epoch === coachEpoch && isCurrentSubmission(expectedSessionId)
     llmReviewStatus.value = 'running'
     llmReviewMessage.value = 'AI 正在复盘错题...'
+    // The same two retry transformations an ordinary question gets (sendCoachQuery):
+    // "short" asks for a brief answer, "compact" sends the slim attempt context.
+    const retryMode: CoachRetryMode = reviewOptions.mode || 'same'
+    const reviewQuery = retryMode === 'short' ? `${AUTOMATIC_REVIEW_QUERY}${COACH_SHORT_ANSWER_SUFFIX}` : AUTOMATIC_REVIEW_QUERY
+    beginCoachRequest(reviewQuery)
+    let requestPayload: AnyRecord | null = null
     try {
-      const requestPayload = buildCoachPayload(AUTOMATIC_REVIEW_QUERY, {
+      requestPayload = buildCoachPayload(reviewQuery, {
         surface: 'review_workspace',
         action: 'review_set',
-        promptKind: 'preset'
+        promptKind: 'preset',
+        compact: retryMode === 'compact'
       })
       const response = await readingCoachApi.query(requestPayload, expectedSessionId, {
         onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'review' })
@@ -708,7 +1017,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         llmReviewMessage.value = ''
         return
       }
-      if (!isCurrentSubmission(expectedSessionId)) {
+      if (!isLive()) {
         return
       }
       applyCoachResponse(response)
@@ -732,12 +1041,15 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         llmReviewMessage.value = ''
         return
       }
-      if (!isCurrentSubmission(expectedSessionId)) {
+      if (!isLive()) {
         return
       }
       llmReviewStatus.value = 'failed'
       llmReviewMessage.value = formatLlmFailureStatusMessage(reviewFailure)
+      offerCoachRetry(reviewFailure, '', (mode) => runAutomaticReviewCoach({ expectedSessionId, mode }), compactWouldShrink(requestPayload))
       appendLocalCoachError(llmReviewMessage.value)
+    } finally {
+      finishCoachRequest(requestId, isLive)
     }
   }
 
@@ -746,11 +1058,18 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       return
     }
     const query = coachQuery.value.trim()
-    await sendCoachQuery(query, {
+    const sessionId = String(submission.value?.sessionId || '').trim()
+    coachQuery.value = ''
+    const response = await sendCoachQuery(query, {
       surface: 'chat_widget',
       action: 'chat',
       promptKind: 'freeform'
     })
+    // A failed question goes back into the box, unless the learner has already
+    // typed something else or moved to another attempt.
+    if (response == null && !coachQuery.value.trim() && isCurrentSubmission(sessionId)) {
+      coachQuery.value = query
+    }
   }
 
   // M6-06: a re-ask link only ties an answer to an explicit "ask about that
@@ -803,6 +1122,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   // verdict and returns it for any later one, so the saved state shows the
   // durable kind; a failed save clears the selection so the learner can retry.
   async function submitCoachFeedback(messageId: unknown, feedbackKind: unknown) {
+    if (isAdjustmentKind(feedbackKind)) return submitCoachAdjustment(messageId, feedbackKind)
     const entry = findFeedbackEligibleEntry(messageId)
     const option = READING_COACH_FEEDBACK_OPTIONS.find((item) => item.kind === feedbackKind)
     if (!entry || !option) return
@@ -821,6 +1141,76 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
     if (!isCurrentSubmission(sessionId)) return
     coachFeedback.value = { ...coachFeedback.value, [entry.id]: next }
+  }
+
+  // "Too long", "want an example"...: each kind is recorded once per answer and
+  // never locks the others. A failed save unlocks that one kind for a retry.
+  async function submitCoachAdjustment(messageId: unknown, kind: ReadingCoachAdjustmentKind) {
+    const entry = findFeedbackEligibleEntry(messageId)
+    if (!entry) return
+    const current = coachAdjustments.value[entry.id]?.[kind]
+    if (current === 'saving' || current === 'saved') return
+    const setStatus = (status: ReadingCoachAdjustmentStatus) => {
+      coachAdjustments.value = {
+        ...coachAdjustments.value,
+        [entry.id]: { ...coachAdjustments.value[entry.id], [kind]: status }
+      }
+    }
+    setStatus('saving')
+    try {
+      await readingCoachApi.recordFeedback(entry.id, kind)
+      setStatus('saved')
+    } catch (feedbackFailure) {
+      console.warn('阅读教练反馈保存失败:', feedbackFailure)
+      setStatus('failed')
+    }
+  }
+
+  // One preference-card request at a time, whichever card it is for. The result
+  // is keyed by message id, which is unique, so a late answer is always filed
+  // under the right card even after the learner has moved to another attempt.
+  async function settleMemoryCard(messageId: string, request: () => Promise<MemoryCardLocal>) {
+    const setLocal = (next: MemoryCardLocal) => {
+      memoryCardLocal.value = { ...memoryCardLocal.value, [messageId]: next }
+    }
+    setLocal({ status: 'saving' })
+    try {
+      setLocal(await request())
+    } catch (failure) {
+      console.warn('阅读教练偏好卡片操作失败:', failure)
+      setLocal(memoryCardFailure(failure))
+    }
+  }
+
+  function startableMemoryCard(messageId: unknown): CoachMemoryCardView | null {
+    const card = coachMemoryCards.value[String(messageId || '')]
+    return card && card.state === 'pending' && !card.busy ? card : null
+  }
+
+  async function confirmCoachMemoryCard(messageId: unknown, text: unknown) {
+    const card = startableMemoryCard(messageId)
+    if (!card) return
+    const wording = String(text ?? '').split(/\s+/).filter(Boolean).join(' ')
+    if (!wording || [...wording].length > MEMORY_CARD_TEXT_LIMIT) {
+      memoryCardLocal.value = {
+        ...memoryCardLocal.value,
+        [card.messageId]: { status: 'failed', error: MEMORY_CARD_ERRORS['memory_card.invalid_text'] }
+      }
+      return
+    }
+    await settleMemoryCard(card.messageId, async () => {
+      await readingCoachApi.confirmMemoryCard(card.messageId, card.noteIndex, wording)
+      return { status: 'confirmed', text: wording }
+    })
+  }
+
+  async function dismissCoachMemoryCard(messageId: unknown) {
+    const card = startableMemoryCard(messageId)
+    if (!card) return
+    await settleMemoryCard(card.messageId, async () => {
+      await readingCoachApi.dismissMemoryCard(card.messageId, card.noteIndex)
+      return { status: 'dismissed' }
+    })
   }
 
   async function runCoachQuickAction(actionId: unknown) {
@@ -848,6 +1238,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     refreshSelectedContext()
     if (!selectedContext.value?.text) {
       coachError.value = '请先选中题干或原文片段。'
+      coachNotice.value = coachError.value
       return
     }
     const action = String(actionId || 'explain_selection').trim()
@@ -878,7 +1269,14 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachTranscript,
     coachFollowUps,
     coachFeedback,
+    coachAdjustments,
+    coachMemoryCards,
     coachReaskableId,
+    coachNotice,
+    coachHistoryFailed,
+    coachRetryKind,
+    retryCoachQuery,
+    reloadCoachHistory,
     resetReadingCoachState,
     setReadingCoachOpen,
     hydrateReadingCoachFromSubmission,
@@ -889,6 +1287,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     askCoachFollowUp,
     reaskCoachMessage,
     submitCoachFeedback,
+    confirmCoachMemoryCard,
+    dismissCoachMemoryCard,
     runCoachQuickAction,
     runCoachSelectionAction,
     runAutomaticReviewCoach,

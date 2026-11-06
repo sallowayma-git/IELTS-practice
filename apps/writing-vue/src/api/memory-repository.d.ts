@@ -169,6 +169,21 @@ export function archiveMemory(command: ArchiveMemoryCommand): Promise<unknown>
 export function recordCoachFeedback(coachMessageId: string, feedbackKind: CoachFeedbackKind, payload?: unknown): Promise<CoachFeedbackRecord>
 export function recordCoachReaskLink(parentAssistantMessageId: string, newUserMessageId: string): Promise<CoachReaskLinkRecord>
 export function listCoachFeedback(threadId: string): Promise<CoachFeedbackRecord[]>
+/** Host error codes of the preference-card commands (`error.code`). */
+export type CoachMemoryCardErrorCode =
+  | 'memory_card.not_found'
+  | 'memory_card.invalid_text'
+  | 'memory_card.no_source'
+  | 'memory_card.rejected'
+  | 'memory_card.already_confirmed'
+  | 'memory_card.persistence_failed'
+
+export interface CoachMemoryCardConfirmed {
+  memoryId: string
+}
+
+export function confirmCoachMemoryCard(messageId: string, noteIndex: number, text: string): Promise<CoachMemoryCardConfirmed>
+export function dismissCoachMemoryCard(messageId: string, noteIndex: number): Promise<null>
 export function recordMemoryFeedback(memoryId: string, feedbackKind: MemoryFeedbackKind): Promise<unknown>
 export function triggerDailyDream(query: DailyDreamQuery): Promise<unknown>
 export function getDailyJournal(query: DailyJournalQuery): Promise<unknown>
@@ -191,6 +206,8 @@ export const memoryRepository: {
   recordCoachFeedback: typeof recordCoachFeedback
   recordCoachReaskLink: typeof recordCoachReaskLink
   listCoachFeedback: typeof listCoachFeedback
+  confirmCoachMemoryCard: typeof confirmCoachMemoryCard
+  dismissCoachMemoryCard: typeof dismissCoachMemoryCard
   recordMemoryFeedback: typeof recordMemoryFeedback
   triggerDailyDream: typeof triggerDailyDream
   getDailyJournal: typeof getDailyJournal

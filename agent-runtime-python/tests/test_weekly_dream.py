@@ -14,7 +14,9 @@ from ielts_agent.dream.types import (
     CAPABILITY_DREAM_RUN_WEEKLY,
     CAPABILITY_LEARNING_WEEKLY_PACK,
     REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES,
+    WEEKLY_MEMORY_HORIZONS,
     WEEKLY_MUTATION_ACTIONS,
+    WEEKLY_MUTATION_FIELDS,
     WeeklyNarrative,
     WeeklyDreamResult,
 )
@@ -47,9 +49,9 @@ def _capabilities(extra: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def _pack(observations: int = 14) -> dict:
-    """A v3 pack as the host builds it: lines, blocks, facts, soul and persona."""
+    """A v4 pack as the host builds it: lines, signals, blocks, facts, soul and persona."""
     return {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "window": {"start": "2026-10-03T00:00:00Z", "end": "2026-10-10T00:00:00Z"},
         "observationCount": observations,
         "header": {"reading": {"missedAcrossPassages": ["tfng (2 passages)"]}},
@@ -97,6 +99,17 @@ def _add(**overrides) -> dict:
     }
     mutation.update(overrides)
     return mutation
+
+
+def _signal(**overrides) -> dict:
+    """One coach signal as the host digests it."""
+    signal = {
+        "kind": "difficulty", "skill": "reading.tfng", "text": "判断题里 NOT GIVEN 与 FALSE 经常混淆",
+        "remember": False, "horizon": "recent", "repeatCount": 1, "distinctAssets": 1,
+        "firstSeen": "2026-10-04", "lastSeen": "2026-10-08", "ids": ["obs-sig1"],
+    }
+    signal.update(overrides)
+    return signal
 
 
 def _digest(**overrides) -> dict:
@@ -214,8 +227,21 @@ def _run(bridge: FakeHostBridge, **kwargs):
 
 
 class WeeklyDreamTypesTests(unittest.TestCase):
-    def test_mutation_actions_are_exactly_new_reinforce_supersede_archive(self) -> None:
-        self.assertEqual(WEEKLY_MUTATION_ACTIONS, frozenset({"ADD", "REINFORCE", "SUPERSEDE", "ARCHIVE"}))
+    def test_mutation_actions_are_the_whole_memory_lifecycle(self) -> None:
+        self.assertEqual(
+            WEEKLY_MUTATION_ACTIONS,
+            frozenset({"ADD", "REINFORCE", "REFINE", "IMPROVE", "REGRESS", "CONTRADICT", "SUPERSEDE", "ARCHIVE"}),
+        )
+        self.assertEqual(set(WEEKLY_MUTATION_FIELDS), set(WEEKLY_MUTATION_ACTIONS))
+        # Only an ADD carries a horizon; the targeted actions carry a target and evidence, REFINE a statement too.
+        self.assertIn("horizon", WEEKLY_MUTATION_FIELDS["ADD"])
+        self.assertTrue(all("horizon" not in fields for action, fields in WEEKLY_MUTATION_FIELDS.items() if action != "ADD"))
+        for action in ("IMPROVE", "REGRESS", "CONTRADICT", "REINFORCE", "ARCHIVE"):
+            self.assertEqual(WEEKLY_MUTATION_FIELDS[action], frozenset({"targetMemoryId", "evidenceObservationIds"}))
+        self.assertEqual(
+            WEEKLY_MUTATION_FIELDS["REFINE"], frozenset({"targetMemoryId", "proposedStatement", "evidenceObservationIds"})
+        )
+        self.assertEqual(WEEKLY_MEMORY_HORIZONS, frozenset({"recent", "durable"}))
 
     def test_the_digest_has_exactly_six_fields_after_normalization(self) -> None:
         narrative = WeeklyNarrative.model_validate({
@@ -331,6 +357,161 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
             self.assertIn(needed, system)
         self.assertNotIn("sentences", system)
         self.assertNotIn("sentences", user)
+
+    def test_the_prompt_says_how_signals_become_preference_or_strategy_memory(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "pack.signals",
+            "kind preference",
+            "difficulty",
+            "strategy_outcome",
+            "repeatCount",
+            "distinctAssets",
+            "the learner messages the coach was answering, citable",
+            "namespace preference",
+            "namespace strategy",
+            "at least two DIFFERENT assets",
+            "one remark is not a trait",
+            "feedback-only coach lines",
+        ):
+            self.assertIn(needed, system)
+        # Coach feedback is an interaction fact: it is never offered as a way to write a preference.
+        self.assertIn("never preferences by themselves", system)
+        # A signal is the coach's reading of sessions, not the learner's quote.
+        self.assertIn("not the learner's quote and not yet a fact", system)
+        # The notes are no longer retold on coach lines.
+        self.assertNotIn("coach note, preference:", system)
+        self.assertNotIn("A coach line's first ids", system)
+        self.assertNotIn("learner asked:", system)
+        self.assertNotIn("worded as what the learner asked for", system)
+
+    def test_the_prompt_states_the_promotion_thresholds(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "Promotion thresholds",
+            "remember true and horizon durable may become one preference memory",
+            "repeatCount at least 2 AND distinctAssets at least 2",
+            "may be ADDed or",
+            "REINFORCEd",
+            "appeared once and was not asked to be remembered yields NO mutation at all",
+            "prefer no mutation to an uncertain claim",
+            "must cite at least one qualifying signal's ids, or it is dropped",
+            "strategy_outcome signal with distinctAssets at least 2",
+        ):
+            self.assertIn(needed, system)
+
+    def test_the_prompt_lists_every_mutation_type_with_its_use(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "The eight mutation types and when each applies",
+            "ADD a new general rule",
+            "REINFORCE a memory whose pattern shows again on NEW evidence",
+            "REFINE a memory whose rule is right but its wording or scope needs sharpening",
+            "IMPROVE a memory about a difficulty or confusion when this week's pack shows clear improvement",
+            "forgets it about three weeks later",
+            "never for a trait or a wish",
+            "REGRESS a memory whose improvementState is improved",
+            "CONTRADICT a memory that this week's evidence speaks against",
+            "SUPERSEDE a memory that new evidence replaces",
+            "ARCHIVE a memory that is no longer true or no longer useful",
+            "improvementState is absent when baseline",
+            "recallCount is absent when it was never recalled",
+        ):
+            self.assertIn(needed, system)
+        # The contract appended to the prompt lists the fields of all eight, and the horizons of an ADD.
+        contract = json.loads(system[system.index('{"memoryMutationContract"'):])["memoryMutationContract"]
+        self.assertEqual(set(contract["fieldsByAction"]), set(WEEKLY_MUTATION_ACTIONS))
+        self.assertIn("horizon", contract["fieldsByAction"]["ADD"])
+        self.assertEqual(contract["addHorizons"], ["durable", "recent"])
+
+    def test_the_prompt_says_what_horizon_means_and_who_owns_the_clock(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "optional horizon: 'recent'",
+            "expires after 30 days",
+            "'durable' for a stable trait or wish, the default when horizon is omitted",
+            "ADD it with horizon recent",
+        ):
+            self.assertIn(needed, system)
+
+    def test_the_prompt_asks_for_general_rules_and_a_confidence_ladder(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "GENERAL rule about this learner",
+            "该学习者对〈题型或技能〉……需要……",
+            "never the retelling of one question",
+            "only the EVIDENCE for the rule",
+            "at most one low-confidence ADD",
+            "is a REINFORCE of the memory",
+            "distinct assetIds, never repeated attempts of one asset",
+            "is a SUPERSEDE",
+            "A one-off remark is never generalised into a lasting trait",
+            "Prefer no mutation to an uncertain claim",
+        ):
+            self.assertIn(needed, system)
+        self.assertNotIn("original wording", system)
+
+    def test_the_prompt_protects_the_memories_the_learner_confirmed(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "pack.confirmed",
+            "user_explicit",
+            "carry no memoryId and are final",
+            "Never rewrite, supersede, archive, repeat or contradict them",
+            "complements them",
+            "Memory mutations must never contradict explicit preferences",
+            # The lifecycle actions cannot reach them either: they are not targets at all.
+            "You may not rewrite, SUPERSEDE, archive, reinforce, improve or otherwise touch a memory the learner "
+            "confirmed (user_explicit) or one owned by system policy",
+        ):
+            self.assertIn(needed, system)
+
+    def test_the_prompt_maps_feedback_kinds_to_strategies_and_demands_two_assets(self) -> None:
+        bridge = FakeHostBridge()
+        _run(bridge)
+        system = bridge.calls[1][1]["request"]["messages"][0]["content"]
+        for needed in (
+            "coach.strategy.<strategy>.<signal>",
+            "evidence_first_v1, example_first_v1, step_by_step_v1",
+            "contrastive_v1, socratic_prompt_v1, concise_direct_v1",
+            "need_example points to example_first_v1",
+            "need_step_by_step to step_by_step_v1",
+            "too_abstract to example_first_v1 or step_by_step_v1",
+            "too_long to concise_direct_v1",
+            "thumbs_down only says the learner was not satisfied",
+            "points at no particular preference",
+            "counts, never causes",
+            "at least two DIFFERENT assets",
+            "One asset is never enough",
+            "strategy-namespace memory",
+        ):
+            self.assertIn(needed, system)
+
+    def test_a_mutation_may_cite_the_learner_message_ids_of_a_qualifying_signal(self) -> None:
+        pack = _pack()
+        pack["signals"] = [_signal(ids=["obs-msg1", "obs-msg2"], repeatCount=3, distinctAssets=2)]
+        mutation = _add(
+            namespace="preference",
+            canonicalKey="preference.reading.short_examples_first",
+            statement="学习者希望讲解先给简短例子。",
+            evidenceObservationIds=["obs-msg1", "obs-a1"],
+        )
+        bridge = FakeHostBridge(pack=pack, content=_answer(mutations=[mutation]))
+        _run(bridge)
+        self.assertEqual(bridge.submitted()["mutations"], [mutation])
+        self.assertEqual(bridge.submitted()["droppedMutations"], 0)
 
     def test_the_per_block_sentence_path_is_gone(self) -> None:
         for removed in ("_build_narrative", "_build_system_prompt_v2", "_build_digest_v2",
@@ -503,6 +684,30 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         self.assertEqual([m["action"] for m in bridge.submitted()["mutations"]], ["REINFORCE"])
         self.assertEqual(bridge.submitted()["droppedMutations"], 5)
 
+    def test_a_mutation_may_not_take_the_place_of_a_memory_the_learner_confirmed(self) -> None:
+        pack = _pack()
+        pack["confirmed"] = [
+            {"namespace": "preference", "scope": "activity:reading",
+             "canonicalKey": "preference.reading.card_ab12", "statement": "判断题上先给例子再讲证据。"},
+            "not a memory",
+        ]
+        mutations = [
+            # The same identity as the confirmed memory: refused whatever the wording.
+            _add(namespace="preference", canonicalKey="preference.reading.card_ab12", statement="换一种说法。"),
+            # A broader inferred memory beside it is welcome.
+            _add(namespace="preference", canonicalKey="preference.reading.examples_for_tfng"),
+            # The same key in the other activity is another identity.
+            _add(namespace="preference", canonicalKey="preference.writing.card_ab12",
+                 scope={"type": "activity", "key": "writing"}),
+        ]
+        bridge = FakeHostBridge(pack=pack, content=_answer(mutations=mutations))
+        _run(bridge)
+        kept = [m["canonicalKey"] for m in bridge.submitted()["mutations"]]
+        self.assertEqual(kept, ["preference.reading.examples_for_tfng", "preference.writing.card_ab12"])
+        self.assertEqual(bridge.submitted()["droppedMutations"], 1)
+        # A confirmed memory has no id in the pack, so no mutation can target it.
+        self.assertEqual(weekly_module._memory_ids(pack["confirmed"]), [])
+
     def test_a_mutation_may_only_target_memories_of_the_pack(self) -> None:
         mutations = [
             {"action": "REINFORCE", "targetMemoryId": "mem-other", "evidenceObservationIds": ["obs-a1"]},
@@ -520,6 +725,7 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         mutations = [
             _add(action="REFINE"),
             _add(action="regress"),
+            _add(action="NOOP"),
             {**_add(), "confidence": 0.99},
             _add(namespace="astrology", canonicalKey="astrology.reading.x"),
             _add(canonicalKey="strategy.Reading.Caps"),
@@ -536,6 +742,113 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         bridge = FakeHostBridge(content=_answer(mutations=mutations))
         _run(bridge)
         self.assertEqual(bridge.submitted()["mutations"], [_add()])
+
+    def test_an_add_may_say_recent_or_durable_and_nothing_else(self) -> None:
+        mutations = [
+            _add(canonicalKey="strategy.reading.k1", horizon="recent"),
+            _add(canonicalKey="strategy.reading.k2", horizon="durable"),
+            _add(canonicalKey="strategy.reading.k3"),
+            _add(canonicalKey="strategy.reading.k4", horizon="session"),
+            _add(canonicalKey="strategy.reading.k5", horizon="Recent"),
+            _add(canonicalKey="strategy.reading.k6", horizon=""),
+            _add(canonicalKey="strategy.reading.k7", horizon=30),
+            _add(canonicalKey="strategy.reading.k8", horizon=None),
+            _add(canonicalKey="strategy.reading.k9", horizon=["recent"]),
+            _add(canonicalKey="strategy.reading.k10", horizon={"days": 30}),
+        ]
+        bridge = FakeHostBridge(content=_answer(mutations=mutations))
+        _run(bridge)
+        kept = bridge.submitted()["mutations"]
+        self.assertEqual(
+            [m["canonicalKey"] for m in kept],
+            ["strategy.reading.k1", "strategy.reading.k2", "strategy.reading.k3"],
+        )
+        # What reaches the host is exactly what was proposed: an old ADD without a horizon is unchanged.
+        self.assertEqual(kept[0]["horizon"], "recent")
+        self.assertEqual(kept[1]["horizon"], "durable")
+        self.assertNotIn("horizon", kept[2])
+        self.assertEqual(bridge.submitted()["droppedMutations"], 7)
+
+    def test_only_an_add_carries_a_horizon(self) -> None:
+        mutations = [
+            {"action": "REINFORCE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-r1"], "horizon": "recent"},
+            {"action": "ARCHIVE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-r1"], "horizon": "durable"},
+        ]
+        bridge = FakeHostBridge(content=_answer(mutations=mutations))
+        _run(bridge)
+        self.assertEqual(bridge.submitted()["mutations"], [])
+
+    def test_the_whole_lifecycle_is_accepted_with_its_own_fields(self) -> None:
+        refine = {"action": "REFINE", "targetMemoryId": "mem-1", "proposedStatement": "先读题干，再找定位词。",
+                  "evidenceObservationIds": ["obs-r1"]}
+        targeted = [
+            {"action": action, "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-r1"]}
+            for action in ("IMPROVE", "REGRESS", "CONTRADICT")
+        ]
+        wrong = [
+            {**refine, "statement": "extra field"},
+            {key: value for key, value in refine.items() if key != "proposedStatement"},
+            {**refine, "proposedStatement": ""},
+            {**refine, "targetMemoryId": "mem-other"},
+            {"action": "IMPROVE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-forged"]},
+            {"action": "IMPROVE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-r1"], "proposedStatement": "x"},
+        ]
+        bridge = FakeHostBridge(content=_answer(mutations=[refine, *targeted, *wrong]))
+        _run(bridge)
+        self.assertEqual(bridge.submitted()["mutations"], [refine, *targeted])
+        self.assertEqual(bridge.submitted()["droppedMutations"], len(wrong))
+
+    def test_a_claim_resting_only_on_a_one_off_signal_is_dropped(self) -> None:
+        pack = _pack()
+        pack["signals"] = [
+            _signal(ids=["obs-once"]),
+            _signal(text="以后都先讲结论", kind="preference", skill=None, remember=True, horizon="durable", ids=["obs-asked"]),
+            _signal(text="只在 P1 上", ids=["obs-same-passage"], repeatCount=4, distinctAssets=1),
+            _signal(text="重复且跨文章", ids=["obs-repeated"], repeatCount=2, distinctAssets=2),
+            _signal(text="想被记住但只是眼下", kind="preference", skill=None, remember=True, horizon="recent", ids=["obs-recent-ask"]),
+        ]
+
+        def add(key: str, ids: list[str]) -> dict:
+            return _add(canonicalKey=f"preference.reading.{key}", namespace="preference", evidenceObservationIds=ids)
+
+        mutations = [
+            add("once", ["obs-once"]),  # one remark: no
+            add("same_passage", ["obs-same-passage"]),  # four times on one passage: no
+            add("recent_ask", ["obs-recent-ask"]),  # asked, but only for now: no
+            add("mixed", ["obs-a1", "obs-once"]),  # practice lines do not launder a weak signal: no
+            {"action": "REINFORCE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-once"]},  # no
+            add("asked", ["obs-asked"]),  # asked and durable: yes
+            add("repeated", ["obs-repeated"]),  # twice on two passages: yes
+            add("beside_weak", ["obs-once", "obs-repeated"]),  # a strong one beside a weak one: yes
+            add("practice_only", ["obs-a1", "obs-b1"]),  # no signal cited at all: not this gate's business
+            {"action": "ARCHIVE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-once"]},  # not a claim
+            {"action": "IMPROVE", "targetMemoryId": "mem-1", "evidenceObservationIds": ["obs-once"]},  # nor is this
+        ]
+        bridge = FakeHostBridge(pack=pack, content=_answer(mutations=mutations))
+        _run(bridge)
+        kept = [m.get("canonicalKey", m["action"]) for m in bridge.submitted()["mutations"]]
+        self.assertEqual(
+            kept,
+            ["preference.reading.asked", "preference.reading.repeated", "preference.reading.beside_weak",
+             "preference.reading.practice_only", "ARCHIVE", "IMPROVE"],
+        )
+        self.assertEqual(bridge.submitted()["droppedMutations"], 5)
+
+    def test_signal_ids_are_citable_and_a_pack_without_signals_still_works(self) -> None:
+        pack = _pack()
+        pack["signals"] = [_signal(ids=["obs-sig1", 7, None, "mem-nope"]), "not a signal", {"ids": "obs-x"}]
+        mutation = _add(evidenceObservationIds=["obs-sig1", "obs-a1"])
+        bridge = FakeHostBridge(pack=pack, content=_answer(mutations=[mutation, _add(evidenceObservationIds=["mem-nope"])]))
+        _run(bridge)
+        # obs-sig1 is citable, but the signal behind it is a one-off and nothing qualifying is cited.
+        self.assertEqual(bridge.submitted()["mutations"], [])
+        # An older host sends no `signals` at all: the practice-line mutation goes through as before.
+        plain = FakeHostBridge(pack=_pack(), content=_answer())
+        _run(plain)
+        self.assertEqual(plain.submitted()["mutations"], [_add()])
+        bad = _pack()
+        bad["signals"] = {"not": "a list"}
+        self.assertIsNone(_run(FakeHostBridge(pack=bad)).fallback_reason)
 
     def test_mutations_are_bounded(self) -> None:
         many = [_add(canonicalKey=f"strategy.reading.k{i}") for i in range(MAX_MUTATIONS + 5)]
@@ -656,6 +969,8 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
     def test_constants(self) -> None:
         self.assertEqual(DEFAULT_COGNITIVE_DEADLINE_MS, 400_000)
         self.assertEqual(MIN_OBSERVATIONS, 8)
+        # Mirrors of the host's promotion rule (`PROMOTE_MIN_*` in ielts_db::weekly_pack).
+        self.assertEqual((weekly_module.PROMOTE_MIN_REPEATS, weekly_module.PROMOTE_MIN_ASSETS), (2, 2))
         self.assertEqual(fallback_result("why").fallback_reason, "why")
 
 

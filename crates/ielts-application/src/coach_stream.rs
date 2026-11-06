@@ -1,9 +1,11 @@
 //! Learner-visible text of a streaming coach reply.
 //!
-//! The coach asks the model for one JSON object, `{"answer":"...", ...}`. While
-//! the reply streams, only the decoded value of that top-level `answer` string
-//! is forwarded: JSON syntax, `teachingNotes` and any other field never reach
-//! the learner. The persisted answer is still parsed from the complete reply.
+//! The coach asks the model for one JSON object,
+//! `{"strategy":"...","answer":"...","teachingNotes":[...]}`. While the reply
+//! streams, only the decoded value of that top-level `answer` string is
+//! forwarded: JSON syntax, the leading `strategy`, `teachingNotes` and any other
+//! field never reach the learner, whatever order the keys arrive in. The
+//! persisted answer is still parsed from the complete reply.
 //!
 //! The scanner is byte-based so chunk boundaries may fall anywhere, including
 //! inside a `\uXXXX` escape, a surrogate pair or a multibyte character.
@@ -350,6 +352,37 @@ mod tests {
         assert_eq!(visible(&[br#"{"answer":42}"#]), "");
         assert_eq!(visible(&[br#"{"kind":"hint","text":"no answer key"}"#]), "");
         assert_eq!(visible(&[b"not json at all"]), "");
+    }
+
+    const STRATEGY_FIRST: &str = r#"{"strategy":"concise_direct_v1","answer":"Check \"it\" 你好 😀.","teachingNotes":[{"kind":"preference","text":"answer"}]}"#;
+    const STRATEGY_FIRST_EXPECTED: &str = "Check \"it\" 你好 😀.";
+
+    #[test]
+    fn a_leading_strategy_is_never_shown_and_survives_every_split() {
+        let bytes = STRATEGY_FIRST.as_bytes();
+        for split in 0..=bytes.len() {
+            assert_eq!(visible(&[&bytes[..split], &bytes[split..]]), STRATEGY_FIRST_EXPECTED, "split at byte {split}");
+        }
+        let chunks: Vec<&[u8]> = bytes.chunks(1).collect();
+        assert_eq!(visible(&chunks), STRATEGY_FIRST_EXPECTED);
+    }
+
+    #[test]
+    fn nothing_is_shown_while_only_the_strategy_has_arrived() {
+        let mut stream = AnswerStream::default();
+        assert_eq!(stream.push(br#"{"strategy":"step_by_"#), "");
+        assert_eq!(stream.push(br#"step_v1","#), "");
+        assert_eq!(stream.push(br#""answer":"First"#), "First");
+        assert_eq!(stream.push(br#", look."}"#), ", look.");
+    }
+
+    #[test]
+    fn a_strategy_value_or_note_text_that_spells_answer_is_not_the_answer() {
+        assert_eq!(visible(&[br#"{"strategy":"answer","answer":"yes"}"#]), "yes");
+        assert_eq!(visible(&[br#"{"strategy":"x","teachingNotes":[{"text":"answer"}],"answer":"yes"}"#]), "yes");
+        // A malformed strategy (not a string) does not hide the answer either.
+        assert_eq!(visible(&[br#"{"strategy":null,"answer":"yes"}"#]), "yes");
+        assert_eq!(visible(&[br#"{"strategy":["a","answer"],"answer":"yes"}"#]), "yes");
     }
 
     #[test]

@@ -1,12 +1,36 @@
 //! One host-owned invocation and exact request snapshot per Coach run.
 //! Terminal run status disambiguates an interrupted invocation; never invent a response.
-use super::{append_coach_message_in_transaction, AppendCoachMessageCommand, CoachMessage};
+use super::{
+    append_coach_message_in_transaction, evaluate_coach_memory_card, AppendCoachMessageCommand, CoachMessage,
+};
 use crate::{begin_agent_run, BeginAgentRunCommand, DbError, DbResult};
-use ielts_domain::{estimate_tokens, rendered_hash, AgentRunKind};
+use ielts_domain::{estimate_tokens, rendered_hash, AgentRunKind, CoachFollowupType, CoachStrategyId};
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 
-const HOST_COACH_STRATEGY: &str = "evidence_first_v1";
+/// Strategy recorded when the model names none, or one outside the catalog.
+const FALLBACK_COACH_STRATEGY: CoachStrategyId = CoachStrategyId::EvidenceFirstV1;
+
+/// The strategy the model reported in `"strategy"`, validated against the six
+/// catalog ids. Anything else is the fallback: the answer is still recorded.
+fn reported_strategy(payload: &Value) -> CoachStrategyId {
+    payload["strategy"]
+        .as_str()
+        .and_then(|id| CoachStrategyId::parse(id.trim()))
+        .unwrap_or(FALLBACK_COACH_STRATEGY)
+}
+
+/// The follow-up intent that goes with a strategy.
+fn followup_for(strategy: CoachStrategyId) -> CoachFollowupType {
+    match strategy {
+        CoachStrategyId::EvidenceFirstV1 => CoachFollowupType::Explain,
+        CoachStrategyId::ExampleFirstV1 => CoachFollowupType::Example,
+        CoachStrategyId::StepByStepV1 => CoachFollowupType::StepByStep,
+        CoachStrategyId::ContrastiveV1 => CoachFollowupType::Contrast,
+        CoachStrategyId::SocraticPromptV1 => CoachFollowupType::SocraticPrompt,
+        CoachStrategyId::ConciseDirectV1 => CoachFollowupType::ConciseDirect,
+    }
+}
 
 pub fn begin_coach_trace(
     conn: &Connection,
@@ -49,7 +73,9 @@ pub fn begin_coach_trace(
             run_kind: AgentRunKind::Coach,
         },
     )?;
-    let plan = json!({"kind":"canonical_coach", "threadId":thread_id, "userMessageId":user_message_id, "invocationId":invocation, "strategyId":HOST_COACH_STRATEGY});
+    // The strategy is the model's choice inside the answer: it is recorded on
+    // completion, not planned here.
+    let plan = json!({"kind":"canonical_coach", "threadId":thread_id, "userMessageId":user_message_id, "invocationId":invocation});
     tx.execute("INSERT INTO agent_context_snapshots (id,run_id,planner_version,scope,query_plan_json,token_budget,used_tokens,rendered_context,content_hash,created_at)
         VALUES (?1,?2,'canonical-coach-v1',?3,?4,?5,?6,?7,?8,?9)",
         params![snapshot,id,format!("coach:{thread_id}"),plan.to_string(),budget,used,rendered,hash,now])?;
@@ -64,9 +90,33 @@ pub fn begin_coach_trace(
     tx.execute("INSERT INTO llm_invocations (id,run_id,kind,provider,model,request_hash,created_at) VALUES (?1,?2,'completion',?3,?4,?5,?6)",
         params![invocation,id,provider,model,hash,now])?;
     tx.execute("UPDATE agent_runs SET result_json=?1 WHERE id=?2",
-        params![json!({"runKind":"coach","threadId":thread_id,"userMessageId":user_message_id,"snapshotId":snapshot,"invocationId":invocation,"strategyId":HOST_COACH_STRATEGY,"memoryIdsUsed":memory_ids}).to_string(),id])?;
+        params![json!({"runKind":"coach","threadId":thread_id,"userMessageId":user_message_id,"snapshotId":snapshot,"invocationId":invocation,"memoryIdsUsed":memory_ids,"promptLayout":prompt_layout(request)}).to_string(),id])?;
     tx.commit()?;
     Ok(id)
+}
+
+/// Most messages whose hashes the receipt lists. A thread's history is capped
+/// well below this; the bound only protects the row from a malformed request.
+const MAX_LAYOUT_MESSAGES: usize = 256;
+
+/// The shape of the prompt that was sent, for judging prompt-cache behaviour
+/// after the fact: the routing key and a short hash per message. Two runs of one
+/// thread share their cacheable prefix exactly as far as their hash lists agree
+/// from the front; the first index that differs is where a provider's prefix
+/// cache stopped matching. Hashes of text the snapshot already holds in full.
+fn prompt_layout(request: &Value) -> Value {
+    let messages = request.get("messages").and_then(Value::as_array);
+    let hashes: Vec<String> = messages
+        .into_iter()
+        .flatten()
+        .take(MAX_LAYOUT_MESSAGES)
+        .map(|message| rendered_hash(&message.to_string())[..8].to_owned())
+        .collect();
+    json!({
+        "messages": messages.map_or(0, Vec::len),
+        "cacheKey": request.get("cacheKey").cloned().unwrap_or(Value::Null),
+        "messageHashes": hashes,
+    })
 }
 
 /// Success message + invocation + run terminal receipt commit together.
@@ -82,16 +132,22 @@ pub fn complete_traced_coach(
     verify_trace_thread(&tx, run_id, thread_id)?;
     let user_message_id = trace_user_message_id(&tx, run_id)?;
     let assignment_id = format!("csa-{}", uuid::Uuid::new_v4());
+    let strategy = reported_strategy(&payload);
     payload["runId"] = json!(run_id);
     payload["userMessageId"] = json!(user_message_id);
     payload["snapshotId"] = json!(format!("context-{run_id}"));
     payload["invocationId"] = json!(format!("invoke-{run_id}"));
-    payload["strategyId"] = json!(HOST_COACH_STRATEGY);
+    payload["strategyId"] = json!(strategy.as_str());
     payload["strategyAssignmentId"] = json!(assignment_id);
     if let Some(object) = payload.as_object_mut() {
-        for untrusted in ["skillsAddressed", "memoryIdsUsed", "contextSnapshotId"] {
+        // `strategy` is the model's raw claim, now replaced by the validated `strategyId`;
+        // the card fields are the host's to write.
+        for untrusted in ["skillsAddressed", "memoryIdsUsed", "contextSnapshotId", "strategy", "memoryCard", "memoryCardState"] {
             object.remove(untrusted);
         }
+    }
+    if let Some(card) = evaluate_coach_memory_card(&tx, &payload, None, chrono::Utc::now())? {
+        payload["memoryCard"] = json!(card);
     }
     let message = append_coach_message_in_transaction(
         &tx,
@@ -108,9 +164,13 @@ pub fn complete_traced_coach(
          (id,user_id,coach_message_id,strategy_id,skills_addressed_json,memory_ids_used_json,context_snapshot_id,followup_type,created_at)
          VALUES (?1,'local',?2,?3,'[]',
                  COALESCE((SELECT json_extract(result_json,'$.memoryIdsUsed') FROM agent_runs WHERE id=?6),'[]'),
-                 ?4,'explain',?5)",
-        params![assignment_id, message.id, HOST_COACH_STRATEGY,
-            format!("context-{run_id}"), chrono::Utc::now().to_rfc3339(), run_id],
+                 ?4,?7,?5)",
+        params![assignment_id, message.id, strategy.as_str(),
+            format!("context-{run_id}"), chrono::Utc::now().to_rfc3339(), run_id, followup_for(strategy).as_str()],
+    )?;
+    tx.execute(
+        "UPDATE agent_runs SET result_json=json_set(result_json,'$.strategyId',?1) WHERE id=?2",
+        params![strategy.as_str(), run_id],
     )?;
     tx.execute(
         "UPDATE coach_threads SET status='active',last_error_json=NULL WHERE id=?1",

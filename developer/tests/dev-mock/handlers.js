@@ -14,6 +14,7 @@ import {
   buildWritingEvaluation,
   writingDetail,
 } from './seed.js'
+import { coachScenarioMessages } from './coach-scenarios.js'
 import { weeklyReports } from './weekly-reports.js'
 
 const ZERO_MEMORY_CHANGES = { newCandidates: 0, promoted: 0, reinforced: 0, refined: 0, improved: 0, regressed: 0, contradicted: 0, superseded: 0 }
@@ -275,6 +276,7 @@ export function createHandlers(state, host) {
   const preferences = []
   const reports = weeklyReports()
   const coachFeedback = []
+  const memoryCards = Object.create(null)
   let coachThreadId = 'coach-thread'
 
   const sessionStub = (kind) => (args) => ({ id: `${kind}-mock`, kind, status: 'active', ...args?.cmd, startedAt: new Date().toISOString() })
@@ -652,15 +654,48 @@ export function createHandlers(state, host) {
       return clone(record)
     },
     coach_list_feedback: ({ threadId }) => clone(coachFeedback.filter((row) => row.threadId === threadId).map((row) => row.record)),
+    // Preference cards: confirm writes one user_explicit preference (idempotent per message and note) and the
+    // decision sticks; dismiss only records the decision and cannot undo a confirmed card.
+    coach_confirm_memory_card: ({ messageId, noteIndex, text }) => {
+      const clean = String(text ?? '').split(/\s+/).filter(Boolean).join(' ')
+      if (!clean) throw fail('memory_card.invalid_text', '请先写下要记住的偏好。')
+      if (Array.from(clean).length > 300) throw fail('memory_card.invalid_text', '这条偏好太长了，请控制在 300 个字以内。')
+      // Sentinels for the refusals a screenshot or a manual run needs to see.
+      if (clean.includes('【重复】')) throw fail('memory_card.rejected', '这条偏好已经记过。')
+      if (clean.includes('【失败】')) throw fail('memory_card.persistence_failed', '保存失败，请重试。')
+      const key = `${messageId}:${noteIndex}`
+      const card = ownOf(memoryCards, key) || {}
+      if (!card.memoryId) {
+        card.memoryId = idFrom('mem')
+        const at = new Date().toISOString()
+        notebook.catalog.unshift({ id: card.memoryId, canonicalKey: `preference.reading.card_${notebook.catalog.length}`, statement: clean,
+          sourceClass: 'user_explicit', namespace: 'preference', status: 'active', version: 1, scope: 'activity:reading', confidenceBand: 'high',
+          supportCount: 1, contradictionCount: 0, firstSeen: at, pendingVerification: false, evidenceObservationIds: [], lastSeen: at })
+      }
+      memoryCards[key] = { ...card, state: 'confirmed' }
+      return { memoryId: card.memoryId }
+    },
+    coach_dismiss_memory_card: ({ messageId, noteIndex }) => {
+      const key = `${messageId}:${noteIndex}`
+      const card = ownOf(memoryCards, key) || {}
+      if (card.state === 'confirmed') throw fail('memory_card.already_confirmed', '这条偏好已经记住了。要改动它，请到记忆中心操作。')
+      memoryCards[key] = { ...card, state: 'dismissed' }
+      return null
+    },
     coach_record_reask_link: () => null,
     coach_record_strategy_assignment: () => null,
-    coach_link_outcome: () => null,
     coach_ensure_thread: ({ cmd }) => {
       coachThreadId = `coach-${cmd?.attemptId || 'thread'}`
       return { id: coachThreadId, attemptId: cmd?.attemptId || null, status: 'open' }
     },
-    coach_list_messages: () => [],
-    coach_run: () => ({ status: 'completed', messages: [] }),
+    // Empty unless the page opts in with ?mockCoach=... (see coach-scenarios.js).
+    coach_list_messages: ({ threadId, afterSequence }) => coachScenarioMessages(
+      host.coachScenario, threadId, afterSequence, (messageId, noteIndex) => ownOf(memoryCards, `${messageId}:${noteIndex}`)?.state
+    ),
+    // With ?mockCoach=... a question gets the canned answer (its messages come from coach_list_messages).
+    coach_run: () => (host.coachScenario
+      ? { status: 'completed', assistantMessage: { id: 'mock-coach-a1', role: 'assistant', content: '（模拟回答）' }, messages: [] }
+      : { status: 'completed', messages: [] }),
     journal_get_daily: ({ query = {} }) => clone(ownOf(notebook.journals, query.journalDate) || {
       id: `journal-${query.journalDate}`, userId: 'local', journalDate: query.journalDate, version: 1, status: 'published',
       facts: { journalDate: query.journalDate, timeSpentMs: 0, writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [], memoryChanges: ZERO_MEMORY_CHANGES, coachFeedbackCount: 0, coachReaskCount: 0, sourceHash: 'mock', todayObservationIds: [], memoryEvents: [] },
