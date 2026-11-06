@@ -102,6 +102,8 @@ jobs:
           python -m playwright install chromium
       - name: Verify shared visual assertions
         run: python -m unittest discover -s developer/tests/e2e -p visual_test_support_test.py -v
+      - name: Verify visual evidence collection
+        run: python -m unittest discover -s developer/tests/e2e -p visual_evidence_test.py -v
       - name: Run visual regression matrix
         run: python developer/tests/e2e/run_visual_regressions.py
       - name: Upload visual regression evidence
@@ -118,7 +120,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             target: aarch64-apple-darwin
             pythonArchitecture: arm64
           - runner: ubuntu-22.04
