@@ -503,12 +503,13 @@
             popup.state = collected ? 'collected' : 'uncollected';
             button.textContent = collected ? '已加入' : '加入生词本';
             button.disabled = collected;
-        } catch (_) {
+        } catch (error) {
             if (!isActivePopup(popup)) return;
-            popup.state = 'read-failed';
-            button.textContent = '读取失败，点击重试';
-            button.title = '无法确认收藏状态，请点击重试。';
-            button.disabled = false;
+            const unavailable = error && error.code === 'BACKEND_UNAVAILABLE';
+            popup.state = unavailable ? 'reload-required' : 'read-failed';
+            button.textContent = unavailable ? '请刷新页面后重试' : '读取失败，点击重试';
+            button.title = unavailable ? button.textContent : '无法确认收藏状态，请点击重试。';
+            button.disabled = unavailable;
         }
     }
 

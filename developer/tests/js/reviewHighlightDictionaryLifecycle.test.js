@@ -220,6 +220,46 @@ test('highlight dictionary reads persisted article membership for each popup ins
         } finally { await page.close(); }
     });
 
+    await t.test('latched membership backend failures require reload and recover only with a new AppData instance', async () => {
+        const page = await createPage(browser);
+        try {
+            await collect(page, { word: 'microscope' });
+            const saved = await snapshot(page);
+            const storageFrame = page.frames().find(frame => frame !== page.mainFrame());
+            await storageFrame.evaluate(() => {
+                window.originalTransaction = IDBDatabase.prototype.transaction;
+                IDBDatabase.prototype.transaction = function () {
+                    throw new DOMException('Injected transaction failure', 'InvalidStateError');
+                };
+            });
+            await open(page);
+            await page.waitForFunction(() => authority.status().state === 'failed');
+            await storageFrame.evaluate(() => {
+                IDBDatabase.prototype.transaction = window.originalTransaction;
+            });
+            await expectButton(page, '请刷新页面后重试', true);
+            assert.equal(await page.locator(addSelector).getAttribute('title'), '请刷新页面后重试');
+            assert.equal(await page.evaluate(async () => {
+                try { await authority.vocab.getReadingSnapshot(); }
+                catch (error) { return error.code; }
+            }), 'BACKEND_UNAVAILABLE', 'restoring IndexedDB does not recover the latched AppData instance');
+            await page.locator(addSelector).evaluate(button => button.click());
+            assert.equal(await page.evaluate(() => control.writes), 0);
+            assert.equal(await page.evaluate(() => control.posted.length), 0);
+            await close(page);
+            await open(page, 'microscope');
+            await expectButton(page, '请刷新页面后重试', true);
+            await page.reload();
+            await install(page);
+            await open(page);
+            await expectButton(page, '加入生词本', false);
+            await close(page);
+            await open(page, 'microscope');
+            await expectButton(page, '已加入', true);
+            assert.deepEqual(await snapshot(page), saved, 'reload must preserve the existing collection');
+        } finally { await page.close(); }
+    });
+
     await t.test('read and write failures stay explicit and retryable; host results only settle their initiating popup', async () => {
         const page = await createPage(browser);
         try {
