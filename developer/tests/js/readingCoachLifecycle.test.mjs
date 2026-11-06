@@ -114,37 +114,43 @@ test('truncated output offers a short retry that asks for a brief answer once', 
   assert.deepEqual(queries, ['Explain Q7', `Explain Q7${hint}`, `Explain Q7${hint}`])
 })
 
-test('context overflow offers a compact retry: clipped selection, slim attempt context', async () => {
+test('context overflow offers a compact retry only because it clips a long selection', async () => {
   const payloads = []
   const selected = { text: 'x'.repeat(900), scope: 'passage', questionNumbers: ['7'] }
-  const { coach, state } = harness({
+  const { coach } = harness({
     selected,
     query: async (payload) => {
       payloads.push(payload)
       throw failure('coach.context_exceeded')
     }
   })
-  state.submission = {
-    sessionId: 'attempt-1',
-    answerComparison: { q7: { questionId: 'q7', displayLabel: '7', isCorrect: false, userAnswer: 'A' } },
-    questionTimelineLite: [{ q: 7, ms: 1000 }],
-    analysisSignals: { weak: ['tfng'] },
-    markedQuestions: ['q7'],
-    questionTypePerformance: { tfng: { total: 4 } }
-  }
   coach.coachQuery.value = 'Why?'
   await coach.askCoach()
-  assert.equal(coach.coachRetryKind.value, 'context')
+  assert.equal(coach.coachRetryKind.value, 'context', 'a 900-character selection can be shortened')
   await coach.retryCoachQuery('compact')
 
   const [full, compact] = payloads
   assert.equal(full.selectedText.length, 900)
-  assert.equal(full.attemptContext.questionTimelineLite.length, 1)
-  assert.equal(compact.selectedText.length, 200)
-  assert.deepEqual(compact.attemptContext.questionTimelineLite, [])
-  assert.deepEqual(compact.attemptContext.markedQuestions, [])
-  assert.equal(compact.attemptContext.analysisSignals, null)
-  assert.deepEqual(compact.attemptContext.wrongQuestions, ['7'], 'what to talk about survives the slimming')
+  assert.equal(compact.selectedText.length, 200, 'the selection is clipped; that is what compaction changes')
+  // Nothing is left to clip: the same request would overflow again, so no retry is offered.
+  assert.equal(coach.coachRetryKind.value, 'context_limit')
+})
+
+test('a context overflow with nothing to clip offers no retry that cannot help', async () => {
+  const payloads = []
+  const { coach } = harness({
+    query: async (payload) => {
+      payloads.push(payload)
+      throw failure('coach.context_exceeded')
+    }
+  })
+  coach.coachQuery.value = 'Why?'
+  await coach.askCoach()
+  assert.equal(payloads.length, 1)
+  assert.equal(payloads[0].selectedText, '')
+  // The host rebuilds the passage, questions and answers itself and does not read
+  // the client's attempt context, so no compact resend would send the model less.
+  assert.equal(coach.coachRetryKind.value, 'context_limit')
 })
 
 test('a failed review offers a retry that re-runs the review', async () => {
@@ -309,7 +315,7 @@ test('a truncated whole-attempt review offers a short retry that really asks for
   assert.equal(payloads[2].content, `${first.content}${hint}`)
 })
 
-test('a whole-attempt review that overflowed the context is retried with the slim attempt context', async () => {
+test('a whole-attempt review that overflowed the context with no selection offers no compact retry', async () => {
   const payloads = []
   const { coach, state } = harness({
     query: async (payload) => {
@@ -321,23 +327,36 @@ test('a whole-attempt review that overflowed the context is retried with the sli
     sessionId: 'attempt-1',
     answerComparison: { q7: { questionId: 'q7', displayLabel: '7', isCorrect: false, userAnswer: 'A' } },
     questionTimelineLite: [{ q: 7, ms: 1000 }],
-    analysisSignals: { weak: ['tfng'] },
-    markedQuestions: ['q7'],
-    questionTypePerformance: { tfng: { total: 4 } }
+    markedQuestions: ['q7']
   }
+  await coach.runAutomaticReviewCoach()
+  assert.equal(payloads.length, 1)
+  assert.equal(payloads[0].action, 'review_set')
+  assert.equal(payloads[0].selectedText, '')
+  // Nothing the client sends changes what the host puts in the prompt.
+  assert.equal(coach.coachRetryKind.value, 'context_limit')
+})
+
+test('a whole-attempt review with a long selection is retried with the selection clipped', async () => {
+  const payloads = []
+  const selected = { text: 'x'.repeat(900), scope: 'passage', questionNumbers: ['7'] }
+  const { coach } = harness({
+    selected,
+    query: async (payload) => {
+      payloads.push(payload)
+      throw failure('coach.context_exceeded')
+    }
+  })
   await coach.runAutomaticReviewCoach()
   assert.equal(coach.coachRetryKind.value, 'context')
   await coach.retryCoachQuery('compact')
 
   const [full, compact] = payloads
-  assert.equal(compact.action, 'review_set')
+  assert.equal(compact.action, 'review_set', 'still the whole-attempt review')
   assert.equal(compact.content, full.content, 'compact keeps the question as it was')
-  assert.equal(full.attemptContext.questionTimelineLite.length, 1)
-  assert.deepEqual(compact.attemptContext.questionTimelineLite, [])
-  assert.deepEqual(compact.attemptContext.markedQuestions, [])
-  assert.deepEqual(compact.attemptContext.analysisSignals, null)
-  assert.deepEqual(compact.attemptContext.questionTypePerformance, {})
-  assert.equal(compact.attemptContext.wrongQuestions.length, full.attemptContext.wrongQuestions.length, 'what the coach needs is kept')
+  assert.equal(full.selectedText.length, 900)
+  assert.equal(compact.selectedText.length, 200)
+  assert.equal(coach.coachRetryKind.value, 'context_limit', 'nothing is left to clip')
 })
 
 test('retrying a whole-attempt review as it was resends it unchanged', async () => {

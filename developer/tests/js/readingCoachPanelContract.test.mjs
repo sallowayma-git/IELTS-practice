@@ -54,3 +54,20 @@ test('coach styles follow the Options font size and never use the 44px touch flo
   assert.ok(!/\bfont-size:\s*\d+px/.test(block.replace(/\.reading-coach-panel__close[^}]*\}/, '')),
     'coach text sizes scale with --coach-px')
 })
+
+test('a context overflow offers a compact retry only when it can shorten something', () => {
+  // The Windows runner checks sources out with CRLF.
+  const panel = readApp('modules/practice-reading/components/ReadingCoachPanel.vue').replace(/\r\n/g, '\n')
+  const buttons = (kind) => [...panel.matchAll(/<button[^>]*?v-if="([^"]*)"[^>]*?data-reading-coach-retry-mode="(\w+)"/gs)]
+    .filter(([, condition]) => new Function('coachRetryKind', `return ${condition}`)(kind))
+    .map(([, , mode]) => mode)
+  assert.deepEqual(buttons('context'), ['compact'], 'a long selection can be clipped: only the compact retry')
+  assert.deepEqual(buttons('context_limit'), [], 'nothing left to clip: no retry that would overflow again')
+  assert.deepEqual(buttons('truncated'), ['short', 'same'])
+  assert.deepEqual(buttons('plain'), ['same'])
+  // The compact button is about the selection, since that is all it can shorten.
+  assert.ok(!panel.includes('精简上下文后重试'), 'the host does not read the attempt context, so it cannot be "slimmed"')
+  // The learner is told why there is no retry, and what would help.
+  const note = panel.slice(panel.indexOf('data-reading-coach-retry-note') - 120, panel.indexOf('data-reading-coach-retry-note') + 260)
+  assert.ok(note.includes("coachRetryKind === 'context_limit'") && note.includes('换用上下文更大的模型'))
+})

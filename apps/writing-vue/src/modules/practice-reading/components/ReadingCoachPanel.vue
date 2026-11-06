@@ -113,10 +113,17 @@
               data-reading-coach-retry-mode="compact"
               @click="$emit('retry', 'compact')"
             >
-              {{ selectedContext ? '缩短选中内容后重试' : '精简上下文后重试' }}
+              缩短选中内容后重试
             </button>
+            <p
+              v-if="coachRetryKind === 'context_limit'"
+              class="reading-coach-retry-note"
+              data-reading-coach-retry-note
+            >
+              题目和原文已经无法再精简，同样的请求还会超出模型的上下文长度。请换用上下文更大的模型后再试。
+            </p>
             <button
-              v-if="coachRetryKind !== 'context'"
+              v-if="coachRetryKind !== 'context' && coachRetryKind !== 'context_limit'"
               class="reading-coach-chip"
               type="button"
               data-reading-coach-retry-mode="same"

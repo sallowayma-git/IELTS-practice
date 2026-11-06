@@ -114,13 +114,20 @@ const READING_COACH_REASK_QUERY = '没太懂，换个讲法把刚才这个问题
 // "short" asks for a brief answer (truncated output); "compact" resends with a
 // clipped selection and a slim attempt context (context exceeded).
 export type CoachRetryMode = 'same' | 'short' | 'compact'
-export type CoachRetryKind = '' | 'plain' | 'truncated' | 'context'
+export type CoachRetryKind = '' | 'plain' | 'truncated' | 'context' | 'context_limit'
 
 type CoachRetry = {
   code: string
   /** The typed question a failed send put back in the box; retrying consumes it. */
   draft: string
   run: (mode: CoachRetryMode) => Promise<unknown>
+  /**
+   * Whether a compact resend would send the model less than this request did.
+   * The host rebuilds the passage, questions and answers itself and does not read
+   * the client's attempt context, so the only thing compaction can shrink is a
+   * selection longer than the clip limit.
+   */
+  compactable: boolean
 }
 
 export const COACH_SHORT_ANSWER_SUFFIX = '（请用不超过 5 句话简要回答）'
@@ -451,7 +458,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     const code = coachRetry.value?.code
     if (!coachRetry.value) return ''
     if (code === 'coach.output_truncated') return 'truncated'
-    if (code === 'coach.context_exceeded') return 'context'
+    // A context overflow is only worth a "compact" retry when compacting changes the
+    // request; otherwise the same request would overflow again, so no retry is offered.
+    if (code === 'coach.context_exceeded') return coachRetry.value.compactable ? 'context' : 'context_limit'
     return 'plain'
   })
   // Failures land in the transcript as an error message; the status line only
@@ -753,7 +762,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   }
 
   // The slim form keeps what the coach needs to talk about this attempt (score,
-  // wrong questions) and drops the bulky telemetry.
+  // wrong questions) and drops the bulky telemetry. NOTE: the host builds the model
+  // context itself from the stored attempt and does not read this object, so the
+  // slim form does not shrink what the model receives; see `compactWouldShrink`.
   function buildAttemptContext(compact: boolean) {
     const current = submission.value
     return {
@@ -902,8 +913,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     const epoch = coachEpoch
     const isLive = () => epoch === coachEpoch && isCurrentSubmission(expectedSessionId)
     beginCoachRequest(normalizedQuery)
+    let requestPayload: AnyRecord | null = null
     try {
-      const requestPayload = buildCoachPayload(normalizedQuery, queryOptions)
+      requestPayload = buildCoachPayload(normalizedQuery, queryOptions)
       const response = await readingCoachApi.query(requestPayload, expectedSessionId, {
         onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'coach' }),
         onDelta: (text) => {
@@ -935,7 +947,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       offerCoachRetry(coachFailure, normalizedQuery.replace(COACH_SHORT_ANSWER_SUFFIX, ''), (mode) => sendCoachQuery(
         mode === 'short' ? `${normalizedQuery.replace(COACH_SHORT_ANSWER_SUFFIX, '')}${COACH_SHORT_ANSWER_SUFFIX}` : normalizedQuery,
         { ...queryOptions, compact: mode === 'compact' }
-      ))
+      ), compactWouldShrink(requestPayload))
       appendLocalCoachError(coachError.value)
       return null
     } finally {
@@ -945,8 +957,12 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
   }
 
-  function offerCoachRetry(failure: unknown, draft: string, run: CoachRetry['run']) {
-    coachRetry.value = { code: errorField(failure, 'code').toLowerCase(), draft, run }
+  function compactWouldShrink(payload: AnyRecord | null) {
+    return String(payload?.selectedText || '').length > COMPACT_SELECTION_LIMIT
+  }
+
+  function offerCoachRetry(failure: unknown, draft: string, run: CoachRetry['run'], compactable = false) {
+    coachRetry.value = { code: errorField(failure, 'code').toLowerCase(), draft, run, compactable }
   }
 
   function retryCoachQuery(mode: CoachRetryMode = 'same') {
@@ -985,8 +1001,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     const retryMode: CoachRetryMode = reviewOptions.mode || 'same'
     const reviewQuery = retryMode === 'short' ? `${AUTOMATIC_REVIEW_QUERY}${COACH_SHORT_ANSWER_SUFFIX}` : AUTOMATIC_REVIEW_QUERY
     beginCoachRequest(reviewQuery)
+    let requestPayload: AnyRecord | null = null
     try {
-      const requestPayload = buildCoachPayload(reviewQuery, {
+      requestPayload = buildCoachPayload(reviewQuery, {
         surface: 'review_workspace',
         action: 'review_set',
         promptKind: 'preset',
@@ -1029,7 +1046,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       }
       llmReviewStatus.value = 'failed'
       llmReviewMessage.value = formatLlmFailureStatusMessage(reviewFailure)
-      offerCoachRetry(reviewFailure, '', (mode) => runAutomaticReviewCoach({ expectedSessionId, mode }))
+      offerCoachRetry(reviewFailure, '', (mode) => runAutomaticReviewCoach({ expectedSessionId, mode }), compactWouldShrink(requestPayload))
       appendLocalCoachError(llmReviewMessage.value)
     } finally {
       finishCoachRequest(requestId, isLive)

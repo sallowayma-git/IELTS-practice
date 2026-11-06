@@ -391,6 +391,13 @@
   margin-top: -4px;
 }
 
+.runified .reading-coach-retry-note {
+  margin: 0;
+  font-size: calc(13 * var(--coach-px));
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
 .runified .reading-coach-feedback__option {
   height: auto;
   min-height: calc(28 * var(--coach-px));
