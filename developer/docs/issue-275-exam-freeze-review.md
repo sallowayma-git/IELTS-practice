@@ -66,6 +66,8 @@ The downloaded failed-run manifest resolves all **199** copied files. Its exam-f
 
 The sidecar matrix uses `macos-15`, retaining `aarch64-apple-darwin` and Python `arm64`. The existing release-contract test checks that tuple. Linux coverage and the aggregate CI dependency remain intact.
 
+Clean-run qualification also exposed a cache prerequisite: the static gate's offline domain tests need the locked `ppv-lite86` test dependency, which the earlier workspace check does not fetch. The Windows static job now runs `cargo fetch --locked --target x86_64-pc-windows-msvc` before the gate. This prepares all locked test dependencies while preserving the offline tests, assertions and lockfile.
+
 `exam_freeze_visual_check.py` is unchanged: exact style/rectangle comparison, channel tolerance **32**, maximum pixel difference ratio **0.005**, all **18** scenarios, and the complete **20**-script visual matrix are preserved. The ordinary comparison, rather than the baseline-update command's exit code, determines whether the accepted baselines pass.
 
 Final repair head, qualification runs, downloaded artifact verification, and the review decision are recorded in the repair PR. A repair-branch CI result does not claim that #264's later integration revision has passed; #274 and #275 stay open until that separate acceptance is complete.
