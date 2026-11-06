@@ -18,10 +18,17 @@ const instrumentedSource = source.replace(
             currentOptions = { ...currentOptions, ...(options || {}) };
         },
         setActiveLookup(lookup, selectedText) {
-            activeLookup = lookup || null;
-            activeHighlight = { textContent: selectedText || '' };
+            activePopup = {
+                lookup: lookup || null,
+                highlight: { textContent: selectedText || '', isConnected: true }
+            };
         },
-        saveActiveLookup
+        saveActiveLookup(button) {
+            activePopup.button = button;
+            activePopup.state = 'uncollected';
+            activePopup.payload = buildVocabPayload(activePopup);
+            return saveActiveLookup(button);
+        }
     };
 
     const api = {`

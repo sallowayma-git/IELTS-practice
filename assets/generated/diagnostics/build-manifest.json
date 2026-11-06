@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:1b0d80cab9f6c7d9ecf10a4c92b68f6595bfa8479595bcf4625ca776f7d54a26",
+  "buildId": "sha256:c13e2101d696d1c4b5d0750f2b419f4a846545ec7c3685dfa0a27d48dc3ed566",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -590,7 +590,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "f0c157cd8534c188e52b70813cea73ef06c07c374f52d84d5982d220845749c7"
+      "sha256": "9ec2b9d5977cc5808b01f8c21f756fa4b26711929dbd7785f5e09bc32c4c78fa"
     },
     {
       "path": "js/bundles/reading-tools.bundle.js",
@@ -1282,43 +1282,43 @@
       {
         "source": "js/runtime/reviewHighlightDictionary.js",
         "startLine": 11922,
-        "endLine": 12554,
+        "endLine": 12610,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/practiceTimerPreferences.js",
-        "startLine": 12558,
-        "endLine": 12646,
+        "startLine": 12614,
+        "endLine": 12702,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabContent.js",
-        "startLine": 12650,
-        "endLine": 12852,
+        "startLine": 12706,
+        "endLine": 12908,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabAnchors.js",
-        "startLine": 12856,
-        "endLine": 13117,
+        "startLine": 12912,
+        "endLine": 13173,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/readingVocabReader.js",
-        "startLine": 13121,
-        "endLine": 15126,
+        "startLine": 13177,
+        "endLine": 15182,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingTimingController.js",
-        "startLine": 15130,
-        "endLine": 15414,
+        "startLine": 15186,
+        "endLine": 15470,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/unifiedReadingPage.js",
-        "startLine": 15418,
-        "endLine": 24167,
+        "startLine": 15474,
+        "endLine": 24223,
         "sourceStartLine": 1
       }
     ],
