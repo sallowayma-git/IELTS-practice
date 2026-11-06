@@ -1311,6 +1311,61 @@ def wait_for_reading_view(driver: Driver, timeout_seconds: int = 30):
     raise RuntimeError(f"Reading view did not become ready: {last}")
 
 
+def check_notes_dialog(driver: Driver) -> None:
+    driver.script("""
+        const button = document.querySelector('#notes-drawer-btn');
+        button.focus();
+        button.click();
+        return true;
+    """)
+    wait_for_value(driver, """
+        return document.querySelector('#reading-note-drawer')?.getAttribute('aria-hidden') === 'false';
+    """, label="notes drawer open")
+    driver.script("""
+        const button = document.querySelector('#reading-note-drawer .reading-note-outline-add');
+        button.focus();
+        button.click();
+        return true;
+    """)
+    wait_for_value(driver, """
+        const editor = document.querySelector('#reading-note-editor');
+        return editor?.getAttribute('aria-hidden') === 'false'
+          && getComputedStyle(editor).display !== 'none'
+          && document.activeElement === editor.querySelector('textarea');
+    """, label="notes editor initial focus")
+    for shift, control in ((False, 'button'), (False, 'textarea'), (True, 'button'), (True, 'textarea')):
+        trapped = driver.script("""
+            document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'Tab', shiftKey: arguments[0], bubbles: true, cancelable: true
+            }));
+            return document.activeElement === document.querySelector('#reading-note-editor ' + arguments[1]);
+        """, [shift, control])
+        require(trapped, f"notes dialog did not trap {'Shift+Tab' if shift else 'Tab'} on {control}")
+    driver.script("""
+        document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'Escape', bubbles: true, cancelable: true
+        }));
+        return true;
+    """)
+    wait_for_value(driver, """
+        const editor = document.querySelector('#reading-note-editor');
+        return editor?.getAttribute('aria-hidden') === 'true'
+          && getComputedStyle(editor).display === 'none'
+          && document.activeElement === document.querySelector('#reading-note-drawer .reading-note-outline-add');
+    """, label="notes editor close and focus restoration")
+    driver.script("""
+        const button = document.querySelector('#notes-drawer-btn');
+        button.focus();
+        button.click();
+        return true;
+    """)
+    wait_for_value(driver, """
+        const drawer = document.querySelector('#reading-note-drawer');
+        return drawer?.getAttribute('aria-hidden') === 'true'
+          && Array.from(drawer.querySelectorAll('button')).every(button => button.tabIndex === -1);
+    """, label="closed notes drawer excluded from Tab order")
+
+
 def capture_route_visual(driver: Driver, route: str, selector: str, screenshot: Path) -> dict:
     driver.script("location.hash = arguments[0]; return location.hash", [route])
     wait_for_value(driver, f"""
@@ -1747,30 +1802,7 @@ def main() -> int:
                 raise RuntimeError(f"reading {pane_name} collapsed: {layout}")
         driver.screenshot(READING_SCREENSHOT)
         metadata["readingScreenshot"] = str(READING_SCREENSHOT.resolve())
-        driver.script("""
-            const button = document.querySelector('#note-btn');
-            button.focus();
-            button.click();
-            return document.activeElement?.id;
-        """)
-        wait_for_value(
-            driver,
-            "return document.activeElement?.tagName === 'TEXTAREA' && getComputedStyle(document.querySelector('#notes-panel')).display !== 'none'",
-        )
-        tab_target = driver.script("""
-            document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
-            return document.activeElement?.id || '';
-        """)
-        if tab_target != "close-note":
-            raise RuntimeError(f"notes dialog did not trap Tab: {tab_target}")
-        driver.script("""
-            document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
-            return true;
-        """)
-        wait_for_value(
-            driver,
-            "return getComputedStyle(document.querySelector('#notes-panel')).display === 'none' && document.activeElement?.id === 'note-btn'",
-        )
+        check_notes_dialog(driver)
         checks["notesDialog"] = "passed"
         negative = driver.script("""
             return window.__TAURI_INTERNALS__.invoke('reading_submit_attempt', {cmd: {

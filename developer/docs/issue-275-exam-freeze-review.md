@@ -68,6 +68,8 @@ The sidecar matrix uses `macos-15`, retaining `aarch64-apple-darwin` and Python 
 
 Clean-run qualification also exposed a cache prerequisite: the static gate's offline domain tests need the locked `ppv-lite86` test dependency, which the earlier workspace check does not fetch. The Windows static job now runs `cargo fetch --locked --target x86_64-pc-windows-msvc` before the gate. This prepares all locked test dependencies while preserving the offline tests, assertions and lockfile.
 
+Packaged qualification reached the reading UI but exposed stale test contracts. The notes check still used the removed `#note-btn` and `#notes-panel`; it now opens the current notes drawer and its new-note editor, verifies initial textarea focus, forward/backward Tab wrapping, Escape focus restoration to the opener, and closed-drawer Tab exclusion. The failure-only startup probe now unpacks all three values returned by `stage_test_runtime`. These changes adapt test tools to the existing application behavior; production and packaging code are unchanged.
+
 `exam_freeze_visual_check.py` is unchanged: exact style/rectangle comparison, channel tolerance **32**, maximum pixel difference ratio **0.005**, all **18** scenarios, and the complete **20**-script visual matrix are preserved. The ordinary comparison, rather than the baseline-update command's exit code, determines whether the accepted baselines pass.
 
 Final repair head, qualification runs, downloaded artifact verification, and the review decision are recorded in the repair PR. A repair-branch CI result does not claim that #264's later integration revision has passed; #274 and #275 stay open until that separate acceptance is complete.
