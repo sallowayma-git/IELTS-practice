@@ -153,10 +153,20 @@ def output_text(value: str | bytes | None) -> str:
 
 
 def current_artifacts(started_ns: int) -> list[Path]:
+    # Keep the existing top-level evidence and the complete exam-freeze tree.
+    # Explicit source roots exclude EVIDENCE itself and unrelated old run archives.
+    candidates = (
+        *REPORTS.glob("*-current.png"),
+        *REPORTS.glob("*-report.json"),
+        *(REPORTS / "exam-freeze").rglob("*"),
+    )
     return sorted(
         path
-        for path in REPORTS.glob("*-current.png")
-        if path.is_file() and path.stat().st_mtime_ns >= started_ns
+        for path in candidates
+        if path != REPORT
+        and path.suffix in {".json", ".png"}
+        and path.is_file()
+        and path.stat().st_mtime_ns >= started_ns
     )
 
 
@@ -270,16 +280,14 @@ def main() -> int:
         finally:
             stop_process(process)
 
-    screenshots = current_artifacts(started_ns)
-    for screenshot in screenshots:
-        shutil.copy2(screenshot, EVIDENCE / screenshot.name)
+    artifacts = current_artifacts(started_ns)
+    for artifact in artifacts:
+        destination = EVIDENCE / artifact.relative_to(REPORTS)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(artifact, destination)
 
-    case_reports = sorted(
-        path for path in REPORTS.glob('*-report.json')
-        if path != REPORT and path.stat().st_mtime_ns >= started_ns
-    )
-    for case_report in case_reports:
-        shutil.copy2(case_report, EVIDENCE / case_report.name)
+    def evidence_paths(paths: list[Path]) -> list[str]:
+        return [str((EVIDENCE / path.relative_to(REPORTS)).relative_to(ROOT)) for path in paths]
 
     expected_count = sum(len(scripts) for _, scripts in SCRIPT_GROUPS)
     passed = (
@@ -299,8 +307,9 @@ def main() -> int:
         "executedScripts": len(results),
         "startupError": startup_error,
         "scripts": results,
-        "screenshots": [str((EVIDENCE / path.name).relative_to(ROOT)) for path in screenshots],
-        "caseReports": [str((EVIDENCE / path.name).relative_to(ROOT)) for path in case_reports],
+        "screenshots": evidence_paths([path for path in artifacts if path.suffix == ".png"]),
+        "caseReports": evidence_paths([path for path in artifacts if path.name.endswith("-report.json")]),
+        "artifacts": evidence_paths(artifacts),
     }
     serialized = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     REPORT.write_text(serialized, encoding="utf-8")

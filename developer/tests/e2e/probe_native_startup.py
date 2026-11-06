@@ -14,7 +14,7 @@ def main() -> None:
     app = Path(os.environ["TAURI_APP_BINARY"]).resolve()
     reports = ROOT / "developer/tests/e2e/reports/native-diagnostics"
     reports.mkdir(parents=True, exist_ok=True)
-    staged, runtime = stage_test_runtime(app)
+    staged, runtime, _ = stage_test_runtime(app)
     result = {
         "purpose": "Startup diagnosis only; the failed practice-flow result remains required.",
         "applicationSha256": sha256_file(app),
