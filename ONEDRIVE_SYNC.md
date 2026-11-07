@@ -1,0 +1,77 @@
+# Optional OneDrive folder sync
+
+This feature is built on `feature/multi-device-easy-deploy`. It adds an opt-in desktop folder transport alongside the branch's existing backend. It does not connect the backend record API or PostgreSQL to OneDrive.
+
+## Choose a storage path
+
+- The existing backend uses accounts, sessions and PostgreSQL for API records.
+- Folder sync exchanges this browser's AppData / IndexedDB learning data through a folder that the OneDrive desktop client uploads and downloads.
+- Signing into the backend does not grant folder permission, import server records into AppData, or send folder-synced records to PostgreSQL. There is no bridge between these stores.
+- Use a dedicated personal OneDrive folder outside the web root. The application source can remain elsewhere. Do not expose personal sync logs through a general-purpose static server.
+
+## First connection
+
+1. Back up existing learning data with Export. Run the same version of this branch on each desktop computer, using Chrome / Edge with directory access and Web Locks support.
+2. Open **Settings → Data management → OneDrive 自动同步**.
+3. On computer A, choose **第一台电脑：创建同步空间**, select a dedicated OneDrive folder and allow read/write access. The app creates `user-data/workspace.json` and `user-data/sync-v1/<space>/ops/<writer>/` below it.
+4. Wait for OneDrive to download that directory on B. Choose **连接已有同步空间** on B and select the same synced folder, or its `user-data` directory. Do not create a second space.
+5. Set `user-data` to **Always keep on this device** in OneDrive. Finish a synthetic practice on A, wait for local publication and OneDrive transfer, then verify it on B. Test the reverse direction too.
+
+Every computer needs an initial grant. If permission expires, use **恢复文件夹权限**. When direct `file://` directory access is unavailable, use a fixed localhost address. Browser, origin, protocol and port changes can select a different local database; export from the old entry and use incremental import before connecting the new entry.
+
+Completed commits schedule publication automatically. A visible page checks approximately every 15 seconds, and returning to the page also schedules a check. **立即同步** requests a check now. OneDrive transfer latency is separate; closed pages receive changes the next time they open.
+
+## Data and merge rules
+
+| Data in this branch | Behavior |
+|---|---|
+| Completed reading, listening and suite attempts | Keep summary, answer details and annotations together; separate attempt IDs remain separate |
+| Vocabulary words, lists and user configuration | Merge independent entries; retain alternatives for competing edits, including word review-state conflicts |
+| Goals, library configurations / imported indexes and manual achievement flags | Sync domain data; library configuration does not include question or audio files |
+| Theme, reading display and timer preferences | Optional; only the selected portable preference fields are exchanged |
+| Active practice windows, unfinished drafts, timing locks, device paths / handles and backend credentials | Remain local or under the existing backend's control |
+
+This branch does not have the newer static edition's normalized reading-vocabulary graph or separate practice review-plan APIs. This contribution does not backport those features. Its workspace format is `ielts-atlas-folder-sync-multidevice`, deliberately different from the newer static prototype; use a new dedicated space. Do not connect both implementations to one data directory.
+
+Changes and the durable outbox are written in one IndexedDB transaction. Failed publication or lost permission leaves queued changes available after a restart. Each browser writes immutable operation files under a separate writer ID. Operation IDs and SHA-256 detect duplicates or changed content; causal versions distinguish later changes from concurrent ones.
+
+Independent records merge. Competing edits and edit/delete races retain alternatives in the panel. Selecting a version publishes a new resolution; it does not erase the original log. Explicit deletion creates a tombstone. Replaying older operations does not resurrect causally superseded records. Receiving one operation that deletes at least 10 attempts and at least half of local attempts requires confirmation.
+
+**已写入同步文件夹** means the local file closed and passed a read-back check. It does not mean OneDrive uploaded it. The OneDrive client is the source of transfer status. SHA-256 checks consistency; files contain plaintext learning data and are not encrypted or authenticated.
+
+## Backup, reset and recovery
+
+Connecting first creates an application backup. Sync identity, queues and directory handles are not included in ordinary portable exports. Existing disk backups remain a separate snapshot feature with an independent binding.
+
+Disconnecting preserves local learning data and on-disk logs. Reconnecting resumes that space. A fresh browser profile can reconstruct data from retained logs using a new writer ID. Do not manually edit workspace files or tombstones.
+
+The application's local site reset coordinates with the worker under the existing reset lock. It refuses to clear while unpublished data cannot be flushed. Clearing a local browser is not published as remote deletion. This protection cannot prevent data loss from manually clearing browser storage outside the application.
+
+History is retained without automatic checkpointing or garbage collection. A file larger than 32 MB is rejected and its pending operation remains queued. Long-running, large-history performance needs further evaluation.
+
+## Build and test
+
+Use this branch's existing lockfiles; no dependency version upgrade is required. From the source root:
+
+```sh
+npm ci --prefix developer
+node developer/node_modules/playwright/cli.js install chromium --only-shell
+node scripts/build-bundles.mjs
+node scripts/build-bundles.mjs --check
+npm --prefix developer run test:sync
+npm --prefix developer test
+```
+
+On Windows use `npm.cmd` if PowerShell blocks the npm script. A process-scoped `PLAYWRIGHT_BROWSERS_PATH` may point to your configured shared browser cache for both installation and execution.
+
+To test the real backend HTTP entry with isolated in-memory stores:
+
+```sh
+npm ci --prefix backend
+npm --prefix backend test
+npm --prefix developer run test:sync:backend
+```
+
+The last command requires both project-local dependency directories. It serves production pages through `backend/src/app.js`, substitutes the directory chooser with an isolated real browser directory and observes automatic publication. It does not verify PostgreSQL persistence, Docker or OneDrive transfer.
+
+See [verification results](developer/doc/OneDrive-Sync-Verification.md) and the [two-computer manual checklist](developer/doc/OneDrive-Sync-Manual-Test.md).

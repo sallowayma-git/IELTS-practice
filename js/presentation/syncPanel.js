@@ -1,0 +1,155 @@
+(function installFolderSyncPanel(global) {
+    'use strict';
+    if (!global.document || !global.FolderSyncService) return;
+    const service = global.FolderSyncService, doc = global.document;
+    let modal = null, statusLine, conflictList, errorLine, preferences, versionSignature = '';
+    const buttons = {};
+    function element(tag, text, className) {
+        const node = doc.createElement(tag);
+        if (text) node.textContent = text;
+        if (className) node.className = className;
+        return node;
+    }
+    function message(text, type = 'info') {
+        if (typeof global.showMessage === 'function') global.showMessage(text, type);
+        else if (errorLine) errorLine.textContent = text;
+    }
+    function action(button, task) {
+        button.addEventListener('click', () => {
+            let operation;
+            try { operation = task(); } catch (error) { message(error.message, 'error'); return; }
+            button.disabled = true;
+            Promise.resolve(operation).catch(error => {
+                if (error.name !== 'AbortError') message(error.message, 'error');
+            }).finally(() => { button.disabled = false; render(service.getStatus()); });
+        });
+    }
+    function ensureModal() {
+        if (modal) return modal;
+        modal = element('div', '', 'theme-modal folder-sync-modal shui-secondary-modal shui-secondary-modal--sm');
+        modal.id = 'folder-sync-modal'; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'folder-sync-title');
+        const content = element('div', '', 'theme-modal-content shui-secondary-modal__content');
+        const header = element('div', '', 'theme-modal-header shui-secondary-modal__header');
+        const title = element('h3', '☁️ OneDrive 自动同步'); title.id = 'folder-sync-title';
+        const close = element('button', '×', 'theme-modal-close'); close.type = 'button'; close.setAttribute('aria-label', '关闭同步面板');
+        close.addEventListener('click', () => modal.classList.remove('show'));
+        header.append(title, close);
+        const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
+        body.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。网页本身可以继续放在开发目录。'));
+        body.append(element('p', '请确认所选目录由 OneDrive 客户端同步。第一台电脑创建空间，其他电脑下载完成后连接已有空间；将 user-data 设置为“始终保留在此设备上”。', 'folder-sync-muted'));
+        statusLine = element('p', '正在读取本机同步状态…', 'folder-sync-status');
+        statusLine.setAttribute('role', 'status'); statusLine.setAttribute('aria-live', 'polite');
+        body.append(statusLine);
+        const actions = element('div', '', 'external-backup-panel__actions');
+        for (const [key, label, task] of [
+            ['create', '📁 第一台电脑：创建同步空间', () => service.connect(true)],
+            ['join', '🔗 连接已有同步空间', () => service.connect(false)],
+            ['sync', '🔄 立即同步', () => service.syncNow()],
+            ['permission', '🔑 恢复文件夹权限', () => service.reauthorize()],
+            ['disconnect', '断开本机同步', () => {
+                if (global.confirm('断开后保留本机记录和 OneDrive 文件，下次连接可继续同步。是否断开？')) return service.disconnect();
+            }]
+        ]) {
+            const button = element('button', label, 'btn data-mgmt-btn'); button.type = 'button'; button.id = 'folder-sync-' + key + '-btn';
+            buttons[key] = button; action(button, task); actions.append(button);
+        }
+        body.append(actions);
+        const option = element('label', '', 'folder-sync-option');
+        preferences = element('input'); preferences.type = 'checkbox'; preferences.id = 'folder-sync-preferences';
+        option.append(preferences, doc.createTextNode(' 同步主题、阅读显示和计时偏好'));
+        preferences.addEventListener('change', () => {
+            service.setPreferences(preferences.checked).catch(error => message(error.message, 'error'))
+                .finally(() => render(service.getStatus()));
+        });
+        body.append(option);
+        errorLine = element('p', '', 'folder-sync-error'); errorLine.setAttribute('role', 'status'); body.append(errorLine);
+        conflictList = element('div', '', 'folder-sync-conflicts'); body.append(conflictList);
+        body.append(element('p', '“已写入同步文件夹”表示本机写入成功。云端上传进度由 OneDrive 客户端管理；其他电脑收到文件并打开网页后自动合并。未完成的练习窗口不会跨设备接管。', 'folder-sync-muted'));
+        content.append(header, body); modal.append(content); doc.body.append(modal);
+        modal.addEventListener('click', event => { if (event.target === modal) modal.classList.remove('show'); });
+        modal.addEventListener('keydown', event => { if (event.key === 'Escape') modal.classList.remove('show'); });
+        render(service.getStatus());
+        return modal;
+    }
+    function formatDate(value) { return value ? new Date(value).toLocaleString() : '尚无'; }
+    function textStatus(status) {
+        if (!status.supported) return '当前环境不支持自动文件夹同步。请使用桌面 Chrome / Edge；必要时通过固定 localhost 地址打开。';
+        if (!status.enabled || !status.bound) return '未连接同步空间，学习数据仍保存在当前浏览器。';
+        if (status.permission !== 'granted') return '已连接 ' + status.directoryName + '，需要点击“恢复文件夹权限”才能继续读写。';
+        if (status.busy) return '正在检查并合并同步文件…';
+        return '已连接 ' + status.directoryName + ' · 待发送 ' + status.pending + ' 条 · 待处理冲突 ' + status.conflicts.length
+            + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
+    }
+    function banner(status) {
+        const needsAttention = status.enabled && status.bound && (status.permission !== 'granted' || status.conflicts.length || status.blocked.length || status.errors.length);
+        let node = doc.getElementById('folder-sync-banner');
+        if (!needsAttention) { node?.remove(); return; }
+        if (!node) {
+            let stack = doc.getElementById('app-global-banner-stack');
+            if (!stack) { stack = element('div', '', 'app-global-banner-stack'); stack.id = 'app-global-banner-stack'; doc.body.append(stack); }
+            node = element('div', '', 'app-global-banner app-global-banner--backup'); node.id = 'folder-sync-banner';
+            node.setAttribute('role', 'status');
+            const copy = element('span'); copy.id = 'folder-sync-banner-copy';
+            const open = element('button', '打开同步面板', 'btn app-global-banner__btn'); open.type = 'button'; open.addEventListener('click', openModal);
+            node.append(copy, open); stack.append(node);
+        }
+        doc.getElementById('folder-sync-banner-copy').textContent = status.permission !== 'granted' ? 'OneDrive 同步需要重新授权文件夹'
+            : status.blocked.length ? 'OneDrive 同步有批量删除请求需要确认'
+                : status.conflicts.length ? 'OneDrive 同步有 ' + status.conflicts.length + ' 项内容需要选择版本' : 'OneDrive 同步遇到问题，本机记录仍保留';
+    }
+    function render(status) {
+        const entry = doc.getElementById('folder-sync-entry-btn');
+        if (entry) entry.textContent = !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
+            : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 需授权'
+                : status.conflicts.length ? '☁️ OneDrive 同步 · 有冲突' : status.pending ? '☁️ OneDrive 同步 · 待发送' : '☁️ OneDrive 同步 · 已连接';
+        banner(status);
+        if (!modal) return;
+        statusLine.textContent = textStatus(status);
+        errorLine.textContent = status.errors.map(error => (error.path ? error.path + '：' : '') + error.message).slice(0, 5).join('\n');
+        buttons.create.disabled = buttons.join.disabled = !status.supported || status.busy;
+        buttons.sync.disabled = buttons.disconnect.disabled = !status.enabled || !status.bound || status.busy;
+        buttons.permission.disabled = !status.bound || status.permission === 'granted' || status.busy;
+        preferences.disabled = !status.enabled || !status.bound || status.busy;
+        preferences.checked = status.preferences === true;
+        const signature = JSON.stringify([status.conflicts.map(item => [item.key, item.versions.map(version => version.id)]), status.blocked]);
+        if (signature === versionSignature) return;
+        versionSignature = signature; conflictList.replaceChildren();
+        for (const blocked of status.blocked) {
+            const item = element('section', '', 'folder-sync-conflict');
+            item.append(element('p', '另一台电脑请求删除 ' + blocked.count + ' 条练习。为保护历史，已暂停应用这次删除。'));
+            const approve = element('button', '确认应用这次批量删除', 'btn btn-secondary'); approve.type = 'button';
+            action(approve, () => {
+                if (global.confirm('确认从本机移除这次请求中的 ' + blocked.count + ' 条练习？原始同步日志仍保留。')) return service.approveDelete(blocked.id);
+            });
+            item.append(approve); conflictList.append(item);
+        }
+        if (status.conflicts.length) conflictList.append(element('h4', '选择需要保留的版本'));
+        for (const conflict of status.conflicts) {
+            const item = element('section', '', 'folder-sync-conflict');
+            const first = conflict.versions.find(version => version.value.exists)?.value.value;
+            const name = first?.practiceSummaries?.title || first?.title || ({ vocabulary: '词汇数据', libraries: '题库配置', achievements: '成就标记', preferences: '外观偏好' })[conflict.key] || conflict.key;
+            item.append(element('strong', name));
+            conflict.versions.forEach((version, index) => {
+                const details = element('details');
+                const label = (version.value.exists ? '版本 ' + (index + 1) : '删除此项') + ' · 来源 ' + version.id.slice(0, 8);
+                details.append(element('summary', label));
+                const raw = JSON.stringify(version.value, null, 2);
+                details.append(element('pre', raw.length > 18000 ? raw.slice(0, 18000) + '\n…（预览已截断；完整版本保留在同步日志中）' : raw));
+                const choose = element('button', '采用这个版本', 'btn btn-secondary'); choose.type = 'button';
+                action(choose, () => {
+                    if (global.confirm('采用所选版本并同步到其他电脑？其他原始版本仍保留在同步日志中。')) return service.resolve(conflict.key, version.id);
+                });
+                details.append(choose); item.append(details);
+            });
+            conflictList.append(item);
+        }
+    }
+    function openModal() { ensureModal().classList.add('show'); }
+    function boot() {
+        doc.getElementById('folder-sync-entry-btn')?.addEventListener('click', openModal);
+        service.onStatusChange(render);
+    }
+    global.FolderSyncPanel = Object.freeze({ open: openModal });
+    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
+})(typeof window !== 'undefined' ? window : globalThis);

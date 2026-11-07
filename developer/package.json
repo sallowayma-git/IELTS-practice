@@ -9,6 +9,8 @@
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 \"tests/js/**/*.test.js\"",
-    "test:unit": "node --test --test-concurrency=1 \"tests/js/**/*.test.js\""
+    "test:unit": "node --test --test-concurrency=1 \"tests/js/**/*.test.js\"",
+    "test:sync": "node --test --test-concurrency=1 tests/js/folderSyncModel.test.js tests/js/folderSyncPersistence.test.js tests/js/folderSyncRelease.test.js",
+    "test:sync:backend": "node --test tests/e2e/folderSyncBackend.node.js"
   }
 }

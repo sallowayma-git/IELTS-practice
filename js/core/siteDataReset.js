@@ -274,7 +274,8 @@
             try {
                 result = await serviceInfo.service.withFullResetLock(async () => {
                     callbackEntered = true;
-                    return performLocked(serviceInfo.service);
+                    const clear = () => performLocked(serviceInfo.service);
+                    return global.FolderSyncService ? global.FolderSyncService.withReset(clear) : clear();
                 });
             } catch (error) {
                 return externalBackupFailure(

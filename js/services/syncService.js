@@ -1,0 +1,189 @@
+(function installFolderSyncService(global) {
+    'use strict';
+    if (global.FolderSyncService) return;
+    const adapter = global.SyncFolderAdapter, model = global.FolderSyncModel;
+    const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
+    const listeners = new Set();
+    let binding = null, timer = null, polling = null, running = null, initPromise = null, initialized = false, suspended = false;
+    let channel = null;
+    let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
+        permission: 'prompt', busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
+    function emit(patch = {}) {
+        view = Object.assign({}, view, patch);
+        for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
+    }
+    function getStatus() { return model.copy({ ...view, suspended }); }
+    async function refresh() {
+        const state = await global.AppData.folderSync.status();
+        emit({ ...state, bound: !!binding, directoryName: binding?.name || null,
+            lastPublishAt: binding?.lastPublishAt || null, lastReceiveAt: binding?.lastReceiveAt || null });
+        return state;
+    }
+    function announce(type) { try { channel?.postMessage({ type }); } catch (_) { /* best effort */ } }
+    function withLock(task, background = false) {
+        if (!global.navigator?.locks?.request) throw new Error('当前浏览器缺少安全的跨标签页锁，请使用桌面 Chrome / Edge');
+        return global.navigator.locks.request(LOCK, { mode: 'exclusive', ...(background ? { ifAvailable: true } : {}) },
+            lock => lock ? task() : { skipped: true });
+    }
+    function schedule(delay = 1000) {
+        if (suspended || timer) return;
+        timer = global.setTimeout(() => { timer = null; syncNow(true).catch(() => {}); }, delay);
+    }
+    async function runUnlocked() {
+        if (suspended) return;
+        binding = await adapter.binding();
+        const state = await refresh();
+        if (!binding || !state.enabled) return;
+        if (binding.spaceId !== state.spaceId) throw new Error('本机绑定与数据空间不一致，请重新连接');
+        const permission = await adapter.permission(binding.directory);
+        emit({ permission });
+        if (permission !== 'granted') return;
+        const root = await adapter.workspace(binding);
+        const pending = await global.AppData.folderSync.pending();
+        const errors = [];
+        let published = 0, received = 0;
+        for (const operation of pending.slice(0, 100)) {
+            try {
+                await adapter.publish(root, operation);
+                await global.AppData.folderSync.acknowledge([operation.id]);
+                published++;
+            } catch (error) { errors.push({ path: operation.id, message: error.message }); break; }
+        }
+        const known = await global.AppData.folderSync.known();
+        const scan = await adapter.scan(root, async operation => {
+            if (suspended) throw new Error('本机同步已暂停');
+            if (operation.spaceId !== state.spaceId) throw new Error('该日志不属于当前数据空间');
+            const hash = model.digest(operation);
+            if (known[operation.id] === hash) return;
+            await global.AppData.folderSync.receive(operation);
+            known[operation.id] = hash;
+            received++;
+        });
+        errors.push(...scan.errors);
+        if (published) binding.lastPublishAt = new Date().toISOString();
+        if (received) binding.lastReceiveAt = new Date().toISOString();
+        if (published || received) await adapter.binding(binding);
+        emit({ errors });
+        const latest = await refresh();
+        if (received && typeof global.syncPracticeRecords === 'function') {
+            try { await global.syncPracticeRecords({ forceRender: true }); } catch (_) { /* next view activation reads durable data */ }
+        }
+        if (latest.pending && !errors.length) schedule(1000);
+        return { published, received, errors };
+    }
+    function syncNow(background = false) {
+        if (running) return running;
+        emit({ busy: true });
+        running = init().then(() => withLock(runUnlocked, background)).catch(error => {
+            emit({ errors: [{ path: '', message: error.message }] });
+            if (!background) throw error;
+        }).finally(() => { running = null; emit({ busy: false }); });
+        return running;
+    }
+    async function connect(create = false) {
+        const selection = adapter.pick();
+        const selected = await selection;
+        await init();
+        const result = await withLock(async () => {
+            const space = await adapter.openWorkspace(selected, create);
+            const current = await global.AppData.folderSync.status();
+            if (current.enabled && current.spaceId !== space.spaceId) throw new Error('请先断开当前空间，再连接其他空间');
+            binding = { directory: space.directory, spaceId: space.spaceId, name: space.name };
+            await adapter.binding(binding);
+            await global.AppData.folderSync.connect(space.spaceId);
+            adapter.clearCache(); suspended = false;
+            emit({ permission: await adapter.permission(binding.directory), errors: [] });
+            await refresh();
+            return { existing: space.existing, spaceId: space.spaceId };
+        });
+        announce('binding-changed');
+        await syncNow();
+        return result;
+    }
+    // Starts requestPermission directly inside the click handler, before any asynchronous read.
+    function reauthorize() {
+        if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
+        const request = adapter.requestPermission(binding.directory);
+        return request.then(permission => {
+            emit({ permission });
+            if (permission !== 'granted') throw new Error('尚未获得同步文件夹读写权限');
+            announce('binding-changed'); return syncNow();
+        });
+    }
+    async function disconnect() {
+        await withLock(async () => {
+            await global.AppData.folderSync.disconnect();
+            await adapter.binding(null);
+            binding = null; adapter.clearCache();
+            emit({ errors: [], permission: 'prompt' }); await refresh();
+        });
+        announce('binding-changed');
+    }
+    async function resolve(key, headId) {
+        await withLock(() => global.AppData.folderSync.resolve(key, headId));
+        await refresh(); await syncNow();
+    }
+    async function setPreferences(enabled) {
+        await withLock(() => global.AppData.folderSync.setPreferences(enabled));
+        await refresh(); await syncNow();
+    }
+    async function approveDelete(id) {
+        await withLock(() => global.AppData.folderSync.approveDelete(id));
+        await refresh(); await syncNow();
+    }
+    async function withReset(task) {
+        // Called while the shared full-reset lock is already held.
+        await runUnlocked();
+        const state = await global.AppData.folderSync.status();
+        if (state.enabled && state.pending) throw new Error('还有未写入 OneDrive 文件夹的记录，请恢复权限并同步后再清理本机');
+        suspended = true; announce('reset-pause');
+        if (timer) { global.clearTimeout(timer); timer = null; }
+        try {
+            const result = await task();
+            if (result?.success !== true) { suspended = false; announce('reset-resume'); }
+            return result;
+        } catch (error) { suspended = false; announce('reset-resume'); throw error; }
+    }
+    function init() {
+        if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; throw error; });
+        return initPromise;
+    }
+    async function initialize() {
+        if (initialized) return;
+        initialized = true;
+        await global.AppData.ready;
+        binding = await adapter.binding();
+        if (binding) emit({ permission: await adapter.permission(binding.directory) });
+        await refresh();
+        if (typeof global.BroadcastChannel === 'function') {
+            channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
+            channel.onmessage = event => {
+                if (event.data?.type === 'reset-pause') { suspended = true; emit(); }
+                else if (event.data?.type === 'reset-resume') { suspended = false; schedule(); }
+                else if (event.data?.type === 'binding-changed') {
+                    adapter.binding().then(value => { binding = value; adapter.clearCache(); return refresh(); }).then(() => schedule()).catch(error => emit({ errors: [{ path: '', message: error.message }] }));
+                }
+            };
+        }
+        global.AppData.backups.onDataCommitted(event => {
+            if (!event.targets?.some(target => target.syncOrigin)) schedule();
+        });
+        global.document?.addEventListener('visibilitychange', () => {
+            if (global.document.visibilityState === 'visible') schedule(0);
+        });
+        global.addEventListener?.('online', () => schedule(0));
+        polling = global.setInterval(() => {
+            if (global.document?.visibilityState !== 'hidden') schedule(0);
+        }, 15000);
+        if (binding && view.enabled) schedule(0);
+    }
+    global.FolderSyncService = Object.freeze({ init, connect, disconnect, reauthorize, syncNow, resolve,
+        setPreferences, approveDelete, withReset, getStatus, onStatusChange(listener) {
+            listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
+        } });
+    if (global.document) {
+        const start = () => init().catch(error => emit({ errors: [{ path: '', message: error.message }] }));
+        if (global.document.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
+        else start();
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
