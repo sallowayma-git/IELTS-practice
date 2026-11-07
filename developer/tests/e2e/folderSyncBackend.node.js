@@ -46,6 +46,11 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         await page.evaluate(() => AppData.ready);
         await page.locator('#license-modal.show .lm-btn').click();
         await page.waitForFunction(() => getComputedStyle(document.getElementById('license-modal')).opacity === '0');
+        const mainControls = () => page.evaluate(() => Array.from(document.querySelectorAll(
+            'nav button, #overview-view h2, #overview-view h3, #overview-view button'
+        ), node => node.textContent.trim()));
+        const originalControls = await mainControls();
+        assert.equal(await page.locator('#settings-view .data-management-panel #folder-sync-entry-btn').count(), 1);
         await page.locator('button[data-view="settings"]').click();
         await page.locator('#folder-sync-entry-btn').click();
         assert(await page.locator('#folder-sync-modal').isVisible());
@@ -109,12 +114,30 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         assert(!(await page.locator('#folder-sync-enable-btn').isVisible()));
         assert(!(await page.locator('#folder-sync-sync-btn').isEnabled()));
         assert((await page.locator('.folder-sync-status').textContent()).includes('同步已暂停'));
-        assert((await page.locator('#folder-sync-banner-copy').textContent()).includes('恢复同步'));
+        assert.equal(await page.locator('#folder-sync-banner').count(), 0);
+        await page.locator('#folder-sync-modal .theme-modal-close').click();
+        for (const view of ['overview', 'browse', 'practice', 'more']) {
+            await page.locator('button[data-view="' + view + '"]').click();
+            await page.waitForFunction(view => document.getElementById(view + '-view').classList.contains('active'), view);
+            assert(!(await page.locator('#folder-sync-entry-btn').isVisible()), view + ' has no sync settings entry');
+            assert(!(await page.locator('#folder-sync-modal').isVisible()));
+            assert.equal(await page.getByRole('button', { name: '打开同步面板', exact: true }).count(), 0);
+            assert.equal(await page.locator('#folder-sync-banner').count(), 0);
+            if (view === 'overview' && process.env.ONEDRIVE_SYNC_OVERVIEW_SCREENSHOT) {
+                await page.screenshot({ path: path.resolve(process.env.ONEDRIVE_SYNC_OVERVIEW_SCREENSHOT) });
+            }
+        }
+        assert.deepEqual(await mainControls(), originalControls, 'original navigation and overview controls are unchanged');
+        await page.locator('button[data-view="settings"]').click();
+        assert((await page.locator('#folder-sync-entry-btn').textContent()).includes('已暂停'));
+        await page.locator('#folder-sync-entry-btn').click();
+        assert(await page.locator('#folder-sync-permission-btn').isVisible());
         const queued = await page.evaluate(() => AppData.folderSync.pending());
         assert(queued.some(op => op.changes.some(change => change.key === 'practice/paused-record')));
         await page.locator('#folder-sync-permission-btn').click();
         await page.waitForFunction(() => window.__permissionRequests === 1 && !document.getElementById('folder-sync-permission-btn').disabled);
         assert(await page.locator('#folder-sync-permission-btn').isVisible(), 'denial keeps recovery available');
+        assert((await page.locator('.folder-sync-error').textContent()).includes('尚未获得'), 'denial is explained inside the settings panel');
         assert.equal((await page.evaluate(() => AppData.folderSync.pending())).length, queued.length);
         await page.evaluate(() => { window.__grantRestore = true; });
         await page.locator('#folder-sync-permission-btn').click();
@@ -126,6 +149,7 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         assert((await page.locator('.folder-sync-status').textContent()).includes('自动同步已开启'));
         assert(await page.locator('#folder-sync-sync-btn').isEnabled());
         assert.equal(await page.locator('#folder-sync-banner').count(), 0);
+        assert.equal(await page.locator('.folder-sync-error').textContent(), '');
         assert.equal(await page.evaluate(() => window.__pickerCalls), 1, 'restore reuses the bound folder');
         assert.equal(await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId), originalSpace);
         await page.locator('#folder-sync-disconnect-btn').click();

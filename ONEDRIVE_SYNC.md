@@ -12,7 +12,7 @@ This feature is built on `feature/multi-device-easy-deploy`. It adds an opt-in d
 ## First connection
 
 1. Back up existing learning data with Export. Run the same version of this branch on each desktop computer, using Chrome / Edge with directory access and Web Locks support.
-2. Open **Settings → Data management → OneDrive 自动同步**.
+2. Open **Settings → Data management → OneDrive 自动同步**. This is the only UI entry for sync. Sync status, permission recovery, errors, conflicts and deletion confirmations stay in this settings panel; no sync button or banner is added to the overview, browse, practice or more views.
 3. Click **启用 OneDrive 同步**, select the project root in OneDrive, and allow read/write access. A compatible existing space connects automatically, including when selecting the old `user-data` directory directly. Existing space IDs and marker files are preserved.
 4. Only for a complete project with no sync directory, the app asks before initializing a space. Confirm only if sync has never been enabled on another computer and OneDrive has finished downloading. On every other computer use the same **启用 OneDrive 同步** button after download; no separate create/join choice is needed.
 5. Set `user-data` to **Always keep on this device** in OneDrive. Finish a synthetic practice on A, wait for local publication and OneDrive transfer, then verify it on B. Test the reverse direction too.

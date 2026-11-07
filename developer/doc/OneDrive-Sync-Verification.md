@@ -54,6 +54,12 @@ The production backend browser test now verifies these real rendered states, den
 
 Rerun commands use the existing dependency lockfiles: frontend suite (121 tests including 21 sync tests), focused sync, backend (5 tests), production HTTP browser integration (1 extended test), bundle build/check and git diff check. Local evidence is saved in ignored developer/doc/onedrive-sync-ui-*.log files. No dependency, storage protocol, data-write barrier or backend API changes are included in this UI update.
 
+## Settings-only sync UI
+
+Removed the sync worker status subscription's global banner creation; it no longer inserts an “打开同步面板” button or changes the application's shared banner stack. The existing Settings → Data management entry is the sole UI entry. Permission, conflict, bulk-deletion and file-error information remains in that panel, with attention states on its settings entry. Action errors are kept inside the panel rather than using a global toast.
+
+The production HTTP browser regression now pauses sync by simulating permission loss, visits overview/browse/practice/more, and asserts that no global sync button/banner exists and the settings entry/modal is not visible there. Original navigation/overview labels and controls are compared before/after. It returns through Settings → Data management to verify permission denial feedback and recovery without data loss. Runtime source changes are confined to syncPanel.js and its generated bundle; index.html, original page sections and shared layout/CSS are unchanged. Evidence: developer/doc/onedrive-sync-settings-*.log (ignored local files).
+
 ## Pending external validation
 
 Real OneDrive upload/download, two physical computers, Files On-Demand and actual directory reauthorization still require [manual acceptance](OneDrive-Sync-Manual-Test.md). No personal browser database or OneDrive account was used.
