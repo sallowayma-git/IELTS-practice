@@ -9,12 +9,12 @@
   "meta": {
     "title": "The life of Beatrix Potter 彼得兔作家",
     "category": "P1",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "21. P1 - The life of Beatrix Potter 彼得兔作家.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/",
     "legacyFilename": "21. P1 - The life of Beatrix Potter 彼得兔作家.html",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

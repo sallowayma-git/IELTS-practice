@@ -9,12 +9,12 @@
   "meta": {
     "title": "Born to Trade 交易的本能",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/",
     "legacyFilename": "142. P2 - Born to Trade 交易的本能.html",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

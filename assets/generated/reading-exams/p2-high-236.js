@@ -9,10 +9,10 @@
   "meta": {
     "title": "War of the Plants",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "low",
     "sourceDoc": "P2 - War of the Plants(1).docx",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

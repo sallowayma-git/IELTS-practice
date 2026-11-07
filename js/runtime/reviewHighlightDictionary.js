@@ -7,8 +7,7 @@
     const VOCAB_MESSAGE_TYPE = 'VOCAB_HIGHLIGHT_SAVE';
 
     let currentOptions = {};
-    let activeHighlight = null;
-    let activeLookup = null;
+    let activePopup = null;
     let outsideHandlerAttached = false;
     const pendingSaveRequests = new Map();
 
@@ -223,8 +222,12 @@
             const addButton = event.target instanceof HTMLElement
                 ? event.target.closest('[data-vocab-add]')
                 : null;
-            if (addButton) {
-                saveActiveLookup(addButton);
+            if (addButton && activePopup && activePopup.button === addButton && !addButton.disabled) {
+                if (activePopup.state === 'read-failed') {
+                    refreshCollectionState(activePopup);
+                } else {
+                    saveActiveLookup(addButton);
+                }
             }
         });
         return bubble;
@@ -284,7 +287,7 @@
             </div>
             ${body}
             <div class="vocab-actions">
-                <button class="vocab-add" type="button" data-vocab-add>加入生词本</button>
+                <button class="vocab-add" type="button" data-vocab-add disabled>正在读取…</button>
             </div>
         `;
     }
@@ -315,21 +318,23 @@
         if (!term) {
             return;
         }
-        activeHighlight = highlight;
+        const popup = { highlight, lookup: null, payload: null, button: null, state: 'loading' };
+        activePopup = popup;
         const bubble = ensureBubble();
         if (!getLookupService() && typeof global.ensureReadingDictionary === 'function') {
-            activeLookup = null;
             bubble.textContent = '正在加载词典…';
             positionBubble(bubble, highlight);
             global.ensureReadingDictionary().then(() => {
-                if (activeHighlight === highlight && highlight.isConnected && isEnabled()) openBubble(highlight);
+                if (isActivePopup(popup)) openBubble(highlight);
             }).catch(() => {
-                if (activeHighlight === highlight) bubble.textContent = '词典加载失败，请再次点击生词重试。';
+                if (isActivePopup(popup)) bubble.textContent = '词典加载失败，请再次点击生词重试。';
             });
         } else {
-            activeLookup = lookupTerm(term);
-            bubble.innerHTML = renderLookup(activeLookup);
+            popup.lookup = lookupTerm(term);
+            bubble.innerHTML = renderLookup(popup.lookup);
+            popup.button = bubble.querySelector('[data-vocab-add]');
             positionBubble(bubble, highlight);
+            refreshCollectionState(popup);
         }
         if (!outsideHandlerAttached) {
             outsideHandlerAttached = true;
@@ -357,8 +362,7 @@
             bubble.innerHTML = '';
         }
         detachOutsideHandlers();
-        activeHighlight = null;
-        activeLookup = null;
+        activePopup = null;
     }
 
     function isScrollbarClick(event, bubble) {
@@ -434,12 +438,16 @@
         closeBubble();
     }
 
-    function buildVocabPayload() {
-        const lookup = activeLookup || {};
+    function isActivePopup(popup) {
+        return activePopup === popup && popup.highlight.isConnected && isEnabled();
+    }
+
+    function buildVocabPayload(popup) {
+        const lookup = popup.lookup || {};
         const context = currentOptions && typeof currentOptions.getContext === 'function'
             ? currentOptions.getContext()
             : {};
-        const selectedText = cleanText(activeHighlight && activeHighlight.textContent);
+        const selectedText = cleanText(popup.highlight.textContent);
         return {
             word: cleanText(lookup.term || lookup.lemma || selectedText),
             selectedText,
@@ -452,8 +460,57 @@
             license: lookup.license || '',
             example: cleanText(lookup.example || ''),
             tags: Array.isArray(lookup.tags) ? lookup.tags.slice() : [],
-            context: context && typeof context === 'object' ? context : {}
+            context: context && typeof context === 'object' ? { ...context } : {}
         };
+    }
+
+    function collectionTarget(payload) {
+        const context = payload.context || {};
+        if (!context.examId || context.libraryConfigurationId === undefined) return null;
+        const configurationId = context.libraryConfigurationId;
+        return {
+            source: configurationId == null || configurationId === ''
+                ? { kind: 'builtin', id: 'default' }
+                : { kind: 'imported', id: String(configurationId).trim() },
+            article: { examId: String(context.examId), title: String(context.title || '') }
+        };
+    }
+
+    async function refreshCollectionState(popup) {
+        if (!isActivePopup(popup)) return;
+        const button = popup.button;
+        popup.state = 'loading';
+        button.textContent = '正在读取…';
+        button.title = '';
+        button.disabled = true;
+        try {
+            // Capture the same term and source/article context that an explicit
+            // save will use, before any asynchronous work can change the page.
+            if (!popup.payload) popup.payload = buildVocabPayload(popup);
+            const target = collectionTarget(popup.payload);
+            const appData = global.AppData;
+            if (!target || !appData || !appData.vocab) throw new Error('Vocabulary state unavailable');
+            await appData.ready;
+            const vocab = appData.vocab;
+            const model = vocab.readingModel;
+            const articleId = model.articleId(target.source, target.article.examId);
+            const termId = model.termId(popup.payload.word);
+            const { snapshot } = await vocab.getReadingSnapshot();
+            // A canonical word in another article or list is not a collection
+            // in this article. The shared query also validates its live owner.
+            const collected = model.query(snapshot, { articleId }).terms.some(entry => entry.term.id === termId);
+            if (!isActivePopup(popup)) return;
+            popup.state = collected ? 'collected' : 'uncollected';
+            button.textContent = collected ? '已加入' : '加入生词本';
+            button.disabled = collected;
+        } catch (error) {
+            if (!isActivePopup(popup)) return;
+            const unavailable = error && error.code === 'BACKEND_UNAVAILABLE';
+            popup.state = unavailable ? 'reload-required' : 'read-failed';
+            button.textContent = unavailable ? '请刷新页面后重试' : '读取失败，点击重试';
+            button.title = unavailable ? button.textContent : '无法确认收藏状态，请点击重试。';
+            button.disabled = unavailable;
+        }
     }
 
     async function writeAppDataVocab(payload) {
@@ -477,16 +534,11 @@
         if (payload.phonetic) {
             word.phonetic = payload.phonetic;
         }
-        const context = payload.context || {};
-        if (!context.examId || context.libraryConfigurationId === undefined) return false;
-        const configurationId = context.libraryConfigurationId;
-        const source = configurationId == null || configurationId === ''
-            ? { kind: 'builtin', id: 'default' }
-            : { kind: 'imported', id: String(configurationId).trim() };
+        const target = collectionTarget(payload);
+        if (!target) return false;
         const observed = await global.AppData.vocab.getReadingSnapshot();
         const receipt = await global.AppData.vocab.mutateReading('collect', {
-            source,
-            article: { examId: String(context.examId), title: String(context.title || '') },
+            ...target,
             word,
             manual: true,
             at: now
@@ -545,10 +597,14 @@
     }
 
     async function saveActiveLookup(button) {
-        const payload = buildVocabPayload();
+        const popup = activePopup;
+        if (!popup || !isActivePopup(popup) || popup.button !== button || button.disabled
+            || (popup.state !== 'uncollected' && popup.state !== 'save-failed')) return;
+        const payload = popup.payload;
         if (!payload.word) {
             return;
         }
+        popup.state = 'saving';
         if (button instanceof HTMLButtonElement) {
             button.textContent = '保存中…';
             button.disabled = true;
@@ -563,7 +619,8 @@
                 errorCode = error && error.code || '';
             }
         }
-        if (button instanceof HTMLButtonElement) {
+        if (isActivePopup(popup) && button instanceof HTMLButtonElement) {
+            popup.state = persisted ? 'collected' : 'save-failed';
             const unavailable = errorCode === 'BACKEND_UNAVAILABLE';
             button.textContent = persisted ? '已加入' : unavailable
                 ? (hostOutcome ? '请刷新主页并重开阅读页后重试' : '请刷新页面后重试')
