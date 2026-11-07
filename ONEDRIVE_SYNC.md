@@ -7,15 +7,17 @@ This feature is built on `feature/multi-device-easy-deploy`. It adds an opt-in d
 - The existing backend uses accounts, sessions and PostgreSQL for API records.
 - Folder sync exchanges this browser's AppData / IndexedDB learning data through a folder that the OneDrive desktop client uploads and downloads.
 - Signing into the backend does not grant folder permission, import server records into AppData, or send folder-synced records to PostgreSQL. There is no bridge between these stores.
-- Use a dedicated personal OneDrive folder outside the web root. The application source can remain elsewhere. Do not expose personal sync logs through a general-purpose static server.
+- Download the GitHub ZIP, extract it, and put the entire project folder in your personal OneDrive. Open the site and authorize that project folder from the sync panel. The supplied backend excludes `user-data` from HTTP serving; when using another static server, exclude that directory yourself.
 
 ## First connection
 
 1. Back up existing learning data with Export. Run the same version of this branch on each desktop computer, using Chrome / Edge with directory access and Web Locks support.
 2. Open **Settings → Data management → OneDrive 自动同步**.
-3. On computer A, choose **第一台电脑：创建同步空间**, select a dedicated OneDrive folder and allow read/write access. The app creates `user-data/workspace.json` and `user-data/sync-v1/<space>/ops/<writer>/` below it.
-4. Wait for OneDrive to download that directory on B. Choose **连接已有同步空间** on B and select the same synced folder, or its `user-data` directory. Do not create a second space.
+3. Click **启用 OneDrive 同步**, select the project root in OneDrive, and allow read/write access. A compatible existing space connects automatically, including when selecting the old `user-data` directory directly. Existing space IDs and marker files are preserved.
+4. Only for a complete project with no sync directory, the app asks before initializing a space. Confirm only if sync has never been enabled on another computer and OneDrive has finished downloading. On every other computer use the same **启用 OneDrive 同步** button after download; no separate create/join choice is needed.
 5. Set `user-data` to **Always keep on this device** in OneDrive. Finish a synthetic practice on A, wait for local publication and OneDrive transfer, then verify it on B. Test the reverse direction too.
+
+An existing `user-data` directory without a valid marker, empty/truncated markers and incompatible versions stop connection without creating a replacement. A project missing required root files cannot be initialized. If a sync directory arrives during confirmation, it is inspected again. A browser that has already used a space cannot initialize a different one through this entry. The browser cannot inspect OneDrive cloud status: if the entire sync directory has not arrived, cancel the initialization prompt and wait for the client. Never manually create or edit internal JSON files.
 
 Every computer needs an initial grant. If permission expires, use **恢复文件夹权限**. When direct `file://` directory access is unavailable, use a fixed localhost address. Browser, origin, protocol and port changes can select a different local database; export from the old entry and use incremental import before connecting the new entry.
 
@@ -45,7 +47,7 @@ Connecting first creates an application backup. Sync identity, queues and direct
 
 Disconnecting preserves local learning data and on-disk logs. Reconnecting resumes that space. A fresh browser profile can reconstruct data from retained logs using a new writer ID. Do not manually edit workspace files or tombstones.
 
-The application's local site reset coordinates with the worker under the existing reset lock. It refuses to clear while unpublished data cannot be flushed. Clearing a local browser is not published as remote deletion. This protection cannot prevent data loss from manually clearing browser storage outside the application.
+The application's local site reset coordinates with the worker under the existing reset lock and installs a durable barrier in the same IndexedDB system store used by every learning-write transaction. Earlier writes finish before the barrier and are published; later writes from other tabs are rejected before committing until reset completes. Failed reset releases the barrier. If the reset tab is interrupted, retry the site reset to finish recovery. Unbound browsers can still reset when AppData initialization fails; a binding, pending data or unreadable sync state fails closed. It refuses to clear while unpublished data cannot be flushed. Clearing a local browser is not published as remote deletion. This protection cannot prevent data loss from manually clearing browser storage outside the application.
 
 History is retained without automatic checkpointing or garbage collection. A file larger than 32 MB is rejected and its pending operation remains queued. Long-running, large-history performance needs further evaluation.
 

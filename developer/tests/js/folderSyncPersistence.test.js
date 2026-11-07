@@ -19,9 +19,9 @@ async function fixture(task) {
     const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
     const origin = 'http://127.0.0.1:' + server.address().port;
     const contexts = [];
-    async function page() {
+    async function page(boot = true) {
         const context = await browser.newContext(); contexts.push(context);
-        const page = await context.newPage(); await page.goto(origin); await load(page); return page;
+        const page = await context.newPage(); await page.goto(origin); if (boot) await load(page); return page;
     }
     try { await task({ page, load }); }
     finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
@@ -112,10 +112,16 @@ test('real FileSystemDirectoryHandle: persistent binding, automatic exchange, an
             await page.evaluate(() => {
                 // Tests use origin-private directories, never the user's OneDrive or browser profile.
                 window.SyncFolderAdapter = Object.freeze({ ...SyncFolderAdapter,
-                    pick: () => navigator.storage.getDirectory(), permission: async () => window.__denySyncPermission ? 'prompt' : 'granted' });
+                    pick: async () => {
+                        const dir = await navigator.storage.getDirectory();
+                        for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await dir.getFileHandle(name, { create: true });
+                        for (const name of ['js', 'css']) await dir.getDirectoryHandle(name, { create: true });
+                        return dir;
+                    }, permission: async () => window.__denySyncPermission ? 'prompt' : 'granted' });
             });
             await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncService.js'), 'utf8') });
-            if (create) await page.evaluate(() => FolderSyncService.connect(true));
+            page.on('dialog', dialog => dialog.accept());
+            if (create) await page.evaluate(() => FolderSyncService.connect());
         }
         await transport(a, true); await complete(a, 'filesystem-A'); await a.evaluate(() => FolderSyncService.syncNow());
         const readTree = async page => page.evaluate(async () => {
@@ -151,7 +157,8 @@ test('real FileSystemDirectoryHandle: persistent binding, automatic exchange, an
         await a.evaluate(() => FolderSyncService.syncNow());
         assert((await pending(a)).length > 0, 'permission loss must retain the outbox');
         await a.reload(); await load(a); await transport(a, false);
-        await a.evaluate(() => FolderSyncService.syncNow());
+        await a.evaluate(() => FolderSyncService.init());
+        await a.evaluate(() => FolderSyncService.reauthorize());
         assert.equal((await pending(a)).length, 0);
         const files = await readTree(a);
         assert(files.some(file => file.text.includes('closed-before-send')));
@@ -212,5 +219,169 @@ test('real vocabulary: concurrent review states preserve alternatives and resolu
         await send(a, b);
         assert.deepEqual(await a.evaluate(() => AppData.vocab.listWords()), await b.evaluate(() => AppData.vocab.listWords()));
         assert.equal((await b.evaluate(() => AppData.folderSync.status())).conflicts.length, 0);
+    });
+});
+
+async function installTransport(page) {
+    await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncFolderAdapter.js'), 'utf8') });
+    await page.evaluate(() => {
+        window.showDirectoryPicker = () => navigator.storage.getDirectory();
+        window.confirm = () => true;
+    });
+    await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncService.js'), 'utf8') });
+    await page.evaluate(() => FolderSyncService.init());
+}
+async function projectDirectory(page) {
+    await page.evaluate(async () => {
+        const dir = await navigator.storage.getDirectory();
+        for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await dir.getFileHandle(name, { create: true });
+        for (const name of ['js', 'css']) await dir.getDirectoryHandle(name, { create: true });
+    });
+}
+
+test('fresh join skips empty defaults from both old and new clients, preserving independent local learning', async () => {
+    await fixture(async ({ page }) => {
+        const a = await page(), b = await page(), c = await page();
+        // Reproduce the original client: A published an empty vocabulary seed, then edited it.
+        await a.evaluate(space => {
+            const old = FolderSyncModel;
+            window.FolderSyncModel = { ...old, capture(state, snapshot, id) {
+                const actual = old.unitsFrom(snapshot, state.preferences);
+                for (const key of Object.keys(actual)) if (!state.materialized[key]) state.materialized[key] = { exists: false };
+                return old.capture(state, snapshot, id);
+            } };
+            window.__oldModel = old;
+            return AppData.folderSync.connect(space);
+        }, SPACE);
+        await a.evaluate(() => { window.FolderSyncModel = __oldModel; });
+        await a.evaluate(() => AppData.vocab.saveWords([{ id: 'apple', word: 'apple' }], { operationId: 'A-word' }));
+        await complete(c, 'independent-before-connect');
+        await c.evaluate(() => AppData.vocab.saveWords([{ id: 'banana', word: 'banana' }], { operationId: 'C-word' }));
+        await connect(b); assert.equal((await pending(b)).length, 0);
+        await send(a, b); await send(b, a);
+        assert.deepEqual(await b.evaluate(() => AppData.vocab.listWords()), [{ id: 'apple', word: 'apple' }]);
+        assert.equal((await b.evaluate(() => AppData.folderSync.status())).conflicts.length, 0);
+        await connect(c); await send(a, c); await send(c, a);
+        assert(await a.evaluate(() => AppData.practice.get('independent-before-connect')));
+        const words = await c.evaluate(() => AppData.vocab.listWords());
+        assert.deepEqual(words.map(word => word.id).sort(), ['apple', 'banana']);
+        assert.equal((await c.evaluate(() => AppData.folderSync.status())).conflicts.length, 0);
+    });
+});
+
+test('single entry detects existing roots and legacy user-data; refuses partial, incompatible and declined spaces', async () => {
+    await fixture(async ({ page }) => {
+        const a = await page(); await installTransport(a); await projectDirectory(a);
+        const result = await a.evaluate(async () => {
+            const root = await navigator.storage.getDirectory();
+            let confirmations = 0;
+            try { await SyncFolderAdapter.openWorkspace(root, () => false); } catch (_) { }
+            let absent = false;
+            try { await root.getDirectoryHandle('user-data'); } catch (e) { absent = e.name === 'NotFoundError'; }
+            const first = await SyncFolderAdapter.openWorkspace(root, () => { confirmations++; return true; });
+            const before = await (await (await first.directory.getFileHandle('workspace.json')).getFile()).text();
+            const again = await SyncFolderAdapter.openWorkspace(root, () => { throw Error('must not prompt'); });
+            const legacy = await SyncFolderAdapter.openWorkspace(first.directory);
+            const after = await (await (await first.directory.getFileHandle('workspace.json')).getFile()).text();
+            return { absent, confirmations, first: first.spaceId, again: again.spaceId, legacy: legacy.spaceId, before, after };
+        });
+        assert(result.absent); assert.equal(result.confirmations, 1);
+        assert.equal(result.first, result.again); assert.equal(result.first, result.legacy); assert.equal(result.before, result.after);
+        for (const content of [null, '', '{', JSON.stringify({ format: 'wrong', version: 99, spaceId: 'existing' })]) {
+            const b = await page(); await installTransport(b); await projectDirectory(b);
+            const error = await b.evaluate(async content => {
+                const root = await navigator.storage.getDirectory();
+                const dir = await root.getDirectoryHandle('user-data', { create: true });
+                if (content !== null) { const w = await (await dir.getFileHandle('workspace.json', { create: true })).createWritable(); await w.write(content); await w.close(); }
+                try { await SyncFolderAdapter.openWorkspace(root, () => { throw Error('unsafe confirmation'); }); return null; }
+                catch (error) { return error.message; }
+            }, content);
+            assert(error); assert(!error.includes('unsafe confirmation'));
+        }
+        const c = await page(); await installTransport(c); await projectDirectory(c);
+        await assert.rejects(() => c.evaluate(async () => {
+            const root = await navigator.storage.getDirectory();
+            await SyncFolderAdapter.openWorkspace(root, async () => {
+                await root.getDirectoryHandle('user-data', { create: true }); return true;
+            });
+        }), /尚不完整/);
+    });
+});
+
+async function resetHarness(page, { pause = false } = {}) {
+    await page.evaluate(pause => {
+        window.ExternalBackupService = {
+            withFullResetLock: task => navigator.locks.request('ielts-atlas-external-backup-write', task),
+            async prepareForFullReset() {
+                window.__preparing = true;
+                if (pause) await new Promise(resolve => { window.__releaseReset = resolve; });
+                return { success: true };
+            },
+            async commitFullResetPreparation() { return true; },
+            async rollbackFullResetPreparation() { return true; }
+        };
+    }, pause);
+    await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/core/siteDataReset.js'), 'utf8') });
+}
+
+test('reset transaction barrier rejects another tab during preparation and publishes all earlier records', async () => {
+    await fixture(async ({ page, load }) => {
+        const a = await page(); await installTransport(a); await projectDirectory(a);
+        await a.evaluate(async () => {
+            window.SyncFolderAdapter = { ...SyncFolderAdapter, pick: () => navigator.storage.getDirectory(), permission: async () => 'granted' };
+            window.confirm = () => true;
+        });
+        await a.evaluate(() => FolderSyncService.connect());
+        const b = await a.context().newPage(); await b.goto(a.url()); await load(b);
+        await complete(b, 'before-reset');
+        await resetHarness(a, { pause: true });
+        await a.evaluate(() => { window.__reset = SiteDataReset.perform({ reload: false }); });
+        await a.waitForFunction(() => window.__preparing);
+        await assert.rejects(() => complete(b, 'during-reset'), /正在清理/);
+        assert.equal(await b.evaluate(() => AppData.practice.get('during-reset')), null);
+        assert.equal((await pending(b)).length, 0);
+        const published = await a.evaluate(async () => {
+            const root = await SyncFolderAdapter.workspace(await SyncFolderAdapter.binding());
+            for await (const dir of root.values()) for await (const f of dir.values())
+                if ((await (await f.getFile()).text()).includes('before-reset')) return true;
+            return false;
+        });
+        assert(published);
+        await a.evaluate(() => __releaseReset());
+        assert.equal((await a.evaluate(() => __reset)).success, true);
+    });
+});
+
+test('reset failure releases write barrier; denied permission retains unpublished data', async () => {
+    await fixture(async ({ page }) => {
+        const a = await page(); await installTransport(a); await connect(a); await complete(a, 'unpublished');
+        await assert.rejects(() => a.evaluate(() => FolderSyncService.withReset(async () => ({ success: true }))), /未写入/);
+        assert((await pending(a)).length > 0); await complete(a, 'after-refused-reset');
+        // A failed preparation also releases the barrier for unbound browsers.
+        const b = await page(); await installTransport(b);
+        assert.equal((await b.evaluate(() => FolderSyncService.withReset(async () => ({ success: false })))).success, false);
+        await complete(b, 'after-failed-preparation');
+    });
+});
+
+test('AppData readiness failure allows unbound site recovery but blocks a bound browser reset', async () => {
+    await fixture(async ({ page }) => {
+        for (const bound of [false, true]) {
+            const a = await page(false);
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/data/v2/syncModel.js'), 'utf8') });
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncFolderAdapter.js'), 'utf8') });
+            if (bound) await a.evaluate(async () => {
+                await SyncFolderAdapter.binding({ directory: await navigator.storage.getDirectory(), spaceId: 'bound-space', name: 'test' });
+            });
+            await a.evaluate(() => {
+                const ready = Promise.reject(new Error('injected initialization failure')); ready.catch(() => {});
+                window.AppData = { ready, folderSync: { status: () => ready } };
+            });
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncService.js'), 'utf8') });
+            await resetHarness(a);
+            const result = await a.evaluate(() => SiteDataReset.perform({ reload: false }));
+            assert.equal(result.success, !bound);
+            if (bound) assert(await a.evaluate(() => SyncFolderAdapter.binding()));
+        }
     });
 });

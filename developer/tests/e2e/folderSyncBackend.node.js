@@ -28,10 +28,15 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
             'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync);
         browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
         const context = await browser.newContext();
-        const page = await context.newPage();
+        const page = await context.newPage(); page.on('dialog', dialog => dialog.accept());
         await page.addInitScript(() => {
             // Substitute only the user chooser, using an isolated real directory handle.
-            window.showDirectoryPicker = () => navigator.storage.getDirectory();
+            window.showDirectoryPicker = async () => {
+                    const dir = await navigator.storage.getDirectory();
+                    for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await dir.getFileHandle(name, { create: true });
+                    for (const name of ['js', 'css']) await dir.getDirectoryHandle(name, { create: true });
+                    return dir;
+                };
         });
         const base = 'http://127.0.0.1:' + server.address().port;
         await page.goto(base + '/?view=settings&test_env=1');
@@ -46,10 +51,10 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         if (process.env.ONEDRIVE_SYNC_SCREENSHOT) {
             await page.screenshot({ path: path.resolve(process.env.ONEDRIVE_SYNC_SCREENSHOT) });
         }
-        await page.locator('#folder-sync-create-btn').click();
+        await page.locator('#folder-sync-enable-btn').click();
         await page.waitForFunction(() => {
             const status = FolderSyncService.getStatus();
-            return status.enabled && status.permission === 'granted' && status.lastPublishAt && !status.busy && !status.pending;
+            return status.enabled && status.permission === 'granted' && !status.busy && !status.pending;
         });
         const previousPublish = await page.evaluate(() => FolderSyncService.getStatus().lastPublishAt);
         await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'backend-folder-record', record: {

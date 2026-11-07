@@ -242,7 +242,15 @@
         const actual = unitsFrom(snapshot, state.preferences);
         const keys = [...new Set(Object.keys(state.materialized).concat(Object.keys(actual)))].filter(key => key !== 'preferences' || state.preferences);
         const entries = keys.map(key => [key, actual[key] || absent()]).filter(([key, value]) => !equal(value, state.materialized[key] || absent()));
-        publish(state, entries, sourceId);
+        // Initial empty singleton defaults are observation baselines, not user edits.
+        // Preserve non-empty local collections and all subsequent explicit clears.
+        const emptyDefaults = unitsFrom({ documents: {}, entities: {} }, state.preferences);
+        const meaningful = entries.filter(([key, value]) => own(state.materialized, key)
+            || !own(emptyDefaults, key) || !equal(value, emptyDefaults[key]));
+        for (const [key] of meaningful) {
+            if (!own(state.materialized, key) && own(emptyDefaults, key)) state.materialized[key] = copy(emptyDefaults[key]);
+        }
+        publish(state, meaningful, sourceId);
         // The local user's commit stays visible. Unresolved alternatives remain in heads.
         state.materialized = actual;
         return state;

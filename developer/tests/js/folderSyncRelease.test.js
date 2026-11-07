@@ -21,10 +21,15 @@ test('built release: file and HTTP pages keep working; HTTP folder sync starts f
     try {
         for (const base of [pathToFileURL(path.join(root, 'index.html')).href, 'http://127.0.0.1:' + server.address().port + '/']) {
             const context = await browser.newContext();
-            const page = await context.newPage();
+            const page = await context.newPage(); page.on('dialog', dialog => dialog.accept());
             if (base.startsWith('http')) await page.addInitScript(() => {
                 // Only the chooser is substituted; permission, IDB, FileSystem APIs and bundles are production code.
-                window.showDirectoryPicker = () => navigator.storage.getDirectory();
+                window.showDirectoryPicker = async () => {
+                    const dir = await navigator.storage.getDirectory();
+                    for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await dir.getFileHandle(name, { create: true });
+                    for (const name of ['js', 'css']) await dir.getDirectoryHandle(name, { create: true });
+                    return dir;
+                };
             });
             await page.goto(base + '?view=settings&test_env=1');
             await page.waitForFunction(() => window.AppData && window.app?.isInitialized);
@@ -35,14 +40,14 @@ test('built release: file and HTTP pages keep working; HTTP folder sync starts f
             await page.locator('#folder-sync-entry-btn').click();
             assert(await page.locator('#folder-sync-modal').isVisible());
             const supported = await page.evaluate(() => FolderSyncService.getStatus().supported);
-            assert(await page.locator('#folder-sync-create-btn').isEnabled() === supported);
+            assert(await page.locator('#folder-sync-enable-btn').isEnabled() === supported);
             if (base.startsWith('http')) {
                 assert(supported);
-                await page.locator('#folder-sync-create-btn').click();
+                await page.locator('#folder-sync-enable-btn').click();
                 await page.waitForFunction(() => FolderSyncService.getStatus().enabled && FolderSyncService.getStatus().permission === 'granted');
                 await page.waitForFunction(() => {
                     const status = FolderSyncService.getStatus();
-                    return status.lastPublishAt && !status.busy && status.pending === 0;
+                    return !status.busy && status.pending === 0;
                 });
                 const previousPublish = await page.evaluate(() => FolderSyncService.getStatus().lastPublishAt);
                 await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'built-record', record: {

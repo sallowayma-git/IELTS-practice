@@ -583,7 +583,14 @@
                 const journalRequest = tx.objectStore(SYSTEM_STORE).get('system.operationJournal');
                 journalRequest.onerror = () => fail(journalRequest.error || new Error('Journal read failed'));
                 journalRequest.onsuccess = () => {
-                    try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    const barrier = tx.objectStore(SYSTEM_STORE).get('system.folderSyncResetBarrier');
+                    barrier.onerror = () => fail(barrier.error);
+                    barrier.onsuccess = () => {
+                        if (barrier.result && !spec.resetAllowed) {
+                            fail(validation('本机正在清理数据，请等待清理完成后重新打开网页')); return;
+                        }
+                        try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    };
                 };
             }, true);
         }
@@ -1328,6 +1335,7 @@
             const command = canonicalizeJson(input);
             const opId = randomId('folder-sync-' + action);
             const spec = { operationId: opId, warnings: [], pending: [], stores: STORE_NAMES.slice(),
+                resetAllowed: ['status', 'pending', 'known', 'ack', 'receive'].includes(action),
                 fingerprint: requestFingerprint({}, { action, command }, []) };
             let targets = [], result;
             const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {

@@ -108,6 +108,7 @@ test('independent vocabulary items union without conflicts', () => {
 });
 test('same operation id with changed content, wrong space and prototype payload are rejected', () => {
     const a = client(), b = client(); exchange(a, b);
+    put(a.snapshot, 'validation-record'); m.capture(a.state, a.snapshot, 'validation'); exchange(a, b);
     const changed = copy(a.state.pending[0]); changed.sourceId = 'tampered';
     assert.throws(() => apply(b, changed), /不同内容/);
     const wrong = copy(a.state.pending[0]); wrong.spaceId = 'different-space';

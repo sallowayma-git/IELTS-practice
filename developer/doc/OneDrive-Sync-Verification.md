@@ -12,8 +12,8 @@ Windows; Node.js v24.16.0; npm 11.13.0. Dependencies were installed locally with
 
 | Check | Result |
 |---|---|
-| `npm --prefix developer test` | 116 passed, 0 failed, 0 cancelled, 0 skipped |
-| `npm --prefix developer run test:sync` | 16 sync tests are included in the full suite; also runnable separately |
+| `npm --prefix developer test` | 121 passed, 0 failed, 0 cancelled, 0 skipped |
+| `npm --prefix developer run test:sync` | 21 sync tests are included in the full suite; also runnable separately |
 | `npm --prefix backend test` | 5 passed, 0 failed, 0 skipped |
 | `npm --prefix developer run test:sync:backend` | 1 passed; production backend HTTP entry, panel, CSS and automatic publication |
 | `node scripts/build-bundles.mjs --check` | Passed: 14 outputs current |
@@ -31,6 +31,20 @@ The build reports the branch's existing eight duplicate-symbol warnings. No depe
 - Rejection of the newer static prototype's protocol format, so incompatible schemas cannot silently share one workspace.
 
 Tests use isolated browser contexts and synthetic data. Directory selection is substituted with a real origin-private directory; log copying simulates OneDrive transport. The backend integration uses in-memory auth, session and record stores.
+
+## PR #282 review regressions
+
+The unified **启用 OneDrive 同步** entry detects a project root or the legacy user-data directory. Creation requires complete project-root entries, no existing sync directory and explicit confirmation. Missing/truncated/incompatible markers stop safely. Confirmation-time folder arrival is rechecked, known local space identities prevent replacement initialization, and existing marker bytes / space IDs are preserved. The browser cannot establish OneDrive cloud download completeness when no local sync directory is visible; the confirmation explicitly requires first-ever use and a completed download.
+
+The five added browser regression tests cover:
+
+- An old-client empty vocabulary seed followed by a word edit; an empty joining client emits no default operation and receives the word without conflict. A joining client with pre-existing words and a practice attempt preserves and merges both.
+- Existing root and direct user-data connection, declined initialization, partial / empty / malformed / incompatible markers, and directory arrival during confirmation.
+- A real second tab attempting a learning commit while reset is paused in external-backup preparation. The system-store barrier aborts that transaction; previously accepted records have already been published before database deletion.
+- Refused reset with an unpublished outbox and failed reset preparation; data survives and writes resume after barrier release.
+- A rejected AppData readiness promise with no folder binding versus an existing binding: unbound site reset succeeds; bound reset stops without deleting the binding.
+
+Permission restoration is exercised through reauthorize with an origin-private handle. Real permission prompts and OneDrive transfer remain manual cases. The panel screenshot was regenerated from the production backend-served page. Evidence is saved locally in ignored developer/doc/onedrive-sync-review-{all,focused,backend,http,build,bundle-check}.log files.
 
 ## Pending external validation
 

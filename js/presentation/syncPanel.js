@@ -36,15 +36,14 @@
         close.addEventListener('click', () => modal.classList.remove('show'));
         header.append(title, close);
         const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
-        body.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。网页本身可以继续放在开发目录。'));
-        body.append(element('p', '请确认所选目录由 OneDrive 客户端同步。第一台电脑创建空间，其他电脑下载完成后连接已有空间；将 user-data 设置为“始终保留在此设备上”。', 'folder-sync-muted'));
+        body.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。请先把解压后的整个项目文件夹放进 OneDrive。'));
+        body.append(element('p', '点击“启用 OneDrive 同步”，选择 OneDrive 中的项目文件夹并授权。已有空间会自动连接；首次使用需确认初始化。其他电脑请等待下载完成，并设置“始终保留在此设备上”。', 'folder-sync-muted'));
         statusLine = element('p', '正在读取本机同步状态…', 'folder-sync-status');
         statusLine.setAttribute('role', 'status'); statusLine.setAttribute('aria-live', 'polite');
         body.append(statusLine);
         const actions = element('div', '', 'external-backup-panel__actions');
         for (const [key, label, task] of [
-            ['create', '📁 第一台电脑：创建同步空间', () => service.connect(true)],
-            ['join', '🔗 连接已有同步空间', () => service.connect(false)],
+            ['enable', '☁️ 启用 OneDrive 同步', () => service.connect()],
             ['sync', '🔄 立即同步', () => service.syncNow()],
             ['permission', '🔑 恢复文件夹权限', () => service.reauthorize()],
             ['disconnect', '断开本机同步', () => {
@@ -107,7 +106,7 @@
         if (!modal) return;
         statusLine.textContent = textStatus(status);
         errorLine.textContent = status.errors.map(error => (error.path ? error.path + '：' : '') + error.message).slice(0, 5).join('\n');
-        buttons.create.disabled = buttons.join.disabled = !status.supported || status.busy;
+        buttons.enable.disabled = !status.supported || status.busy;
         buttons.sync.disabled = buttons.disconnect.disabled = !status.enabled || !status.bound || status.busy;
         buttons.permission.disabled = !status.bound || status.permission === 'granted' || status.busy;
         preferences.disabled = !status.enabled || !status.bound || status.busy;

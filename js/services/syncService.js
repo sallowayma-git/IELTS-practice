@@ -80,13 +80,16 @@
         }).finally(() => { running = null; emit({ busy: false }); });
         return running;
     }
-    async function connect(create = false) {
+    async function connect() {
         const selection = adapter.pick();
         const selected = await selection;
         await init();
         const result = await withLock(async () => {
-            const space = await adapter.openWorkspace(selected, create);
             const current = await global.AppData.folderSync.status();
+            const space = await adapter.openWorkspace(selected, () => {
+                if (current.spaceId) throw new Error('本机已有同步空间，请选择原项目文件夹并等待 OneDrive 下载完成；不会创建其他空间');
+                return global.confirm('尚未发现同步空间。只有从未在其他电脑启用过同步，且 OneDrive 已完成下载时才应新建。确认在此项目中初始化同步空间？');
+            });
             if (current.enabled && current.spaceId !== space.spaceId) throw new Error('请先断开当前空间，再连接其他空间');
             binding = { directory: space.directory, spaceId: space.spaceId, name: space.name };
             await adapter.binding(binding);
@@ -133,16 +136,28 @@
     }
     async function withReset(task) {
         // Called while the shared full-reset lock is already held.
-        await runUnlocked();
-        const state = await global.AppData.folderSync.status();
-        if (state.enabled && state.pending) throw new Error('还有未写入 OneDrive 文件夹的记录，请恢复权限并同步后再清理本机');
-        suspended = true; announce('reset-pause');
-        if (timer) { global.clearTimeout(timer); timer = null; }
+        // This durable flag and every learning write share the system-store transaction.
+        // Earlier writes finish first; later writes abort even in another tab.
+        let success = false;
         try {
+            const state = await adapter.resetBarrier(true);
+            binding = await adapter.binding();
+            if (binding || state.enabled || state.pending) {
+                await runUnlocked();
+                const latest = await global.AppData.folderSync.status();
+                if (latest.pending) throw new Error('还有未写入 OneDrive 文件夹的记录，请恢复权限并同步后再清理本机');
+            }
+            suspended = true; announce('reset-pause');
+            if (timer) { global.clearTimeout(timer); timer = null; }
             const result = await task();
-            if (result?.success !== true) { suspended = false; announce('reset-resume'); }
+            success = result?.success === true;
             return result;
-        } catch (error) { suspended = false; announce('reset-resume'); throw error; }
+        } finally {
+            if (!success) {
+                await adapter.resetBarrier(false);
+                suspended = false; announce('reset-resume');
+            }
+        }
     }
     function init() {
         if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; throw error; });

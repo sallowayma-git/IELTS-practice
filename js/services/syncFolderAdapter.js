@@ -29,6 +29,35 @@
             });
         } finally { db.close(); }
     }
+    async function resetBarrier(active) {
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open('IELTSAtlasDataV2');
+            let absent = false;
+            request.onupgradeneeded = () => { absent = true; request.transaction.abort(); };
+            request.onerror = () => absent ? resolve(null) : reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+        });
+        if (!db) return { enabled: false, pending: 0 };
+        try {
+            if (!db.objectStoreNames.contains('system')) return { enabled: false, pending: 0 };
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('system', 'readwrite');
+                const store = tx.objectStore('system');
+                const request = store.get(model.STATE_KEY);
+                if (active) store.put({ logicalKey: 'system.folderSyncResetBarrier', active: true });
+                else store.delete('system.folderSyncResetBarrier');
+                tx.oncomplete = () => {
+                    const state = request.result?.envelope?.data;
+                    try {
+                        if (request.result) model.assertState(state);
+                        resolve(state ? model.status(state) : { enabled: false, pending: 0 });
+                    }
+                    catch (error) { reject(error); }
+                };
+                tx.onabort = tx.onerror = () => reject(tx.error || new Error('无法建立数据清理屏障'));
+            });
+        } finally { db.close(); }
+    }
     function requestPermission(handle) {
         if (!handle?.requestPermission) return Promise.resolve('denied');
         return handle.requestPermission({ mode: 'readwrite' });
@@ -53,6 +82,7 @@
         const text = JSON.stringify(value);
         if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('单条同步操作超过 32 MB，已保留待发送队列');
         const file = await dir.getFileHandle(name, { create: true });
+        if (name === 'workspace.json' && (await file.getFile()).size) throw new Error('同步空间已出现，请重新连接；不会覆盖原有空间');
         const writer = await file.createWritable();
         try { await writer.write(text); await writer.close(); }
         catch (error) { try { await writer.abort(); } catch (_) { /* already closed */ } throw error; }
@@ -66,22 +96,40 @@
         if (expected && value.spaceId !== expected) throw new Error('文件夹的数据空间标识已改变，请重新连接；本机记录仍然保留');
         return value;
     }
-    async function openWorkspace(selected, create) {
-        let dir = selected;
+    async function openWorkspace(selected, confirmCreate = () => false) {
+        const found = async dir => {
+            try { return assertWorkspace(await readJson(dir, 'workspace.json')); }
+            catch (error) { if (error.name !== 'NotFoundError') throw error; return null; }
+        };
+        const direct = await found(selected);
+        if (direct) return { directory: selected, spaceId: direct.spaceId, name: selected.name, existing: true };
+        let dir;
+        if (selected.name === 'user-data') dir = selected;
+        else {
+            try { dir = await selected.getDirectoryHandle('user-data', { create: false }); }
+            catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        }
+        if (dir) {
+            const existing = await found(dir);
+            if (existing) return { directory: dir, spaceId: existing.spaceId, name: selected.name, existing: true };
+            throw new Error('同步文件夹尚不完整，请等待 OneDrive 下载完成并设置“始终保留在此设备上”，然后重试。为保护原有数据，不会创建其他空间。');
+        }
+        // Only a complete project root without any sync directory can be initialized.
+        for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await selected.getFileHandle(name, { create: false });
+        for (const name of ['js', 'css']) await selected.getDirectoryHandle(name, { create: false });
+        if (typeof confirmCreate !== 'function' || !await confirmCreate()) throw new Error('已取消初始化，本机学习记录仍保留');
+        // Reinspect after confirmation: a folder arriving during the prompt is never overwritten.
         try {
-            const direct = assertWorkspace(await readJson(dir, 'workspace.json'));
-            return { directory: dir, spaceId: direct.spaceId, name: selected.name, existing: true };
+            await selected.getDirectoryHandle('user-data', { create: false });
+            return openWorkspace(selected, () => false);
         } catch (error) { if (error.name !== 'NotFoundError') throw error; }
-        dir = selected.name === 'user-data' ? selected : await selected.getDirectoryHandle('user-data', { create });
-        try {
-            const existing = assertWorkspace(await readJson(dir, 'workspace.json'));
-            return { directory: dir, spaceId: existing.spaceId, name: selected.name + '/user-data', existing: true };
-        } catch (error) { if (error.name !== 'NotFoundError') throw error; }
-        if (!create) throw new Error('未发现 workspace.json，请等待 OneDrive 下载完成，或在第一台电脑创建同步空间');
-        // Explicit bootstrap only; new/empty folders are never interpreted as remote deletions.
+        dir = await selected.getDirectoryHandle('user-data', { create: true });
+        for await (const entry of dir.values()) throw new Error('同步目录已出现内容，请等待 OneDrive 下载完成后重试');
+        const late = await found(dir);
+        if (late) return { directory: dir, spaceId: late.spaceId, name: selected.name, existing: true };
         const workspace = { format: model.FORMAT, version: model.VERSION, spaceId: model.uuid(), createdAt: new Date().toISOString() };
         await writeJson(dir, 'workspace.json', workspace);
-        return { directory: dir, spaceId: workspace.spaceId, name: selected.name + (selected.name === 'user-data' ? '' : '/user-data'), existing: false };
+        return { directory: dir, spaceId: workspace.spaceId, name: selected.name + '/user-data', existing: false };
     }
     async function workspace(binding) {
         assertWorkspace(await readJson(binding.directory, 'workspace.json'), binding.spaceId);
@@ -137,5 +185,5 @@
         return { files, errors };
     }
     global.SyncFolderAdapter = Object.freeze({ supported, pick, binding, permission, requestPermission,
-        openWorkspace, workspace, publish, scan, clearCache() { cache.clear(); } });
+        openWorkspace, workspace, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
 })(typeof window !== 'undefined' ? window : globalThis);

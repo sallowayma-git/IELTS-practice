@@ -4,9 +4,9 @@ These cases are pending manual execution. Automated file copying is not a substi
 
 ## Setup
 
-Use two desktops with the same code from this contribution, Chrome / Edge, the OneDrive client and separate test browser profiles. Export any existing data first. Create a dedicated personal OneDrive folder outside the served web root, and set its `user-data` to Always keep on this device.
+Use two desktops with the same code from this contribution, Chrome / Edge, the OneDrive client and separate test browser profiles. Export any existing data first. Put the extracted GitHub ZIP project folder in personal OneDrive, and set its `user-data` to Always keep on this device. The supplied backend excludes that directory from HTTP serving.
 
-A creates a space from Settings → Data management → OneDrive 自动同步. After download, B joins that existing space. Keep a fixed entry URL on each computer. Do not use the earlier static prototype's space: this branch has a distinct protocol profile and vocabulary schema.
+On A and B, use Settings → Data management → OneDrive 自动同步 → **启用 OneDrive 同步** and select the project root. Only the first initialization needs confirmation. On B wait for the existing space to download. Keep a fixed entry URL on each computer. Do not use the earlier static prototype's space: this branch has a distinct protocol profile and vocabulary schema.
 
 ## Cases
 
@@ -23,6 +23,9 @@ A creates a space from Settings → Data management → OneDrive 自动同步. A
 | 9 | Disconnect/reconnect; also join from a fresh browser profile | Disconnect does not delete files or local records; a new writer can reconstruct retained history | Pending |
 | 10 | Use the app's local site reset while pending data cannot be flushed | Reset refuses to discard the queue; local clearing is not a remote deletion | Pending |
 | 11 | Export/import and use disk backup with sync disabled and enabled | Existing workflows remain usable; portable exports omit sync metadata; bindings remain independent | Pending |
+| 13 | On B pause OneDrive with a partial user-data directory / missing marker, then enable sync | Connection stops; no replacement marker or space is created | Pending |
+| 14 | Upgrade an existing synced browser and select either project root or old user-data directory | Same space ID and marker; existing history preserved | Pending |
+| 15 | Pause reset preparation, then submit a practice from another tab | Later write rejected; all earlier accepted writes published before deletion | Pending |
 | 12 | Pause OneDrive after a local publication | The app reports local folder write only; it does not claim cloud delivery | Pending |
 
 Test both direct file:// (where supported) and the deployed frontend through a secure context. Remote HTTP without a secure context may not expose the directory APIs; mobile browsers and backend API / PostgreSQL bridging are outside this feature.

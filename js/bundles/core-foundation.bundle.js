@@ -1025,7 +1025,15 @@
         const actual = unitsFrom(snapshot, state.preferences);
         const keys = [...new Set(Object.keys(state.materialized).concat(Object.keys(actual)))].filter(key => key !== 'preferences' || state.preferences);
         const entries = keys.map(key => [key, actual[key] || absent()]).filter(([key, value]) => !equal(value, state.materialized[key] || absent()));
-        publish(state, entries, sourceId);
+        // Initial empty singleton defaults are observation baselines, not user edits.
+        // Preserve non-empty local collections and all subsequent explicit clears.
+        const emptyDefaults = unitsFrom({ documents: {}, entities: {} }, state.preferences);
+        const meaningful = entries.filter(([key, value]) => own(state.materialized, key)
+            || !own(emptyDefaults, key) || !equal(value, emptyDefaults[key]));
+        for (const [key] of meaningful) {
+            if (!own(state.materialized, key) && own(emptyDefaults, key)) state.materialized[key] = copy(emptyDefaults[key]);
+        }
+        publish(state, meaningful, sourceId);
         // The local user's commit stays visible. Unresolved alternatives remain in heads.
         state.materialized = actual;
         return state;
@@ -1706,7 +1714,14 @@
                 const journalRequest = tx.objectStore(SYSTEM_STORE).get('system.operationJournal');
                 journalRequest.onerror = () => fail(journalRequest.error || new Error('Journal read failed'));
                 journalRequest.onsuccess = () => {
-                    try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    const barrier = tx.objectStore(SYSTEM_STORE).get('system.folderSyncResetBarrier');
+                    barrier.onerror = () => fail(barrier.error);
+                    barrier.onsuccess = () => {
+                        if (barrier.result && !spec.resetAllowed) {
+                            fail(validation('本机正在清理数据，请等待清理完成后重新打开网页')); return;
+                        }
+                        try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    };
                 };
             }, true);
         }
@@ -2451,6 +2466,7 @@
             const command = canonicalizeJson(input);
             const opId = randomId('folder-sync-' + action);
             const spec = { operationId: opId, warnings: [], pending: [], stores: STORE_NAMES.slice(),
+                resetAllowed: ['status', 'pending', 'known', 'ack', 'receive'].includes(action),
                 fingerprint: requestFingerprint({}, { action, command }, []) };
             let targets = [], result;
             const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
@@ -5352,6 +5368,35 @@
             });
         } finally { db.close(); }
     }
+    async function resetBarrier(active) {
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open('IELTSAtlasDataV2');
+            let absent = false;
+            request.onupgradeneeded = () => { absent = true; request.transaction.abort(); };
+            request.onerror = () => absent ? resolve(null) : reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+        });
+        if (!db) return { enabled: false, pending: 0 };
+        try {
+            if (!db.objectStoreNames.contains('system')) return { enabled: false, pending: 0 };
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('system', 'readwrite');
+                const store = tx.objectStore('system');
+                const request = store.get(model.STATE_KEY);
+                if (active) store.put({ logicalKey: 'system.folderSyncResetBarrier', active: true });
+                else store.delete('system.folderSyncResetBarrier');
+                tx.oncomplete = () => {
+                    const state = request.result?.envelope?.data;
+                    try {
+                        if (request.result) model.assertState(state);
+                        resolve(state ? model.status(state) : { enabled: false, pending: 0 });
+                    }
+                    catch (error) { reject(error); }
+                };
+                tx.onabort = tx.onerror = () => reject(tx.error || new Error('无法建立数据清理屏障'));
+            });
+        } finally { db.close(); }
+    }
     function requestPermission(handle) {
         if (!handle?.requestPermission) return Promise.resolve('denied');
         return handle.requestPermission({ mode: 'readwrite' });
@@ -5376,6 +5421,7 @@
         const text = JSON.stringify(value);
         if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('单条同步操作超过 32 MB，已保留待发送队列');
         const file = await dir.getFileHandle(name, { create: true });
+        if (name === 'workspace.json' && (await file.getFile()).size) throw new Error('同步空间已出现，请重新连接；不会覆盖原有空间');
         const writer = await file.createWritable();
         try { await writer.write(text); await writer.close(); }
         catch (error) { try { await writer.abort(); } catch (_) { /* already closed */ } throw error; }
@@ -5389,22 +5435,40 @@
         if (expected && value.spaceId !== expected) throw new Error('文件夹的数据空间标识已改变，请重新连接；本机记录仍然保留');
         return value;
     }
-    async function openWorkspace(selected, create) {
-        let dir = selected;
+    async function openWorkspace(selected, confirmCreate = () => false) {
+        const found = async dir => {
+            try { return assertWorkspace(await readJson(dir, 'workspace.json')); }
+            catch (error) { if (error.name !== 'NotFoundError') throw error; return null; }
+        };
+        const direct = await found(selected);
+        if (direct) return { directory: selected, spaceId: direct.spaceId, name: selected.name, existing: true };
+        let dir;
+        if (selected.name === 'user-data') dir = selected;
+        else {
+            try { dir = await selected.getDirectoryHandle('user-data', { create: false }); }
+            catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        }
+        if (dir) {
+            const existing = await found(dir);
+            if (existing) return { directory: dir, spaceId: existing.spaceId, name: selected.name, existing: true };
+            throw new Error('同步文件夹尚不完整，请等待 OneDrive 下载完成并设置“始终保留在此设备上”，然后重试。为保护原有数据，不会创建其他空间。');
+        }
+        // Only a complete project root without any sync directory can be initialized.
+        for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await selected.getFileHandle(name, { create: false });
+        for (const name of ['js', 'css']) await selected.getDirectoryHandle(name, { create: false });
+        if (typeof confirmCreate !== 'function' || !await confirmCreate()) throw new Error('已取消初始化，本机学习记录仍保留');
+        // Reinspect after confirmation: a folder arriving during the prompt is never overwritten.
         try {
-            const direct = assertWorkspace(await readJson(dir, 'workspace.json'));
-            return { directory: dir, spaceId: direct.spaceId, name: selected.name, existing: true };
+            await selected.getDirectoryHandle('user-data', { create: false });
+            return openWorkspace(selected, () => false);
         } catch (error) { if (error.name !== 'NotFoundError') throw error; }
-        dir = selected.name === 'user-data' ? selected : await selected.getDirectoryHandle('user-data', { create });
-        try {
-            const existing = assertWorkspace(await readJson(dir, 'workspace.json'));
-            return { directory: dir, spaceId: existing.spaceId, name: selected.name + '/user-data', existing: true };
-        } catch (error) { if (error.name !== 'NotFoundError') throw error; }
-        if (!create) throw new Error('未发现 workspace.json，请等待 OneDrive 下载完成，或在第一台电脑创建同步空间');
-        // Explicit bootstrap only; new/empty folders are never interpreted as remote deletions.
+        dir = await selected.getDirectoryHandle('user-data', { create: true });
+        for await (const entry of dir.values()) throw new Error('同步目录已出现内容，请等待 OneDrive 下载完成后重试');
+        const late = await found(dir);
+        if (late) return { directory: dir, spaceId: late.spaceId, name: selected.name, existing: true };
         const workspace = { format: model.FORMAT, version: model.VERSION, spaceId: model.uuid(), createdAt: new Date().toISOString() };
         await writeJson(dir, 'workspace.json', workspace);
-        return { directory: dir, spaceId: workspace.spaceId, name: selected.name + (selected.name === 'user-data' ? '' : '/user-data'), existing: false };
+        return { directory: dir, spaceId: workspace.spaceId, name: selected.name + '/user-data', existing: false };
     }
     async function workspace(binding) {
         assertWorkspace(await readJson(binding.directory, 'workspace.json'), binding.spaceId);
@@ -5460,7 +5524,7 @@
         return { files, errors };
     }
     global.SyncFolderAdapter = Object.freeze({ supported, pick, binding, permission, requestPermission,
-        openWorkspace, workspace, publish, scan, clearCache() { cache.clear(); } });
+        openWorkspace, workspace, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -5547,13 +5611,16 @@
         }).finally(() => { running = null; emit({ busy: false }); });
         return running;
     }
-    async function connect(create = false) {
+    async function connect() {
         const selection = adapter.pick();
         const selected = await selection;
         await init();
         const result = await withLock(async () => {
-            const space = await adapter.openWorkspace(selected, create);
             const current = await global.AppData.folderSync.status();
+            const space = await adapter.openWorkspace(selected, () => {
+                if (current.spaceId) throw new Error('本机已有同步空间，请选择原项目文件夹并等待 OneDrive 下载完成；不会创建其他空间');
+                return global.confirm('尚未发现同步空间。只有从未在其他电脑启用过同步，且 OneDrive 已完成下载时才应新建。确认在此项目中初始化同步空间？');
+            });
             if (current.enabled && current.spaceId !== space.spaceId) throw new Error('请先断开当前空间，再连接其他空间');
             binding = { directory: space.directory, spaceId: space.spaceId, name: space.name };
             await adapter.binding(binding);
@@ -5600,16 +5667,28 @@
     }
     async function withReset(task) {
         // Called while the shared full-reset lock is already held.
-        await runUnlocked();
-        const state = await global.AppData.folderSync.status();
-        if (state.enabled && state.pending) throw new Error('还有未写入 OneDrive 文件夹的记录，请恢复权限并同步后再清理本机');
-        suspended = true; announce('reset-pause');
-        if (timer) { global.clearTimeout(timer); timer = null; }
+        // This durable flag and every learning write share the system-store transaction.
+        // Earlier writes finish first; later writes abort even in another tab.
+        let success = false;
         try {
+            const state = await adapter.resetBarrier(true);
+            binding = await adapter.binding();
+            if (binding || state.enabled || state.pending) {
+                await runUnlocked();
+                const latest = await global.AppData.folderSync.status();
+                if (latest.pending) throw new Error('还有未写入 OneDrive 文件夹的记录，请恢复权限并同步后再清理本机');
+            }
+            suspended = true; announce('reset-pause');
+            if (timer) { global.clearTimeout(timer); timer = null; }
             const result = await task();
-            if (result?.success !== true) { suspended = false; announce('reset-resume'); }
+            success = result?.success === true;
             return result;
-        } catch (error) { suspended = false; announce('reset-resume'); throw error; }
+        } finally {
+            if (!success) {
+                await adapter.resetBarrier(false);
+                suspended = false; announce('reset-resume');
+            }
+        }
     }
     function init() {
         if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; throw error; });
@@ -7661,15 +7740,14 @@
         close.addEventListener('click', () => modal.classList.remove('show'));
         header.append(title, close);
         const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
-        body.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。网页本身可以继续放在开发目录。'));
-        body.append(element('p', '请确认所选目录由 OneDrive 客户端同步。第一台电脑创建空间，其他电脑下载完成后连接已有空间；将 user-data 设置为“始终保留在此设备上”。', 'folder-sync-muted'));
+        body.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。请先把解压后的整个项目文件夹放进 OneDrive。'));
+        body.append(element('p', '点击“启用 OneDrive 同步”，选择 OneDrive 中的项目文件夹并授权。已有空间会自动连接；首次使用需确认初始化。其他电脑请等待下载完成，并设置“始终保留在此设备上”。', 'folder-sync-muted'));
         statusLine = element('p', '正在读取本机同步状态…', 'folder-sync-status');
         statusLine.setAttribute('role', 'status'); statusLine.setAttribute('aria-live', 'polite');
         body.append(statusLine);
         const actions = element('div', '', 'external-backup-panel__actions');
         for (const [key, label, task] of [
-            ['create', '📁 第一台电脑：创建同步空间', () => service.connect(true)],
-            ['join', '🔗 连接已有同步空间', () => service.connect(false)],
+            ['enable', '☁️ 启用 OneDrive 同步', () => service.connect()],
             ['sync', '🔄 立即同步', () => service.syncNow()],
             ['permission', '🔑 恢复文件夹权限', () => service.reauthorize()],
             ['disconnect', '断开本机同步', () => {
@@ -7732,7 +7810,7 @@
         if (!modal) return;
         statusLine.textContent = textStatus(status);
         errorLine.textContent = status.errors.map(error => (error.path ? error.path + '：' : '') + error.message).slice(0, 5).join('\n');
-        buttons.create.disabled = buttons.join.disabled = !status.supported || status.busy;
+        buttons.enable.disabled = !status.supported || status.busy;
         buttons.sync.disabled = buttons.disconnect.disabled = !status.enabled || !status.bound || status.busy;
         buttons.permission.disabled = !status.bound || status.permission === 'granted' || status.busy;
         preferences.disabled = !status.enabled || !status.bound || status.busy;
