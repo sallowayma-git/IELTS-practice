@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:ac3825be9c6ed6051dffd53a38111b885a815580a1c079ce6ef9036e60cbbcec",
+  "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -490,7 +490,7 @@
     },
     {
       "path": "assets/generated/reading-exams/manifest.js",
-      "sha256": "2cbca2c63abca271ba2cd31e859cee3c1fcf34bcd7759101aceacb6080252560"
+      "sha256": "39b1a0b9d6efc08a70bc190f125c87fd81da2ed7766a418bcbe8dfc8c1fc1f23"
     },
     {
       "path": "assets/generated/reading-exams/reading-practice-unified.html",
@@ -542,7 +542,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "b3d20ce0bfa7a83d5f3d0a5dedd7547c3690bc7e20fd3959ed4b34cc29859b7c"
+      "sha256": "cf12f08d66b96025c88253a0ef73b08c5ae3bf8c83f529bf0544aea994ab9d9f"
     },
     {
       "path": "js/bundles/browse.bundle.js",
@@ -550,7 +550,7 @@
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "89d1c2d6cff01b7e09bd93253de03e4834db17faafbc102976c34b5f9dd0e040"
+      "sha256": "5783fd6ba616e15331e6050661a2eb996ac02776b931e2b8faff2d6232d4652f"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -806,37 +806,37 @@
       {
         "source": "assets/generated/reading-exams/manifest.js",
         "startLine": 14958,
-        "endLine": 22508,
+        "endLine": 22519,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExamRegistry.js",
-        "startLine": 22512,
-        "endLine": 22549,
+        "startLine": 22523,
+        "endLine": 22560,
         "sourceStartLine": 1
       },
       {
         "source": "js/runtime/readingExplanationRegistry.js",
-        "startLine": 22553,
-        "endLine": 22590,
+        "startLine": 22564,
+        "endLine": 22601,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/state-service.js",
-        "startLine": 22594,
-        "endLine": 23260,
+        "startLine": 22605,
+        "endLine": 23271,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryDiscovery.js",
-        "startLine": 23264,
-        "endLine": 23979,
+        "startLine": 23275,
+        "endLine": 23990,
         "sourceStartLine": 1
       },
       {
         "source": "js/services/libraryManager.js",
-        "startLine": 23983,
-        "endLine": 25579,
+        "startLine": 23994,
+        "endLine": 25590,
         "sourceStartLine": 1
       }
     ],

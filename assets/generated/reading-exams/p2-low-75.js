@@ -10,6 +10,7 @@
     "title": "Lean Production Innovation 精益生产",
     "category": "P2",
     "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "166. P2 - Lean Production Innovation 精益生产.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/166. P2 - Lean Production Innovation 精益生产/",
     "legacyFilename": "166. P2 - Lean Production Innovation 精益生产.html",

@@ -10,6 +10,7 @@
     "title": "The economic effect of climate 气候对经济的影响",
     "category": "P2",
     "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "191. P2 - The economic effect of climate 气候对经济的影响.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/191. P2 - The economic effect of climate 气候对经济的影响/",
     "legacyFilename": "191. P2 - The economic effect of climate 气候对经济的影响.html",

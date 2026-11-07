@@ -9,12 +9,12 @@
   "meta": {
     "title": "Building a castle 建造城堡",
     "category": "P1",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "",
     "legacyPath": "",
     "legacyFilename": "",
     "questionIntroHtml": "<h3>Questions 1–13</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [
