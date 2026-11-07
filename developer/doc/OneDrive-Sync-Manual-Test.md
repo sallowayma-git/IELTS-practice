@@ -15,7 +15,7 @@ On A and B, use Settings → Data management → OneDrive 自动同步 → **启
 | 1 | A completes a synthetic practice; wait for local write and OneDrive transfer; open B | B has the full summary, answers and annotations once; statistics are not duplicated | Pending |
 | 2 | B completes another attempt, including a second attempt of the same article | Both attempts eventually appear on both devices | Pending |
 | 3 | Both work offline, then reconnect | Independent additions merge; pending queues drain when folder permission and transport are available | Pending |
-| 4 | Make a local commit without folder permission, close/reopen, then reauthorize | Queued data survives and publishes after reauthorization | Pending |
+| 4 | Make a local commit without folder permission, close/reopen, then reauthorize | When permission expires, 恢复同步 appears with 同步已暂停. Denial retains the queue; granting permission resumes publication in the same space and hides recovery again | Pending |
 | 5 | From a shared baseline, edit the same annotation offline on both devices | Both alternatives are visible; selecting one converges on the other device | Pending |
 | 6 | One device deletes while the other edits the same attempt offline | Delete/edit alternatives survive; an ordinary causal deletion is not undone by old log replay | Pending |
 | 7 | A sends one operation deleting at least 10 attempts and at least half of B's attempts | B waits for explicit confirmation before applying that operation | Pending |

@@ -46,6 +46,14 @@ The five added browser regression tests cover:
 
 Permission restoration is exercised through reauthorize with an origin-private handle. Real permission prompts and OneDrive transfer remain manual cases. The panel screenshot was regenerated from the production backend-served page. Evidence is saved locally in ignored developer/doc/onedrive-sync-review-{all,focused,backend,http,build,bundle-check}.log files.
 
+## Permission recovery interaction update
+
+The panel now shows only **启用 OneDrive 同步** before setup. Connected, authorized browsers see **自动同步已开启** with sync/disconnect/preferences controls and no setup/recovery button. When permission expires, **同步已暂停** and **恢复同步** appear; immediate sync is disabled until access is restored. Disconnect returns to setup. Conflict and bulk-deletion controls remain available.
+
+The production backend browser test now verifies these real rendered states, denies one simulated browser permission request (queue retained), grants the next request (queue drains automatically), verifies that recovery does not reopen the directory picker or change the space ID, and disconnects/reconnects without losing the practice record. Only the browser permission results and directory chooser are substituted; production service, IndexedDB and file writing code execute unchanged. The initial panel screenshot was regenerated and visually inspected.
+
+Rerun commands use the existing dependency lockfiles: frontend suite (121 tests including 21 sync tests), focused sync, backend (5 tests), production HTTP browser integration (1 extended test), bundle build/check and git diff check. Local evidence is saved in ignored developer/doc/onedrive-sync-ui-*.log files. No dependency, storage protocol, data-write barrier or backend API changes are included in this UI update.
+
 ## Pending external validation
 
 Real OneDrive upload/download, two physical computers, Files On-Demand and actual directory reauthorization still require [manual acceptance](OneDrive-Sync-Manual-Test.md). No personal browser database or OneDrive account was used.

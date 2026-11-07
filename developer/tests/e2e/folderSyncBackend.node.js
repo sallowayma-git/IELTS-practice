@@ -31,7 +31,9 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         const page = await context.newPage(); page.on('dialog', dialog => dialog.accept());
         await page.addInitScript(() => {
             // Substitute only the user chooser, using an isolated real directory handle.
+            window.__pickerCalls = 0;
             window.showDirectoryPicker = async () => {
+                    window.__pickerCalls++;
                     const dir = await navigator.storage.getDirectory();
                     for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await dir.getFileHandle(name, { create: true });
                     for (const name of ['js', 'css']) await dir.getDirectoryHandle(name, { create: true });
@@ -47,6 +49,10 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         await page.locator('button[data-view="settings"]').click();
         await page.locator('#folder-sync-entry-btn').click();
         assert(await page.locator('#folder-sync-modal').isVisible());
+        assert(await page.locator('#folder-sync-enable-btn').isVisible());
+        assert(!(await page.locator('#folder-sync-sync-btn').isVisible()));
+        assert(!(await page.locator('#folder-sync-disconnect-btn').isVisible()));
+        assert(!(await page.locator('#folder-sync-permission-btn').isVisible()), 'unbound browsers have no recovery action');
         assert.equal((await page.request.get(base + '/css/folder-sync.css')).status(), 200);
         if (process.env.ONEDRIVE_SYNC_SCREENSHOT) {
             await page.screenshot({ path: path.resolve(process.env.ONEDRIVE_SYNC_SCREENSHOT) });
@@ -56,6 +62,11 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
             const status = FolderSyncService.getStatus();
             return status.enabled && status.permission === 'granted' && !status.busy && !status.pending;
         });
+        assert(!(await page.locator('#folder-sync-enable-btn').isVisible()));
+        assert(!(await page.locator('#folder-sync-permission-btn').isVisible()));
+        assert(!(await page.locator('#folder-sync-setup-guide').isVisible()));
+        assert((await page.locator('.folder-sync-status').textContent()).includes('自动同步已开启'));
+        assert(await page.locator('#folder-sync-preferences').isEnabled());
         const previousPublish = await page.evaluate(() => FolderSyncService.getStatus().lastPublishAt);
         await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'backend-folder-record', record: {
             id: 'backend-folder-record', type: 'reading', examId: 'test-exam', title: 'Synthetic folder-sync record',
@@ -77,6 +88,56 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
             return found;
         });
         assert(published, 'a commit made on the backend-served page should publish without syncNow');
+        const originalSpace = await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId);
+        await page.evaluate(async () => {
+            // Simulate browser permission loss only. Worker, stored binding, queue and file writes remain real.
+            window.__permission = 'prompt'; window.__permissionRequests = 0;
+            FileSystemDirectoryHandle.prototype.queryPermission = async () => window.__permission;
+            FileSystemDirectoryHandle.prototype.requestPermission = async () => {
+                window.__permissionRequests++;
+                return window.__grantRestore ? (window.__permission = 'granted') : 'denied';
+            };
+            await FolderSyncService.syncNow();
+            await AppData.practice.completeAttempt({ operationId: 'paused-record', record: {
+                id: 'paused-record', type: 'reading', examId: 'test-exam', title: 'Queued while paused',
+                totalQuestions: 1, correctAnswers: 1, answers: { 1: 'yes' }
+            } });
+            await FolderSyncService.syncNow();
+        });
+        assert(await page.locator('#folder-sync-permission-btn').isVisible());
+        assert((await page.locator('#folder-sync-permission-btn').textContent()).includes('恢复同步'));
+        assert(!(await page.locator('#folder-sync-enable-btn').isVisible()));
+        assert(!(await page.locator('#folder-sync-sync-btn').isEnabled()));
+        assert((await page.locator('.folder-sync-status').textContent()).includes('同步已暂停'));
+        assert((await page.locator('#folder-sync-banner-copy').textContent()).includes('恢复同步'));
+        const queued = await page.evaluate(() => AppData.folderSync.pending());
+        assert(queued.some(op => op.changes.some(change => change.key === 'practice/paused-record')));
+        await page.locator('#folder-sync-permission-btn').click();
+        await page.waitForFunction(() => window.__permissionRequests === 1 && !document.getElementById('folder-sync-permission-btn').disabled);
+        assert(await page.locator('#folder-sync-permission-btn').isVisible(), 'denial keeps recovery available');
+        assert.equal((await page.evaluate(() => AppData.folderSync.pending())).length, queued.length);
+        await page.evaluate(() => { window.__grantRestore = true; });
+        await page.locator('#folder-sync-permission-btn').click();
+        await page.waitForFunction(() => {
+            const status = FolderSyncService.getStatus();
+            return status.permission === 'granted' && !status.busy && !status.pending;
+        });
+        assert(!(await page.locator('#folder-sync-permission-btn').isVisible()));
+        assert((await page.locator('.folder-sync-status').textContent()).includes('自动同步已开启'));
+        assert(await page.locator('#folder-sync-sync-btn').isEnabled());
+        assert.equal(await page.locator('#folder-sync-banner').count(), 0);
+        assert.equal(await page.evaluate(() => window.__pickerCalls), 1, 'restore reuses the bound folder');
+        assert.equal(await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId), originalSpace);
+        await page.locator('#folder-sync-disconnect-btn').click();
+        await page.waitForFunction(() => !FolderSyncService.getStatus().bound);
+        assert(await page.locator('#folder-sync-enable-btn').isVisible());
+        assert(await page.locator('#folder-sync-setup-guide').isVisible());
+        assert(!(await page.locator('#folder-sync-permission-btn').isVisible()));
+        assert(await page.evaluate(() => AppData.practice.get('paused-record')));
+        await page.locator('#folder-sync-enable-btn').click();
+        await page.waitForFunction(() => FolderSyncService.getStatus().bound && !FolderSyncService.getStatus().busy);
+        assert.equal(await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId), originalSpace);
+        assert(!(await page.locator('#folder-sync-permission-btn').isVisible()));
         assert.equal((await page.request.get(base + '/user-data/workspace.json')).status(), 404);
     } finally {
         if (browser) await browser.close();

@@ -2,7 +2,7 @@
     'use strict';
     if (!global.document || !global.FolderSyncService) return;
     const service = global.FolderSyncService, doc = global.document;
-    let modal = null, statusLine, conflictList, errorLine, preferences, versionSignature = '';
+    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '';
     const buttons = {};
     function element(tag, text, className) {
         const node = doc.createElement(tag);
@@ -36,8 +36,10 @@
         close.addEventListener('click', () => modal.classList.remove('show'));
         header.append(title, close);
         const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
-        body.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。请先把解压后的整个项目文件夹放进 OneDrive。'));
-        body.append(element('p', '点击“启用 OneDrive 同步”，选择 OneDrive 中的项目文件夹并授权。已有空间会自动连接；首次使用需确认初始化。其他电脑请等待下载完成，并设置“始终保留在此设备上”。', 'folder-sync-muted'));
+        setupGuide = element('div'); setupGuide.id = 'folder-sync-setup-guide';
+        setupGuide.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。请先把解压后的整个项目文件夹放进 OneDrive。'));
+        setupGuide.append(element('p', '点击“启用 OneDrive 同步”，选择 OneDrive 中的项目文件夹并授权。已有空间会自动连接；首次使用需确认初始化。其他电脑请等待下载完成，并设置“始终保留在此设备上”。', 'folder-sync-muted'));
+        body.append(setupGuide);
         statusLine = element('p', '正在读取本机同步状态…', 'folder-sync-status');
         statusLine.setAttribute('role', 'status'); statusLine.setAttribute('aria-live', 'polite');
         body.append(statusLine);
@@ -45,7 +47,7 @@
         for (const [key, label, task] of [
             ['enable', '☁️ 启用 OneDrive 同步', () => service.connect()],
             ['sync', '🔄 立即同步', () => service.syncNow()],
-            ['permission', '🔑 恢复文件夹权限', () => service.reauthorize()],
+            ['permission', '🔑 恢复同步', () => service.reauthorize()],
             ['disconnect', '断开本机同步', () => {
                 if (global.confirm('断开后保留本机记录和 OneDrive 文件，下次连接可继续同步。是否断开？')) return service.disconnect();
             }]
@@ -75,9 +77,9 @@
     function textStatus(status) {
         if (!status.supported) return '当前环境不支持自动文件夹同步。请使用桌面 Chrome / Edge；必要时通过固定 localhost 地址打开。';
         if (!status.enabled || !status.bound) return '未连接同步空间，学习数据仍保存在当前浏览器。';
-        if (status.permission !== 'granted') return '已连接 ' + status.directoryName + '，需要点击“恢复文件夹权限”才能继续读写。';
+        if (status.permission !== 'granted') return '同步已暂停，请点击“恢复同步”并重新授权。学习记录仍保存在本机。';
         if (status.busy) return '正在检查并合并同步文件…';
-        return '已连接 ' + status.directoryName + ' · 待发送 ' + status.pending + ' 条 · 待处理冲突 ' + status.conflicts.length
+        return '自动同步已开启 · ' + status.directoryName + ' · 待发送 ' + status.pending + ' 条 · 待处理冲突 ' + status.conflicts.length
             + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
     }
     function banner(status) {
@@ -93,22 +95,30 @@
             const open = element('button', '打开同步面板', 'btn app-global-banner__btn'); open.type = 'button'; open.addEventListener('click', openModal);
             node.append(copy, open); stack.append(node);
         }
-        doc.getElementById('folder-sync-banner-copy').textContent = status.permission !== 'granted' ? 'OneDrive 同步需要重新授权文件夹'
+        doc.getElementById('folder-sync-banner-copy').textContent = status.permission !== 'granted' ? 'OneDrive 同步已暂停，请打开同步面板恢复同步'
             : status.blocked.length ? 'OneDrive 同步有批量删除请求需要确认'
                 : status.conflicts.length ? 'OneDrive 同步有 ' + status.conflicts.length + ' 项内容需要选择版本' : 'OneDrive 同步遇到问题，本机记录仍保留';
     }
     function render(status) {
         const entry = doc.getElementById('folder-sync-entry-btn');
         if (entry) entry.textContent = !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
-            : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 需授权'
-                : status.conflicts.length ? '☁️ OneDrive 同步 · 有冲突' : status.pending ? '☁️ OneDrive 同步 · 待发送' : '☁️ OneDrive 同步 · 已连接';
+            : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 已暂停'
+                : status.conflicts.length ? '☁️ OneDrive 同步 · 有冲突' : status.pending ? '☁️ OneDrive 同步 · 待发送' : '☁️ OneDrive 同步 · 已开启';
         banner(status);
         if (!modal) return;
         statusLine.textContent = textStatus(status);
         errorLine.textContent = status.errors.map(error => (error.path ? error.path + '：' : '') + error.message).slice(0, 5).join('\n');
+        const connected = status.enabled && status.bound;
+        const needsPermission = connected && status.permission !== 'granted';
+        setupGuide.hidden = connected;
+        buttons.enable.hidden = connected;
+        buttons.sync.hidden = buttons.disconnect.hidden = !connected;
+        preferences.parentElement.hidden = !connected;
+        buttons.permission.hidden = !needsPermission;
         buttons.enable.disabled = !status.supported || status.busy;
-        buttons.sync.disabled = buttons.disconnect.disabled = !status.enabled || !status.bound || status.busy;
-        buttons.permission.disabled = !status.bound || status.permission === 'granted' || status.busy;
+        buttons.sync.disabled = !connected || needsPermission || !status.supported || status.busy;
+        buttons.disconnect.disabled = !connected || status.busy;
+        buttons.permission.disabled = !status.supported || status.busy;
         preferences.disabled = !status.enabled || !status.bound || status.busy;
         preferences.checked = status.preferences === true;
         const signature = JSON.stringify([status.conflicts.map(item => [item.key, item.versions.map(version => version.id)]), status.blocked]);

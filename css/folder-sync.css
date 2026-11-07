@@ -9,3 +9,5 @@
 .folder-sync-conflict details { padding: 10px 0; }
 .folder-sync-conflict summary { cursor: pointer; }
 .folder-sync-conflict pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.folder-sync-modal [hidden] { display: none !important; }
+#folder-sync-setup-guide { display: grid; gap: 14px; }
