@@ -2,7 +2,7 @@
     'use strict';
     if (!global.document || !global.FolderSyncService) return;
     const service = global.FolderSyncService, doc = global.document;
-    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '';
+    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '';
     const buttons = {};
     function element(tag, text, className) {
         const node = doc.createElement(tag);
@@ -10,9 +10,26 @@
         if (className) node.className = className;
         return node;
     }
-    function message(text) {
+    function message(text, type = 'error') {
         actionError = text;
         if (errorLine) errorLine.textContent = text;
+        if (typeof global.showMessage === 'function') global.showMessage(text, type);
+    }
+    function notifyAttention(status) {
+        let text = '', type = 'warning';
+        if (status.enabled && status.bound) {
+            const destination = '请前往设置 → 数据管理 → OneDrive 自动同步处理。';
+            if (status.permission !== 'granted') text = 'OneDrive 同步已暂停，学习记录仍保存在本机。' + destination;
+            else if (status.blocked.length) text = 'OneDrive 同步有批量删除请求需要确认。' + destination;
+            else if (status.conflicts.length) text = 'OneDrive 同步有 ' + status.conflicts.length + ' 项内容需要选择版本。' + destination;
+            else if (status.errors.length) {
+                text = 'OneDrive 同步遇到问题，学习记录仍保存在本机。' + destination;
+                type = 'error';
+            }
+        }
+        // Use the same transient notification as disk backup; never add home-page controls.
+        if (text && text !== lastAttention && typeof global.showMessage === 'function') global.showMessage(text, type);
+        lastAttention = text;
     }
     function action(button, task) {
         button.addEventListener('click', () => {
@@ -85,6 +102,7 @@
             + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
     }
     function render(status) {
+        notifyAttention(status);
         const entry = doc.getElementById('folder-sync-entry-btn');
         if (entry) entry.textContent = !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
             : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 已暂停'

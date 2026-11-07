@@ -56,9 +56,15 @@ Rerun commands use the existing dependency lockfiles: frontend suite (121 tests 
 
 ## Settings-only sync UI
 
-Removed the sync worker status subscription's global banner creation; it no longer inserts an “打开同步面板” button or changes the application's shared banner stack. The existing Settings → Data management entry is the sole UI entry. Permission, conflict, bulk-deletion and file-error information remains in that panel, with attention states on its settings entry. Action errors are kept inside the panel rather than using a global toast.
+Removed the sync worker status subscription's global banner creation; it no longer inserts an “打开同步面板” button or changes the application's shared banner stack. The existing Settings → Data management entry is the sole UI entry. Permission, conflict, bulk-deletion and file-error information remains in that panel, with attention states on its settings entry. Action errors are retained inside the panel. The later shared-notification update below also reports them through the existing backup notification system.
 
 The production HTTP browser regression now pauses sync by simulating permission loss, visits overview/browse/practice/more, and asserts that no global sync button/banner exists and the settings entry/modal is not visible there. Original navigation/overview labels and controls are compared before/after. It returns through Settings → Data management to verify permission denial feedback and recovery without data loss. Runtime source changes are confined to syncPanel.js and its generated bundle; index.html, original page sections and shared layout/CSS are unchanged. Evidence: developer/doc/onedrive-sync-settings-*.log (ignored local files).
+
+## Shared backup-style sync notifications
+
+Sync permission loss, conflicts, pending bulk-deletion confirmation and file errors now call the existing showMessage notification used by disk backup. These are transient text notices directing users to Settings → Data management; no separate banner container, home-page button or global shortcut is created. Identical ongoing attention states do not repeat on each polling refresh. Action errors use the same shared error notification and remain visible in the sync panel.
+
+The production HTTP browser test verifies the shared warning/error notification DOM, absence of notification buttons, unchanged-state deduplication and the existing navigation/overview controls. It visits overview/browse/practice/more while permission is unavailable and confirms the only sync settings entry remains under Settings → Data management. No index.html, shared stylesheet, original section markup, service or data protocol changes were made. Executed checks: 121 frontend tests (including 21 sync tests, also run separately), 5 backend tests, 1 production HTTP browser test, 14 current bundle outputs and git diff check all passed. Evidence: ignored developer/doc/onedrive-sync-notices-*.log files. The [overview screenshot during permission loss](onedrive-sync-notices-overview.png) was captured at 1901 × 908 and visually inspected: original sections remain, the lower-left sync button is absent, and the reminder uses the shared backup notification.
 
 ## Pending external validation
 

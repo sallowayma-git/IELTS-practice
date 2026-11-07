@@ -27,7 +27,7 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         const executablePath = ['C:/Program Files/Google/Chrome/Application/chrome.exe',
             'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync);
         browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
-        const context = await browser.newContext();
+        const context = await browser.newContext({ viewport: { width: 1901, height: 908 } });
         const page = await context.newPage(); page.on('dialog', dialog => dialog.accept());
         await page.addInitScript(() => {
             // Substitute only the user chooser, using an isolated real directory handle.
@@ -93,6 +93,13 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
             return found;
         });
         assert(published, 'a commit made on the backend-served page should publish without syncNow');
+        await page.evaluate(() => {
+            const show = window.showMessage;
+            window.__syncNotices = [];
+            window.showMessage = (text, type, duration) => {
+                window.__syncNotices.push({ text, type }); return show(text, type, duration);
+            };
+        });
         const originalSpace = await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId);
         await page.evaluate(async () => {
             // Simulate browser permission loss only. Worker, stored binding, queue and file writes remain real.
@@ -115,6 +122,11 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         assert(!(await page.locator('#folder-sync-sync-btn').isEnabled()));
         assert((await page.locator('.folder-sync-status').textContent()).includes('同步已暂停'));
         assert.equal(await page.locator('#folder-sync-banner').count(), 0);
+        assert((await page.locator('#message-container .message.warning .message-text').last().textContent()).includes('设置 → 数据管理'));
+        assert.equal(await page.locator('#message-container button').count(), 0, 'shared notices add no sync shortcut');
+        assert.equal(await page.evaluate(() => __syncNotices.length), 1);
+        await page.evaluate(() => FolderSyncService.syncNow());
+        assert.equal(await page.evaluate(() => __syncNotices.length), 1, 'unchanged attention does not repeat on polling');
         await page.locator('#folder-sync-modal .theme-modal-close').click();
         for (const view of ['overview', 'browse', 'practice', 'more']) {
             await page.locator('button[data-view="' + view + '"]').click();
@@ -124,7 +136,8 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
             assert.equal(await page.getByRole('button', { name: '打开同步面板', exact: true }).count(), 0);
             assert.equal(await page.locator('#folder-sync-banner').count(), 0);
             if (view === 'overview' && process.env.ONEDRIVE_SYNC_OVERVIEW_SCREENSHOT) {
-                await page.screenshot({ path: path.resolve(process.env.ONEDRIVE_SYNC_OVERVIEW_SCREENSHOT) });
+                await page.waitForFunction(() => document.querySelector('button[data-view="overview"]').classList.contains('active'));
+                await page.screenshot({ path: path.resolve(process.env.ONEDRIVE_SYNC_OVERVIEW_SCREENSHOT), animations: 'disabled' });
             }
         }
         assert.deepEqual(await mainControls(), originalControls, 'original navigation and overview controls are unchanged');
@@ -138,6 +151,7 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         await page.waitForFunction(() => window.__permissionRequests === 1 && !document.getElementById('folder-sync-permission-btn').disabled);
         assert(await page.locator('#folder-sync-permission-btn').isVisible(), 'denial keeps recovery available');
         assert((await page.locator('.folder-sync-error').textContent()).includes('尚未获得'), 'denial is explained inside the settings panel');
+        assert((await page.locator('#message-container .message.error .message-text').last().textContent()).includes('尚未获得'), 'action errors reuse disk backup notifications');
         assert.equal((await page.evaluate(() => AppData.folderSync.pending())).length, queued.length);
         await page.evaluate(() => { window.__grantRestore = true; });
         await page.locator('#folder-sync-permission-btn').click();
