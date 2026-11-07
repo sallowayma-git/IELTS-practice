@@ -9,7 +9,8 @@
   "meta": {
     "title": "How are deserts formed 沙漠成因",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "39. P2 - How are deserts formed 沙漠成因【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/",
     "legacyFilename": "39. P2 - How are deserts formed 沙漠成因【次】.html",

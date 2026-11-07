@@ -9,12 +9,12 @@
   "meta": {
     "title": "Look who was talking",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "",
     "legacyPath": "",
     "legacyFilename": "",
     "questionIntroHtml": "<h3>Questions 27–32</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

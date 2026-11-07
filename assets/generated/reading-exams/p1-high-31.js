@@ -9,7 +9,8 @@
   "meta": {
     "title": "Dolls through the ages 玩偶的变迁史",
     "category": "P1",
-    "frequency": "high",
+    "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "126. P1 - Dolls through the ages 玩偶的变迁史【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/126. P1 - Dolls through the ages 玩偶的变迁史【高】/",
     "legacyFilename": "126. P1 - Dolls through the ages 玩偶的变迁史【高】.html",

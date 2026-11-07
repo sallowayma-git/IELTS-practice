@@ -9,12 +9,12 @@
   "meta": {
     "title": "The Blockbuster Phenomenon 博物馆爆款现象",
     "category": "P1",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/",
     "legacyFilename": "15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.html",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

@@ -9,8 +9,8 @@
   "meta": {
     "title": "Learning by example 动物学习",
     "category": "P1",
-    "frequency": "medium",
-    "frequencyMonth": "2026-10",
+    "frequency": "low",
+    "frequencyMonth": "2026-11",
     "questionIntroHtml": "<h3>Questions</h3>"
   },
   "passage": {

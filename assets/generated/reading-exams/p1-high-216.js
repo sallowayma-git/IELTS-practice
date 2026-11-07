@@ -2,10 +2,10 @@
   "schemaVersion": "ReadingExamSourceV1",
   "examId": "p1-high-216",
   "meta": {
-    "title": "Australia’s cane toad problem 澳洲蟾蜍【高】",
+    "title": "Australia’s cane toad problem 澳洲蟾蜍",
     "category": "P1",
-    "frequency": "high",
-    "frequencyMonth": "2026-10"
+    "frequency": "low",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

@@ -9,12 +9,12 @@
   "meta": {
     "title": "All in the family 兄弟姐妹的影响",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "questionIntroHtml": "<h3>Questions</h3>",
-    "frequencyMonth": "2026-10"
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

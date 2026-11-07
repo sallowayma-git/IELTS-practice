@@ -10,6 +10,7 @@
     "title": "Movement Underwater 水下运动",
     "category": "P3",
     "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "147. P3 - Movement Underwater 水下运动.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/147. P3 - Movement Underwater 水下运动/",
     "legacyFilename": "147. P3 - Movement Underwater 水下运动.html",

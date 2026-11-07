@@ -9,7 +9,8 @@
   "meta": {
     "title": "The History of Tea 茶叶的历史",
     "category": "P1",
-    "frequency": "high",
+    "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "18. P1 - The History of Tea 茶叶的历史【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/18. P1 - The History of Tea 茶叶的历史【高】/",
     "legacyFilename": "18. P1 - The History of Tea 茶叶的历史【高】.html",
