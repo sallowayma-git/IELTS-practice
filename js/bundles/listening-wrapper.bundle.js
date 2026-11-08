@@ -5205,9 +5205,10 @@
     const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
     const listeners = new Set();
     let binding = null, timer = null, polling = null, running = null, initPromise = null, initialized = false, suspended = false;
-    let channel = null, resumeOnInteraction = false, resumeAttempted = false, earlyInteraction = false;
+    let channel = null, resumeAttempted = false, earlyInteraction = false, recovery = null, skipInteractionClick = false;
     let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
-        permission: 'prompt', initializing: true, busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
+        permission: 'prompt', initializing: true, recovering: false, busy: false, completedSyncs: 0,
+        errors: [], lastPublishAt: null, lastReceiveAt: null };
     function emit(patch = {}) {
         view = Object.assign({}, view, patch);
         for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
@@ -5263,7 +5264,7 @@
         if (published) binding.lastPublishAt = new Date().toISOString();
         if (received) binding.lastReceiveAt = new Date().toISOString();
         if (published || received) await adapter.binding(binding);
-        emit({ errors });
+        emit({ errors, completedSyncs: view.completedSyncs + (errors.length ? 0 : 1) });
         const latest = await refresh();
         if (received && typeof global.syncPracticeRecords === 'function') {
             try { await global.syncPracticeRecords({ forceRender: true }); } catch (_) { /* next view activation reads durable data */ }
@@ -5294,7 +5295,7 @@
             binding = { directory: space.directory, spaceId: space.spaceId, name: space.name };
             await adapter.binding(binding);
             await global.AppData.folderSync.connect(space.spaceId);
-            adapter.clearCache(); suspended = false;
+            adapter.clearCache(); suspended = false; resumeAttempted = false;
             emit({ permission: await adapter.permission(binding.directory), errors: [] });
             await refresh();
             return { existing: space.existing, spaceId: space.spaceId };
@@ -5305,12 +5306,14 @@
     }
     // Starts requestPermission directly inside the click handler, before any asynchronous read.
     function reauthorize() {
+        if (recovery) return recovery;
         if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
         resumeAttempted = true;
+        emit({ recovering: true });
         let request;
         try { request = adapter.requestPermission(binding.directory); }
-        catch (error) { if (error.name === 'SecurityError') resumeAttempted = false; return Promise.reject(error); }
-        return request.then(async permission => {
+        catch (error) { request = Promise.reject(error); }
+        recovery = Promise.resolve(request).then(async permission => {
             emit({ permission, ...(permission === 'granted' ? { errors: [] } : {}) });
             if (permission !== 'granted') throw new Error('尚未获得同步文件夹读写权限');
             announce('binding-changed');
@@ -5320,13 +5323,14 @@
         }).catch(error => {
             if (error.name === 'SecurityError') resumeAttempted = false;
             throw error;
-        });
+        }).finally(() => { recovery = null; emit({ recovering: false }); });
+        return recovery;
     }
     async function disconnect() {
         await withLock(async () => {
             await global.AppData.folderSync.disconnect();
             await adapter.binding(null);
-            binding = null; resumeOnInteraction = false; adapter.clearCache();
+            binding = null; adapter.clearCache();
             emit({ errors: [], permission: 'prompt' }); await refresh();
         });
         announce('binding-changed');
@@ -5374,11 +5378,17 @@
     }
     function resumeFromInteraction(event) {
         if (!event.isTrusted) return;
+        // A failed activation request can retry on the next gesture, not its trailing click.
+        if (event.type === 'click' && skipInteractionClick) { skipInteractionClick = false; return; }
+        if (event.type === 'pointerdown' && event.pointerType !== 'mouse') return;
+        if (event.type === 'pointerup' && event.pointerType === 'mouse') return;
+        if (event.type === 'keydown' && (event.key === 'Escape' || event.ctrlKey || event.altKey || event.metaKey)) return;
         earlyInteraction = true;
-        if (!resumeOnInteraction || resumeAttempted || suspended
+        if (resumeAttempted || suspended || recovery
             || !binding || !view.enabled || view.permission !== 'prompt') return;
         // Explicit sync controls keep their own click handler, with no duplicate permission request.
         if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn')) return;
+        skipInteractionClick = ['pointerdown', 'pointerup', 'keydown'].includes(event.type);
         // Call synchronously during a trusted click: browsers require transient user activation.
         reauthorize().catch(error => {
             if (!['SecurityError', 'AbortError'].includes(error.name)) emit({ errors: [{ path: '', message: error.message }] });
@@ -5387,12 +5397,11 @@
     async function initialize() {
         if (initialized) return;
         initialized = true;
-        await global.AppData.ready;
-        binding = await adapter.binding();
+        // Read the saved handle as soon as the module loads, alongside data initialization.
+        const [, savedBinding] = await Promise.all([global.AppData.ready, adapter.binding()]);
+        binding = savedBinding;
         if (binding) emit({ permission: await adapter.permission(binding.directory) });
         await refresh();
-        resumeOnInteraction = !!binding && view.enabled;
-        emit({ initializing: false });
         if (earlyInteraction && global.navigator?.userActivation?.isActive) resumeFromInteraction({ isTrusted: true });
         if (typeof global.BroadcastChannel === 'function') {
             channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
@@ -5414,17 +5423,23 @@
         polling = global.setInterval(() => {
             if (global.document?.visibilityState !== 'hidden') schedule(0);
         }, 15000);
-        if (binding && view.enabled) schedule(0);
+        // Complete the first background pass during startup, without waiting for settings or a timer.
+        if (binding && view.enabled) {
+            emit({ busy: true });
+            try { await withLock(runUnlocked, true); }
+            catch (error) { emit({ errors: [{ path: '', message: error.message }] }); }
+            finally { emit({ busy: false }); }
+        }
+        emit({ initializing: false });
     }
     global.FolderSyncService = Object.freeze({ init, connect, disconnect, reauthorize, syncNow, resolve,
         setPreferences, approveDelete, withReset, getStatus, onStatusChange(listener) {
             listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
         } });
     if (global.document) {
-        global.document.addEventListener('click', resumeFromInteraction, true);
-        const start = () => init().catch(error => emit({ errors: [{ path: '', message: error.message }] }));
-        if (global.document.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
-        else start();
+        for (const type of ['pointerdown', 'pointerup', 'keydown', 'click'])
+            global.document.addEventListener(type, resumeFromInteraction, true);
+        init().catch(error => emit({ errors: [{ path: '', message: error.message }] }));
     }
 })(typeof window !== 'undefined' ? window : globalThis);
 

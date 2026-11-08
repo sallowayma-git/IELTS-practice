@@ -1,6 +1,6 @@
 # OneDrive sync verification: deployment branch
 
-Date: 2026-11-08 (Asia/Shanghai).
+Date: 2026-11-09 (Asia/Shanghai).
 
 Base: `feature/multi-device-easy-deploy`, commit `3099bfce5d13a331b84c86e1de5543381ad265ab`.
 
@@ -12,12 +12,13 @@ Windows; Node.js v24.16.0; npm 11.13.0. Dependencies were installed locally with
 
 | Check | Result |
 |---|---|
-| `npm --prefix developer test` | 124 passed, 0 failed, 0 cancelled, 0 skipped |
-| `npm --prefix developer run test:sync` | 24 sync tests are included in the full suite; also runnable separately |
+| `npm --prefix developer test` | 126 passed, 0 failed, 0 cancelled, 0 skipped |
+| `npm --prefix developer run test:sync` | 26 sync tests are included in the full suite; also runnable separately |
 | `npm --prefix backend test` | 5 passed, 0 failed, 0 skipped |
 | `npm --prefix developer run test:sync:backend` | 1 passed; production backend HTTP entry, panel, CSS and automatic publication |
 | `node scripts/build-bundles.mjs --check` | Passed: 14 outputs current |
 | `git diff --check` | Passed |
+| `D:/Dev/Runtimes/Python/3.12.10/python.exe -X utf8 developer/tests/ci/run_static_suite.py` | Not passed: 3 existing OneDrive guard mismatches and 5 checks blocked by missing Python Playwright |
 
 The build reports the branch's existing eight duplicate-symbol warnings. No dependency lockfile, backend route, SQL migration, deployment configuration or question asset was changed.
 
@@ -31,6 +32,18 @@ The build reports the branch's existing eight duplicate-symbol warnings. No depe
 - Rejection of the newer static prototype's protocol format, so incompatible schemas cannot silently share one workspace.
 
 Tests use isolated browser contexts and synthetic data. Directory selection is substituted with a real origin-private directory; log copying simulates OneDrive transport. The backend integration uses in-memory auth, session and record stores.
+
+## Immediate startup recovery and consistent action notices (2026-11-09)
+
+The runtime starts reading the saved binding alongside AppData readiness as soon as it loads, and performs the initial sync pass before completing initialization. It no longer waits for DOMContentLoaded or a scheduled timer. Permission recovery starts on ordinary mouse/keyboard/touch activation without opening settings, including permission loss after setup in the same visit. Requests are coalesced and their trailing click cannot duplicate a SecurityError retry. Actual denial and explicit disconnect remain respected.
+
+Enable, restore, immediate sync, disconnect and preference actions reuse shared success/error notices. Recovery has an explicit pending state that suppresses obsolete warning notices. A later verified pass removes stale errors from earlier manual actions and leaves unrelated notices intact.
+
+Two new source browser regressions verify publication while the document is still loading, and mouse-down/keyboard recovery without a settings entry. The production HTTP regression verifies home-page reload and permission recovery before a click completes, queued publication, unchanged space identity, no directory reselection, shared success notices, stale manual-error cleanup with and without a newer backup notice, and remaining malformed-log error reporting. Existing file:// release coverage and reset/queue/denial regressions passed in the frontend suite. Native folder dialogs, native persistent file:// grants and physical two-device OneDrive transfer remain unverified.
+
+Local evidence: ignored developer/doc/onedrive-sync-startup-{frontend,http,static}.log files. No dependencies, backend APIs, protocol or shared page layout changed.
+
+The additional static aggregation was run with the existing base Python because `python` on PATH is a Windows Store alias. Its CSS allowlist rejects the existing folder-sync.css, its architecture guard rejects the existing adapter's IndexedDB access and reset-harness reference, and its settings-button configuration lacks the existing folder-sync entry. Those files/references are present in the pre-change HEAD; this patch does not change them. Five embedded Python browser checks, including full_reset_flow.py, could not run because this project has no Python Playwright environment. No interpreter, PATH or dependency installation was changed to work around this. The static aggregation is not reported as passing; the Node/Playwright sync, reset and production-page regressions above passed.
 
 ## PR #282 review regressions
 

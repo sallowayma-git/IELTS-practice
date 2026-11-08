@@ -71,6 +71,8 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         assert(!(await page.locator('#folder-sync-permission-btn').isVisible()));
         assert(!(await page.locator('#folder-sync-setup-guide').isVisible()));
         assert((await page.locator('.folder-sync-status').textContent()).includes('自动同步已开启'));
+        await page.waitForFunction(() => getMessageCenter().activeMessage?.textContent.includes('OneDrive 自动同步已开启'));
+        assert(await page.locator('#message-container .message.success').count(), 'setup uses the shared success notice');
         assert(await page.locator('#folder-sync-preferences').isEnabled());
         const previousPublish = await page.evaluate(() => FolderSyncService.getStatus().lastPublishAt);
         await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'backend-folder-record', record: {
@@ -147,12 +149,33 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         assert(await page.locator('#folder-sync-permission-btn').isVisible());
         const queued = await page.evaluate(() => AppData.folderSync.pending());
         assert(queued.some(op => op.changes.some(change => change.key === 'practice/paused-record')));
+        const requestsBeforeManual = await page.evaluate(() => __permissionRequests);
         await page.locator('#folder-sync-permission-btn').click();
-        await page.waitForFunction(() => window.__permissionRequests === 1 && !document.getElementById('folder-sync-permission-btn').disabled);
+        await page.waitForFunction(previous => window.__permissionRequests === previous + 1
+            && !document.getElementById('folder-sync-permission-btn').disabled, requestsBeforeManual);
         assert(await page.locator('#folder-sync-permission-btn').isVisible(), 'denial keeps recovery available');
         assert((await page.locator('.folder-sync-error').textContent()).includes('尚未获得'), 'denial is explained inside the settings panel');
         assert((await page.locator('#message-container .message.error .message-text').last().textContent()).includes('尚未获得'), 'action errors reuse disk backup notifications');
         assert.equal((await page.evaluate(() => AppData.folderSync.pending())).length, queued.length);
+        // A grant restored outside the panel must retire a failed action's error too.
+        // A newer unrelated notification still belongs to its own action.
+        for (const otherNotice of [false, true]) {
+            if (otherNotice) {
+                await page.evaluate(async () => { window.__permission = 'prompt'; await FolderSyncService.syncNow(); });
+                await page.locator('#folder-sync-permission-btn').click();
+                await page.waitForFunction(() => getMessageCenter().activeMessage?.textContent.includes('尚未获得'));
+            }
+            await page.evaluate(async otherNotice => {
+                window.__deniedNote = getMessageCenter().activeMessage;
+                if (otherNotice) window.__unrelatedNote = showMessage('磁盘备份已完成', 'success');
+                window.__permission = 'granted';
+                await FolderSyncService.syncNow();
+            }, otherNotice);
+            await page.waitForFunction(() => !window.__deniedNote.isConnected);
+            assert.equal(await page.locator('.folder-sync-error').textContent(), '', 'background recovery clears stale action errors');
+            if (otherNotice) assert(await page.evaluate(() => __unrelatedNote.isConnected), 'background recovery preserves unrelated notices');
+        }
+        await page.evaluate(async () => { window.__permission = 'prompt'; await FolderSyncService.syncNow(); });
         await page.evaluate(() => { window.__grantRestore = true; });
         await page.locator('#folder-sync-permission-btn').click();
         await page.waitForFunction(() => {
@@ -164,6 +187,7 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         assert(await page.locator('#folder-sync-sync-btn').isEnabled());
         assert.equal(await page.locator('#folder-sync-banner').count(), 0);
         assert.equal(await page.locator('.folder-sync-error').textContent(), '');
+        await page.waitForFunction(() => getMessageCenter().activeMessage?.textContent.includes('OneDrive 自动同步已恢复'));
         // A real malformed operation triggers an attention toast; repairing it must withdraw that toast.
         for (const otherNotice of [false, true]) {
             await page.evaluate(async () => {
@@ -207,13 +231,15 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         await page.waitForFunction(() => FolderSyncService.getStatus().bound && !FolderSyncService.getStatus().busy);
         assert.equal(await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId), originalSpace);
         assert(!(await page.locator('#folder-sync-permission-btn').isVisible()));
-        await page.reload();
+        await page.goto(base + '/?view=overview&test_env=1');
         await page.waitForFunction(() => window.AppData && window.app?.isInitialized);
         await page.waitForFunction(() => {
             const status = FolderSyncService.getStatus();
             return !status.initializing && status.enabled && status.bound && status.permission === 'granted' && !status.busy;
         });
         assert.equal(await page.evaluate(() => __pickerCalls), 0, 'bound reload does not choose the folder again');
+        assert.equal(await page.locator('#folder-sync-modal').count(), 0, 'startup recovery never opens settings');
+        assert(await page.locator('#overview-view').isVisible());
         assert.equal(await page.evaluate(async () => (await AppData.folderSync.status()).spaceId), originalSpace);
         const reopenedPublish = await page.evaluate(() => FolderSyncService.getStatus().lastPublishAt);
         await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'auto-reopened', record: {
@@ -224,6 +250,39 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
             const status = FolderSyncService.getStatus();
             return !status.busy && status.pending === 0 && status.lastPublishAt !== previous;
         }, reopenedPublish);
+        // Return to the real home page with a session-only grant. The first normal
+        // pointerdown restores the saved folder before its click or any settings visit.
+        await page.addInitScript(() => {
+            window.__permission = 'prompt'; window.__permissionRequests = 0;
+            FileSystemDirectoryHandle.prototype.queryPermission = async () => window.__permission;
+            FileSystemDirectoryHandle.prototype.requestPermission = () => {
+                if (!navigator.userActivation.isActive) return Promise.reject(new DOMException('activation required', 'SecurityError'));
+                window.__permissionRequests++;
+                return new Promise(resolve => { window.__allowSavedFolder = () => resolve(window.__permission = 'granted'); });
+            };
+        });
+        await page.goto(base + '/?view=overview&test_env=1');
+        await page.waitForFunction(() => !FolderSyncService.getStatus().initializing);
+        assert.equal(await page.evaluate(() => __permissionRequests), 0);
+        assert.equal(await page.locator('#folder-sync-modal').count(), 0);
+        assert(await page.locator('#overview-view').isVisible());
+        await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'home-return', record: {
+            id: 'home-return', type: 'reading', examId: 'test-exam', title: 'Home return without settings',
+            totalQuestions: 1, correctAnswers: 1, answers: { 1: 'yes' }
+        } }));
+        await page.locator('#overview-view h2').first().hover(); await page.mouse.down();
+        await page.waitForFunction(() => __permissionRequests === 1 && FolderSyncService.getStatus().recovering);
+        await page.waitForFunction(() => !Array.from(document.querySelectorAll('#message-container .message:not(.message-leaving)'))
+            .some(node => node.textContent.includes('OneDrive 同步已暂停')));
+        await page.evaluate(() => __allowSavedFolder());
+        await page.waitForFunction(() => !FolderSyncService.getStatus().recovering && !FolderSyncService.getStatus().busy
+            && FolderSyncService.getStatus().pending === 0);
+        await page.mouse.up();
+        assert.equal(await page.evaluate(() => __permissionRequests), 1);
+        assert.equal(await page.evaluate(() => __pickerCalls), 0);
+        assert.equal(await page.locator('#folder-sync-modal').count(), 0);
+        assert.equal(await page.evaluate(async () => (await AppData.folderSync.status()).spaceId), originalSpace);
+        assert.equal(await page.locator('#message-container .message.error').count(), 0);
         assert.equal((await page.request.get(base + '/user-data/workspace.json')).status(), 404);
     } finally {
         if (browser) await browser.close();

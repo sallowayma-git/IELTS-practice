@@ -518,3 +518,65 @@ test('returning first click is retained during slow startup and during an active
         }
     });
 });
+
+test('saved binding starts and publishes before DOMContentLoaded without opening settings', async () => {
+    await fixture(async ({ page, load, origin }) => {
+        const a = await page(); await installTransport(a); await projectDirectory(a);
+        await a.evaluate(() => FolderSyncService.connect());
+        await a.evaluate(() => { FileSystemDirectoryHandle.prototype.queryPermission = async () => 'prompt'; });
+        await complete(a, 'before-dom-ready');
+        let release;
+        await a.route('**/startup-hold.js', route => new Promise(resolve => {
+            release = () => route.fulfill({ contentType: 'text/javascript', body: '' }).then(resolve);
+        }));
+        await a.route('**/startup-page', route => route.fulfill({ contentType: 'text/html',
+            body: '<!doctype html><body><h1>Home</h1><script src="/startup-hold.js"></script>' }));
+        try {
+            await a.goto(origin + '/startup-page', { waitUntil: 'commit' });
+            await a.waitForFunction(() => document.querySelector('h1'));
+            await load(a);
+            // Do not call init(), syncNow(), connect() or any settings entry on this visit.
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncFolderAdapter.js'), 'utf8') });
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncService.js'), 'utf8') });
+            await a.waitForFunction(() => !FolderSyncService.getStatus().initializing
+                && FolderSyncService.getStatus().completedSyncs > 0 && FolderSyncService.getStatus().pending === 0);
+            assert.equal(await a.evaluate(() => document.readyState), 'loading');
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().permission), 'granted');
+            assert(await a.evaluate(() => AppData.practice.get('before-dom-ready')));
+        } finally { if (release) await release(); }
+    });
+});
+
+test('ordinary pointer and keyboard interactions restore once, including permission loss after setup', async () => {
+    await fixture(async ({ page }) => {
+        for (const input of ['pointer', 'keyboard']) {
+            const a = await page(); await installTransport(a); await projectDirectory(a);
+            await a.evaluate(() => FolderSyncService.connect());
+            await a.evaluate(async () => {
+                window.__permission = 'prompt'; window.__requests = 0;
+                FileSystemDirectoryHandle.prototype.queryPermission = async () => __permission;
+                FileSystemDirectoryHandle.prototype.requestPermission = () => {
+                    if (!navigator.userActivation.isActive) return Promise.reject(new DOMException('activation required', 'SecurityError'));
+                    window.__requests++;
+                    return new Promise(resolve => { window.__grant = () => resolve(window.__permission = 'granted'); });
+                };
+                const button = document.createElement('button'); button.id = 'home-action'; button.textContent = 'Home';
+                document.body.append(button);
+                await FolderSyncService.syncNow();
+            });
+            await complete(a, 'ordinary-' + input);
+            if (input === 'pointer') {
+                await a.locator('#home-action').hover(); await a.mouse.down();
+            } else {
+                await a.locator('#home-action').focus(); await a.keyboard.down('Enter');
+            }
+            await a.waitForFunction(() => __requests === 1 && FolderSyncService.getStatus().recovering);
+            await a.evaluate(() => __grant());
+            await a.waitForFunction(() => !FolderSyncService.getStatus().recovering && !FolderSyncService.getStatus().busy
+                && FolderSyncService.getStatus().pending === 0);
+            if (input === 'pointer') await a.mouse.up(); else await a.keyboard.up('Enter');
+            assert.equal(await a.evaluate(() => __requests), 1, 'the trailing click does not duplicate the request');
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().permission), 'granted');
+        }
+    });
+});

@@ -3,6 +3,7 @@
     if (!global.document || !global.FolderSyncService) return;
     const service = global.FolderSyncService, doc = global.document;
     let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '', attentionNote = null, actionNote = null;
+    let actionErrorRevision = 0;
     const buttons = {};
     function element(tag, text, className) {
         const node = doc.createElement(tag);
@@ -17,13 +18,18 @@
         else note.remove?.();
     }
     function message(text, type = 'error') {
-        actionError = text;
-        if (errorLine) errorLine.textContent = text;
+        actionError = type === 'error' ? text : '';
+        actionErrorRevision = service.getStatus().completedSyncs;
+        if (errorLine) errorLine.textContent = actionError;
         dismissOwn(actionNote);
         if (typeof global.showMessage === 'function') actionNote = global.showMessage(text, type);
     }
     function notifyAttention(status) {
-        if (status.initializing || status.busy) return;
+        if (status.recovering) {
+            dismissOwn(attentionNote); attentionNote = null; lastAttention = '';
+            dismissOwn(actionNote); actionNote = null;
+        }
+        if (status.initializing || status.busy || status.recovering) return;
         let text = '', type = 'warning';
         if (status.enabled && status.bound) {
             const destination = '请前往设置 → 数据管理 → OneDrive 自动同步处理。';
@@ -42,13 +48,19 @@
         }
         lastAttention = text;
     }
-    function action(button, task) {
+    function action(button, task, successText) {
         button.addEventListener('click', () => {
             actionError = ''; dismissOwn(actionNote); actionNote = null;
             let operation;
             try { operation = task(); } catch (error) { message(error.message); return; }
+            if (operation === undefined) { render(service.getStatus()); return; }
             button.disabled = true;
-            Promise.resolve(operation).catch(error => {
+            Promise.resolve(operation).then(() => {
+                const status = service.getStatus();
+                if (successText && (!status.enabled || status.permission === 'granted')
+                    && !status.errors.length && !status.conflicts.length && !status.blocked.length)
+                    message(successText, 'success');
+            }).catch(error => {
                 if (error.name !== 'AbortError') message(error.message, 'error');
             }).finally(() => { button.disabled = false; render(service.getStatus()); });
         });
@@ -73,16 +85,16 @@
         statusLine.setAttribute('role', 'status'); statusLine.setAttribute('aria-live', 'polite');
         body.append(statusLine);
         const actions = element('div', '', 'external-backup-panel__actions');
-        for (const [key, label, task] of [
-            ['enable', '☁️ 启用 OneDrive 同步', () => service.connect()],
-            ['sync', '🔄 立即同步', () => service.syncNow()],
-            ['permission', '🔑 恢复同步', () => service.reauthorize()],
+        for (const [key, label, task, successText] of [
+            ['enable', '☁️ 启用 OneDrive 同步', () => service.connect(), 'OneDrive 自动同步已开启'],
+            ['sync', '🔄 立即同步', () => service.syncNow(), 'OneDrive 同步检查已完成'],
+            ['permission', '🔑 恢复同步', () => service.reauthorize(), 'OneDrive 自动同步已恢复'],
             ['disconnect', '断开本机同步', () => {
                 if (global.confirm('断开后保留本机记录和 OneDrive 文件，下次连接可继续同步。是否断开？')) return service.disconnect();
-            }]
+            }, '已断开本机 OneDrive 同步']
         ]) {
             const button = element('button', label, 'btn data-mgmt-btn'); button.type = 'button'; button.id = 'folder-sync-' + key + '-btn';
-            buttons[key] = button; action(button, task); actions.append(button);
+            buttons[key] = button; action(button, task, successText); actions.append(button);
         }
         body.append(actions);
         const option = element('label', '', 'folder-sync-option');
@@ -90,7 +102,10 @@
         option.append(preferences, doc.createTextNode(' 同步主题、阅读显示和计时偏好'));
         preferences.addEventListener('change', () => {
             actionError = '';
-            service.setPreferences(preferences.checked).catch(error => message(error.message, 'error'))
+            dismissOwn(actionNote); actionNote = null;
+            service.setPreferences(preferences.checked).then(() => {
+                if (!service.getStatus().errors.length) message('OneDrive 同步偏好已更新', 'success');
+            }).catch(error => message(error.message, 'error'))
                 .finally(() => render(service.getStatus()));
         });
         body.append(option);
@@ -108,15 +123,20 @@
         if (status.initializing) return '正在恢复本机同步设置…';
         if (!status.supported) return '当前环境不支持自动文件夹同步。请使用桌面 Chrome / Edge；必要时通过固定 localhost 地址打开。';
         if (!status.enabled || !status.bound) return '未连接同步空间，学习数据仍保存在当前浏览器。';
+        if (status.recovering) return '正在恢复 OneDrive 自动同步…';
         if (status.permission !== 'granted') return '同步已暂停（自动同步设置仍为开启），等待浏览器授权。点击网页可自动请求恢复；若出现“每次访问都允许”，请选择以便下次自动连接。学习记录仍保存在本机，也可点击“恢复同步”。';
         if (status.busy) return '正在检查并合并同步文件…';
         return '自动同步已开启 · ' + status.directoryName + ' · 待发送 ' + status.pending + ' 条 · 待处理冲突 ' + status.conflicts.length
             + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
     }
     function render(status) {
+        // A later verified pass also retires errors from a failed manual action.
+        if (actionError && status.completedSyncs > actionErrorRevision && !status.errors.length) {
+            actionError = ''; dismissOwn(actionNote); actionNote = null;
+        }
         notifyAttention(status);
         const entry = doc.getElementById('folder-sync-entry-btn');
-        if (entry) entry.textContent = status.initializing ? '☁️ OneDrive 同步 · 正在恢复' : !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
+        if (entry) entry.textContent = status.initializing || status.recovering ? '☁️ OneDrive 同步 · 正在恢复' : !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
             : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 已暂停'
                 : status.blocked.length ? '☁️ OneDrive 同步 · 待确认删除'
                     : status.conflicts.length ? '☁️ OneDrive 同步 · 有冲突'
@@ -126,7 +146,7 @@
         statusLine.textContent = textStatus(status);
         errorLine.textContent = [actionError, ...status.errors.map(error => (error.path ? error.path + '：' : '') + error.message)].filter(Boolean).slice(0, 5).join('\n');
         const connected = status.enabled && status.bound;
-        const busy = status.busy || status.initializing;
+        const busy = status.busy || status.initializing || status.recovering;
         const needsPermission = connected && status.permission !== 'granted';
         setupGuide.hidden = connected;
         buttons.enable.hidden = connected;
