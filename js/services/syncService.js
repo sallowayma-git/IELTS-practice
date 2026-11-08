@@ -5,7 +5,7 @@
     const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
     const listeners = new Set();
     let binding = null, timer = null, polling = null, running = null, initPromise = null, initialized = false, suspended = false;
-    let channel = null, resumeOnInteraction = false, resumeAttempted = false;
+    let channel = null, resumeOnInteraction = false, resumeAttempted = false, earlyInteraction = false;
     let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
         permission: 'prompt', initializing: true, busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
     function emit(patch = {}) {
@@ -107,11 +107,19 @@
     function reauthorize() {
         if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
         resumeAttempted = true;
-        const request = adapter.requestPermission(binding.directory);
-        return request.then(permission => {
-            emit({ permission });
+        let request;
+        try { request = adapter.requestPermission(binding.directory); }
+        catch (error) { if (error.name === 'SecurityError') resumeAttempted = false; return Promise.reject(error); }
+        return request.then(async permission => {
+            emit({ permission, ...(permission === 'granted' ? { errors: [] } : {}) });
             if (permission !== 'granted') throw new Error('尚未获得同步文件夹读写权限');
-            announce('binding-changed'); return syncNow();
+            announce('binding-changed');
+            // A worker may already have observed prompt; finish it, then run with the new grant.
+            if (running) await running.catch(() => {});
+            return syncNow();
+        }).catch(error => {
+            if (error.name === 'SecurityError') resumeAttempted = false;
+            throw error;
         });
     }
     async function disconnect() {
@@ -165,7 +173,9 @@
         return initPromise;
     }
     function resumeFromInteraction(event) {
-        if (!event.isTrusted || !resumeOnInteraction || resumeAttempted || suspended || view.busy
+        if (!event.isTrusted) return;
+        earlyInteraction = true;
+        if (!resumeOnInteraction || resumeAttempted || suspended
             || !binding || !view.enabled || view.permission !== 'prompt') return;
         // Explicit sync controls keep their own click handler, with no duplicate permission request.
         if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn')) return;
@@ -183,7 +193,7 @@
         await refresh();
         resumeOnInteraction = !!binding && view.enabled;
         emit({ initializing: false });
-        global.document?.addEventListener('click', resumeFromInteraction, true);
+        if (earlyInteraction && global.navigator?.userActivation?.isActive) resumeFromInteraction({ isTrusted: true });
         if (typeof global.BroadcastChannel === 'function') {
             channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
             channel.onmessage = event => {
@@ -211,6 +221,7 @@
             listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
         } });
     if (global.document) {
+        global.document.addEventListener('click', resumeFromInteraction, true);
         const start = () => init().catch(error => emit({ errors: [{ path: '', message: error.message }] }));
         if (global.document.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
         else start();

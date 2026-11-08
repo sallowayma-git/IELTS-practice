@@ -12,8 +12,8 @@ Windows; Node.js v24.16.0; npm 11.13.0. Dependencies were installed locally with
 
 | Check | Result |
 |---|---|
-| `npm --prefix developer test` | 123 passed, 0 failed, 0 cancelled, 0 skipped |
-| `npm --prefix developer run test:sync` | 23 sync tests are included in the full suite; also runnable separately |
+| `npm --prefix developer test` | 124 passed, 0 failed, 0 cancelled, 0 skipped |
+| `npm --prefix developer run test:sync` | 24 sync tests are included in the full suite; also runnable separately |
 | `npm --prefix backend test` | 5 passed, 0 failed, 0 skipped |
 | `npm --prefix developer run test:sync:backend` | 1 passed; production backend HTTP entry, panel, CSS and automatic publication |
 | `node scripts/build-bundles.mjs --check` | Passed: 14 outputs current |
@@ -75,6 +75,14 @@ Latest rerun: **123 frontend tests**, **23 focused sync tests** (included in 123
 Two new tests exercise returning-page trusted vs synthetic clicks, grant/denial, at-most-once requests, queue retention and disconnect; and close/relaunch of a real persistent Chromium profile with an origin-private directory handle and a queued record. The latter verifies automatic publication with unchanged writer/space identity and no connect/restore call. The built backend page test also reloads and publishes a new practice record without reconfiguration. Native user-folder permission dialogs, file:// persistent-grant behavior and real OneDrive transfer remain unverified; these tests do not claim those results. Evidence: ignored developer/doc/onedrive-sync-resume-*.log files.
 
 References: [Chrome persistent permissions](https://developer.chrome.com/blog/persistent-permissions-for-the-file-system-access-api) and [requestPermission user-activation requirement](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/requestPermission).
+
+## First-interaction race and stale notification recovery
+
+The returning-page activation listener is registered before asynchronous initialization. A trusted click during startup is retained while its browser activation remains live. Busy worker checks no longer discard the first click: permission is requested synchronously, the old worker finishes, and a new sync pass runs with the grant. SecurityError leaves the next trusted click eligible; a real denial does not repeat automatically. No browser security policy is bypassed.
+
+The sync panel retains the DOM handle of each notification it owns. Once its attention state clears, that exact stale notice is dismissed using the shared MessageCenter; a later disk-backup notification remains untouched. In-progress worker emissions no longer produce intermediate stale-error notices. Granting permission clears prior permission errors and performs a fresh sync check; real file errors still surface if they persist.
+
+Regressions cover delayed binding initialization, clicks during an active permission query, retry after SecurityError, a real malformed operation file followed by repair, automatic removal of the stale error notice, and preservation of an unrelated backup success notice. Latest rerun: 124 frontend tests (including 24 sync tests, also run separately), 5 backend tests, 1 extended HTTP browser test, 14 current bundle outputs and git diff check all passed. The [recovered settings screenshot](onedrive-sync-recovered.png) was visually checked: the entry shows enabled and the stale error notice is absent. Evidence: ignored developer/doc/onedrive-sync-recovery-*.log files. Native user-folder dialogs and the user's file:// permission persistence remain unverified; the existing real persistent-profile restart regression uses origin-private directory handles.
 
 ## Pending external validation
 

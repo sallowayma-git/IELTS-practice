@@ -79,3 +79,5 @@ The last command requires both project-local dependency directories. It serves p
 See [verification results](developer/doc/OneDrive-Sync-Verification.md) and the [two-computer manual checklist](developer/doc/OneDrive-Sync-Manual-Test.md).
 
 Sync attention messages use the existing disk-backup notification system, with no global sync button or separate banner container. Identical ongoing attention states do not repeat on each poll; detailed controls remain in Settings → Data management.
+
+Automatic recovery also handles clicks during startup or a running sync check. A browser SecurityError caused by missing/expired user activation leaves automatic recovery available for the next normal click; an actual permission denial is respected. After recovery succeeds, obsolete sync warnings are withdrawn without dismissing unrelated backup notifications. Browser-required permission confirmation still cannot be skipped, especially with session-only grants.

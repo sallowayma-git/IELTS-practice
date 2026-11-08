@@ -164,6 +164,37 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         assert(await page.locator('#folder-sync-sync-btn').isEnabled());
         assert.equal(await page.locator('#folder-sync-banner').count(), 0);
         assert.equal(await page.locator('.folder-sync-error').textContent(), '');
+        // A real malformed operation triggers an attention toast; repairing it must withdraw that toast.
+        for (const otherNotice of [false, true]) {
+            await page.evaluate(async () => {
+                const root = await SyncFolderAdapter.workspace(await SyncFolderAdapter.binding());
+                const dir = await root.getDirectoryHandle('recovery-regression', { create: true });
+                const file = await dir.getFileHandle('truncated.json', { create: true });
+                const writer = await file.createWritable(); await writer.write('{'); await writer.close();
+                await FolderSyncService.syncNow();
+                window.__oldSyncNote = getMessageCenter().activeMessage;
+            });
+            assert((await page.locator('#folder-sync-entry-btn').textContent()).includes('需处理'));
+            assert((await page.locator('#message-container .message.error .message-text').last().textContent()).includes('OneDrive 同步遇到问题'));
+            await page.evaluate(async otherNotice => {
+                if (otherNotice) window.__backupNote = showMessage('磁盘备份已完成', 'success');
+                const root = await SyncFolderAdapter.workspace(await SyncFolderAdapter.binding());
+                const dir = await root.getDirectoryHandle('recovery-regression');
+                await dir.removeEntry('truncated.json');
+                await FolderSyncService.syncNow();
+            }, otherNotice);
+            await page.waitForFunction(() => !window.__oldSyncNote.isConnected);
+            assert((await page.locator('#folder-sync-entry-btn').textContent()).includes('已开启'));
+            assert.equal(await page.locator('.folder-sync-error').textContent(), '');
+            if (otherNotice) assert(await page.evaluate(() => __backupNote.isConnected), 'sync recovery must not dismiss a backup notice');
+        }
+        if (process.env.ONEDRIVE_SYNC_RECOVERED_SCREENSHOT) {
+            await page.evaluate(() => getMessageCenter().dismiss(0, window.__backupNote));
+            await page.waitForFunction(() => !window.__backupNote.isConnected);
+            await page.locator('#folder-sync-modal .theme-modal-close').click();
+            await page.screenshot({ path: path.resolve(process.env.ONEDRIVE_SYNC_RECOVERED_SCREENSHOT), animations: 'disabled' });
+            await page.locator('#folder-sync-entry-btn').click();
+        }
         assert.equal(await page.evaluate(() => window.__pickerCalls), 1, 'restore reuses the bound folder');
         assert.equal(await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId), originalSpace);
         await page.locator('#folder-sync-disconnect-btn').click();

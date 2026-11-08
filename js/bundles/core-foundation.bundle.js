@@ -5536,7 +5536,7 @@
     const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
     const listeners = new Set();
     let binding = null, timer = null, polling = null, running = null, initPromise = null, initialized = false, suspended = false;
-    let channel = null, resumeOnInteraction = false, resumeAttempted = false;
+    let channel = null, resumeOnInteraction = false, resumeAttempted = false, earlyInteraction = false;
     let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
         permission: 'prompt', initializing: true, busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
     function emit(patch = {}) {
@@ -5638,11 +5638,19 @@
     function reauthorize() {
         if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
         resumeAttempted = true;
-        const request = adapter.requestPermission(binding.directory);
-        return request.then(permission => {
-            emit({ permission });
+        let request;
+        try { request = adapter.requestPermission(binding.directory); }
+        catch (error) { if (error.name === 'SecurityError') resumeAttempted = false; return Promise.reject(error); }
+        return request.then(async permission => {
+            emit({ permission, ...(permission === 'granted' ? { errors: [] } : {}) });
             if (permission !== 'granted') throw new Error('尚未获得同步文件夹读写权限');
-            announce('binding-changed'); return syncNow();
+            announce('binding-changed');
+            // A worker may already have observed prompt; finish it, then run with the new grant.
+            if (running) await running.catch(() => {});
+            return syncNow();
+        }).catch(error => {
+            if (error.name === 'SecurityError') resumeAttempted = false;
+            throw error;
         });
     }
     async function disconnect() {
@@ -5696,7 +5704,9 @@
         return initPromise;
     }
     function resumeFromInteraction(event) {
-        if (!event.isTrusted || !resumeOnInteraction || resumeAttempted || suspended || view.busy
+        if (!event.isTrusted) return;
+        earlyInteraction = true;
+        if (!resumeOnInteraction || resumeAttempted || suspended
             || !binding || !view.enabled || view.permission !== 'prompt') return;
         // Explicit sync controls keep their own click handler, with no duplicate permission request.
         if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn')) return;
@@ -5714,7 +5724,7 @@
         await refresh();
         resumeOnInteraction = !!binding && view.enabled;
         emit({ initializing: false });
-        global.document?.addEventListener('click', resumeFromInteraction, true);
+        if (earlyInteraction && global.navigator?.userActivation?.isActive) resumeFromInteraction({ isTrusted: true });
         if (typeof global.BroadcastChannel === 'function') {
             channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
             channel.onmessage = event => {
@@ -5742,6 +5752,7 @@
             listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
         } });
     if (global.document) {
+        global.document.addEventListener('click', resumeFromInteraction, true);
         const start = () => init().catch(error => emit({ errors: [{ path: '', message: error.message }] }));
         if (global.document.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start, { once: true });
         else start();
@@ -7720,7 +7731,7 @@
     'use strict';
     if (!global.document || !global.FolderSyncService) return;
     const service = global.FolderSyncService, doc = global.document;
-    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '';
+    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '', attentionNote = null, actionNote = null;
     const buttons = {};
     function element(tag, text, className) {
         const node = doc.createElement(tag);
@@ -7728,14 +7739,22 @@
         if (className) node.className = className;
         return node;
     }
+    function dismissOwn(note) {
+        if (!note) return;
+        const center = global.getMessageCenter?.();
+        if (center?.dismiss) center.dismiss(0, note);
+        else note.remove?.();
+    }
     function message(text, type = 'error') {
         actionError = text;
         if (errorLine) errorLine.textContent = text;
-        if (typeof global.showMessage === 'function') global.showMessage(text, type);
+        dismissOwn(actionNote);
+        if (typeof global.showMessage === 'function') actionNote = global.showMessage(text, type);
     }
     function notifyAttention(status) {
+        if (status.initializing || status.busy) return;
         let text = '', type = 'warning';
-        if (!status.initializing && status.enabled && status.bound) {
+        if (status.enabled && status.bound) {
             const destination = '请前往设置 → 数据管理 → OneDrive 自动同步处理。';
             if (status.permission !== 'granted') text = 'OneDrive 同步已暂停，学习记录仍保存在本机。' + destination;
             else if (status.blocked.length) text = 'OneDrive 同步有批量删除请求需要确认。' + destination;
@@ -7746,12 +7765,15 @@
             }
         }
         // Use the same transient notification as disk backup; never add home-page controls.
-        if (text && text !== lastAttention && typeof global.showMessage === 'function') global.showMessage(text, type);
+        if (text !== lastAttention) {
+            dismissOwn(attentionNote); attentionNote = null;
+            if (text && typeof global.showMessage === 'function') attentionNote = global.showMessage(text, type);
+        }
         lastAttention = text;
     }
     function action(button, task) {
         button.addEventListener('click', () => {
-            actionError = '';
+            actionError = ''; dismissOwn(actionNote); actionNote = null;
             let operation;
             try { operation = task(); } catch (error) { message(error.message); return; }
             button.disabled = true;

@@ -460,3 +460,61 @@ test('real persistent browser profile reopens and publishes automatically withou
         }
     });
 });
+
+test('returning first click is retained during slow startup and during an active permission check', async () => {
+    await fixture(async ({ page, load }) => {
+        for (const phase of ['startup', 'worker', 'security']) {
+            const a = await page(); await installTransport(a); await projectDirectory(a);
+            await a.evaluate(() => FolderSyncService.connect());
+            await a.evaluate(() => { FileSystemDirectoryHandle.prototype.queryPermission = async () => 'prompt'; });
+            await complete(a, 'first-click-' + phase);
+            await a.reload(); await load(a);
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncFolderAdapter.js'), 'utf8') });
+            await a.evaluate(phase => {
+                window.__permission = 'prompt'; window.__requests = 0;
+                const original = SyncFolderAdapter;
+                window.SyncFolderAdapter = { ...original,
+                    async binding(value) {
+                        if (phase === 'startup' && value === undefined && !window.__startupReleased)
+                            await new Promise(resolve => { window.__releaseStartup = () => { window.__startupReleased = true; resolve(); }; });
+                        return original.binding(value);
+                    },
+                    async permission() {
+                        if (window.__holdWorker) { window.__checking = true; await new Promise(resolve => { window.__releaseWorker = resolve; }); }
+                        return window.__permission;
+                    },
+                    requestPermission() {
+                        window.__requests++;
+                        if (!navigator.userActivation.isActive) return Promise.reject(new DOMException('activation required', 'SecurityError'));
+                        if (phase === 'security' && window.__requests === 1) return Promise.reject(new DOMException('activation expired', 'SecurityError'));
+                        window.__permission = 'granted'; return Promise.resolve('granted');
+                    }
+                };
+                const button = document.createElement('button'); button.id = 'first-click'; button.textContent = '做题'; document.body.append(button);
+            }, phase);
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncService.js'), 'utf8') });
+            if (phase === 'startup') {
+                await a.waitForFunction(() => !!window.__releaseStartup);
+                await a.locator('#first-click').click();
+                await a.evaluate(() => __releaseStartup());
+            } else if (phase === 'worker') {
+                await a.evaluate(() => FolderSyncService.init());
+                await a.waitForFunction(() => !FolderSyncService.getStatus().busy);
+                await a.evaluate(() => { window.__holdWorker = true; window.__worker = FolderSyncService.syncNow(); });
+                await a.waitForFunction(() => !!window.__checking);
+                await a.locator('#first-click').click();
+                await a.evaluate(() => { window.__holdWorker = false; __releaseWorker(); });
+            } else {
+                await a.evaluate(() => FolderSyncService.init());
+                await a.waitForFunction(() => !FolderSyncService.getStatus().busy);
+                await a.locator('#first-click').click();
+                await a.waitForFunction(() => __requests === 1);
+                await a.locator('#first-click').click();
+            }
+            await a.waitForFunction(expected => __requests === expected && !FolderSyncService.getStatus().initializing
+                && !FolderSyncService.getStatus().busy && FolderSyncService.getStatus().pending === 0, phase === 'security' ? 2 : 1);
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().permission), 'granted');
+            assert(await a.evaluate(id => AppData.practice.get(id), 'first-click-' + phase));
+        }
+    });
+});

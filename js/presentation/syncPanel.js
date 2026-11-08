@@ -2,7 +2,7 @@
     'use strict';
     if (!global.document || !global.FolderSyncService) return;
     const service = global.FolderSyncService, doc = global.document;
-    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '';
+    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '', attentionNote = null, actionNote = null;
     const buttons = {};
     function element(tag, text, className) {
         const node = doc.createElement(tag);
@@ -10,14 +10,22 @@
         if (className) node.className = className;
         return node;
     }
+    function dismissOwn(note) {
+        if (!note) return;
+        const center = global.getMessageCenter?.();
+        if (center?.dismiss) center.dismiss(0, note);
+        else note.remove?.();
+    }
     function message(text, type = 'error') {
         actionError = text;
         if (errorLine) errorLine.textContent = text;
-        if (typeof global.showMessage === 'function') global.showMessage(text, type);
+        dismissOwn(actionNote);
+        if (typeof global.showMessage === 'function') actionNote = global.showMessage(text, type);
     }
     function notifyAttention(status) {
+        if (status.initializing || status.busy) return;
         let text = '', type = 'warning';
-        if (!status.initializing && status.enabled && status.bound) {
+        if (status.enabled && status.bound) {
             const destination = '请前往设置 → 数据管理 → OneDrive 自动同步处理。';
             if (status.permission !== 'granted') text = 'OneDrive 同步已暂停，学习记录仍保存在本机。' + destination;
             else if (status.blocked.length) text = 'OneDrive 同步有批量删除请求需要确认。' + destination;
@@ -28,12 +36,15 @@
             }
         }
         // Use the same transient notification as disk backup; never add home-page controls.
-        if (text && text !== lastAttention && typeof global.showMessage === 'function') global.showMessage(text, type);
+        if (text !== lastAttention) {
+            dismissOwn(attentionNote); attentionNote = null;
+            if (text && typeof global.showMessage === 'function') attentionNote = global.showMessage(text, type);
+        }
         lastAttention = text;
     }
     function action(button, task) {
         button.addEventListener('click', () => {
-            actionError = '';
+            actionError = ''; dismissOwn(actionNote); actionNote = null;
             let operation;
             try { operation = task(); } catch (error) { message(error.message); return; }
             button.disabled = true;
