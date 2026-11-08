@@ -23,7 +23,7 @@ async function fixture(task) {
         const context = await browser.newContext(); contexts.push(context);
         const page = await context.newPage(); await page.goto(origin); if (boot) await load(page); return page;
     }
-    try { await task({ page, load }); }
+    try { await task({ page, load, origin }); }
     finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
 async function load(page) {
@@ -158,8 +158,8 @@ test('real FileSystemDirectoryHandle: persistent binding, automatic exchange, an
         assert((await pending(a)).length > 0, 'permission loss must retain the outbox');
         await a.reload(); await load(a); await transport(a, false);
         await a.evaluate(() => FolderSyncService.init());
-        await a.evaluate(() => FolderSyncService.reauthorize());
-        assert.equal((await pending(a)).length, 0);
+        await a.waitForFunction(() => !FolderSyncService.getStatus().busy && FolderSyncService.getStatus().pending === 0);
+        assert.equal((await pending(a)).length, 0, 'reopening publishes without manual recovery');
         const files = await readTree(a);
         assert(files.some(file => file.text.includes('closed-before-send')));
         assert(files.every(file => !file.text.includes('directory-handle')));
@@ -382,6 +382,81 @@ test('AppData readiness failure allows unbound site recovery but blocks a bound 
             const result = await a.evaluate(() => SiteDataReset.perform({ reload: false }));
             assert.equal(result.success, !bound);
             if (bound) assert(await a.evaluate(() => SyncFolderAdapter.binding()));
+        }
+    });
+});
+
+test('returning browser requests saved-folder access on one trusted click, retains denial and respects disconnect', async () => {
+    await fixture(async ({ page, load }) => {
+        for (const granted of [true, false]) {
+            const a = await page(); await installTransport(a); await projectDirectory(a);
+            await a.evaluate(() => FolderSyncService.connect());
+            const space = await a.evaluate(async () => (await AppData.folderSync.status()).spaceId);
+            await a.evaluate(() => { FileSystemDirectoryHandle.prototype.queryPermission = async () => 'prompt'; });
+            await complete(a, 'waiting-on-return');
+            await a.reload(); await load(a);
+            await a.evaluate(granted => {
+                window.__requests = 0; window.__permission = 'prompt'; window.__practiceClicks = 0;
+                FileSystemDirectoryHandle.prototype.queryPermission = async () => __permission;
+                FileSystemDirectoryHandle.prototype.requestPermission = async () => {
+                    if (!navigator.userActivation.isActive) throw new DOMException('activation required', 'SecurityError');
+                    window.__requests++; return window.__permission = granted ? 'granted' : 'denied';
+                };
+                const button = document.createElement('button'); button.id = 'start-practice'; button.textContent = '开始做题';
+                button.onclick = () => { window.__practiceClicks++; }; document.body.append(button);
+            }, granted);
+            await installTransport(a);
+            await a.waitForFunction(() => !FolderSyncService.getStatus().busy);
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().enabled), true);
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().initializing), false);
+            assert.equal(await a.evaluate(() => __requests), 0, 'no unsolicited prompt without activation');
+            await a.evaluate(() => document.getElementById('start-practice').click());
+            assert.equal(await a.evaluate(() => __requests), 0, 'synthetic clicks do not request access');
+            await a.locator('#start-practice').click();
+            await a.waitForFunction(() => __requests === 1 && !FolderSyncService.getStatus().busy);
+            await a.locator('#start-practice').click();
+            assert.equal(await a.evaluate(() => __requests), 1, 'at most one automatic request per visit');
+            if (granted) await a.waitForFunction(() => !FolderSyncService.getStatus().busy && FolderSyncService.getStatus().pending === 0);
+            else assert((await pending(a)).length > 0, 'denial preserves outbox');
+            assert.equal(await a.evaluate(async () => (await AppData.folderSync.status()).spaceId), space);
+            assert.equal(await a.evaluate(() => __practiceClicks), 3, 'automatic resume does not swallow practice clicks');
+            await a.evaluate(() => FolderSyncService.disconnect());
+            await a.reload(); await load(a); await installTransport(a);
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().bound), false);
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().enabled), false);
+        }
+    });
+});
+
+test('real persistent browser profile reopens and publishes automatically without connect or restore', async () => {
+    await fixture(async ({ origin, load }) => {
+        const profile = fs.mkdtempSync(path.join(root, 'developer/doc/onedrive-sync-resume-profile-'));
+        const executablePath = ['C:/Program Files/Google/Chrome/Application/chrome.exe',
+            'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync);
+        let context;
+        const launch = () => chromium.launchPersistentContext(profile, { headless: true, ...(executablePath ? { executablePath } : {}) });
+        try {
+            context = await launch(); let a = context.pages()[0]; await a.goto(origin); await load(a);
+            await installTransport(a); await projectDirectory(a); await a.evaluate(() => FolderSyncService.connect());
+            const before = await a.evaluate(async () => ({
+                space: (await AppData.folderSync.status()).spaceId, writer: (await AppData.folderSync.status()).writerId
+            }));
+            await a.evaluate(() => { FileSystemDirectoryHandle.prototype.queryPermission = async () => 'prompt'; });
+            await complete(a, 'browser-restart-queued');
+            assert((await pending(a)).length > 0);
+            await context.close(); context = await launch(); a = context.pages()[0]; await a.goto(origin); await load(a);
+            await installTransport(a);
+            await a.waitForFunction(() => !FolderSyncService.getStatus().busy && FolderSyncService.getStatus().pending === 0);
+            assert.equal(await a.evaluate(() => FolderSyncService.getStatus().enabled), true);
+            const after = await a.evaluate(async () => ({
+                space: (await AppData.folderSync.status()).spaceId, writer: (await AppData.folderSync.status()).writerId
+            }));
+            assert.deepEqual(after, before);
+            assert(await a.evaluate(() => AppData.practice.get('browser-restart-queued')));
+        } finally {
+            await context?.close();
+            if (path.dirname(profile) !== path.join(root, 'developer/doc') || !path.basename(profile).startsWith('onedrive-sync-resume-profile-')) throw Error('Unsafe profile cleanup');
+            fs.rmSync(profile, { recursive: true, force: true });
         }
     });
 });

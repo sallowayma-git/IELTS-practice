@@ -5536,9 +5536,9 @@
     const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
     const listeners = new Set();
     let binding = null, timer = null, polling = null, running = null, initPromise = null, initialized = false, suspended = false;
-    let channel = null;
+    let channel = null, resumeOnInteraction = false, resumeAttempted = false;
     let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
-        permission: 'prompt', busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
+        permission: 'prompt', initializing: true, busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
     function emit(patch = {}) {
         view = Object.assign({}, view, patch);
         for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
@@ -5637,6 +5637,7 @@
     // Starts requestPermission directly inside the click handler, before any asynchronous read.
     function reauthorize() {
         if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
+        resumeAttempted = true;
         const request = adapter.requestPermission(binding.directory);
         return request.then(permission => {
             emit({ permission });
@@ -5648,7 +5649,7 @@
         await withLock(async () => {
             await global.AppData.folderSync.disconnect();
             await adapter.binding(null);
-            binding = null; adapter.clearCache();
+            binding = null; resumeOnInteraction = false; adapter.clearCache();
             emit({ errors: [], permission: 'prompt' }); await refresh();
         });
         announce('binding-changed');
@@ -5691,8 +5692,18 @@
         }
     }
     function init() {
-        if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; throw error; });
+        if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; emit({ initializing: false }); throw error; });
         return initPromise;
+    }
+    function resumeFromInteraction(event) {
+        if (!event.isTrusted || !resumeOnInteraction || resumeAttempted || suspended || view.busy
+            || !binding || !view.enabled || view.permission !== 'prompt') return;
+        // Explicit sync controls keep their own click handler, with no duplicate permission request.
+        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn')) return;
+        // Call synchronously during a trusted click: browsers require transient user activation.
+        reauthorize().catch(error => {
+            if (!['SecurityError', 'AbortError'].includes(error.name)) emit({ errors: [{ path: '', message: error.message }] });
+        });
     }
     async function initialize() {
         if (initialized) return;
@@ -5701,6 +5712,9 @@
         binding = await adapter.binding();
         if (binding) emit({ permission: await adapter.permission(binding.directory) });
         await refresh();
+        resumeOnInteraction = !!binding && view.enabled;
+        emit({ initializing: false });
+        global.document?.addEventListener('click', resumeFromInteraction, true);
         if (typeof global.BroadcastChannel === 'function') {
             channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
             channel.onmessage = event => {
@@ -7721,7 +7735,7 @@
     }
     function notifyAttention(status) {
         let text = '', type = 'warning';
-        if (status.enabled && status.bound) {
+        if (!status.initializing && status.enabled && status.bound) {
             const destination = '请前往设置 → 数据管理 → OneDrive 自动同步处理。';
             if (status.permission !== 'granted') text = 'OneDrive 同步已暂停，学习记录仍保存在本机。' + destination;
             else if (status.blocked.length) text = 'OneDrive 同步有批量删除请求需要确认。' + destination;
@@ -7798,9 +7812,10 @@
     }
     function formatDate(value) { return value ? new Date(value).toLocaleString() : '尚无'; }
     function textStatus(status) {
+        if (status.initializing) return '正在恢复本机同步设置…';
         if (!status.supported) return '当前环境不支持自动文件夹同步。请使用桌面 Chrome / Edge；必要时通过固定 localhost 地址打开。';
         if (!status.enabled || !status.bound) return '未连接同步空间，学习数据仍保存在当前浏览器。';
-        if (status.permission !== 'granted') return '同步已暂停，请点击“恢复同步”并重新授权。学习记录仍保存在本机。';
+        if (status.permission !== 'granted') return '同步已暂停（自动同步设置仍为开启），等待浏览器授权。点击网页可自动请求恢复；若出现“每次访问都允许”，请选择以便下次自动连接。学习记录仍保存在本机，也可点击“恢复同步”。';
         if (status.busy) return '正在检查并合并同步文件…';
         return '自动同步已开启 · ' + status.directoryName + ' · 待发送 ' + status.pending + ' 条 · 待处理冲突 ' + status.conflicts.length
             + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
@@ -7808,7 +7823,7 @@
     function render(status) {
         notifyAttention(status);
         const entry = doc.getElementById('folder-sync-entry-btn');
-        if (entry) entry.textContent = !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
+        if (entry) entry.textContent = status.initializing ? '☁️ OneDrive 同步 · 正在恢复' : !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
             : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 已暂停'
                 : status.blocked.length ? '☁️ OneDrive 同步 · 待确认删除'
                     : status.conflicts.length ? '☁️ OneDrive 同步 · 有冲突'
@@ -7818,17 +7833,18 @@
         statusLine.textContent = textStatus(status);
         errorLine.textContent = [actionError, ...status.errors.map(error => (error.path ? error.path + '：' : '') + error.message)].filter(Boolean).slice(0, 5).join('\n');
         const connected = status.enabled && status.bound;
+        const busy = status.busy || status.initializing;
         const needsPermission = connected && status.permission !== 'granted';
         setupGuide.hidden = connected;
         buttons.enable.hidden = connected;
         buttons.sync.hidden = buttons.disconnect.hidden = !connected;
         preferences.parentElement.hidden = !connected;
         buttons.permission.hidden = !needsPermission;
-        buttons.enable.disabled = !status.supported || status.busy;
-        buttons.sync.disabled = !connected || needsPermission || !status.supported || status.busy;
-        buttons.disconnect.disabled = !connected || status.busy;
-        buttons.permission.disabled = !status.supported || status.busy;
-        preferences.disabled = !status.enabled || !status.bound || status.busy;
+        buttons.enable.disabled = !status.supported || busy;
+        buttons.sync.disabled = !connected || needsPermission || !status.supported || busy;
+        buttons.disconnect.disabled = !connected || busy;
+        buttons.permission.disabled = !status.supported || busy;
+        preferences.disabled = !status.enabled || !status.bound || busy;
         preferences.checked = status.preferences === true;
         const signature = JSON.stringify([status.conflicts.map(item => [item.key, item.versions.map(version => version.id)]), status.blocked]);
         if (signature === versionSignature) return;

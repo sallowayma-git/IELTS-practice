@@ -176,6 +176,23 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         await page.waitForFunction(() => FolderSyncService.getStatus().bound && !FolderSyncService.getStatus().busy);
         assert.equal(await page.evaluate(async () => (await SyncFolderAdapter.binding()).spaceId), originalSpace);
         assert(!(await page.locator('#folder-sync-permission-btn').isVisible()));
+        await page.reload();
+        await page.waitForFunction(() => window.AppData && window.app?.isInitialized);
+        await page.waitForFunction(() => {
+            const status = FolderSyncService.getStatus();
+            return !status.initializing && status.enabled && status.bound && status.permission === 'granted' && !status.busy;
+        });
+        assert.equal(await page.evaluate(() => __pickerCalls), 0, 'bound reload does not choose the folder again');
+        assert.equal(await page.evaluate(async () => (await AppData.folderSync.status()).spaceId), originalSpace);
+        const reopenedPublish = await page.evaluate(() => FolderSyncService.getStatus().lastPublishAt);
+        await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'auto-reopened', record: {
+            id: 'auto-reopened', type: 'reading', examId: 'test-exam', title: 'Automatic on return',
+            totalQuestions: 1, correctAnswers: 1, answers: { 1: 'yes' }
+        } }));
+        await page.waitForFunction(previous => {
+            const status = FolderSyncService.getStatus();
+            return !status.busy && status.pending === 0 && status.lastPublishAt !== previous;
+        }, reopenedPublish);
         assert.equal((await page.request.get(base + '/user-data/workspace.json')).status(), 404);
     } finally {
         if (browser) await browser.close();

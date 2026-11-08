@@ -12,8 +12,8 @@ Windows; Node.js v24.16.0; npm 11.13.0. Dependencies were installed locally with
 
 | Check | Result |
 |---|---|
-| `npm --prefix developer test` | 121 passed, 0 failed, 0 cancelled, 0 skipped |
-| `npm --prefix developer run test:sync` | 21 sync tests are included in the full suite; also runnable separately |
+| `npm --prefix developer test` | 123 passed, 0 failed, 0 cancelled, 0 skipped |
+| `npm --prefix developer run test:sync` | 23 sync tests are included in the full suite; also runnable separately |
 | `npm --prefix backend test` | 5 passed, 0 failed, 0 skipped |
 | `npm --prefix developer run test:sync:backend` | 1 passed; production backend HTTP entry, panel, CSS and automatic publication |
 | `node scripts/build-bundles.mjs --check` | Passed: 14 outputs current |
@@ -65,6 +65,16 @@ The production HTTP browser regression now pauses sync by simulating permission 
 Sync permission loss, conflicts, pending bulk-deletion confirmation and file errors now call the existing showMessage notification used by disk backup. These are transient text notices directing users to Settings → Data management; no separate banner container, home-page button or global shortcut is created. Identical ongoing attention states do not repeat on each polling refresh. Action errors use the same shared error notification and remain visible in the sync panel.
 
 The production HTTP browser test verifies the shared warning/error notification DOM, absence of notification buttons, unchanged-state deduplication and the existing navigation/overview controls. It visits overview/browse/practice/more while permission is unavailable and confirms the only sync settings entry remains under Settings → Data management. No index.html, shared stylesheet, original section markup, service or data protocol changes were made. Executed checks: 121 frontend tests (including 21 sync tests, also run separately), 5 backend tests, 1 production HTTP browser test, 14 current bundle outputs and git diff check all passed. Evidence: ignored developer/doc/onedrive-sync-notices-*.log files. The [overview screenshot during permission loss](onedrive-sync-notices-overview.png) was captured at 1901 × 908 and visually inspected: original sections remain, the lower-left sync button is absent, and the reminder uses the shared backup notification.
+
+## Automatic return to an existing binding
+
+Startup now reports restoration in progress until persisted state and directory permission have loaded. Valid grants resume background synchronization immediately. On returning pages with a session-only prompt, one trusted normal click synchronously requests the saved handle permission; it does not open the folder chooser, intercept the user's practice action or re-create a space. A denied request is not retried automatically again during the visit; explicit disconnect is respected. Browser-required consent cannot be bypassed. Chrome's persistent permission option, when offered, is explained in the settings panel and usage guide.
+
+Latest rerun: **123 frontend tests**, **23 focused sync tests** (included in 123), **5 backend tests**, **1 production HTTP browser integration**, **14 current bundle outputs** and git diff check all passed.
+
+Two new tests exercise returning-page trusted vs synthetic clicks, grant/denial, at-most-once requests, queue retention and disconnect; and close/relaunch of a real persistent Chromium profile with an origin-private directory handle and a queued record. The latter verifies automatic publication with unchanged writer/space identity and no connect/restore call. The built backend page test also reloads and publishes a new practice record without reconfiguration. Native user-folder permission dialogs, file:// persistent-grant behavior and real OneDrive transfer remain unverified; these tests do not claim those results. Evidence: ignored developer/doc/onedrive-sync-resume-*.log files.
+
+References: [Chrome persistent permissions](https://developer.chrome.com/blog/persistent-permissions-for-the-file-system-access-api) and [requestPermission user-activation requirement](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/requestPermission).
 
 ## Pending external validation
 

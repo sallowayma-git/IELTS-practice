@@ -5205,9 +5205,9 @@
     const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
     const listeners = new Set();
     let binding = null, timer = null, polling = null, running = null, initPromise = null, initialized = false, suspended = false;
-    let channel = null;
+    let channel = null, resumeOnInteraction = false, resumeAttempted = false;
     let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
-        permission: 'prompt', busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
+        permission: 'prompt', initializing: true, busy: false, errors: [], lastPublishAt: null, lastReceiveAt: null };
     function emit(patch = {}) {
         view = Object.assign({}, view, patch);
         for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
@@ -5306,6 +5306,7 @@
     // Starts requestPermission directly inside the click handler, before any asynchronous read.
     function reauthorize() {
         if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
+        resumeAttempted = true;
         const request = adapter.requestPermission(binding.directory);
         return request.then(permission => {
             emit({ permission });
@@ -5317,7 +5318,7 @@
         await withLock(async () => {
             await global.AppData.folderSync.disconnect();
             await adapter.binding(null);
-            binding = null; adapter.clearCache();
+            binding = null; resumeOnInteraction = false; adapter.clearCache();
             emit({ errors: [], permission: 'prompt' }); await refresh();
         });
         announce('binding-changed');
@@ -5360,8 +5361,18 @@
         }
     }
     function init() {
-        if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; throw error; });
+        if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; emit({ initializing: false }); throw error; });
         return initPromise;
+    }
+    function resumeFromInteraction(event) {
+        if (!event.isTrusted || !resumeOnInteraction || resumeAttempted || suspended || view.busy
+            || !binding || !view.enabled || view.permission !== 'prompt') return;
+        // Explicit sync controls keep their own click handler, with no duplicate permission request.
+        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn')) return;
+        // Call synchronously during a trusted click: browsers require transient user activation.
+        reauthorize().catch(error => {
+            if (!['SecurityError', 'AbortError'].includes(error.name)) emit({ errors: [{ path: '', message: error.message }] });
+        });
     }
     async function initialize() {
         if (initialized) return;
@@ -5370,6 +5381,9 @@
         binding = await adapter.binding();
         if (binding) emit({ permission: await adapter.permission(binding.directory) });
         await refresh();
+        resumeOnInteraction = !!binding && view.enabled;
+        emit({ initializing: false });
+        global.document?.addEventListener('click', resumeFromInteraction, true);
         if (typeof global.BroadcastChannel === 'function') {
             channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
             channel.onmessage = event => {
