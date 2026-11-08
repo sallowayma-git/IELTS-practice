@@ -43,6 +43,7 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         const base = 'http://127.0.0.1:' + server.address().port;
         await page.goto(base + '/?view=settings&test_env=1');
         await page.waitForFunction(() => window.AppData && window.app?.isInitialized);
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0, 'unbound startup has no recovery prompt');
         await page.evaluate(() => AppData.ready);
         await page.locator('#license-modal.show .lm-btn').click();
         await page.waitForFunction(() => getComputedStyle(document.getElementById('license-modal')).opacity === '0');
@@ -239,6 +240,7 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
         });
         assert.equal(await page.evaluate(() => __pickerCalls), 0, 'bound reload does not choose the folder again');
         assert.equal(await page.locator('#folder-sync-modal').count(), 0, 'startup recovery never opens settings');
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0, 'valid grants need no recovery interaction');
         assert(await page.locator('#overview-view').isVisible());
         assert.equal(await page.evaluate(async () => (await AppData.folderSync.status()).spaceId), originalSpace);
         const reopenedPublish = await page.evaluate(() => FolderSyncService.getStatus().lastPublishAt);
@@ -250,39 +252,78 @@ test('backend HTTP entry serves a working opt-in folder-sync UI and publishes lo
             const status = FolderSyncService.getStatus();
             return !status.busy && status.pending === 0 && status.lastPublishAt !== previous;
         }, reopenedPublish);
-        // Return to the real home page with a session-only grant. The first normal
-        // pointerdown restores the saved folder before its click or any settings visit.
+        // Return with a session-only grant. The app must present recovery itself,
+        // before any click, key press or settings visit on this new document.
         await page.addInitScript(() => {
             window.__permission = 'prompt'; window.__permissionRequests = 0;
             FileSystemDirectoryHandle.prototype.queryPermission = async () => window.__permission;
             FileSystemDirectoryHandle.prototype.requestPermission = () => {
                 if (!navigator.userActivation.isActive) return Promise.reject(new DOMException('activation required', 'SecurityError'));
                 window.__permissionRequests++;
-                return new Promise(resolve => { window.__allowSavedFolder = () => resolve(window.__permission = 'granted'); });
+                return new Promise(resolve => { window.__allowSavedFolder = (permission = 'granted') => resolve(window.__permission = permission); });
             };
         });
         await page.goto(base + '/?view=overview&test_env=1');
         await page.waitForFunction(() => !FolderSyncService.getStatus().initializing);
         assert.equal(await page.evaluate(() => __permissionRequests), 0);
+        await page.locator('#folder-sync-startup-dialog').waitFor({ state: 'visible' });
+        assert(await page.locator('#folder-sync-startup-restore-btn').evaluate(node => node === document.activeElement));
         assert.equal(await page.locator('#folder-sync-modal').count(), 0);
         assert(await page.locator('#overview-view').isVisible());
+        if (process.env.ONEDRIVE_SYNC_STARTUP_SCREENSHOT) {
+            await page.waitForFunction(() => document.getElementById('boot-overlay')?.getAttribute('data-hidden') === 'true');
+            await page.screenshot({ path: path.resolve(process.env.ONEDRIVE_SYNC_STARTUP_SCREENSHOT), animations: 'disabled' });
+        }
         await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'home-return', record: {
             id: 'home-return', type: 'reading', examId: 'test-exam', title: 'Home return without settings',
             totalQuestions: 1, correctAnswers: 1, answers: { 1: 'yes' }
         } }));
-        await page.locator('#overview-view h2').first().hover(); await page.mouse.down();
+        const homeQueue = await page.evaluate(() => AppData.folderSync.pending());
+        await page.locator('#folder-sync-startup-restore-btn').click();
         await page.waitForFunction(() => __permissionRequests === 1 && FolderSyncService.getStatus().recovering);
+        assert(!(await page.locator('#folder-sync-startup-restore-btn').isEnabled()));
         await page.waitForFunction(() => !Array.from(document.querySelectorAll('#message-container .message:not(.message-leaving)'))
             .some(node => node.textContent.includes('OneDrive 同步已暂停')));
+        await page.evaluate(() => __allowSavedFolder('denied'));
+        await page.waitForFunction(() => !FolderSyncService.getStatus().recovering);
+        assert(await page.locator('#folder-sync-startup-dialog').isVisible(), 'denial leaves recovery available');
+        assert((await page.locator('#folder-sync-startup-dialog .folder-sync-error').textContent()).includes('尚未获得'));
+        assert.deepEqual(await page.evaluate(() => AppData.folderSync.pending()), homeQueue, 'denial preserves the queue');
+        await page.evaluate(() => FolderSyncService.syncNow());
+        assert.equal(await page.evaluate(() => __permissionRequests), 1, 'polling does not repeat the request');
+        await page.locator('#folder-sync-startup-restore-btn').click();
+        await page.waitForFunction(() => __permissionRequests === 2 && FolderSyncService.getStatus().recovering);
         await page.evaluate(() => __allowSavedFolder());
         await page.waitForFunction(() => !FolderSyncService.getStatus().recovering && !FolderSyncService.getStatus().busy
             && FolderSyncService.getStatus().pending === 0);
-        await page.mouse.up();
-        assert.equal(await page.evaluate(() => __permissionRequests), 1);
+        assert.equal(await page.evaluate(() => __permissionRequests), 2);
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0, 'successful restoration closes the prompt');
         assert.equal(await page.evaluate(() => __pickerCalls), 0);
         assert.equal(await page.locator('#folder-sync-modal').count(), 0);
         assert.equal(await page.evaluate(async () => (await AppData.folderSync.status()).spaceId), originalSpace);
         assert.equal(await page.locator('#message-container .message.error').count(), 0);
+        await page.reload();
+        await page.locator('#folder-sync-startup-dialog').waitFor({ state: 'visible' });
+        await page.locator('#folder-sync-startup-later-btn').click();
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0);
+        await page.locator('button[data-view="overview"]').click();
+        await page.evaluate(() => FolderSyncService.syncNow());
+        assert.equal(await page.evaluate(() => __permissionRequests), 0, 'later defers automatic permission requests for this visit');
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0, 'polling does not reopen a deferred prompt');
+        await page.reload();
+        await page.locator('#folder-sync-startup-dialog').waitFor({ state: 'visible' });
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0, 'Escape has the same defer semantics');
+        assert.equal(await page.evaluate(() => __permissionRequests), 0);
+        await page.reload();
+        await page.locator('#folder-sync-startup-dialog').waitFor({ state: 'visible' });
+        await page.evaluate(async () => { window.__permission = 'granted'; await FolderSyncService.syncNow(); });
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0, 'an external grant closes the prompt too');
+        assert.equal(await page.evaluate(() => __permissionRequests), 0);
+        await page.evaluate(() => FolderSyncService.disconnect());
+        await page.reload();
+        await page.waitForFunction(() => !FolderSyncService.getStatus().initializing);
+        assert.equal(await page.locator('#folder-sync-startup-dialog').count(), 0, 'explicit disconnect is respected on the next visit');
         assert.equal((await page.request.get(base + '/user-data/workspace.json')).status(), 404);
     } finally {
         if (browser) await browser.close();

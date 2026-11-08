@@ -5387,7 +5387,7 @@
         if (resumeAttempted || suspended || recovery
             || !binding || !view.enabled || view.permission !== 'prompt') return;
         // Explicit sync controls keep their own click handler, with no duplicate permission request.
-        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn')) return;
+        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn, #folder-sync-startup-dialog')) return;
         skipInteractionClick = ['pointerdown', 'pointerup', 'keydown'].includes(event.type);
         // Call synchronously during a trusted click: browsers require transient user activation.
         reauthorize().catch(error => {
@@ -5433,7 +5433,9 @@
         emit({ initializing: false });
     }
     global.FolderSyncService = Object.freeze({ init, connect, disconnect, reauthorize, syncNow, resolve,
-        setPreferences, approveDelete, withReset, getStatus, onStatusChange(listener) {
+        setPreferences, approveDelete, withReset, getStatus,
+        deferAutomaticRecovery() { resumeAttempted = true; },
+        onStatusChange(listener) {
             listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
         } });
     if (global.document) {

@@ -5718,7 +5718,7 @@
         if (resumeAttempted || suspended || recovery
             || !binding || !view.enabled || view.permission !== 'prompt') return;
         // Explicit sync controls keep their own click handler, with no duplicate permission request.
-        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn')) return;
+        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn, #folder-sync-startup-dialog')) return;
         skipInteractionClick = ['pointerdown', 'pointerup', 'keydown'].includes(event.type);
         // Call synchronously during a trusted click: browsers require transient user activation.
         reauthorize().catch(error => {
@@ -5764,7 +5764,9 @@
         emit({ initializing: false });
     }
     global.FolderSyncService = Object.freeze({ init, connect, disconnect, reauthorize, syncNow, resolve,
-        setPreferences, approveDelete, withReset, getStatus, onStatusChange(listener) {
+        setPreferences, approveDelete, withReset, getStatus,
+        deferAutomaticRecovery() { resumeAttempted = true; },
+        onStatusChange(listener) {
             listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
         } });
     if (global.document) {
@@ -7748,6 +7750,8 @@
     const service = global.FolderSyncService, doc = global.document;
     let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '', attentionNote = null, actionNote = null;
     let actionErrorRevision = 0;
+    let startupChecked = false, startupRecoveryPending = false, startupDialog = null;
+    let startupRestore, startupLater, startupError, startupPreviousFocus;
     const buttons = {};
     function element(tag, text, className) {
         const node = doc.createElement(tag);
@@ -7769,11 +7773,11 @@
         if (typeof global.showMessage === 'function') actionNote = global.showMessage(text, type);
     }
     function notifyAttention(status) {
-        if (status.recovering) {
+        if (status.recovering || startupRecoveryPending) {
             dismissOwn(attentionNote); attentionNote = null; lastAttention = '';
             dismissOwn(actionNote); actionNote = null;
         }
-        if (status.initializing || status.busy || status.recovering) return;
+        if (status.initializing || status.busy || status.recovering || startupRecoveryPending) return;
         let text = '', type = 'warning';
         if (status.enabled && status.bound) {
             const destination = '请前往设置 → 数据管理 → OneDrive 自动同步处理。';
@@ -7808,6 +7812,75 @@
                 if (error.name !== 'AbortError') message(error.message, 'error');
             }).finally(() => { button.disabled = false; render(service.getStatus()); });
         });
+    }
+    function closeStartupRecovery(defer = false) {
+        if (defer) service.deferAutomaticRecovery();
+        startupRecoveryPending = false;
+        if (!startupDialog) return;
+        const hadFocus = startupDialog.contains(doc.activeElement);
+        startupDialog.remove(); startupDialog = null;
+        if (hadFocus && startupPreviousFocus?.isConnected) startupPreviousFocus.focus({ preventScroll: true });
+    }
+    function renderStartupRecovery(status) {
+        if (!startupChecked && !status.initializing && !status.busy) {
+            startupChecked = true;
+            startupRecoveryPending = status.supported && status.enabled && status.bound
+                && status.permission !== 'granted' && !status.suspended;
+        }
+        if (!startupRecoveryPending) return;
+        if (!status.enabled || !status.bound || status.permission === 'granted' || status.suspended) {
+            closeStartupRecovery(); return;
+        }
+        if (!startupDialog) {
+            startupPreviousFocus = doc.activeElement;
+            startupDialog = element('div', '', 'theme-modal shui-secondary-modal shui-secondary-modal--sm show');
+            startupDialog.id = 'folder-sync-startup-dialog';
+            startupDialog.setAttribute('role', 'dialog'); startupDialog.setAttribute('aria-modal', 'true');
+            startupDialog.setAttribute('aria-labelledby', 'folder-sync-startup-title');
+            startupDialog.setAttribute('aria-describedby', 'folder-sync-startup-description');
+            const content = element('div', '', 'theme-modal-content shui-secondary-modal__content');
+            const header = element('div', '', 'theme-modal-header shui-secondary-modal__header');
+            const title = element('h3', '☁️ 恢复 OneDrive 同步'); title.id = 'folder-sync-startup-title';
+            header.append(title);
+            const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
+            const description = element('p', '已找到这台电脑保存的 OneDrive 同步设置。文件夹授权已过期，请点击“恢复同步”，在浏览器提示中允许访问原同步文件夹。');
+            description.id = 'folder-sync-startup-description'; body.append(description);
+            body.append(element('p', '无需进入设置或重新选择文件夹。若浏览器提供“每次访问都允许”，选择后下次可直接自动同步。', 'folder-sync-muted'));
+            startupError = element('p', '', 'folder-sync-error'); startupError.setAttribute('role', 'status');
+            startupError.setAttribute('aria-live', 'polite'); body.append(startupError);
+            const actions = element('div', '', 'external-backup-panel__actions');
+            startupRestore = element('button', '恢复同步', 'btn data-mgmt-btn'); startupRestore.type = 'button';
+            startupRestore.id = 'folder-sync-startup-restore-btn';
+            startupLater = element('button', '稍后再说', 'btn data-mgmt-btn'); startupLater.type = 'button';
+            startupLater.id = 'folder-sync-startup-later-btn';
+            startupRestore.addEventListener('click', () => {
+                startupError.textContent = '';
+                // Keep the native permission request in this button's trusted click.
+                service.reauthorize().then(() => {
+                    if (!service.getStatus().errors.length) message('OneDrive 自动同步已恢复', 'success');
+                }).catch(error => {
+                    if (error.name !== 'AbortError') startupError.textContent = error.message;
+                }).finally(() => render(service.getStatus()));
+            });
+            startupLater.addEventListener('click', () => { closeStartupRecovery(true); render(service.getStatus()); });
+            actions.append(startupRestore, startupLater); body.append(actions);
+            content.append(header, body); startupDialog.append(content); doc.body.append(startupDialog);
+            startupDialog.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && !startupLater.disabled) {
+                    event.preventDefault(); closeStartupRecovery(true); render(service.getStatus());
+                } else if (event.key === 'Tab') {
+                    if (startupRestore.disabled) event.preventDefault();
+                    else if (event.shiftKey && doc.activeElement === startupRestore) {
+                        event.preventDefault(); startupLater.focus();
+                    } else if (!event.shiftKey && doc.activeElement === startupLater) {
+                        event.preventDefault(); startupRestore.focus();
+                    }
+                }
+            });
+            startupRestore.focus({ preventScroll: true });
+        }
+        startupRestore.disabled = startupLater.disabled = status.busy || status.recovering;
+        startupRestore.textContent = status.recovering ? '正在恢复…' : '恢复同步';
     }
     function ensureModal() {
         if (modal) return modal;
@@ -7874,6 +7947,7 @@
             + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
     }
     function render(status) {
+        renderStartupRecovery(status);
         // A later verified pass also retires errors from a failed manual action.
         if (actionError && status.completedSyncs > actionErrorRevision && !status.errors.length) {
             actionError = ''; dismissOwn(actionNote); actionNote = null;

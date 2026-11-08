@@ -33,6 +33,14 @@ The build reports the branch's existing eight duplicate-symbol warnings. No depe
 
 Tests use isolated browser contexts and synthetic data. Directory selection is substituted with a real origin-private directory; log copying simulates OneDrive transport. The backend integration uses in-memory auth, session and record stores.
 
+## Automatic home-page recovery dialog (2026-11-09)
+
+This follow-up changes only the returning-browser permission-recovery interaction. Valid saved grants still synchronize immediately. Expired grants now produce a focused **恢复 OneDrive 同步** dialog automatically on entry, without a preliminary click, key press or settings visit. Its restore button requests the browser's permission from a trusted click, reuses the saved folder and closes on a grant. Denial preserves the queue and offers explicit retry. Later/Escape defers automatic permission requests until the next visit. Polling does not reopen a deferred dialog; unconfigured/disconnected browsers have no prompt. The dialog reuses the existing small-modal and button styles, with no shared layout/CSS, dependency, data protocol or backend change.
+
+The production HTTP regression verifies automatic appearance before any interaction, focus, denial/retry and queued publication, closing after external permission restoration, later/Escape behavior across reloads, unchanged space identity and no directory reselection. The built file:// page also verifies automatic appearance, denied permission, queue preservation and deferral using a simulated restored native handle (file:// cannot use origin-private storage as a test transport). HTTP uses a real origin-private handle and real file publication with simulated permission results. Native Windows folder authorization dialogs, native file:// persistent grants and physical two-device OneDrive transfer remain unverified.
+
+Rerun: 126 frontend tests (including 26 sync tests), 5 backend tests, 1 extended production HTTP integration, 14 current bundle outputs and git diff check. The unchanged prior static-aggregation limitations in the table remain; that aggregation was not rerun for this dialog-only follow-up. Evidence: ignored developer/doc/onedrive-sync-startup-dialog-{frontend,http,build,bundle-check}.log files and developer/tests/e2e/reports/onedrive-startup-dialog.png. The recovery screenshot was visually inspected.
+
 ## Immediate startup recovery and consistent action notices (2026-11-09)
 
 The runtime starts reading the saved binding alongside AppData readiness as soon as it loads, and performs the initial sync pass before completing initialization. It no longer waits for DOMContentLoaded or a scheduled timer. Permission recovery starts on ordinary mouse/keyboard/touch activation without opening settings, including permission loss after setup in the same visit. Requests are coalesced and their trailing click cannot duplicate a SecurityError retry. Actual denial and explicit disconnect remain respected.

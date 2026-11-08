@@ -41,6 +41,49 @@ test('built release: file and HTTP pages keep working; HTTP folder sync starts f
             assert(await page.locator('#folder-sync-modal').isVisible());
             const supported = await page.evaluate(() => FolderSyncService.getStatus().supported);
             assert(await page.locator('#folder-sync-enable-btn').isEnabled() === supported);
+            if (base.startsWith('file')) {
+                // file:// cannot use OPFS as a test transport. Simulate only the saved
+                // native handle and denied permission; retain real bundles and AppData.
+                await page.addInitScript(() => {
+                    window.__fileRequests = 0;
+                    let adapter;
+                    Object.defineProperty(window, 'SyncFolderAdapter', {
+                        configurable: true, get: () => adapter,
+                        set(value) {
+                            const originalBinding = value.binding;
+                            adapter = { ...value, binding: async value => value === undefined ? {
+                                name: 'Saved OneDrive', spaceId: 'file-startup-space', directory: {
+                                    queryPermission: async () => 'prompt',
+                                    requestPermission: async () => {
+                                        if (!navigator.userActivation.isActive) throw new DOMException('activation required', 'SecurityError');
+                                        window.__fileRequests++; return 'denied';
+                                    }
+                                }
+                            } : originalBinding(value) };
+                        }
+                    });
+                });
+                await page.evaluate(async () => {
+                    await AppData.folderSync.connect('file-startup-space');
+                    await AppData.practice.completeAttempt({ operationId: 'file-startup-queued', record: {
+                        id: 'file-startup-queued', type: 'reading', examId: 'file-exam', title: 'File startup recovery',
+                        totalQuestions: 1, correctAnswers: 1, answers: { 1: 'yes' }
+                    } });
+                });
+                await page.goto(base + '?view=overview&test_env=1');
+                await page.locator('#folder-sync-startup-dialog').waitFor({ state: 'visible' });
+                assert.equal(await page.evaluate(() => __fileRequests), 0, 'file startup presents recovery without a user click');
+                assert.equal(await page.locator('#folder-sync-modal').count(), 0, 'file recovery never enters settings');
+                assert(await page.locator('#overview-view').isVisible());
+                const before = await page.evaluate(() => AppData.folderSync.pending());
+                await page.locator('#folder-sync-startup-restore-btn').click();
+                await page.waitForFunction(() => __fileRequests === 1 && !FolderSyncService.getStatus().recovering);
+                assert((await page.locator('#folder-sync-startup-dialog .folder-sync-error').textContent()).includes('尚未获得'));
+                assert.deepEqual(await page.evaluate(() => AppData.folderSync.pending()), before);
+                await page.locator('#folder-sync-startup-later-btn').click();
+                await page.locator('button[data-view="overview"]').click();
+                assert.equal(await page.evaluate(() => __fileRequests), 1, 'deferring file recovery prevents another automatic request');
+            }
             if (base.startsWith('http')) {
                 assert(supported);
                 await page.locator('#folder-sync-enable-btn').click();

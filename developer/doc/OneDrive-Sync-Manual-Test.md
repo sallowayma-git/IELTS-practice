@@ -28,8 +28,9 @@ On A and B, use Settings → Data management → OneDrive 自动同步 → **启
 | 15 | Pause reset preparation, then submit a practice from another tab | Later write rejected; all earlier accepted writes published before deletion | Pending |
 | 12 | Pause OneDrive after a local publication | The app reports local folder write only; it does not claim cloud delivery | Pending |
 | 16 | Reopen the home page with a previously saved binding and a persistent folder grant; do not open Settings | Startup immediately reads the binding and synchronizes queued records | Pending |
-| 17 | Reopen with a session-only grant, then press the mouse or a normal key on the home page | The browser requests saved-folder access without settings navigation or folder reselection; recovery suppresses stale pause/error notices; denial does not repeat automatically | Pending |
+| 17 | Reopen with a session-only grant; do not click anything, then use the automatic dialog's 恢复同步 button | The home page automatically shows recovery before any click or settings visit; the button requests saved-folder access without folder reselection; denial retains the dialog and queue, while granting permission closes it and syncs | Pending |
 | 18 | Deny manual recovery, then restore permission in browser controls or another tab and let a background pass finish | The stale action-error banner and panel error disappear; a newer unrelated backup notice remains | Pending |
+| 19 | Choose 稍后再说 or press Escape in the startup recovery dialog, then use the home page and reopen it | No repeated dialog or automatic permission request in the current visit; the next visit offers recovery again; unconfigured/disconnected browsers show no prompt | Pending |
 
 Test both direct file:// (where supported) and the deployed frontend through a secure context. Remote HTTP without a secure context may not expose the directory APIs; mobile browsers and backend API / PostgreSQL bridging are outside this feature.
 
