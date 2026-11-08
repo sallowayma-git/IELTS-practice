@@ -249,6 +249,7 @@ assets/generated/listening-exams/listening-index.compat.js
 - 导出数据：导出当前本地数据，便于迁移或长期保存。
 - 导入数据：从外部 JSON 数据恢复或合并历史记录。
 - 完整性检查：对导入数据和本地数据进行基础校验。
+- 可选 OneDrive 文件夹同步：将 ZIP 解压后的整个项目放入 OneDrive，在网页点击“启用 OneDrive 同步”并授权项目文件夹后，自动交换本机学习数据；见[使用说明与兼容性限制](ONEDRIVE_SYNC.md)。它不连接后端 API 或 PostgreSQL。
 
 核心持久化数据使用 IndexedDB；IndexedDB 不可用时应用会明确报错，不会将练习记录静默降级到弱一致性存储。localStorage 仅用于旧数据迁移与少量兼容状态，sessionStorage 用于会话级草稿。不同浏览器、不同协议和不同域名下的数据互相隔离。
 

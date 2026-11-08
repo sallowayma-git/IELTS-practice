@@ -2714,7 +2714,23 @@
             throw error instanceof AppDataError ? error : new AppDataError('INITIALIZATION_BLOCKED', error && error.message || 'AppData v2 initialization failed');
         });
 
-    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
+    const folderSync = Object.freeze({
+        async status() { await ready; return (await kernel.folderSyncAction('status')).result; },
+        async pending() { await ready; return (await kernel.folderSyncAction('pending')).result; },
+        async known() { await ready; return (await kernel.folderSyncAction('known')).result; },
+        async connect(spaceId, options = {}) {
+            await ready;
+            await backups.create({ type: 'pre-folder-sync' });
+            return kernel.folderSyncAction('connect', { spaceId, preferences: options.preferences === true });
+        },
+        async disconnect() { await ready; return kernel.folderSyncAction('disconnect'); },
+        async acknowledge(ids) { await ready; return kernel.folderSyncAction('ack', { ids }); },
+        async receive(operation) { await ready; return kernel.folderSyncAction('receive', { operation }); },
+        async resolve(key, headId) { await ready; return kernel.folderSyncAction('resolve', { key, headId }); },
+        async approveDelete(id) { await ready; return kernel.folderSyncAction('approveDelete', { id }); },
+        async setPreferences(enabled) { await ready; return kernel.folderSyncAction('preferences', { enabled }); }
+    });
+    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements, folderSync };
     Object.defineProperties(AppData, {
         ready: { value: ready, enumerable: false },
         status: { value: () => kernel.status(), enumerable: false }

@@ -58,6 +58,12 @@
     // not as document keys. import merge identity is resolved in AppData, not here.
     const definitions = [
         {
+            // Local identity, causal history and durable outbox are never portable backup data.
+            logicalKey: 'system.folderSync', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
+        },
+        {
             logicalKey: 'settings.values', classification: 'authoritative',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: true, import: 'patch'

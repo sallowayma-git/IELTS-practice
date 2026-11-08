@@ -594,6 +594,12 @@
     // not as document keys. import merge identity is resolved in AppData, not here.
     const definitions = [
         {
+            // Local identity, causal history and durable outbox are never portable backup data.
+            logicalKey: 'system.folderSync', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
+        },
+        {
             logicalKey: 'settings.values', classification: 'authoritative',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: true, import: 'patch'
@@ -771,6 +777,354 @@
         configurable: true,
         writable: false
     });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/data/v2/syncModel.js ===== */
+/* Portable folder-sync protocol. No filesystem, timers, or database access. */
+(function installFolderSyncModel(global) {
+    'use strict';
+    if (global.FolderSyncModel) return;
+    // This branch has the legacy vocabulary schema. Do not accept newer static-edition spaces.
+    const FORMAT = 'ielts-atlas-folder-sync-multidevice';
+    const VERSION = 1;
+    const STATE_KEY = 'system.folderSync';
+    const STORES = ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
+    const DOCUMENT_KEYS = ['vocab.words', 'vocab.lists',
+        'vocab.userConfig', 'library.configurations', 'library.importedIndexes', 'goals.items',
+        'achievements.manual', 'preferences.values'];
+    const copy = value => JSON.parse(JSON.stringify(value));
+    const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+    const plain = value => !!value && typeof value === 'object' && !Array.isArray(value);
+    const absent = () => ({ exists: false });
+    const present = value => ({ exists: true, value: copy(value) });
+    function fail(message) { const error = new Error(message); error.code = 'VALIDATION'; throw error; }
+    function stable(value) {
+        if (value === null || typeof value !== 'object') return JSON.stringify(value);
+        if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
+        return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
+    }
+    const equal = (left, right) => stable(left) === stable(right);
+    function safeJson(value, depth = 0) {
+        if (depth > 90) fail('同步数据嵌套过深');
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+        if (typeof value === 'number' && Number.isFinite(value)) return;
+        if (!value || typeof value !== 'object') fail('同步数据不是有效 JSON');
+        for (const key of Object.keys(value)) {
+            if (['__proto__', 'prototype', 'constructor'].includes(key)) fail('同步数据包含不安全的属性');
+            safeJson(value[key], depth + 1);
+        }
+    }
+    function identifier(value) { return typeof value === 'string' && /^[a-zA-Z0-9_-]{8,100}$/.test(value); }
+    function uuid() {
+        if (!global.crypto || typeof global.crypto.randomUUID !== 'function') fail('当前环境不支持安全的同步身份生成，请使用 Chrome / Edge 或 localhost');
+        return global.crypto.randomUUID();
+    }
+    // SHA-256 over canonical UTF-8 JSON, synchronous so it can run inside IDB transactions.
+    function digest(value) {
+        const bytes = new TextEncoder().encode(stable(value));
+        const length = Math.ceil((bytes.length + 9) / 64) * 64;
+        const padded = new Uint8Array(length); padded.set(bytes); padded[bytes.length] = 128;
+        const view = new DataView(padded.buffer);
+        view.setUint32(length - 8, Math.floor(bytes.length / 0x20000000));
+        view.setUint32(length - 4, (bytes.length * 8) >>> 0);
+        const primes = []; const h = []; const k = [];
+        for (let number = 2; primes.length < 64; number++) {
+            if (primes.some(prime => number % prime === 0)) continue;
+            primes.push(number);
+            if (h.length < 8) h.push((Math.sqrt(number) % 1 * 0x100000000) | 0);
+            k.push((Math.cbrt(number) % 1 * 0x100000000) | 0);
+        }
+        const rotate = (word, bits) => (word >>> bits) | (word << (32 - bits));
+        const words = new Int32Array(64);
+        for (let offset = 0; offset < length; offset += 64) {
+            for (let i = 0; i < 64; i++) {
+                if (i < 16) words[i] = view.getInt32(offset + i * 4);
+                else {
+                    const a = words[i - 15], b = words[i - 2];
+                    words[i] = (words[i - 16] + (rotate(a, 7) ^ rotate(a, 18) ^ (a >>> 3))
+                        + words[i - 7] + (rotate(b, 17) ^ rotate(b, 19) ^ (b >>> 10))) | 0;
+                }
+            }
+            let [a, b, c, d, e, f, g, hh] = h;
+            for (let i = 0; i < 64; i++) {
+                const t1 = (hh + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25))
+                    + ((e & f) ^ (~e & g)) + k[i] + words[i]) | 0;
+                const t2 = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+                hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+            }
+            [a, b, c, d, e, f, g, hh].forEach((word, i) => { h[i] = (h[i] + word) | 0; });
+        }
+        return h.map(word => (word >>> 0).toString(16).padStart(8, '0')).join('');
+    }
+    function clockJoin(clocks) {
+        const result = {};
+        for (const clock of clocks) for (const [writer, value] of Object.entries(clock || {})) {
+            result[writer] = Math.max(result[writer] || 0, value);
+        }
+        return result;
+    }
+    const covers = (left, right) => Object.entries(right).every(([writer, n]) => (left[writer] || 0) >= n);
+    function valueAt(object, key) { return own(object, key) ? present(object[key]) : absent(); }
+    function arrayMap(array) {
+        const result = {};
+        for (const row of array) {
+            const id = plain(row) && (row.id ?? row.key ?? row.articleId ?? row.word ?? row.examId);
+            if (id === undefined || own(result, String(id))) return null;
+            if (['__proto__', 'constructor', 'prototype'].includes(String(id))) return null;
+            result[String(id)] = row;
+        }
+        return result;
+    }
+    // Conservative, symmetric three-way merge. Unknown arrays and competing scalars conflict.
+    function mergeValue(base, versions, atomic = false) {
+        const changed = versions.filter(value => !equal(value, base));
+        if (!changed.length) return { value: copy(base), conflict: false };
+        if (changed.every(value => equal(value, changed[0]))) return { value: copy(changed[0]), conflict: false };
+        if (atomic || changed.some(value => !value.exists)) return { value: copy(base), conflict: true };
+        const values = changed.map(value => value.value);
+        if (values.every(plain) && (!base.exists || plain(base.value))) {
+            const original = base.exists ? base.value : {};
+            const keys = [...new Set(Object.keys(original).concat(...values.map(Object.keys)))].sort();
+            const merged = {}; let conflict = false;
+            for (const key of keys) {
+                // Metadata clocks may be combined; learning/SM-2 clocks are deliberately excluded.
+                const timestamps = values.map(value => value[key]);
+                if (['createdAt', 'updatedAt', 'titleUpdatedAt', 'firstVisitedAt', 'lastVisitedAt'].includes(key)
+                    && timestamps.every(value => typeof value === 'string' && Number.isFinite(Date.parse(value)))) {
+                    merged[key] = timestamps.sort()[['createdAt', 'firstVisitedAt'].includes(key) ? 0 : timestamps.length - 1];
+                    continue;
+                }
+                const child = mergeValue(valueAt(original, key), values.map(value => valueAt(value, key)),
+                    ['practiceSummaries', 'practiceDetails', 'reviewState'].includes(key));
+                if (child.value.exists) merged[key] = child.value.value;
+                conflict = conflict || child.conflict;
+            }
+            return { value: present(merged), conflict };
+        }
+        if (values.every(Array.isArray) && (!base.exists || Array.isArray(base.value))) {
+            const maps = values.map(arrayMap), original = arrayMap(base.exists ? base.value : []);
+            if (original && maps.every(Boolean)) {
+                const merged = mergeValue(present(original), maps.map(present));
+                const ids = Object.keys(merged.value.value);
+                const order = Object.keys(original).filter(key => own(merged.value.value, key))
+                    .concat(ids.filter(key => !own(original, key)).sort());
+                return { value: present(order.map(key => merged.value.value[key])), conflict: merged.conflict };
+            }
+        }
+        return { value: copy(base), conflict: true };
+    }
+    function vocabValue(documents) {
+        return { words: documents['vocab.words'] || [], lists: documents['vocab.lists'] || {},
+            state: {}, config: documents['vocab.userConfig'] || {} };
+    }
+    function unitsFrom(snapshot, preferences) {
+        const result = {}, docs = snapshot.documents;
+        const layers = Object.fromEntries(STORES.map(store => [store, new Map((snapshot.entities[store] || []).map(row => [row.recordId, row.data]))]));
+        for (const [id, summary] of layers.practiceSummaries) {
+            const bundle = { practiceSummaries: summary };
+            for (const store of STORES.slice(1)) {
+                if (!layers[store].has(id)) fail('练习记录实体层不完整，无法同步：' + id);
+                bundle[store] = layers[store].get(id);
+            }
+            result['practice/' + id] = present(bundle);
+        }
+        for (const key of ['goals.items']) for (const row of docs[key] || []) {
+            const id = row.id || row.goalId;
+            if (!id) fail('同步集合缺少稳定 ID：' + key);
+            result[key + '/' + id] = present(row);
+        }
+        result.vocabulary = present(vocabValue(docs));
+        result.libraries = present({ configurations: docs['library.configurations'] || [], indexes: docs['library.importedIndexes'] || {} });
+        result.achievements = present(docs['achievements.manual'] || {});
+        if (preferences) {
+            const selected = {};
+            for (const key of ['theme', 'readingDisplay', 'timer']) if (own(docs['preferences.values'] || {}, key)) selected[key] = docs['preferences.values'][key];
+            result.preferences = present(selected);
+        }
+        return result;
+    }
+    function validUnitKey(key) {
+        return ['vocabulary', 'libraries', 'achievements', 'preferences'].includes(key)
+            || /^(practice|goals\.items)\/.{1,2000}$/.test(key);
+    }
+    function validateUnit(key, wrapped) {
+        if (!validUnitKey(key) || !plain(wrapped) || typeof wrapped.exists !== 'boolean') fail('不支持的同步实体');
+        if (!wrapped.exists) return;
+        if (!own(wrapped, 'value')) fail('同步实体缺少内容');
+        const value = wrapped.value;
+        if (key.startsWith('practice/')) {
+            const id = key.slice(9);
+            if (!plain(value) || STORES.some(store => !plain(value[store])
+                || value[store][store === 'practiceSummaries' ? 'id' : 'recordId'] !== id)) fail('同步练习身份或实体层不匹配');
+        } else if (key === 'vocabulary') {
+            if (!plain(value) || !Array.isArray(value.words) || !plain(value.lists) || !plain(value.state) || !plain(value.config)) fail('同步词汇格式无效');
+            if (Object.keys(value.state).length) fail('当前分支不支持新版精读关系，请使用独立同步空间');
+        } else if (key === 'libraries') {
+            if (!plain(value) || !Array.isArray(value.configurations) || !plain(value.indexes)) fail('同步题库配置无效');
+        } else if (!plain(value)) fail('同步实体格式无效');
+    }
+    function projection(key, heads) {
+        heads.sort((left, right) => left.id.localeCompare(right.id));
+        if (heads.length === 1 || heads.every(head => equal(head.value, heads[0].value))) {
+            return { value: copy(heads[0].value), conflict: false, viewClock: clockJoin(heads.map(head => head.clock)) };
+        }
+        const sameBase = heads.every(head => equal(head.base, heads[0].base));
+        const base = sameBase ? heads[0].base : absent();
+        let merged = sameBase ? mergeValue(base, heads.map(head => head.value))
+            : { value: copy(heads[0].value), conflict: true };
+        // A conflicting partial merge can violate entity/word relationships. Keep a valid baseline.
+        if (merged.conflict) merged.value = base.exists ? copy(base) : copy(heads.find(head => head.value.exists)?.value || heads[0].value);
+        try { validateUnit(key, merged.value); }
+        catch (_) { merged = { value: copy(heads[0].value), conflict: true }; }
+        return { ...merged, viewClock: merged.conflict ? {} : clockJoin(heads.map(head => head.clock)) };
+    }
+    function installChange(state, change, id) {
+        const unit = state.units[change.key] || { heads: [] };
+        if (unit.heads.some(head => covers(head.clock, change.clock))) return;
+        unit.heads = unit.heads.filter(head => !covers(change.clock, head.clock));
+        unit.heads.push({ id, clock: copy(change.clock), value: copy(change.value), base: copy(change.base) });
+        Object.assign(unit, projection(change.key, unit.heads));
+        state.units[change.key] = unit;
+    }
+    function newState(spaceId, preferences = false) {
+        if (!identifier(spaceId)) fail('数据空间 ID 无效');
+        return { version: VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
+            units: {}, materialized: {}, pending: [], seen: {}, blocked: {} };
+    }
+    function assertState(state) {
+        if (!state || state.version !== VERSION || !identifier(state.spaceId) || !identifier(state.writerId)
+            || !Number.isSafeInteger(state.seq) || !plain(state.units) || !plain(state.materialized)
+            || !Array.isArray(state.pending) || !plain(state.seen)) fail('同步状态版本无效，请升级所有电脑上的网页');
+    }
+    function publish(state, entries, sourceId, resolve = false) {
+        if (!entries.length) return;
+        // Large first-time histories are independent complete units, not one ever-growing file.
+        if (entries.length > 100) {
+            for (let offset = 0; offset < entries.length; offset += 100) publish(state, entries.slice(offset, offset + 100), sourceId, resolve);
+            return;
+        }
+        state.seq++;
+        if (!Number.isSafeInteger(state.seq)) fail('同步序号已超出范围');
+        const id = state.writerId + '-' + String(state.seq).padStart(12, '0');
+        const changes = entries.map(([key, value]) => {
+            const unit = state.units[key];
+            const clock = clockJoin(unit ? (resolve || !unit.conflict ? unit.heads.map(head => head.clock) : [unit.viewClock]) : []);
+            clock[state.writerId] = state.seq;
+            return { key, value: copy(value), base: copy(state.materialized[key] || absent()), clock };
+        });
+        const operation = { format: FORMAT, version: VERSION, spaceId: state.spaceId,
+            writerId: state.writerId, seq: state.seq, id, sourceId: String(sourceId || ''),
+            createdAt: new Date().toISOString(), changes };
+        for (const change of changes) installChange(state, change, id);
+        state.pending.push(operation); state.seen[id] = digest(operation);
+    }
+    function capture(state, snapshot, sourceId) {
+        assertState(state);
+        if (!state.enabled) return state;
+        const actual = unitsFrom(snapshot, state.preferences);
+        const keys = [...new Set(Object.keys(state.materialized).concat(Object.keys(actual)))].filter(key => key !== 'preferences' || state.preferences);
+        const entries = keys.map(key => [key, actual[key] || absent()]).filter(([key, value]) => !equal(value, state.materialized[key] || absent()));
+        // Initial empty singleton defaults are observation baselines, not user edits.
+        // Preserve non-empty local collections and all subsequent explicit clears.
+        const emptyDefaults = unitsFrom({ documents: {}, entities: {} }, state.preferences);
+        const meaningful = entries.filter(([key, value]) => own(state.materialized, key)
+            || !own(emptyDefaults, key) || !equal(value, emptyDefaults[key]));
+        for (const [key] of meaningful) {
+            if (!own(state.materialized, key) && own(emptyDefaults, key)) state.materialized[key] = copy(emptyDefaults[key]);
+        }
+        publish(state, meaningful, sourceId);
+        // The local user's commit stays visible. Unresolved alternatives remain in heads.
+        state.materialized = actual;
+        return state;
+    }
+    function validateOperation(operation) {
+        safeJson(operation);
+        if (!plain(operation) || operation.format !== FORMAT || operation.version !== VERSION
+            || !identifier(operation.spaceId) || !identifier(operation.writerId)
+            || !Number.isSafeInteger(operation.seq) || operation.seq < 1
+            || operation.id !== operation.writerId + '-' + String(operation.seq).padStart(12, '0')
+            || !Array.isArray(operation.changes) || !operation.changes.length || operation.changes.length > 20000) fail('不支持或损坏的同步日志');
+        const keys = new Set();
+        for (const change of operation.changes) {
+            if (keys.has(change.key)) fail('同步日志包含重复实体'); keys.add(change.key);
+            validateUnit(change.key, change.value); validateUnit(change.key, change.base);
+            if (!plain(change.clock) || Object.keys(change.clock).length > 1000 || change.clock[operation.writerId] !== operation.seq
+                || Object.entries(change.clock).some(([writer, n]) => !identifier(writer) || !Number.isSafeInteger(n) || n < 1)) fail('同步因果版本无效');
+        }
+        return operation;
+    }
+    function receive(state, operation, allowLargeDelete = false) {
+        assertState(state); validateOperation(operation);
+        if (operation.spaceId !== state.spaceId) fail('日志不属于当前数据空间');
+        const hash = digest(operation);
+        if (own(state.seen, operation.id)) {
+            if (state.seen[operation.id] !== hash) fail('相同同步操作 ID 对应不同内容，已停止应用该文件');
+            return { state, duplicate: true };
+        }
+        state.blocked = state.blocked || {};
+        if (state.blocked[operation.id] && digest(state.blocked[operation.id]) !== hash) fail('待确认日志的内容发生变化');
+        const deleting = operation.changes.filter(change => change.key.startsWith('practice/')
+            && !change.value.exists && state.units[change.key]?.value.exists);
+        const count = Object.entries(state.units).filter(([key, unit]) => key.startsWith('practice/') && unit.value.exists).length;
+        if (!allowLargeDelete && deleting.length >= 10 && deleting.length >= count * .5) {
+            state.blocked[operation.id] = copy(operation);
+            return { state, duplicate: false, blocked: true };
+        }
+        for (const change of operation.changes) installChange(state, change, operation.id);
+        state.seen[operation.id] = hash;
+        delete state.blocked[operation.id];
+        return { state, duplicate: false };
+    }
+    function resolve(state, key, headId) {
+        assertState(state);
+        const unit = state.units[key];
+        const head = unit?.heads.find(item => item.id === headId);
+        if (!unit?.conflict || !head) fail('冲突已经变化，请刷新后重新选择');
+        publish(state, [[key, head.value]], 'conflict-resolution', true);
+    }
+    function toSnapshot(state, original) {
+        const result = copy(original), docs = result.documents;
+        const units = {};
+        for (const [key, unit] of Object.entries(state.units)) units[key] = copy(unit.value);
+        for (const store of STORES) result.entities[store] = [];
+        docs['goals.items'] = [];
+        for (const [key, wrapped] of Object.entries(units)) {
+            if (!wrapped.exists) continue;
+            const value = wrapped.value;
+            if (key.startsWith('practice/')) {
+                const recordId = key.slice(9);
+                for (const store of STORES) result.entities[store].push({ recordId, data: copy(value[store]) });
+            } else if (key.startsWith('goals.items/')) docs['goals.items'].push(value);
+            else if (key === 'vocabulary') {
+                docs['vocab.words'] = value.words; docs['vocab.lists'] = value.lists;
+                docs['vocab.userConfig'] = value.config;
+            } else if (key === 'libraries') {
+                docs['library.configurations'] = value.configurations; docs['library.importedIndexes'] = value.indexes;
+            } else if (key === 'achievements') docs['achievements.manual'] = value;
+            else if (key === 'preferences' && state.preferences) {
+                const prefs = docs['preferences.values'] || {};
+                for (const field of ['theme', 'readingDisplay', 'timer']) delete prefs[field];
+                docs['preferences.values'] = Object.assign(prefs, value);
+            }
+        }
+        for (const store of STORES) result.entities[store].sort((a, b) => a.recordId.localeCompare(b.recordId));
+        for (const key of ['goals.items']) docs[key].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        return result;
+    }
+    function rememberMaterialized(state, snapshot) { state.materialized = unitsFrom(snapshot, state.preferences); }
+    function status(state) {
+        if (!state?.version) return { enabled: false, pending: 0, conflicts: [], blocked: [], spaceId: null };
+        assertState(state);
+        return { enabled: state.enabled, spaceId: state.spaceId, writerId: state.writerId, preferences: state.preferences,
+            pending: state.pending.length, blocked: Object.values(state.blocked || {}).map(op => ({ id: op.id, createdAt: op.createdAt,
+                count: op.changes.filter(change => change.key.startsWith('practice/') && !change.value.exists).length })),
+            conflicts: Object.entries(state.units).filter(([, unit]) => unit.conflict)
+                .map(([key, unit]) => ({ key, versions: copy(unit.heads) })) };
+    }
+    global.FolderSyncModel = Object.freeze({ FORMAT, VERSION, STATE_KEY, STORES, DOCUMENT_KEYS,
+        copy, stable, equal, digest, safeJson, identifier, uuid, unitsFrom, newState, capture,
+        validateOperation, receive, resolve, toSnapshot, rememberMaterialized, status, assertState });
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -1360,7 +1714,14 @@
                 const journalRequest = tx.objectStore(SYSTEM_STORE).get('system.operationJournal');
                 journalRequest.onerror = () => fail(journalRequest.error || new Error('Journal read failed'));
                 journalRequest.onsuccess = () => {
-                    try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    const barrier = tx.objectStore(SYSTEM_STORE).get('system.folderSyncResetBarrier');
+                    barrier.onerror = () => fail(barrier.error);
+                    barrier.onsuccess = () => {
+                        if (barrier.result && !spec.resetAllowed) {
+                            fail(validation('本机正在清理数据，请等待清理完成后重新打开网页')); return;
+                        }
+                        try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    };
                 };
             }, true);
         }
@@ -1466,6 +1827,64 @@
             derived: { status: pending.length ? 'pending' : 'ready', pending: pending.slice() }, warnings: warnings.slice() };
         const keys = Object.keys(revisions); if (keys.length === 1) receipt.revision = revisions[keys[0]];
         return receipt;
+    }
+
+    function folderSyncModel() { return global.FolderSyncModel || null; }
+    function syncStores(stores) { return folderSyncModel() ? STORE_NAMES.slice() : stores; }
+    function readSyncSnapshot(tx, complete, fail) {
+        const model = folderSyncModel();
+        const keys = model.DOCUMENT_KEYS;
+        const snapshot = { documents: {}, revisions: {}, entities: {} };
+        const reads = keys.map(logicalKey => ({ logicalKey,
+            request: tx.objectStore(storeFor(logicalKey)).get(logicalKey) }))
+            .concat(ENTITY_STORES.map(store => ({ store, request: tx.objectStore(store).getAll() })));
+        let remaining = reads.length;
+        for (const read of reads) {
+            read.request.onerror = () => fail(read.request.error || validation('同步快照读取失败'));
+            read.request.onsuccess = () => {
+                try {
+                    if (read.logicalKey) {
+                        const entry = lookupEntry(read.logicalKey), row = read.request.result;
+                        if (row && !validateEnvelope(entry, row.envelope)) throw corruption('Invalid sync source: ' + read.logicalKey);
+                        snapshot.documents[read.logicalKey] = row?.envelope.state === 'present' ? clone(row.envelope.data) : entry.defaultValue();
+                        snapshot.revisions[read.logicalKey] = row?.envelope.revision || 0;
+                    } else {
+                        snapshot.entities[read.store] = (read.request.result || []).map(row => {
+                            validateEntityRow(read.store, row);
+                            return clone(row);
+                        });
+                    }
+                    if (!--remaining) complete(snapshot);
+                } catch (error) { fail(error); }
+            };
+        }
+    }
+    function putSyncState(tx, previous, data, opId) {
+        const key = folderSyncModel().STATE_KEY;
+        const envelope = makeEnvelope(lookupEntry(key), data, {
+            revision: incrementCounter(previous?.envelope?.revision || 0, key), operationId: opId, normalized: true
+        });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey: key, envelope: canonicalizeJson(envelope) });
+    }
+    function captureFolderSync(tx, opId, relevant, complete, fail) {
+        const model = folderSyncModel();
+        if (!model || !relevant) { complete(); return; }
+        const request = tx.objectStore(SYSTEM_STORE).get(model.STATE_KEY);
+        request.onerror = () => fail(request.error || validation('同步队列读取失败'));
+        request.onsuccess = () => {
+            try {
+                const row = request.result;
+                if (!row?.envelope?.data?.enabled) { complete(); return; }
+                if (!validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
+                readSyncSnapshot(tx, snapshot => {
+                    try {
+                        const state = model.capture(clone(row.envelope.data), snapshot, opId);
+                        putSyncState(tx, row, state, opId);
+                        complete();
+                    } catch (error) { fail(error instanceof AppDataError ? error : validation(error.message)); }
+                }, fail);
+            } catch (error) { fail(error); }
+        };
     }
 
     class DataKernel {
@@ -1612,7 +2031,7 @@
                 changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })),
                 warnings
             }, warnings);
-            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
+            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: syncStores(Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey)))))) };
         }
         async mutate(changes, options = {}) {
             this._assertReady(); const spec = this._documentSpec(changes, options);
@@ -1638,7 +2057,9 @@
                         }
                         const receipt = receiptFor(spec.operationId, revisions, spec.warnings, []);
                         putJournal(tx, journalRow, journal, spec, receipt);
-                        done(receipt);
+                        captureFolderSync(tx, spec.operationId,
+                            spec.changes.some(change => folderSyncModel()?.DOCUMENT_KEYS.includes(change.logicalKey)),
+                            () => done(receipt), fail);
                     };
                     if (!remaining) { finish(); return; }
                     for (const item of reads) { item.request.onerror = () => fail(item.request.error || new Error('Mutation read failed')); item.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } }; }
@@ -1721,7 +2142,7 @@
                 warnings,
                 pending: [],
                 fingerprint: requestFingerprint(options, { operations: items, warnings }, warnings),
-                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store))))
+                stores: syncStores(Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store)))))
             };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
@@ -1790,7 +2211,7 @@
                             putEntityRevisionState(tx, revisionRequest.result || null, revisionState, spec.operationId);
                             const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                             putJournal(tx, journalRow, journal, spec, receipt);
-                            done(receipt);
+                            captureFolderSync(tx, spec.operationId, true, () => done(receipt), fail);
                         };
                         for (const read of reads) {
                             read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed'));
@@ -2019,7 +2440,9 @@
                         }
                         const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                         putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt);
-                        done(receipt);
+                        captureFolderSync(tx, spec.operationId, Object.keys(entityRows).length > 0
+                            || changes.some(change => folderSyncModel()?.DOCUMENT_KEYS.includes(change.logicalKey)),
+                            () => done(receipt), fail);
                     };
                     let remaining = reads.length;
                     for (const read of reads) {
@@ -2035,6 +2458,127 @@
                 return receipt;
             }
             catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
+        }
+        async folderSyncAction(action, input = {}, project = null) {
+            this._assertReady();
+            const model = folderSyncModel();
+            if (!model) throw validation('同步模块未加载，请更新所有网页文件');
+            const command = canonicalizeJson(input);
+            const opId = randomId('folder-sync-' + action);
+            const spec = { operationId: opId, warnings: [], pending: [], stores: STORE_NAMES.slice(),
+                resetAllowed: ['status', 'pending', 'known', 'ack', 'receive'].includes(action),
+                fingerprint: requestFingerprint({}, { action, command }, []) };
+            let targets = [], result;
+            const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
+                const reject = error => fail(error instanceof AppDataError ? error : validation(error.message || String(error)));
+                const request = tx.objectStore(SYSTEM_STORE).get(model.STATE_KEY);
+                request.onerror = () => reject(request.error || validation('同步状态读取失败'));
+                request.onsuccess = () => {
+                    try {
+                        const row = request.result;
+                        if (row && !validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
+                        let state = clone(row?.envelope?.data || {});
+                        if (['status', 'pending', 'known'].includes(action)) {
+                            result = action === 'status' ? model.status(state) : action === 'pending' ? (state.pending || []) : (state.seen || {});
+                            done(receiptFor(opId, {}, [], [])); return;
+                        }
+                        readSyncSnapshot(tx, original => {
+                            try {
+                                let apply = false;
+                                if (action === 'connect') {
+                                    if (state.enabled && state.spaceId !== command.spaceId) throw validation('请先断开当前数据空间');
+                                    if (state.spaceId !== command.spaceId || !state.version) state = model.newState(command.spaceId, command.preferences === true);
+                                    state.enabled = true;
+                                    model.capture(state, original, opId);
+                                } else {
+                                    model.assertState(state);
+                                    if (action === 'disconnect') state.enabled = false;
+                                    else if (action === 'ack') {
+                                        const ids = new Set(command.ids || []);
+                                        state.pending = state.pending.filter(item => !ids.has(item.id));
+                                    } else if (action === 'preferences') {
+                                        state.preferences = command.enabled === true;
+                                        model.capture(state, original, opId);
+                                    } else {
+                                        if (!state.enabled) throw validation('同步已暂停');
+                                        // Reconcile any local write before observing incoming versions.
+                                        model.capture(state, original, opId);
+                                        if (action === 'receive') {
+                                            const received = model.receive(state, command.operation);
+                                            apply = !received.duplicate && !received.blocked;
+                                        }
+                                        else if (action === 'approveDelete') {
+                                            const operation = state.blocked?.[command.id];
+                                            if (!operation) throw validation('批量删除请求已变化，请刷新');
+                                            model.receive(state, operation, true); apply = true;
+                                        }
+                                        else if (action === 'resolve') { model.resolve(state, command.key, command.headId); apply = true; }
+                                        else throw validation('未知同步操作');
+                                    }
+                                }
+                                const revisions = {};
+                                if (apply) {
+                                    let next = model.toSnapshot(state, original);
+                                    if (project) next = project(next, original, opId);
+                                    const docs = [];
+                                    for (const [key, data] of Object.entries(next.documents)) {
+                                        if (model.equal(data, original.documents[key])) continue;
+                                        const entry = lookupEntry(key), normalized = canonicalizeJson(entry.normalize(data));
+                                        if (!entry.validate(normalized)) throw validation('同步文档格式无效：' + key);
+                                        const envelope = makeEnvelope(entry, normalized, { revision: incrementCounter(original.revisions[key] || 0, key), operationId: opId, normalized: true });
+                                        tx.objectStore(storeFor(key)).put({ logicalKey: key, envelope: canonicalizeJson(envelope) });
+                                        revisions[key] = envelope.revision; docs.push({ logicalKey: key });
+                                        targets.push({ logicalKey: key, owner: entry.owner, classification: entry.classification });
+                                    }
+                                    const revisionRequest = tx.objectStore(SYSTEM_STORE).get(ENTITY_REVISION_LOGICAL_KEY);
+                                    revisionRequest.onerror = () => reject(revisionRequest.error);
+                                    revisionRequest.onsuccess = () => {
+                                        try {
+                                            const tracked = readEntityRevisionState(revisionRequest.result || null);
+                                            let changed = false;
+                                            for (const store of ENTITY_STORES) {
+                                                const previous = new Map(original.entities[store].map(item => [item.recordId, item]));
+                                                const incoming = new Map(next.entities[store].map(item => [item.recordId, item]));
+                                                let affected = false;
+                                                for (const id of new Set([...previous.keys(), ...incoming.keys()])) {
+                                                    const old = previous.get(id), value = incoming.get(id);
+                                                    if (old && value && model.equal(old.data, value.data)) continue;
+                                                    const revision = incrementCounter(trackedEntityRevision(tracked, store, id, old), store + '/' + id);
+                                                    if (!value) tx.objectStore(store).delete(id);
+                                                    else {
+                                                        assertEntityIdentity(store, id, value.data);
+                                                        tx.objectStore(store).put({ recordId: id, revision, operationId: opId, updatedAt: nowIso(),
+                                                            data: canonicalizeJson(value.data), checksum: checksum(value.data) });
+                                                    }
+                                                    trackEntityRevision(tracked, store, id, revision);
+                                                    revisions[store + '/' + id] = revision;
+                                                    targets.push({ store, recordId: id, type: value ? 'put' : 'delete' });
+                                                    affected = changed = true;
+                                                }
+                                                if (affected) bumpEntityEpoch(tracked, store);
+                                            }
+                                            if (changed) putEntityRevisionState(tx, revisionRequest.result || null, tracked, opId);
+                                            model.rememberMaterialized(state, next);
+                                            finish();
+                                        } catch (error) { reject(error); }
+                                    };
+                                } else finish();
+                                function finish() {
+                                    putSyncState(tx, row, state, opId);
+                                    const receipt = receiptFor(opId, revisions, [], []);
+                                    putJournal(tx, journalRow, journal, spec, receipt);
+                                    result = model.status(state);
+                                    done(receipt);
+                                }
+                            } catch (error) { reject(error); }
+                        }, reject);
+                    } catch (error) { reject(error); }
+                };
+            } }));
+            if (!['status', 'pending', 'known'].includes(action)) {
+                this._notifyCommitted(targets.concat({ logicalKey: model.STATE_KEY, syncOrigin: true }), receipt);
+            }
+            return { ...receipt, result: clone(result) };
         }
         status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null }); }
     }
@@ -4760,7 +5304,23 @@
             throw error instanceof AppDataError ? error : new AppDataError('INITIALIZATION_BLOCKED', error && error.message || 'AppData v2 initialization failed');
         });
 
-    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
+    const folderSync = Object.freeze({
+        async status() { await ready; return (await kernel.folderSyncAction('status')).result; },
+        async pending() { await ready; return (await kernel.folderSyncAction('pending')).result; },
+        async known() { await ready; return (await kernel.folderSyncAction('known')).result; },
+        async connect(spaceId, options = {}) {
+            await ready;
+            await backups.create({ type: 'pre-folder-sync' });
+            return kernel.folderSyncAction('connect', { spaceId, preferences: options.preferences === true });
+        },
+        async disconnect() { await ready; return kernel.folderSyncAction('disconnect'); },
+        async acknowledge(ids) { await ready; return kernel.folderSyncAction('ack', { ids }); },
+        async receive(operation) { await ready; return kernel.folderSyncAction('receive', { operation }); },
+        async resolve(key, headId) { await ready; return kernel.folderSyncAction('resolve', { key, headId }); },
+        async approveDelete(id) { await ready; return kernel.folderSyncAction('approveDelete', { id }); },
+        async setPreferences(enabled) { await ready; return kernel.folderSyncAction('preferences', { enabled }); }
+    });
+    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements, folderSync };
     Object.defineProperties(AppData, {
         ready: { value: ready, enumerable: false },
         status: { value: () => kernel.status(), enumerable: false }
@@ -4772,6 +5332,447 @@
     }
     if (!Reflect.deleteProperty(global, '__AppDataV2Catalog')) {
         throw new Error('AppData v2 failed to close its catalog bootstrap channel');
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/services/syncFolderAdapter.js ===== */
+/* Local directory transport. OneDrive itself transports these files between computers. */
+(function installSyncFolderAdapter(global) {
+    'use strict';
+    const model = global.FolderSyncModel;
+    const DB = 'IELTSAtlasExternalBackupV2', STORE = 'binding', KEY = 'onedrive-sync-binding-v1';
+    const MAX_BYTES = 32 * 1024 * 1024;
+    const cache = new Map();
+    function supported() { return global.isSecureContext !== false && typeof global.showDirectoryPicker === 'function' && !!global.navigator?.locks; }
+    function pick() {
+        if (!supported()) throw new Error('请使用桌面 Chrome / Edge；若直接打开文件不支持，请通过固定 localhost 地址打开');
+        // Invoke before awaiting anything: directory selection needs the original click activation.
+        return global.showDirectoryPicker({ id: 'ielts-atlas-onedrive-sync', mode: 'readwrite', startIn: 'documents' });
+    }
+    async function binding(value) {
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open(DB, 1);
+            request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE); };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        try {
+            return await new Promise((resolve, reject) => {
+                const write = value !== undefined;
+                const tx = db.transaction(STORE, write ? 'readwrite' : 'readonly');
+                const store = tx.objectStore(STORE);
+                const request = write ? (value === null ? store.delete(KEY) : store.put(value, KEY)) : store.get(KEY);
+                tx.oncomplete = () => resolve(write ? value : request.result || null);
+                tx.onerror = tx.onabort = () => reject(tx.error || new Error('同步文件夹绑定保存失败'));
+            });
+        } finally { db.close(); }
+    }
+    async function resetBarrier(active) {
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open('IELTSAtlasDataV2');
+            let absent = false;
+            request.onupgradeneeded = () => { absent = true; request.transaction.abort(); };
+            request.onerror = () => absent ? resolve(null) : reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+        });
+        if (!db) return { enabled: false, pending: 0 };
+        try {
+            if (!db.objectStoreNames.contains('system')) return { enabled: false, pending: 0 };
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('system', 'readwrite');
+                const store = tx.objectStore('system');
+                const request = store.get(model.STATE_KEY);
+                if (active) store.put({ logicalKey: 'system.folderSyncResetBarrier', active: true });
+                else store.delete('system.folderSyncResetBarrier');
+                tx.oncomplete = () => {
+                    const state = request.result?.envelope?.data;
+                    try {
+                        if (request.result) model.assertState(state);
+                        resolve(state ? model.status(state) : { enabled: false, pending: 0 });
+                    }
+                    catch (error) { reject(error); }
+                };
+                tx.onabort = tx.onerror = () => reject(tx.error || new Error('无法建立数据清理屏障'));
+            });
+        } finally { db.close(); }
+    }
+    function requestPermission(handle) {
+        if (!handle?.requestPermission) return Promise.resolve('denied');
+        return handle.requestPermission({ mode: 'readwrite' });
+    }
+    async function permission(handle) {
+        if (!handle?.queryPermission) return 'denied';
+        return handle.queryPermission({ mode: 'readwrite' });
+    }
+    async function parseFile(file) {
+        if (!file.size || file.size > MAX_BYTES) throw new Error('同步文件为空或超过 32 MB，请保留文件并检查');
+        const text = await file.text();
+        let value;
+        try { value = JSON.parse(text); } catch (_) { throw new Error('同步文件尚未完整下载或 JSON 损坏，将自动重试'); }
+        model.safeJson(value);
+        return value;
+    }
+    async function readJson(dir, name) {
+        const handle = await dir.getFileHandle(name, { create: false });
+        return parseFile(await handle.getFile());
+    }
+    async function writeJson(dir, name, value) {
+        const text = JSON.stringify(value);
+        if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('单条同步操作超过 32 MB，已保留待发送队列');
+        const file = await dir.getFileHandle(name, { create: true });
+        if (name === 'workspace.json' && (await file.getFile()).size) throw new Error('同步空间已出现，请重新连接；不会覆盖原有空间');
+        const writer = await file.createWritable();
+        try { await writer.write(text); await writer.close(); }
+        catch (error) { try { await writer.abort(); } catch (_) { /* already closed */ } throw error; }
+        const stored = await parseFile(await file.getFile());
+        if (!model.equal(stored, value)) throw new Error('同步文件回读校验失败，稍后会重试');
+    }
+    function assertWorkspace(value, expected) {
+        if (!value || value.format !== model.FORMAT || value.version !== model.VERSION || !model.identifier(value.spaceId)) {
+            throw new Error('同步空间标记无效或版本不兼容，请更新所有电脑上的项目');
+        }
+        if (expected && value.spaceId !== expected) throw new Error('文件夹的数据空间标识已改变，请重新连接；本机记录仍然保留');
+        return value;
+    }
+    async function openWorkspace(selected, confirmCreate = () => false) {
+        const found = async dir => {
+            try { return assertWorkspace(await readJson(dir, 'workspace.json')); }
+            catch (error) { if (error.name !== 'NotFoundError') throw error; return null; }
+        };
+        const direct = await found(selected);
+        if (direct) return { directory: selected, spaceId: direct.spaceId, name: selected.name, existing: true };
+        let dir;
+        if (selected.name === 'user-data') dir = selected;
+        else {
+            try { dir = await selected.getDirectoryHandle('user-data', { create: false }); }
+            catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        }
+        if (dir) {
+            const existing = await found(dir);
+            if (existing) return { directory: dir, spaceId: existing.spaceId, name: selected.name, existing: true };
+            throw new Error('同步文件夹尚不完整，请等待 OneDrive 下载完成并设置“始终保留在此设备上”，然后重试。为保护原有数据，不会创建其他空间。');
+        }
+        // Only a complete project root without any sync directory can be initialized.
+        for (const name of ['index.html', 'ONEDRIVE_SYNC.md']) await selected.getFileHandle(name, { create: false });
+        for (const name of ['js', 'css']) await selected.getDirectoryHandle(name, { create: false });
+        if (typeof confirmCreate !== 'function' || !await confirmCreate()) throw new Error('已取消初始化，本机学习记录仍保留');
+        // Reinspect after confirmation: a folder arriving during the prompt is never overwritten.
+        try {
+            await selected.getDirectoryHandle('user-data', { create: false });
+            return openWorkspace(selected, () => false);
+        } catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        dir = await selected.getDirectoryHandle('user-data', { create: true });
+        for await (const entry of dir.values()) throw new Error('同步目录已出现内容，请等待 OneDrive 下载完成后重试');
+        const late = await found(dir);
+        if (late) return { directory: dir, spaceId: late.spaceId, name: selected.name, existing: true };
+        const workspace = { format: model.FORMAT, version: model.VERSION, spaceId: model.uuid(), createdAt: new Date().toISOString() };
+        await writeJson(dir, 'workspace.json', workspace);
+        return { directory: dir, spaceId: workspace.spaceId, name: selected.name + '/user-data', existing: false };
+    }
+    async function workspace(binding) {
+        assertWorkspace(await readJson(binding.directory, 'workspace.json'), binding.spaceId);
+        const version = await binding.directory.getDirectoryHandle('sync-v1', { create: true });
+        const space = await version.getDirectoryHandle(binding.spaceId, { create: true });
+        return space.getDirectoryHandle('ops', { create: true });
+    }
+    async function publish(root, operation) {
+        model.validateOperation(operation);
+        const folder = await root.getDirectoryHandle(operation.writerId, { create: true });
+        const name = operation.id + '.json';
+        const envelope = { format: model.FORMAT + '-file', version: model.VERSION, sha256: model.digest(operation), operation };
+        let previous = null;
+        try { previous = await folder.getFileHandle(name, { create: false }); }
+        catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        if (previous) {
+            const file = await previous.getFile();
+            let existing = null;
+            try { existing = await parseFile(file); } catch (_) { /* an interrupted own write can be recovered */ }
+            if (existing && model.equal(existing, envelope)) return;
+            if (existing?.format === model.FORMAT + '-file' && existing.sha256 === model.digest(existing.operation)) {
+                throw new Error('日志文件名已存在但内容不同，已保留队列：' + name);
+            }
+            // Only an own pending filename is repaired, preserving the incomplete bytes for recovery.
+            const recovery = await folder.getFileHandle(name + '.incomplete-' + model.uuid() + '.txt', { create: true });
+            const writer = await recovery.createWritable();
+            try { await writer.write(await file.text()); await writer.close(); }
+            catch (error) { try { await writer.abort(); } catch (_) { } throw error; }
+        }
+        await writeJson(folder, name, envelope);
+    }
+    async function scan(root, visit) {
+        const errors = [];
+        let files = 0;
+        for await (const writer of root.values()) {
+            if (writer.kind !== 'directory') continue;
+            for await (const handle of writer.values()) {
+                if (handle.kind !== 'file' || !/\.json$/i.test(handle.name)) continue;
+                const path = writer.name + '/' + handle.name;
+                try {
+                    const file = await handle.getFile();
+                    const signature = file.lastModified + ':' + file.size;
+                    if (cache.get(path) === signature) continue;
+                    const envelope = await parseFile(file);
+                    if (envelope.format !== model.FORMAT + '-file' || envelope.version !== model.VERSION
+                        || envelope.sha256 !== model.digest(envelope.operation)) throw new Error('同步日志摘要校验失败');
+                    model.validateOperation(envelope.operation);
+                    await visit(envelope.operation);
+                    cache.set(path, signature); files++;
+                } catch (error) { errors.push({ path, message: error.message }); }
+            }
+        }
+        return { files, errors };
+    }
+    global.SyncFolderAdapter = Object.freeze({ supported, pick, binding, permission, requestPermission,
+        openWorkspace, workspace, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/services/syncService.js ===== */
+(function installFolderSyncService(global) {
+    'use strict';
+    if (global.FolderSyncService) return;
+    const adapter = global.SyncFolderAdapter, model = global.FolderSyncModel;
+    const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
+    const listeners = new Set();
+    let binding = null, timer = null, polling = null, running = null, initPromise = null, initialized = false, suspended = false;
+    let channel = null, resumeAttempted = false, earlyInteraction = false, recovery = null, skipInteractionClick = false;
+    let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
+        permission: 'prompt', initializing: true, recovering: false, busy: false, completedSyncs: 0,
+        errors: [], lastPublishAt: null, lastReceiveAt: null };
+    function emit(patch = {}) {
+        view = Object.assign({}, view, patch);
+        for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
+    }
+    function getStatus() { return model.copy({ ...view, suspended }); }
+    async function refresh() {
+        const state = await global.AppData.folderSync.status();
+        emit({ ...state, bound: !!binding, directoryName: binding?.name || null,
+            lastPublishAt: binding?.lastPublishAt || null, lastReceiveAt: binding?.lastReceiveAt || null });
+        return state;
+    }
+    function announce(type) { try { channel?.postMessage({ type }); } catch (_) { /* best effort */ } }
+    function withLock(task, background = false) {
+        if (!global.navigator?.locks?.request) throw new Error('当前浏览器缺少安全的跨标签页锁，请使用桌面 Chrome / Edge');
+        return global.navigator.locks.request(LOCK, { mode: 'exclusive', ...(background ? { ifAvailable: true } : {}) },
+            lock => lock ? task() : { skipped: true });
+    }
+    function schedule(delay = 1000) {
+        if (suspended || timer) return;
+        timer = global.setTimeout(() => { timer = null; syncNow(true).catch(() => {}); }, delay);
+    }
+    async function runUnlocked() {
+        if (suspended) return;
+        binding = await adapter.binding();
+        const state = await refresh();
+        if (!binding || !state.enabled) return;
+        if (binding.spaceId !== state.spaceId) throw new Error('本机绑定与数据空间不一致，请重新连接');
+        const permission = await adapter.permission(binding.directory);
+        emit({ permission });
+        if (permission !== 'granted') return;
+        const root = await adapter.workspace(binding);
+        const pending = await global.AppData.folderSync.pending();
+        const errors = [];
+        let published = 0, received = 0;
+        for (const operation of pending.slice(0, 100)) {
+            try {
+                await adapter.publish(root, operation);
+                await global.AppData.folderSync.acknowledge([operation.id]);
+                published++;
+            } catch (error) { errors.push({ path: operation.id, message: error.message }); break; }
+        }
+        const known = await global.AppData.folderSync.known();
+        const scan = await adapter.scan(root, async operation => {
+            if (suspended) throw new Error('本机同步已暂停');
+            if (operation.spaceId !== state.spaceId) throw new Error('该日志不属于当前数据空间');
+            const hash = model.digest(operation);
+            if (known[operation.id] === hash) return;
+            await global.AppData.folderSync.receive(operation);
+            known[operation.id] = hash;
+            received++;
+        });
+        errors.push(...scan.errors);
+        if (published) binding.lastPublishAt = new Date().toISOString();
+        if (received) binding.lastReceiveAt = new Date().toISOString();
+        if (published || received) await adapter.binding(binding);
+        emit({ errors, completedSyncs: view.completedSyncs + (errors.length ? 0 : 1) });
+        const latest = await refresh();
+        if (received && typeof global.syncPracticeRecords === 'function') {
+            try { await global.syncPracticeRecords({ forceRender: true }); } catch (_) { /* next view activation reads durable data */ }
+        }
+        if (latest.pending && !errors.length) schedule(1000);
+        return { published, received, errors };
+    }
+    function syncNow(background = false) {
+        if (running) return running;
+        emit({ busy: true });
+        running = init().then(() => withLock(runUnlocked, background)).catch(error => {
+            emit({ errors: [{ path: '', message: error.message }] });
+            if (!background) throw error;
+        }).finally(() => { running = null; emit({ busy: false }); });
+        return running;
+    }
+    async function connect() {
+        const selection = adapter.pick();
+        const selected = await selection;
+        await init();
+        const result = await withLock(async () => {
+            const current = await global.AppData.folderSync.status();
+            const space = await adapter.openWorkspace(selected, () => {
+                if (current.spaceId) throw new Error('本机已有同步空间，请选择原项目文件夹并等待 OneDrive 下载完成；不会创建其他空间');
+                return global.confirm('尚未发现同步空间。只有从未在其他电脑启用过同步，且 OneDrive 已完成下载时才应新建。确认在此项目中初始化同步空间？');
+            });
+            if (current.enabled && current.spaceId !== space.spaceId) throw new Error('请先断开当前空间，再连接其他空间');
+            binding = { directory: space.directory, spaceId: space.spaceId, name: space.name };
+            await adapter.binding(binding);
+            await global.AppData.folderSync.connect(space.spaceId);
+            adapter.clearCache(); suspended = false; resumeAttempted = false;
+            emit({ permission: await adapter.permission(binding.directory), errors: [] });
+            await refresh();
+            return { existing: space.existing, spaceId: space.spaceId };
+        });
+        announce('binding-changed');
+        await syncNow();
+        return result;
+    }
+    // Starts requestPermission directly inside the click handler, before any asynchronous read.
+    function reauthorize() {
+        if (recovery) return recovery;
+        if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
+        resumeAttempted = true;
+        emit({ recovering: true });
+        let request;
+        try { request = adapter.requestPermission(binding.directory); }
+        catch (error) { request = Promise.reject(error); }
+        recovery = Promise.resolve(request).then(async permission => {
+            emit({ permission, ...(permission === 'granted' ? { errors: [] } : {}) });
+            if (permission !== 'granted') throw new Error('尚未获得同步文件夹读写权限');
+            announce('binding-changed');
+            // A worker may already have observed prompt; finish it, then run with the new grant.
+            if (running) await running.catch(() => {});
+            return syncNow();
+        }).catch(error => {
+            if (error.name === 'SecurityError') resumeAttempted = false;
+            throw error;
+        }).finally(() => { recovery = null; emit({ recovering: false }); });
+        return recovery;
+    }
+    async function disconnect() {
+        await withLock(async () => {
+            await global.AppData.folderSync.disconnect();
+            await adapter.binding(null);
+            binding = null; adapter.clearCache();
+            emit({ errors: [], permission: 'prompt' }); await refresh();
+        });
+        announce('binding-changed');
+    }
+    async function resolve(key, headId) {
+        await withLock(() => global.AppData.folderSync.resolve(key, headId));
+        await refresh(); await syncNow();
+    }
+    async function setPreferences(enabled) {
+        await withLock(() => global.AppData.folderSync.setPreferences(enabled));
+        await refresh(); await syncNow();
+    }
+    async function approveDelete(id) {
+        await withLock(() => global.AppData.folderSync.approveDelete(id));
+        await refresh(); await syncNow();
+    }
+    async function withReset(task) {
+        // Called while the shared full-reset lock is already held.
+        // This durable flag and every learning write share the system-store transaction.
+        // Earlier writes finish first; later writes abort even in another tab.
+        let success = false;
+        try {
+            const state = await adapter.resetBarrier(true);
+            binding = await adapter.binding();
+            if (binding || state.enabled || state.pending) {
+                await runUnlocked();
+                const latest = await global.AppData.folderSync.status();
+                if (latest.pending) throw new Error('还有未写入 OneDrive 文件夹的记录，请恢复权限并同步后再清理本机');
+            }
+            suspended = true; announce('reset-pause');
+            if (timer) { global.clearTimeout(timer); timer = null; }
+            const result = await task();
+            success = result?.success === true;
+            return result;
+        } finally {
+            if (!success) {
+                await adapter.resetBarrier(false);
+                suspended = false; announce('reset-resume');
+            }
+        }
+    }
+    function init() {
+        if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; initialized = false; emit({ initializing: false }); throw error; });
+        return initPromise;
+    }
+    function resumeFromInteraction(event) {
+        if (!event.isTrusted) return;
+        // A failed activation request can retry on the next gesture, not its trailing click.
+        if (event.type === 'click' && skipInteractionClick) { skipInteractionClick = false; return; }
+        if (event.type === 'pointerdown' && event.pointerType !== 'mouse') return;
+        if (event.type === 'pointerup' && event.pointerType === 'mouse') return;
+        if (event.type === 'keydown' && (event.key === 'Escape' || event.ctrlKey || event.altKey || event.metaKey)) return;
+        earlyInteraction = true;
+        if (resumeAttempted || suspended || recovery
+            || !binding || !view.enabled || view.permission !== 'prompt') return;
+        // Explicit sync controls keep their own click handler, with no duplicate permission request.
+        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn, #folder-sync-startup-dialog')) return;
+        skipInteractionClick = ['pointerdown', 'pointerup', 'keydown'].includes(event.type);
+        // Call synchronously during a trusted click: browsers require transient user activation.
+        reauthorize().catch(error => {
+            if (!['SecurityError', 'AbortError'].includes(error.name)) emit({ errors: [{ path: '', message: error.message }] });
+        });
+    }
+    async function initialize() {
+        if (initialized) return;
+        initialized = true;
+        // Read the saved handle as soon as the module loads, alongside data initialization.
+        const [, savedBinding] = await Promise.all([global.AppData.ready, adapter.binding()]);
+        binding = savedBinding;
+        if (binding) emit({ permission: await adapter.permission(binding.directory) });
+        await refresh();
+        if (earlyInteraction && global.navigator?.userActivation?.isActive) resumeFromInteraction({ isTrusted: true });
+        if (typeof global.BroadcastChannel === 'function') {
+            channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
+            channel.onmessage = event => {
+                if (event.data?.type === 'reset-pause') { suspended = true; emit(); }
+                else if (event.data?.type === 'reset-resume') { suspended = false; schedule(); }
+                else if (event.data?.type === 'binding-changed') {
+                    adapter.binding().then(value => { binding = value; adapter.clearCache(); return refresh(); }).then(() => schedule()).catch(error => emit({ errors: [{ path: '', message: error.message }] }));
+                }
+            };
+        }
+        global.AppData.backups.onDataCommitted(event => {
+            if (!event.targets?.some(target => target.syncOrigin)) schedule();
+        });
+        global.document?.addEventListener('visibilitychange', () => {
+            if (global.document.visibilityState === 'visible') schedule(0);
+        });
+        global.addEventListener?.('online', () => schedule(0));
+        polling = global.setInterval(() => {
+            if (global.document?.visibilityState !== 'hidden') schedule(0);
+        }, 15000);
+        // Complete the first background pass during startup, without waiting for settings or a timer.
+        if (binding && view.enabled) {
+            emit({ busy: true });
+            try { await withLock(runUnlocked, true); }
+            catch (error) { emit({ errors: [{ path: '', message: error.message }] }); }
+            finally { emit({ busy: false }); }
+        }
+        emit({ initializing: false });
+    }
+    global.FolderSyncService = Object.freeze({ init, connect, disconnect, reauthorize, syncNow, resolve,
+        setPreferences, approveDelete, withReset, getStatus,
+        deferAutomaticRecovery() { resumeAttempted = true; },
+        onStatusChange(listener) {
+            listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
+        } });
+    if (global.document) {
+        for (const type of ['pointerdown', 'pointerup', 'keydown', 'click'])
+            global.document.addEventListener(type, resumeFromInteraction, true);
+        init().catch(error => emit({ errors: [{ path: '', message: error.message }] }));
     }
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -6685,7 +7686,8 @@
             try {
                 result = await serviceInfo.service.withFullResetLock(async () => {
                     callbackEntered = true;
-                    return performLocked(serviceInfo.service);
+                    const clear = () => performLocked(serviceInfo.service);
+                    return global.FolderSyncService ? global.FolderSyncService.withReset(clear) : clear();
                 });
             } catch (error) {
                 return externalBackupFailure(
@@ -6738,6 +7740,283 @@
 
     global.SiteDataReset = Object.freeze({ __v2: true, DATABASE_NAMES, perform, request });
     global.clearCache = request;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/presentation/syncPanel.js ===== */
+(function installFolderSyncPanel(global) {
+    'use strict';
+    if (!global.document || !global.FolderSyncService) return;
+    const service = global.FolderSyncService, doc = global.document;
+    let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '', attentionNote = null, actionNote = null;
+    let actionErrorRevision = 0;
+    let startupChecked = false, startupRecoveryPending = false, startupDialog = null;
+    let startupRestore, startupLater, startupError, startupPreviousFocus;
+    const buttons = {};
+    function element(tag, text, className) {
+        const node = doc.createElement(tag);
+        if (text) node.textContent = text;
+        if (className) node.className = className;
+        return node;
+    }
+    function dismissOwn(note) {
+        if (!note) return;
+        const center = global.getMessageCenter?.();
+        if (center?.dismiss) center.dismiss(0, note);
+        else note.remove?.();
+    }
+    function message(text, type = 'error') {
+        actionError = type === 'error' ? text : '';
+        actionErrorRevision = service.getStatus().completedSyncs;
+        if (errorLine) errorLine.textContent = actionError;
+        dismissOwn(actionNote);
+        if (typeof global.showMessage === 'function') actionNote = global.showMessage(text, type);
+    }
+    function notifyAttention(status) {
+        if (status.recovering || startupRecoveryPending) {
+            dismissOwn(attentionNote); attentionNote = null; lastAttention = '';
+            dismissOwn(actionNote); actionNote = null;
+        }
+        if (status.initializing || status.busy || status.recovering || startupRecoveryPending) return;
+        let text = '', type = 'warning';
+        if (status.enabled && status.bound) {
+            const destination = '请前往设置 → 数据管理 → OneDrive 自动同步处理。';
+            if (status.permission !== 'granted') text = 'OneDrive 同步已暂停，学习记录仍保存在本机。' + destination;
+            else if (status.blocked.length) text = 'OneDrive 同步有批量删除请求需要确认。' + destination;
+            else if (status.conflicts.length) text = 'OneDrive 同步有 ' + status.conflicts.length + ' 项内容需要选择版本。' + destination;
+            else if (status.errors.length) {
+                text = 'OneDrive 同步遇到问题，学习记录仍保存在本机。' + destination;
+                type = 'error';
+            }
+        }
+        // Use the same transient notification as disk backup; never add home-page controls.
+        if (text !== lastAttention) {
+            dismissOwn(attentionNote); attentionNote = null;
+            if (text && typeof global.showMessage === 'function') attentionNote = global.showMessage(text, type);
+        }
+        lastAttention = text;
+    }
+    function action(button, task, successText) {
+        button.addEventListener('click', () => {
+            actionError = ''; dismissOwn(actionNote); actionNote = null;
+            let operation;
+            try { operation = task(); } catch (error) { message(error.message); return; }
+            if (operation === undefined) { render(service.getStatus()); return; }
+            button.disabled = true;
+            Promise.resolve(operation).then(() => {
+                const status = service.getStatus();
+                if (successText && (!status.enabled || status.permission === 'granted')
+                    && !status.errors.length && !status.conflicts.length && !status.blocked.length)
+                    message(successText, 'success');
+            }).catch(error => {
+                if (error.name !== 'AbortError') message(error.message, 'error');
+            }).finally(() => { button.disabled = false; render(service.getStatus()); });
+        });
+    }
+    function closeStartupRecovery(defer = false) {
+        if (defer) service.deferAutomaticRecovery();
+        startupRecoveryPending = false;
+        if (!startupDialog) return;
+        const hadFocus = startupDialog.contains(doc.activeElement);
+        startupDialog.remove(); startupDialog = null;
+        if (hadFocus && startupPreviousFocus?.isConnected) startupPreviousFocus.focus({ preventScroll: true });
+    }
+    function renderStartupRecovery(status) {
+        if (!startupChecked && !status.initializing && !status.busy) {
+            startupChecked = true;
+            startupRecoveryPending = status.supported && status.enabled && status.bound
+                && status.permission !== 'granted' && !status.suspended;
+        }
+        if (!startupRecoveryPending) return;
+        if (!status.enabled || !status.bound || status.permission === 'granted' || status.suspended) {
+            closeStartupRecovery(); return;
+        }
+        if (!startupDialog) {
+            startupPreviousFocus = doc.activeElement;
+            startupDialog = element('div', '', 'theme-modal shui-secondary-modal shui-secondary-modal--sm show');
+            startupDialog.id = 'folder-sync-startup-dialog';
+            startupDialog.setAttribute('role', 'dialog'); startupDialog.setAttribute('aria-modal', 'true');
+            startupDialog.setAttribute('aria-labelledby', 'folder-sync-startup-title');
+            startupDialog.setAttribute('aria-describedby', 'folder-sync-startup-description');
+            const content = element('div', '', 'theme-modal-content shui-secondary-modal__content');
+            const header = element('div', '', 'theme-modal-header shui-secondary-modal__header');
+            const title = element('h3', '☁️ 恢复 OneDrive 同步'); title.id = 'folder-sync-startup-title';
+            header.append(title);
+            const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
+            const description = element('p', '已找到这台电脑保存的 OneDrive 同步设置。文件夹授权已过期，请点击“恢复同步”，在浏览器提示中允许访问原同步文件夹。');
+            description.id = 'folder-sync-startup-description'; body.append(description);
+            body.append(element('p', '无需进入设置或重新选择文件夹。若浏览器提供“每次访问都允许”，选择后下次可直接自动同步。', 'folder-sync-muted'));
+            startupError = element('p', '', 'folder-sync-error'); startupError.setAttribute('role', 'status');
+            startupError.setAttribute('aria-live', 'polite'); body.append(startupError);
+            const actions = element('div', '', 'external-backup-panel__actions');
+            startupRestore = element('button', '恢复同步', 'btn data-mgmt-btn'); startupRestore.type = 'button';
+            startupRestore.id = 'folder-sync-startup-restore-btn';
+            startupLater = element('button', '稍后再说', 'btn data-mgmt-btn'); startupLater.type = 'button';
+            startupLater.id = 'folder-sync-startup-later-btn';
+            startupRestore.addEventListener('click', () => {
+                startupError.textContent = '';
+                // Keep the native permission request in this button's trusted click.
+                service.reauthorize().then(() => {
+                    if (!service.getStatus().errors.length) message('OneDrive 自动同步已恢复', 'success');
+                }).catch(error => {
+                    if (error.name !== 'AbortError') startupError.textContent = error.message;
+                }).finally(() => render(service.getStatus()));
+            });
+            startupLater.addEventListener('click', () => { closeStartupRecovery(true); render(service.getStatus()); });
+            actions.append(startupRestore, startupLater); body.append(actions);
+            content.append(header, body); startupDialog.append(content); doc.body.append(startupDialog);
+            startupDialog.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && !startupLater.disabled) {
+                    event.preventDefault(); closeStartupRecovery(true); render(service.getStatus());
+                } else if (event.key === 'Tab') {
+                    if (startupRestore.disabled) event.preventDefault();
+                    else if (event.shiftKey && doc.activeElement === startupRestore) {
+                        event.preventDefault(); startupLater.focus();
+                    } else if (!event.shiftKey && doc.activeElement === startupLater) {
+                        event.preventDefault(); startupRestore.focus();
+                    }
+                }
+            });
+            startupRestore.focus({ preventScroll: true });
+        }
+        startupRestore.disabled = startupLater.disabled = status.busy || status.recovering;
+        startupRestore.textContent = status.recovering ? '正在恢复…' : '恢复同步';
+    }
+    function ensureModal() {
+        if (modal) return modal;
+        modal = element('div', '', 'theme-modal folder-sync-modal shui-secondary-modal shui-secondary-modal--sm');
+        modal.id = 'folder-sync-modal'; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'folder-sync-title');
+        const content = element('div', '', 'theme-modal-content shui-secondary-modal__content');
+        const header = element('div', '', 'theme-modal-header shui-secondary-modal__header');
+        const title = element('h3', '☁️ OneDrive 自动同步'); title.id = 'folder-sync-title';
+        const close = element('button', '×', 'theme-modal-close'); close.type = 'button'; close.setAttribute('aria-label', '关闭同步面板');
+        close.addEventListener('click', () => modal.classList.remove('show'));
+        header.append(title, close);
+        const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
+        setupGuide = element('div'); setupGuide.id = 'folder-sync-setup-guide';
+        setupGuide.append(element('p', '每台电脑首次选择 OneDrive 内的专用同步文件夹并允许读写，之后会自动合并已完成的练习、笔记和词汇。请先把解压后的整个项目文件夹放进 OneDrive。'));
+        setupGuide.append(element('p', '点击“启用 OneDrive 同步”，选择 OneDrive 中的项目文件夹并授权。已有空间会自动连接；首次使用需确认初始化。其他电脑请等待下载完成，并设置“始终保留在此设备上”。', 'folder-sync-muted'));
+        body.append(setupGuide);
+        statusLine = element('p', '正在读取本机同步状态…', 'folder-sync-status');
+        statusLine.setAttribute('role', 'status'); statusLine.setAttribute('aria-live', 'polite');
+        body.append(statusLine);
+        const actions = element('div', '', 'external-backup-panel__actions');
+        for (const [key, label, task, successText] of [
+            ['enable', '☁️ 启用 OneDrive 同步', () => service.connect(), 'OneDrive 自动同步已开启'],
+            ['sync', '🔄 立即同步', () => service.syncNow(), 'OneDrive 同步检查已完成'],
+            ['permission', '🔑 恢复同步', () => service.reauthorize(), 'OneDrive 自动同步已恢复'],
+            ['disconnect', '断开本机同步', () => {
+                if (global.confirm('断开后保留本机记录和 OneDrive 文件，下次连接可继续同步。是否断开？')) return service.disconnect();
+            }, '已断开本机 OneDrive 同步']
+        ]) {
+            const button = element('button', label, 'btn data-mgmt-btn'); button.type = 'button'; button.id = 'folder-sync-' + key + '-btn';
+            buttons[key] = button; action(button, task, successText); actions.append(button);
+        }
+        body.append(actions);
+        const option = element('label', '', 'folder-sync-option');
+        preferences = element('input'); preferences.type = 'checkbox'; preferences.id = 'folder-sync-preferences';
+        option.append(preferences, doc.createTextNode(' 同步主题、阅读显示和计时偏好'));
+        preferences.addEventListener('change', () => {
+            actionError = '';
+            dismissOwn(actionNote); actionNote = null;
+            service.setPreferences(preferences.checked).then(() => {
+                if (!service.getStatus().errors.length) message('OneDrive 同步偏好已更新', 'success');
+            }).catch(error => message(error.message, 'error'))
+                .finally(() => render(service.getStatus()));
+        });
+        body.append(option);
+        errorLine = element('p', '', 'folder-sync-error'); errorLine.setAttribute('role', 'status'); body.append(errorLine);
+        conflictList = element('div', '', 'folder-sync-conflicts'); body.append(conflictList);
+        body.append(element('p', '“已写入同步文件夹”表示本机写入成功。云端上传进度由 OneDrive 客户端管理；其他电脑收到文件并打开网页后自动合并。未完成的练习窗口不会跨设备接管。', 'folder-sync-muted'));
+        content.append(header, body); modal.append(content); doc.body.append(modal);
+        modal.addEventListener('click', event => { if (event.target === modal) modal.classList.remove('show'); });
+        modal.addEventListener('keydown', event => { if (event.key === 'Escape') modal.classList.remove('show'); });
+        render(service.getStatus());
+        return modal;
+    }
+    function formatDate(value) { return value ? new Date(value).toLocaleString() : '尚无'; }
+    function textStatus(status) {
+        if (status.initializing) return '正在恢复本机同步设置…';
+        if (!status.supported) return '当前环境不支持自动文件夹同步。请使用桌面 Chrome / Edge；必要时通过固定 localhost 地址打开。';
+        if (!status.enabled || !status.bound) return '未连接同步空间，学习数据仍保存在当前浏览器。';
+        if (status.recovering) return '正在恢复 OneDrive 自动同步…';
+        if (status.permission !== 'granted') return '同步已暂停（自动同步设置仍为开启），等待浏览器授权。点击网页可自动请求恢复；若出现“每次访问都允许”，请选择以便下次自动连接。学习记录仍保存在本机，也可点击“恢复同步”。';
+        if (status.busy) return '正在检查并合并同步文件…';
+        return '自动同步已开启 · ' + status.directoryName + ' · 待发送 ' + status.pending + ' 条 · 待处理冲突 ' + status.conflicts.length
+            + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
+    }
+    function render(status) {
+        renderStartupRecovery(status);
+        // A later verified pass also retires errors from a failed manual action.
+        if (actionError && status.completedSyncs > actionErrorRevision && !status.errors.length) {
+            actionError = ''; dismissOwn(actionNote); actionNote = null;
+        }
+        notifyAttention(status);
+        const entry = doc.getElementById('folder-sync-entry-btn');
+        if (entry) entry.textContent = status.initializing || status.recovering ? '☁️ OneDrive 同步 · 正在恢复' : !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
+            : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 已暂停'
+                : status.blocked.length ? '☁️ OneDrive 同步 · 待确认删除'
+                    : status.conflicts.length ? '☁️ OneDrive 同步 · 有冲突'
+                        : status.errors.length ? '☁️ OneDrive 同步 · 需处理'
+                            : status.pending ? '☁️ OneDrive 同步 · 待发送' : '☁️ OneDrive 同步 · 已开启';
+        if (!modal) return;
+        statusLine.textContent = textStatus(status);
+        errorLine.textContent = [actionError, ...status.errors.map(error => (error.path ? error.path + '：' : '') + error.message)].filter(Boolean).slice(0, 5).join('\n');
+        const connected = status.enabled && status.bound;
+        const busy = status.busy || status.initializing || status.recovering;
+        const needsPermission = connected && status.permission !== 'granted';
+        setupGuide.hidden = connected;
+        buttons.enable.hidden = connected;
+        buttons.sync.hidden = buttons.disconnect.hidden = !connected;
+        preferences.parentElement.hidden = !connected;
+        buttons.permission.hidden = !needsPermission;
+        buttons.enable.disabled = !status.supported || busy;
+        buttons.sync.disabled = !connected || needsPermission || !status.supported || busy;
+        buttons.disconnect.disabled = !connected || busy;
+        buttons.permission.disabled = !status.supported || busy;
+        preferences.disabled = !status.enabled || !status.bound || busy;
+        preferences.checked = status.preferences === true;
+        const signature = JSON.stringify([status.conflicts.map(item => [item.key, item.versions.map(version => version.id)]), status.blocked]);
+        if (signature === versionSignature) return;
+        versionSignature = signature; conflictList.replaceChildren();
+        for (const blocked of status.blocked) {
+            const item = element('section', '', 'folder-sync-conflict');
+            item.append(element('p', '另一台电脑请求删除 ' + blocked.count + ' 条练习。为保护历史，已暂停应用这次删除。'));
+            const approve = element('button', '确认应用这次批量删除', 'btn btn-secondary'); approve.type = 'button';
+            action(approve, () => {
+                if (global.confirm('确认从本机移除这次请求中的 ' + blocked.count + ' 条练习？原始同步日志仍保留。')) return service.approveDelete(blocked.id);
+            });
+            item.append(approve); conflictList.append(item);
+        }
+        if (status.conflicts.length) conflictList.append(element('h4', '选择需要保留的版本'));
+        for (const conflict of status.conflicts) {
+            const item = element('section', '', 'folder-sync-conflict');
+            const first = conflict.versions.find(version => version.value.exists)?.value.value;
+            const name = first?.practiceSummaries?.title || first?.title || ({ vocabulary: '词汇数据', libraries: '题库配置', achievements: '成就标记', preferences: '外观偏好' })[conflict.key] || conflict.key;
+            item.append(element('strong', name));
+            conflict.versions.forEach((version, index) => {
+                const details = element('details');
+                const label = (version.value.exists ? '版本 ' + (index + 1) : '删除此项') + ' · 来源 ' + version.id.slice(0, 8);
+                details.append(element('summary', label));
+                const raw = JSON.stringify(version.value, null, 2);
+                details.append(element('pre', raw.length > 18000 ? raw.slice(0, 18000) + '\n…（预览已截断；完整版本保留在同步日志中）' : raw));
+                const choose = element('button', '采用这个版本', 'btn btn-secondary'); choose.type = 'button';
+                action(choose, () => {
+                    if (global.confirm('采用所选版本并同步到其他电脑？其他原始版本仍保留在同步日志中。')) return service.resolve(conflict.key, version.id);
+                });
+                details.append(choose); item.append(details);
+            });
+            conflictList.append(item);
+        }
+    }
+    function openModal() { ensureModal().classList.add('show'); }
+    function boot() {
+        doc.getElementById('folder-sync-entry-btn')?.addEventListener('click', openModal);
+        service.onStatusChange(render);
+    }
+    global.FolderSyncPanel = Object.freeze({ open: openModal });
+    if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot, { once: true }); else boot();
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -14790,10 +16069,14 @@
     "js/utils/logger.js",
     "js/data/practiceRecordSource.js",
     "js/data/v2/dataCatalog.js",
+    "js/data/v2/syncModel.js",
     "js/data/v2/dataKernel.js",
     "js/data/v2/appData.js",
+    "js/services/syncFolderAdapter.js",
+    "js/services/syncService.js",
     "js/core/externalBackupService.js",
     "js/core/siteDataReset.js",
+    "js/presentation/syncPanel.js",
     "js/core/practiceCore.js",
     "js/core/resourceCore.js",
     "assets/generated/reading-exams/manifest.js",
