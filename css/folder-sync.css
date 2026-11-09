@@ -11,3 +11,16 @@
 .folder-sync-conflict pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
 .folder-sync-modal [hidden] { display: none !important; }
 #folder-sync-setup-guide { display: grid; gap: 14px; }
+#folder-sync-startup-dialog {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: inherit;
+}
+#folder-sync-startup-dialog::backdrop { background: transparent; }
+#folder-sync-startup-dialog .folder-sync-error:empty { display: none; }

@@ -4,6 +4,7 @@
     const service = global.FolderSyncService, doc = global.document;
     let modal = null, statusLine, conflictList, errorLine, preferences, setupGuide, versionSignature = '', actionError = '', lastAttention = '', attentionNote = null, actionNote = null;
     let actionErrorRevision = 0;
+    let startupChecked = false, startupDialog = null;
     const buttons = {};
     function element(tag, text, className) {
         const node = doc.createElement(tag);
@@ -64,6 +65,69 @@
                 if (error.name !== 'AbortError') message(error.message, 'error');
             }).finally(() => { button.disabled = false; render(service.getStatus()); });
         });
+    }
+    function closeStartupRecovery() {
+        if (!startupDialog) return;
+        startupDialog.close();
+        startupDialog.remove();
+        startupDialog = null;
+    }
+    function renderStartupRecovery(status) {
+        const needsPermission = status.supported && status.enabled && status.bound
+            && !status.suspended && status.permission !== 'granted';
+        if (startupDialog && !needsPermission) closeStartupRecovery();
+        if (startupChecked || status.initializing || status.recovering) return;
+        startupChecked = true;
+        if (!needsPermission) return;
+
+        const dialog = element('dialog', '', 'theme-modal folder-sync-modal shui-secondary-modal shui-secondary-modal--sm show');
+        dialog.id = 'folder-sync-startup-dialog';
+        dialog.setAttribute('aria-labelledby', 'folder-sync-startup-title');
+        dialog.setAttribute('aria-describedby', 'folder-sync-startup-description');
+        const content = element('div', '', 'theme-modal-content shui-secondary-modal__content');
+        const header = element('div', '', 'theme-modal-header shui-secondary-modal__header');
+        const title = element('h3', '☁️ 恢复 OneDrive 同步');
+        title.id = 'folder-sync-startup-title';
+        header.append(title);
+        const body = element('div', '', 'theme-modal-body shui-secondary-modal__body folder-sync-body');
+        const description = element('p', '已找到之前连接的同步文件夹。点击「恢复同步」后，在浏览器提示中允许访问原文件夹。');
+        description.id = 'folder-sync-startup-description';
+        const hint = element('p', '如果浏览器提供「每次访问时都允许」，可选择它以便下次自动恢复。', 'folder-sync-muted');
+        const errorLine = element('p', '', 'folder-sync-error');
+        errorLine.setAttribute('role', 'status');
+        const actions = element('div', '', 'external-backup-panel__actions');
+        const restore = element('button', '恢复同步', 'btn data-mgmt-btn');
+        restore.type = 'button';
+        restore.autofocus = true;
+        const later = element('button', '稍后再说', 'btn data-mgmt-btn');
+        later.type = 'button';
+        function defer() {
+            if (restore.disabled) return;
+            service.deferAutomaticRecovery();
+            closeStartupRecovery();
+            render(service.getStatus());
+        }
+        restore.addEventListener('click', () => {
+            // Request in this trusted click so Chromium can show its native prompt.
+            errorLine.textContent = '';
+            restore.disabled = later.disabled = true;
+            restore.textContent = '正在恢复…';
+            service.reauthorize().catch(error => {
+                if (error.name !== 'AbortError') errorLine.textContent = error.message;
+            }).finally(() => {
+                restore.disabled = later.disabled = false;
+                restore.textContent = '恢复同步';
+            });
+        });
+        later.addEventListener('click', defer);
+        dialog.addEventListener('cancel', event => { event.preventDefault(); defer(); });
+        actions.append(restore, later);
+        body.append(description, hint, errorLine, actions);
+        content.append(header, body);
+        dialog.append(content);
+        doc.body.append(dialog);
+        startupDialog = dialog;
+        dialog.showModal();
     }
     function ensureModal() {
         if (modal) return modal;
@@ -135,7 +199,8 @@
         if (actionError && status.completedSyncs > actionErrorRevision && !status.errors.length) {
             actionError = ''; dismissOwn(actionNote); actionNote = null;
         }
-        notifyAttention(status);
+        renderStartupRecovery(status);
+        if (!startupDialog) notifyAttention(status);
         const entry = doc.getElementById('folder-sync-entry-btn');
         if (entry) entry.textContent = status.initializing || status.recovering ? '☁️ OneDrive 同步 · 正在恢复' : !status.enabled || !status.bound ? '☁️ OneDrive 自动同步'
             : status.permission !== 'granted' ? '☁️ OneDrive 同步 · 已暂停'
