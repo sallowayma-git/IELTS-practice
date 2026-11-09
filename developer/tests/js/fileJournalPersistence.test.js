@@ -460,6 +460,111 @@ test('failed-startup reset repairs corrupt or missing manifests but retains sync
     });
 });
 
+async function failedStartupWithRealResetServices(context, origin) {
+    const page = await context.newPage();
+    await page.goto(origin);
+    await page.evaluate(() => {
+        const getFile = FileSystemFileHandle.prototype.getFile;
+        FileSystemFileHandle.prototype.getFile = function(...args) {
+            if (this.name === 'head.json') throw new DOMException('temporary startup head read failed', 'AbortError');
+            return getFile.apply(this, args);
+        };
+        window.__restoreHeadReads = () => { FileSystemFileHandle.prototype.getFile = getFile; };
+    });
+    await assert.rejects(() => load(page), /temporary startup head read failed/);
+    await page.evaluate(() => __restoreHeadReads());
+    for (const source of ['js/diagnostics/diagnosticContract.js', 'js/diagnostics/diagnosticStore.js',
+        'js/services/syncFolderAdapter.js', 'js/services/syncService.js',
+        'js/core/externalBackupService.js', 'js/core/siteDataReset.js']) {
+        await page.addScriptTag({ content: fs.readFileSync(path.join(root, source), 'utf8') });
+    }
+    await page.evaluate(() => AppDiagnosticStore.ready);
+    return page;
+}
+
+for (const fault of ['writer', 'verification']) {
+    test(`interrupted recovery-marker publication at ${fault} preserves surviving writes and reload`, async () => {
+        await fixture(async ({ page, context, origin }) => {
+            const healthy = await page(); await complete(healthy, 'original');
+            const before = await head(healthy);
+            const recovering = await failedStartupWithRealResetServices(context, origin);
+            await recovering.evaluate(fault => {
+                const method = fault === 'writer' ? 'createWritable' : 'getFile';
+                const original = FileSystemFileHandle.prototype[method];
+                window.__markerFaults = 0;
+                const pause = new Promise(resolve => { window.__releaseMarkerFailure = resolve; });
+                FileSystemFileHandle.prototype[method] = async function(...args) {
+                    if (this.name === 'recovery-reset.json') {
+                        window.__markerFaults++;
+                        await pause;
+                        throw new DOMException('interrupted recovery marker ' + fault, 'AbortError');
+                    }
+                    return original.apply(this, args);
+                };
+                window.__reset = SiteDataReset.perform({ reload: false });
+            }, fault);
+            await recovering.waitForFunction(() => __markerFaults === 1);
+            // A healthy tab queues a write while the partial/complete marker exists.
+            // Cleanup must finish before releasing the file lock to that writer.
+            const pendingSave = complete(healthy, 'survivor').then(() => ({ success: true }), error => ({ error: error.message }));
+            await healthy.waitForFunction(async () => (await navigator.locks.query()).pending.some(lock => lock.name === 'ielts-atlas-local-journal-v1'));
+            await recovering.evaluate(() => __releaseMarkerFailure());
+            const result = await recovering.evaluate(() => __reset);
+            assert.equal(result.success, false);
+            assert.equal(result.retryable, true);
+            assert.equal(await recovering.evaluate(() => FileJournal.status().resetCommitted === true), false);
+            assert.equal(await recovering.evaluate(() => FolderSyncService.getStatus().suspended), false);
+            assert.deepEqual(await pendingSave, { success: true });
+            assert.equal(await healthy.evaluate(() => AppData.status().state), 'ready');
+            assert.equal((await head(healthy)).head.workspaceId, before.head.workspaceId);
+            assert.deepEqual(await ids(healthy), ['original', 'survivor']);
+            assert.equal(await healthy.evaluate(async () => {
+                const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName);
+                try { await dir.getFileHandle('recovery-reset.json'); return true; }
+                catch (error) { if (error.name === 'NotFoundError') return false; throw error; }
+            }), false);
+            await recovering.reload(); await load(recovering);
+            assert.deepEqual(await ids(recovering), ['original', 'survivor']);
+            await complete(recovering, 'after-reload');
+            assert.deepEqual(await ids(healthy), ['after-reload', 'original', 'survivor']);
+        });
+    });
+}
+
+test('recovery-reset rollback preserves another attempt marker', async () => {
+    await fixture(async ({ page, browser, origin }) => {
+        for (const existing of [true, false]) {
+            const context = await browser.newContext();
+            const healthy = await page(true, context); await complete(healthy, 'original');
+            const recovering = await failedStartupWithRealResetServices(context, origin);
+            if (!existing) await recovering.evaluate(() => FileJournal.resetBarrier(true));
+            await healthy.evaluate(() => navigator.locks.request('ielts-atlas-local-journal-v1', async () => {
+                const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName);
+                const writer = await (await dir.getFileHandle('recovery-reset.json', { create: true })).createWritable();
+                await writer.write(JSON.stringify({ token: 'another-reset-attempt' })); await writer.close();
+            }));
+            if (existing) {
+                assert.equal((await recovering.evaluate(() => SiteDataReset.perform({ reload: false }))).success, false);
+            } else await recovering.evaluate(() => FileJournal.resetBarrier(false));
+            const marker = await healthy.evaluate(async () => {
+                const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName);
+                return JSON.parse(await (await (await dir.getFileHandle('recovery-reset.json')).getFile()).text());
+            });
+            assert.deepEqual(marker, { token: 'another-reset-attempt' });
+            // Only the simulated owner cancels the remaining barrier.
+            await healthy.evaluate(() => navigator.locks.request('ielts-atlas-local-journal-v1', async () => {
+                const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName);
+                await dir.removeEntry('recovery-reset.json');
+            }));
+            assert.deepEqual(await ids(healthy), ['original']);
+            await complete(healthy, 'after-cancellation');
+            await recovering.reload(); await load(recovering);
+            assert.deepEqual(await ids(recovering), ['after-cancellation', 'original']);
+            await context.close();
+        }
+    });
+});
+
 test('native aborts and terminal journal failures retain details behind BACKEND_UNAVAILABLE', async () => {
     await fixture(async ({ page, browser }) => {
         for (const failure of ['AbortError', 'missing-head']) {

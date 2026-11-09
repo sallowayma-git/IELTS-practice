@@ -492,6 +492,7 @@
             async prepareRecoveryReset() {
                 return locked(async () => {
                     if (!this.root) throw problem('无法访问本地文件，不能安全清理。');
+                    if (await exists(this.root, RESET_BARRIER)) throw problem('本地数据已有清理标记，请完成已有清理后重试。');
                     if ((await exchangeBinding())?.directory) throw problem('请先恢复同步目录和本地数据，再清理本机。');
                     const model = global.FolderSyncModel;
                     const check = rows => {
@@ -515,10 +516,27 @@
                         else check(part.changes.filter(change => change.store === 'system' && change.type === 'put').map(change => change.row));
                     }
                     this.recoveryResetToken = uid();
-                    await writeText(this.root, RESET_BARRIER, JSON.stringify({ token: this.recoveryResetToken }));
                     recoveryDriver = this;
+                    try { await writeText(this.root, RESET_BARRIER, JSON.stringify({ token: this.recoveryResetToken })); }
+                    catch (error) {
+                        // The marker was absent when this lock was acquired. Own
+                        // even an empty/partially written file, and remove it before
+                        // queued readers or writers can observe a cancelled reset.
+                        await this.rollbackRecoveryReset(true);
+                        throw error;
+                    }
                     return { enabled: false, pending: 0 };
                 });
+            }
+            async rollbackRecoveryReset(publishing = false) {
+                // Called under the file lock. After publication, only our token
+                // authorizes removal: a later attempt may own the current marker.
+                if (publishing || !await exists(this.root, RESET_BARRIER)
+                    || JSON.parse(await readText(this.root, RESET_BARRIER)).token === this.recoveryResetToken) {
+                    await removeIfPresent(this.root, RESET_BARRIER);
+                }
+                this.recoveryResetToken = null;
+                if (recoveryDriver === this) recoveryDriver = null;
             }
         };
     }
@@ -528,8 +546,8 @@
         async resetBarrier(active) {
             if (storageStatus.resetCommitted) return { enabled: false, pending: 0 };
             if (!active && recoveryDriver) {
-                await locked(() => removeIfPresent(recoveryDriver.root, RESET_BARRIER));
-                recoveryDriver = null;
+                const driver = recoveryDriver;
+                await locked(() => driver.rollbackRecoveryReset());
                 return { enabled: false, pending: 0 };
             }
             try { await global.AppData.ready; }
