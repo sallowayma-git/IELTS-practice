@@ -55,6 +55,27 @@ struct Selection {
     question_ids: Vec<String>,
     #[serde(default)]
     question_numbers: Vec<String>,
+    #[serde(default)]
+    paragraph_labels: Vec<String>,
+}
+
+const MAX_PARAGRAPH_LABELS: usize = 8;
+const MAX_PARAGRAPH_LABEL_CHARS: usize = 16;
+
+/// Trim, drop empty or over-long labels, then cap the count.
+fn sanitize_paragraph_labels(raw: &[String]) -> Vec<String> {
+    raw.iter()
+        .map(|label| label.trim())
+        .filter(|label| !label.is_empty() && label.chars().count() <= MAX_PARAGRAPH_LABEL_CHARS)
+        .take(MAX_PARAGRAPH_LABELS)
+        .map(str::to_string)
+        .collect()
+}
+
+/// Paragraph labels are only meaningful alongside a quote they describe.
+fn selection_paragraphs(quote: &str, selection: Option<&Selection>) -> Option<Vec<String>> {
+    let labels = sanitize_paragraph_labels(&selection?.paragraph_labels);
+    (!quote.is_empty() && !labels.is_empty()).then_some(labels)
 }
 
 fn invalid(message: impl Into<String>) -> DbError {
@@ -192,8 +213,11 @@ pub fn resolve_reading_coach_context(
             "scoreScale": attempt.score_scale, "correctCount": attempt.correct_count,
             "questionCount": attempt.question_count, "answers": answers},
     });
-    let request =
+    let mut request =
         json!({"controls": metadata, "selectionQuote": quote, "selectionIsEvidence": false});
+    if let Some(labels) = selection_paragraphs(quote, selection) {
+        request["selectionParagraphs"] = json!(labels);
+    }
     if evidence.to_string().len() + request.to_string().len() > 64 * 1024 {
         return Err(invalid("canonical context exceeds 64 KiB"));
     }
@@ -378,4 +402,62 @@ fn display_to_id(number: &str, payload: &Value, allowed: &BTreeSet<&str>) -> DbR
         )));
     }
     Ok((*matches[0]).to_string())
+}
+
+#[cfg(test)]
+mod paragraph_label_tests {
+    use super::*;
+
+    fn selection_from(value: Value) -> Selection {
+        serde_json::from_value(value).expect("selection parses")
+    }
+
+    #[test]
+    fn paragraph_labels_pass_through_when_quote_present() {
+        let selection = selection_from(json!({"text": "A quote", "paragraphLabels": ["B", "C"]}));
+        assert_eq!(
+            selection_paragraphs("A quote", Some(&selection)),
+            Some(vec!["B".to_string(), "C".to_string()])
+        );
+    }
+
+    #[test]
+    fn paragraph_labels_are_truncated_to_eight() {
+        let labels: Vec<String> = (0..10).map(|index| format!("P{index}")).collect();
+        let selection = selection_from(json!({"text": "q", "paragraphLabels": labels}));
+        let kept = selection_paragraphs("q", Some(&selection)).expect("labels kept");
+        assert_eq!(kept.len(), MAX_PARAGRAPH_LABELS);
+        assert_eq!(kept[0], "P0");
+        assert_eq!(kept[7], "P7");
+    }
+
+    #[test]
+    fn empty_and_over_long_paragraph_labels_are_dropped() {
+        let long = "x".repeat(MAX_PARAGRAPH_LABEL_CHARS + 1);
+        let exact = "y".repeat(MAX_PARAGRAPH_LABEL_CHARS);
+        let selection = selection_from(json!({
+            "text": "q",
+            "paragraphLabels": ["  ", "", long, "  D  ", exact.clone()]
+        }));
+        assert_eq!(
+            selection_paragraphs("q", Some(&selection)),
+            Some(vec!["D".to_string(), exact])
+        );
+    }
+
+    #[test]
+    fn no_paragraphs_emitted_without_quote_or_labels() {
+        let with_labels = selection_from(json!({"paragraphLabels": ["A"]}));
+        assert_eq!(selection_paragraphs("", Some(&with_labels)), None);
+        let without = selection_from(json!({"text": "q"}));
+        assert_eq!(selection_paragraphs("q", Some(&without)), None);
+        assert_eq!(selection_paragraphs("q", None), None);
+    }
+
+    #[test]
+    fn absent_paragraph_field_still_parses() {
+        let selection = selection_from(json!({"text": "q", "questionNumbers": ["3"]}));
+        assert!(selection.paragraph_labels.is_empty());
+        assert_eq!(selection.question_numbers, vec!["3".to_string()]);
+    }
 }

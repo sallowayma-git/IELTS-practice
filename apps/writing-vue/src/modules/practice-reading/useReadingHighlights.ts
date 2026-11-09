@@ -71,6 +71,8 @@ export interface ReadingHighlightControllerOptions {
   onInteraction?: () => void
   notesText?: Ref<string>
   toggleNotesPanel?: () => void
+  /** Right-click shows the selection bar only while this is true (post-submit coach). */
+  contextMenuEnabledSource?: () => boolean
 }
 
 function createDictionaryBubbleState() {
@@ -558,7 +560,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     currentHighlightNode = null
   }
 
-  function positionSelectionToolbar(rect: DOMRect) {
+  function positionSelectionToolbar(rect: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'width'>) {
     const top = window.scrollY + rect.top - 44
     const left = window.scrollX + rect.left + (rect.width / 2) - 110
     selectionToolbarStyle.top = `${Math.max(8, Math.round(top > 0 ? top : window.scrollY + rect.bottom + 8))}px`
@@ -591,6 +593,23 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
       currentHighlightNode = highlightNode
       positionSelectionToolbar(range.getBoundingClientRect())
     }, 10)
+  }
+
+  // Right-click on a non-empty passage/question selection shows the same bar at
+  // the pointer. Outside that case the native menu is left alone.
+  function handleSelectionContextMenu(event: MouseEvent) {
+    if (!options.contextMenuEnabledSource?.()) return
+    const selection = window.getSelection?.()
+    if (!selection || !selection.rangeCount || selection.isCollapsed || !selection.toString().trim()) return
+    const range = selection.getRangeAt(0)
+    const ancestor = range.commonAncestorContainer
+    const container = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement : ancestor as Element | null
+    const roots = Object.values(getHighlightRoots()).filter(Boolean) as HTMLElement[]
+    if (!roots.some((root) => root.contains(container))) return
+    event.preventDefault()
+    lastSelectionRange = range.cloneRange()
+    currentHighlightNode = container?.closest?.('.hl') as HTMLElement | null
+    positionSelectionToolbar({ top: event.clientY, bottom: event.clientY, left: event.clientX, width: 0 })
   }
 
   function applySelectionHighlight(kind = 'highlight') {
@@ -745,6 +764,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     if (listenersAttached || typeof document === 'undefined') return
     document.addEventListener('selectionchange', handleSelectionChange)
     document.addEventListener('click', handleDocumentClick, true)
+    document.addEventListener('contextmenu', handleSelectionContextMenu, true)
     listenersAttached = true
   }
 
@@ -752,6 +772,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     if (!listenersAttached || typeof document === 'undefined') return
     document.removeEventListener('selectionchange', handleSelectionChange)
     document.removeEventListener('click', handleDocumentClick, true)
+    document.removeEventListener('contextmenu', handleSelectionContextMenu, true)
     listenersAttached = false
   }
 

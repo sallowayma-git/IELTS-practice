@@ -59,6 +59,8 @@ type PayloadOptions = {
   promptKind?: string
   /** Persisted assistant message this query explicitly re-asks (M6-06 link). */
   reaskParentId?: string
+  /** Selection captured by the caller; when set, the live DOM selection is not re-read. */
+  selectionContext?: AnyRecord | null
 }
 
 type HydrateOptions = {
@@ -459,7 +461,9 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     const action = String(payloadOptions.action || 'chat').trim() || 'chat'
     const surface = String(payloadOptions.surface || (action === 'review_set' ? 'review_workspace' : 'chat_widget')).trim()
     const promptKind = String(payloadOptions.promptKind || 'freeform').trim() || 'freeform'
-    const context = refreshSelectedContext()
+    const context = payloadOptions.selectionContext !== undefined
+      ? payloadOptions.selectionContext
+      : refreshSelectedContext()
     return {
       examId: submission.value?.examId || readSource(options.assetIdSource),
       sessionId: submission.value?.sessionId || '',
@@ -781,25 +785,35 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     })
   }
 
-  async function runCoachSelectionAction(actionId: unknown) {
+  // An explicit selection (captured before focus moved) wins over the live DOM read.
+  async function runCoachSelectionAction(
+    actionId: unknown,
+    explicitSelection: AnyRecord | null = null,
+    surface = 'selection_popover'
+  ) {
     if (!isReadingCoachEnabled()) {
       return
     }
-    refreshSelectedContext()
+    if (explicitSelection) {
+      selectedContext.value = explicitSelection
+    } else {
+      refreshSelectedContext()
+    }
     if (!selectedContext.value?.text) {
       coachError.value = '请先选中题干或原文片段。'
       return
     }
     const action = String(actionId || 'explain_selection').trim()
     const queryMap: Record<string, string> = {
-      explain_selection: '解释我选中的内容，并说明它和题目定位有什么关系',
+      explain_selection: '请像老师一样给我讲这句话：先拆出句子主干和从句结构，再解释关键词和难词的中文意思，然后给出自然的中文翻译；如果它和某道题的题干或选项构成同义替换，请指出对应关系。',
       locate_evidence: '根据我选中的内容定位相关证据',
       find_paraphrases: '找出我选中内容里的同义替换和关键词'
     }
     await sendCoachQuery(queryMap[action] || queryMap.explain_selection, {
-      surface: 'selection_popover',
+      surface,
       action,
-      promptKind: 'preset'
+      promptKind: 'preset',
+      selectionContext: explicitSelection ? selectedContext.value : undefined
     })
   }
 

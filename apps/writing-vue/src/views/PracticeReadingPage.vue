@@ -120,7 +120,9 @@
       @hold="keepSelectionToolbar = $event"
       @note="applySelectionNote"
       @remove="removeSelectionHighlight"
+      :can-ask-coach="canAskCoachFromSelection"
       @highlight="applySelectionHighlight('highlight')"
+      @ask-coach="askCoachFromSelection"
     />
 
     <ReadingDictionaryBubble
@@ -672,6 +674,8 @@ const {
     syncDomAnswers()
   }
 })
+// Same gate as the coach panel/FAB: a submitted attempt with the coach enabled.
+const canAskCoachFromSelection = computed(() => Boolean(submission.value) && readingCoachEnabled.value)
 const {
   selectionToolbarVisible,
   selectionToolbarStyle,
@@ -707,8 +711,18 @@ const {
   },
   onInteraction: () => recordInteraction(),
   notesText,
-  toggleNotesPanel
+  toggleNotesPanel,
+  contextMenuEnabledSource: () => canAskCoachFromSelection.value
 })
+
+// Capture the selection first: it is lost once focus moves to the coach panel.
+function askCoachFromSelection() {
+  if (!canAskCoachFromSelection.value) return
+  const captured = readSelectedContext(getDisplayLabel)
+  if (!captured?.text) return
+  setReadingCoachOpen(true)
+  void runCoachSelectionAction('explain_selection', captured, 'selection_bar')
+}
 const canSubmit = computed(() => Boolean(
   asset.value
   && payload.value
