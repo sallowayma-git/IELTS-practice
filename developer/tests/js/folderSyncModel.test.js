@@ -106,6 +106,61 @@ test('independent vocabulary items union and review-state conflicts remain atomi
     assert.equal(a.snapshot.documents['vocab.words'].length, 2);
     assert.equal(m.status(a.state).conflicts.length, 0);
 });
+test('word reviews publish a small delta even with the full bundled lexicon', () => {
+    const lexicon = JSON.parse(fs.readFileSync(new URL('../../../assets/wordlists/ielts_core.json', import.meta.url), 'utf8'));
+    assert.equal(lexicon.length, 3610);
+    const initial = empty();
+    initial.documents['vocab.words'] = lexicon.map((word, index) => ({
+        ...word, id: 'word-' + index, interval: 1, correctCount: 0, lastReviewed: null, nextReview: null
+    }));
+    const a = client(initial);
+    const seed = a.state.pending[0];
+    a.state.pending = [];
+    Object.assign(a.snapshot.documents['vocab.words'][0], {
+        interval: 6, correctCount: 2, lastReviewed: '2026-11-08T00:00:00.000Z', nextReview: '2026-11-14T00:00:00.000Z'
+    });
+    m.capture(a.state, a.snapshot, 'review-one-word');
+    const [review] = a.state.pending;
+    assert.equal(a.state.pending.length, 1);
+    assert.equal(review.changes.length, 1);
+    assert.match(review.changes[0].key, /^vocabProgress\//);
+    assert(Buffer.byteLength(JSON.stringify(review)) < 2048);
+    const b = client();
+    apply(b, review); apply(b, seed);
+    assert.equal(b.snapshot.documents['vocab.words'][0].correctCount, 2);
+    assert.equal(b.snapshot.documents['vocab.words'].length, 3610);
+});
+
+test('existing v1 vocabulary state and queued log upgrade without replacing the space or losing review progress', () => {
+    const before = { words: [{ id: 'word-a', word: 'apple', correctCount: 0 }], lists: {}, state: {}, config: {} };
+    const value = { exists: true, value: { ...before, words: [{ ...before.words[0], correctCount: 2 }], config: { dailyNew: 55 } } };
+    const base = { exists: true, value: before };
+    const state = m.newState(SPACE);
+    const clock = { [state.writerId]: 1 };
+    const operation = { format: m.FORMAT, version: 1, spaceId: SPACE, writerId: state.writerId, seq: 1,
+        id: state.writerId + '-000000000001', sourceId: 'old-review', createdAt: '2026-11-08T00:00:00.000Z',
+        changes: [{ key: 'vocabulary', clock, base, value }] };
+    delete state.vocabLayout;
+    state.seq = 1;
+    state.units.vocabulary = { heads: [{ id: operation.id, clock, base, value }], value, viewClock: clock, conflict: false };
+    state.materialized.vocabulary = value;
+    state.pending = [operation];
+    state.seen[operation.id] = m.digest(operation);
+    const snapshot = empty();
+    snapshot.documents['vocab.words'] = copy(value.value.words);
+    snapshot.documents['vocab.userConfig'] = { dailyNew: 55 };
+    m.capture(state, snapshot, 'upgrade');
+    assert.deepEqual(copy(state.pending), [operation]);
+    assert.equal(state.spaceId, SPACE);
+    assert.equal(state.seen[operation.id], m.digest(operation));
+    snapshot.documents['vocab.words'][0].correctCount = 3;
+    m.capture(state, snapshot, 'new-review');
+    assert.equal(state.pending.at(-1).version, 2);
+    const fresh = client();
+    apply(fresh, state.pending[1]); apply(fresh, operation);
+    assert.equal(fresh.snapshot.documents['vocab.words'][0].correctCount, 3);
+    assert.equal(fresh.snapshot.documents['vocab.userConfig'].dailyNew, 55);
+});
 test('same operation id with changed content, wrong space and prototype payload are rejected', () => {
     const a = client(), b = client(); exchange(a, b);
     put(a.snapshot, 'valid');

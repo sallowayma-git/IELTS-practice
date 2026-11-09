@@ -1,4 +1,4 @@
-globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":"sha256:bf32983a92a467a757a0c58e6d488ec6a1dea6593d2029f8ec432a0c09655077","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
+globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":"sha256:53df3b77a5a2b0ed6184c2435daeca370d88125d9a44aef108f0ce4b26c80b0f","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
 /* Generated by scripts/build-bundles.mjs. Do not edit by hand. */
 
 /* ===== js/diagnostics/diagnosticContract.js ===== */
@@ -3724,6 +3724,15 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     if (global.FolderSyncModel) return;
     const FORMAT = 'ielts-atlas-static-folder-sync';
     const VERSION = 1;
+    // Keep the workspace and IndexedDB binding readable. Older builds reject v2
+    // operations instead of applying a vocabulary structure without its progress.
+    const OPERATION_VERSION = 2;
+    const PROGRESS_PREFIX = 'vocabProgress/';
+    const REVIEW_DEFAULTS = Object.freeze({
+        easeFactor: null, interval: 1, repetitions: 0, intraCycles: 0, correctCount: 0,
+        lastReviewed: null, nextReview: null, box: 1
+    });
+    const REVIEW_FIELDS = Object.keys(REVIEW_DEFAULTS);
     const STATE_KEY = 'system.folderSyncStatic';
     const RESET_KEY = 'system.folderSyncStaticResetBarrier';
     const STORES = ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
@@ -3741,7 +3750,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
         return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
     }
-    const equal = (left, right) => stable(left) === stable(right);
+    const equal = (left, right) => left === right || stable(left) === stable(right);
     function safeJson(value, depth = 0) {
         if (depth > 90) fail('同步数据嵌套过深');
         if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
@@ -3866,6 +3875,75 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         return { words: documents['vocab.words'] || [], lists: documents['vocab.lists'] || {},
             state: hasReadingData ? state : {}, config: documents['vocab.userConfig'] || {} };
     }
+    function wordProgressKey(listId, word) {
+        const id = word?.id || word?.key || word?.word;
+        if (!id || typeof word.word !== 'string') return null;
+        const key = PROGRESS_PREFIX + JSON.stringify([listId, String(id), word.word]);
+        return key.length <= PROGRESS_PREFIX.length + 2000 ? key : null;
+    }
+    function mapVocabularyWords(value, transform) {
+        const mapList = (list, listId) => {
+            const keys = list.map(word => wordProgressKey(listId, word));
+            const unique = new Set(), duplicates = new Set();
+            for (const key of keys) {
+                if (unique.has(key)) duplicates.add(key);
+                unique.add(key);
+            }
+            return list.map((word, index) => keys[index] && !duplicates.has(keys[index])
+                ? transform(word, keys[index]) : word);
+        };
+        const lists = Object.fromEntries(Object.entries(value.lists).map(([id, list]) => {
+            if (Array.isArray(list)) return [id, mapList(list, id)];
+            return [id, Array.isArray(list?.words) ? { ...list, words: mapList(list.words, id) } : list];
+        }));
+        return { ...value, words: mapList(value.words, null), lists };
+    }
+    function splitVocabulary(value) {
+        const result = {};
+        const { config, ...structure } = mapVocabularyWords(value, (word, key) => {
+            const structuralWord = { ...word };
+            const progress = {};
+            for (const field of REVIEW_FIELDS) {
+                if (own(word, field)) progress[field] = word[field];
+                delete structuralWord[field];
+            }
+            delete structuralWord.updatedAt;
+            if (REVIEW_FIELDS.some(field => own(progress, field) && progress[field] !== REVIEW_DEFAULTS[field])) {
+                if (own(word, 'updatedAt')) progress.updatedAt = word.updatedAt;
+                result[key] = present(progress);
+            }
+            return structuralWord;
+        });
+        for (const [id, list] of Object.entries(structure.lists)) {
+            if (Array.isArray(list?.words)) delete list.updatedAt;
+        }
+        result.vocabulary = present(structure);
+        result.vocabConfig = present(config || {});
+        return result;
+    }
+    function restoreVocabulary(structure, local, units) {
+        const localWords = new Map();
+        mapVocabularyWords(local, (word, key) => { localWords.set(key, word); return word; });
+        const restored = mapVocabularyWords(structure, (word, key) => {
+            const previous = localWords.get(key);
+            const progress = units[key]?.value;
+            if (progress?.exists) return { ...word, ...progress.value };
+            // Keep the local row's field shape for unreviewed words. A progress
+            // tombstone restores defaults without dropping the word or its links.
+            const defaults = {};
+            if (previous) {
+                for (const field of REVIEW_FIELDS) if (own(previous, field)) defaults[field] = REVIEW_DEFAULTS[field];
+                if (own(previous, 'updatedAt')) defaults.updatedAt = previous.updatedAt;
+            }
+            return { ...word, ...defaults };
+        });
+        for (const [id, list] of Object.entries(restored.lists)) {
+            if (Array.isArray(list?.words) && own(local.lists[id] || {}, 'updatedAt')) {
+                list.updatedAt = local.lists[id].updatedAt;
+            }
+        }
+        return restored;
+    }
     const locatorField = /^(?:url|uri|href|(?:audio|directory|exam|file|resource|source)(?:url|path)|path)$/i;
     const absoluteLocator = /^(?:[a-z][a-z\d+.-]*:|[\\/])/i;
     function localLocator(key, value) {
@@ -3897,7 +3975,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             if (!id) fail('同步集合缺少稳定 ID：' + key);
             result[key + '/' + id] = present(row);
         }
-        result.vocabulary = present(vocabValue(docs));
+        Object.assign(result, splitVocabulary(vocabValue(docs)));
         result.achievements = present(docs['achievements.manual'] || {});
         if (preferences) {
             const selected = {};
@@ -3907,7 +3985,16 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         return result;
     }
     function validUnitKey(key) {
-        return ['vocabulary', 'achievements', 'preferences'].includes(key)
+        if (typeof key !== 'string') return false;
+        if (key.startsWith(PROGRESS_PREFIX)) {
+            if (key.length > PROGRESS_PREFIX.length + 2000) return false;
+            try {
+                const parts = JSON.parse(key.slice(PROGRESS_PREFIX.length));
+                return Array.isArray(parts) && parts.length === 3 && (parts[0] === null || typeof parts[0] === 'string')
+                    && typeof parts[1] === 'string' && typeof parts[2] === 'string' && key === PROGRESS_PREFIX + JSON.stringify(parts);
+            } catch (_) { return false; }
+        }
+        return ['vocabulary', 'vocabConfig', 'achievements', 'preferences'].includes(key)
             || /^(practice|practice\.reviewPlans|goals\.items)\/.{1,2000}$/.test(key);
     }
     function validateUnit(key, wrapped) {
@@ -3921,12 +4008,16 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 || value[store][store === 'practiceSummaries' ? 'id' : 'recordId'] !== id)) fail('同步练习身份或实体层不匹配');
             if (!equal(value, practiceLayer(value))) fail('同步练习包含本机文件路径或地址');
         } else if (key === 'vocabulary') {
-            if (!plain(value) || !Array.isArray(value.words) || !plain(value.lists) || !plain(value.state) || !plain(value.config)) fail('同步词汇格式无效');
+            if (!plain(value) || !Array.isArray(value.words) || !plain(value.lists) || !plain(value.state)
+                || (own(value, 'config') && !plain(value.config))) fail('同步词汇格式无效');
             if (global.ReadingVocabularyModel) global.ReadingVocabularyModel.createSnapshot({
                 words: value.words, lists: value.lists, ...(value.state.reading ? { reading: value.state.reading } : {})
             });
         } else {
             if (!plain(value)) fail('同步实体格式无效');
+            if (key.startsWith(PROGRESS_PREFIX) && Object.keys(value).some(field => field !== 'updatedAt' && !own(REVIEW_DEFAULTS, field))) {
+                fail('同步复习进度格式无效');
+            }
             if (key.startsWith('practice.reviewPlans/') && (!value.recordId || key !== 'practice.reviewPlans/' + value.id)
                 || key.startsWith('goals.items/') && key !== 'goals.items/' + (value.id || value.goalId)) {
                 fail('同步集合实体身份不匹配');
@@ -3940,7 +4031,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         }
         const sameBase = heads.every(head => equal(head.base, heads[0].base));
         const base = sameBase ? heads[0].base : absent();
-        let merged = sameBase ? mergeValue(base, heads.map(head => head.value), key.startsWith('practice.reviewPlans/'))
+        let merged = sameBase ? mergeValue(base, heads.map(head => head.value),
+            key.startsWith('practice.reviewPlans/') || key.startsWith(PROGRESS_PREFIX))
             : { value: copy(heads[0].value), conflict: true };
         // A conflicting partial merge can violate entity/word relationships. Keep a valid baseline.
         if (merged.conflict) merged.value = base.exists ? copy(base) : copy(heads.find(head => head.value.exists)?.value || heads[0].value);
@@ -3958,13 +4050,38 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
     function newState(spaceId, preferences = false) {
         if (!identifier(spaceId)) fail('数据空间 ID 无效');
-        return { format: FORMAT, version: VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
+        return { format: FORMAT, version: VERSION, vocabLayout: OPERATION_VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
             units: {}, materialized: {}, pending: [], seen: {}, blocked: {} };
     }
     function assertState(state) {
         if (!state || state.format !== FORMAT || state.version !== VERSION || !identifier(state.spaceId) || !identifier(state.writerId)
             || !Number.isSafeInteger(state.seq) || !plain(state.units) || !plain(state.materialized)
             || !Array.isArray(state.pending) || !plain(state.seen)) fail('同步状态版本无效，请升级所有电脑上的网页');
+    }
+    function splitLegacyChange(change, retainUnchanged) {
+        if (change.key !== 'vocabulary') return [change];
+        const values = change.value.exists ? splitVocabulary(change.value.value) : {};
+        const bases = change.base.exists ? splitVocabulary(change.base.value) : {};
+        return [...new Set([...Object.keys(values), ...Object.keys(bases)])].flatMap(key => {
+            const value = values[key] || absent(), base = bases[key] || absent();
+            return retainUnchanged || key === 'vocabulary' || !equal(value, base)
+                ? [{ ...change, key, value, base }] : [];
+        });
+    }
+    function upgradeVocabulary(state) {
+        if (state.vocabLayout === OPERATION_VERSION) return;
+        const legacy = state.units.vocabulary;
+        delete state.units.vocabulary;
+        for (const head of legacy?.heads || []) {
+            for (const change of splitLegacyChange({ ...head, key: 'vocabulary' }, true)) {
+                installChange(state, change, head.id);
+            }
+        }
+        const materialized = state.materialized.vocabulary;
+        delete state.materialized.vocabulary;
+        if (materialized?.exists) Object.assign(state.materialized, splitVocabulary(materialized.value));
+        // Original queued files, operation IDs and hashes remain byte-compatible.
+        state.vocabLayout = OPERATION_VERSION;
     }
     function publish(state, entries, sourceId, resolve = false) {
         if (!entries.length) return;
@@ -3984,7 +4101,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             clock[state.writerId] = state.seq;
             return { key, value: copy(value), base: copy(state.materialized[key] || absent()), clock };
         });
-        const operation = { format: FORMAT, version: VERSION, spaceId: state.spaceId,
+        const operation = { format: FORMAT, version: OPERATION_VERSION, spaceId: state.spaceId,
             writerId: state.writerId, seq: state.seq, id, sourceId: String(sourceId || ''),
             createdAt: new Date().toISOString(), changes };
         for (const change of changes) installChange(state, change, id);
@@ -3993,6 +4110,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     function capture(state, snapshot, sourceId) {
         assertState(state);
         if (!state.enabled) return state;
+        upgradeVocabulary(state);
         const actual = unitsFrom(snapshot, state.preferences);
         const keys = [...new Set(Object.keys(state.materialized).concat(Object.keys(actual)))].filter(key => key !== 'preferences' || state.preferences);
         const entries = keys.map(key => [key, actual[key] || absent()]).filter(([key, value]) => !equal(value, state.materialized[key] || absent()));
@@ -4010,13 +4128,17 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
     function validateOperation(operation) {
         safeJson(operation);
-        if (!plain(operation) || operation.format !== FORMAT || operation.version !== VERSION
+        if (!plain(operation) || operation.format !== FORMAT || ![VERSION, OPERATION_VERSION].includes(operation.version)
             || !identifier(operation.spaceId) || !identifier(operation.writerId)
             || !Number.isSafeInteger(operation.seq) || operation.seq < 1
             || operation.id !== operation.writerId + '-' + String(operation.seq).padStart(12, '0')
             || !Array.isArray(operation.changes) || !operation.changes.length || operation.changes.length > 20000) fail('不支持或损坏的同步日志');
         const keys = new Set();
         for (const change of operation.changes) {
+            if (operation.version === VERSION && (change.key === 'vocabConfig'
+                || (typeof change.key === 'string' && change.key.startsWith(PROGRESS_PREFIX)))) {
+                fail('同步日志版本与词汇实体不匹配');
+            }
             if (keys.has(change.key)) fail('同步日志包含重复实体'); keys.add(change.key);
             validateUnit(change.key, change.value); validateUnit(change.key, change.base);
             if (!plain(change.clock) || Object.keys(change.clock).length > 1000 || change.clock[operation.writerId] !== operation.seq
@@ -4041,13 +4163,18 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             state.blocked[operation.id] = copy(operation);
             return { state, duplicate: false, blocked: true };
         }
-        for (const change of operation.changes) installChange(state, change, operation.id);
+        upgradeVocabulary(state);
+        for (const change of operation.changes) {
+            const changes = operation.version === VERSION ? splitLegacyChange(change, false) : [change];
+            for (const entry of changes) installChange(state, entry, operation.id);
+        }
         state.seen[operation.id] = hash;
         delete state.blocked[operation.id];
         return { state, duplicate: false };
     }
     function resolve(state, key, headId) {
         assertState(state);
+        upgradeVocabulary(state);
         const unit = state.units[key];
         const head = unit?.heads.find(item => item.id === headId);
         if (!unit?.conflict || !head) fail('冲突已经变化，请刷新后重新选择');
@@ -4055,6 +4182,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
     function toSnapshot(state, original) {
         const result = copy(original), docs = result.documents;
+        const localVocabulary = vocabValue(original.documents);
         const localLayers = Object.fromEntries(STORES.map(store => [store,
             new Map((original.entities[store] || []).map(row => [row.recordId, row.data]))]));
         const units = {};
@@ -4071,15 +4199,21 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 }
             } else if (key.startsWith('practice.reviewPlans/')) docs['practice.reviewPlans'].push(value);
             else if (key.startsWith('goals.items/')) docs['goals.items'].push(value);
-            else if (key === 'vocabulary') {
-                docs['vocab.words'] = value.words; docs['vocab.lists'] = value.lists;
-                docs['vocab.readingState'] = value.state; docs['vocab.userConfig'] = value.config;
+            else if (key === 'vocabulary' && !equal(value.state, localVocabulary.state)) {
+                docs['vocab.readingState'] = value.state;
+            } else if (key === 'vocabConfig') {
+                docs['vocab.userConfig'] = value;
             } else if (key === 'achievements') docs['achievements.manual'] = value;
             else if (key === 'preferences' && state.preferences) {
                 const prefs = docs['preferences.values'] || {};
                 for (const field of ['theme', 'readingDisplay', 'timer']) delete prefs[field];
                 docs['preferences.values'] = Object.assign(prefs, value);
             }
+        }
+        if (units.vocabulary?.exists) {
+            const vocabulary = restoreVocabulary(units.vocabulary.value, localVocabulary, state.units);
+            docs['vocab.words'] = vocabulary.words;
+            docs['vocab.lists'] = vocabulary.lists;
         }
         for (const store of STORES) result.entities[store].sort((a, b) => a.recordId.localeCompare(b.recordId));
         for (const key of ['practice.reviewPlans', 'goals.items']) docs[key].sort((a, b) => String(a.id).localeCompare(String(b.id)));
@@ -4100,7 +4234,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             conflicts: Object.entries(state.units).filter(([, unit]) => unit.conflict)
                 .map(([key, unit]) => ({ key, versions: copy(unit.heads) })) };
     }
-    global.FolderSyncModel = Object.freeze({ FORMAT, VERSION, STATE_KEY, RESET_KEY, STORES, DOCUMENT_KEYS,
+    global.FolderSyncModel = Object.freeze({ FORMAT, VERSION, OPERATION_VERSION, STATE_KEY, RESET_KEY, STORES, DOCUMENT_KEYS,
         copy, stable, equal, digest, safeJson, identifier, uuid, unitsFrom, newState, capture,
         validateOperation, receive, resolve, toSnapshot, rememberMaterialized, status, assertState });
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -4858,7 +4992,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         const envelope = makeEnvelope(lookupEntry(key), data, {
             revision: incrementCounter(previous?.envelope?.revision || 0, key), operationId: opId, normalized: true
         });
-        tx.objectStore(SYSTEM_STORE).put({ logicalKey: key, envelope: canonicalizeJson(envelope) });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey: key, envelope });
     }
     function captureFolderSync(tx, opId, relevant, complete, fail) {
         const model = folderSyncModel();
@@ -4872,7 +5006,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 if (!validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
                 readSyncSnapshot(tx, snapshot => {
                     try {
-                        const state = model.capture(clone(row.envelope.data), snapshot, opId);
+                        const state = model.capture(row.envelope.data, snapshot, opId);
                         putSyncState(tx, row, state, opId);
                         complete();
                     } catch (error) { fail(error instanceof AppDataError ? error : validation(error.message)); }
@@ -11520,22 +11654,22 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
 
     function projectFolderSync(next, original, opId) {
         const model = global.FolderSyncModel;
-        const before = model.unitsFrom(original, false).vocabulary;
-        const after = model.unitsFrom(next, false).vocabulary;
-        if (model.equal(before, after)) {
-            for (const key of [...READING_DOCUMENT_KEYS, 'vocab.userConfig']) next.documents[key] = clone(original.documents[key]);
-        } else {
+        const readingChanged = !model.equal(next.documents[READING_STATE_KEY], original.documents[READING_STATE_KEY]);
+        const wordsChanged = ['vocab.words', 'vocab.lists'].some(key => !model.equal(next.documents[key], original.documents[key]));
+        if (readingChanged || wordsChanged) {
             const state = normalizeReadingState(next.documents[READING_STATE_KEY]);
             const snapshot = readingModel().createSnapshot({ words: next.documents['vocab.words'],
                 lists: next.documents['vocab.lists'], reading: state.reading });
-            state.generation = opId;
-            state.allowDefaultWordSeed = false;
-            for (const [table, rows] of Object.entries(state.tombstones)) {
-                for (const stamp of table === 'all' ? (rows ? [rows] : []) : Object.values(rows)) {
-                    stamp.revision = (original.revisions[READING_STATE_KEY] || 0) + 1;
+            if (readingChanged) {
+                state.generation = opId;
+                state.allowDefaultWordSeed = false;
+                for (const [table, rows] of Object.entries(state.tombstones)) {
+                    for (const stamp of table === 'all' ? (rows ? [rows] : []) : Object.values(rows)) {
+                        stamp.revision = (original.revisions[READING_STATE_KEY] || 0) + 1;
+                    }
                 }
+                next.documents[READING_STATE_KEY] = state;
             }
-            next.documents[READING_STATE_KEY] = state;
             const mirrors = readingProjection(snapshot);
             next.documents['vocab.readingVocabWords'] = mirrors.words;
             next.documents['vocab.readingBookshelfExams'] = mirrors.bookshelf;
@@ -11583,6 +11717,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     const DB = 'IELTSAtlasExternalBackupV2', STORE = 'binding', KEY = 'onedrive-static-sync-binding-v1';
     const MAX_BYTES = 32 * 1024 * 1024;
     const cache = new Map();
+    const fileSignature = file => file.lastModified + ':' + file.size;
     function supported() { return global.isSecureContext !== false && typeof global.showDirectoryPicker === 'function' && !!global.navigator?.locks; }
     function pick() {
         if (!supported()) throw new Error('请使用桌面 Chrome / Edge；若直接打开文件不支持，请通过固定 localhost 地址打开');
@@ -11678,8 +11813,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             await writer.write(text); await writer.close();
         }
         catch (error) { try { await writer.abort(); } catch (_) { /* already closed */ } throw error; }
-        const stored = await parseFile(await file.getFile());
+        const storedFile = await file.getFile();
+        const stored = await parseFile(storedFile);
         if (!model.equal(stored, value)) throw new Error('同步文件回读校验失败，稍后会重试');
+        return fileSignature(storedFile);
     }
     function assertWorkspace(value, expected) {
         if (!value || value.format !== model.FORMAT || value.version !== model.VERSION || !model.identifier(value.spaceId)) {
@@ -11724,11 +11861,20 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         const space = await version.getDirectoryHandle(binding.spaceId, { create: true });
         return space.getDirectoryHandle('ops', { create: true });
     }
+    async function assertBackupDestination(directory) {
+        const saved = await binding();
+        const withinSync = saved?.directory && await saved.directory.resolve(directory) !== null;
+        const marker = await readJson(directory, 'workspace.json').catch(() => null);
+        if (withinSync || marker?.format === model.FORMAT) {
+            throw new Error('请为本地磁盘备份选择另一个文件夹，避免将整份备份写进 OneDrive 同步空间');
+        }
+    }
     async function publish(root, operation) {
         model.validateOperation(operation);
         const folder = await root.getDirectoryHandle(operation.writerId, { create: true });
         const name = operation.id + '.json';
-        const envelope = { format: model.FORMAT + '-file', version: model.VERSION, sha256: model.digest(operation), operation };
+        const path = operation.writerId + '/' + name;
+        const envelope = { format: model.FORMAT + '-file', version: operation.version, sha256: model.digest(operation), operation };
         let previous = null;
         try { previous = await folder.getFileHandle(name, { create: false }); }
         catch (error) { if (error.name !== 'NotFoundError') throw error; }
@@ -11736,7 +11882,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             const file = await previous.getFile();
             let existing = null;
             try { existing = await parseFile(file); } catch (_) { /* an interrupted own write can be recovered */ }
-            if (existing && model.equal(existing, envelope)) return;
+            if (existing && model.equal(existing, envelope)) {
+                cache.set(path, fileSignature(file));
+                return;
+            }
             if (existing?.format === model.FORMAT + '-file' && existing.sha256 === model.digest(existing.operation)) {
                 throw new Error('日志文件名已存在但内容不同，已保留队列：' + name);
             }
@@ -11746,7 +11895,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             try { await writer.write(await file.text()); await writer.close(); }
             catch (error) { try { await writer.abort(); } catch (_) { } throw error; }
         }
-        await writeJson(folder, name, envelope);
+        cache.set(path, await writeJson(folder, name, envelope));
     }
     async function scan(root, visit) {
         const errors = [];
@@ -11758,13 +11907,16 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 const path = writer.name + '/' + handle.name;
                 try {
                     const file = await handle.getFile();
-                    const signature = file.lastModified + ':' + file.size;
+                    const signature = fileSignature(file);
                     if (cache.get(path) === signature) continue;
                     const envelope = await parseFile(file);
-                    if (envelope.format !== model.FORMAT + '-file' || envelope.version !== model.VERSION
-                        || envelope.sha256 !== model.digest(envelope.operation)) throw new Error('同步日志摘要校验失败');
+                    if (envelope.format !== model.FORMAT + '-file' || envelope.version !== envelope.operation?.version) {
+                        throw new Error('同步日志格式不兼容，请更新两台电脑上的项目');
+                    }
                     model.validateOperation(envelope.operation);
-                    await visit(envelope.operation);
+                    const hash = model.digest(envelope.operation);
+                    if (envelope.sha256 !== hash) throw new Error('同步日志摘要校验失败');
+                    await visit(envelope.operation, hash);
                     cache.set(path, signature); files++;
                 } catch (error) { errors.push({ path, message: error.message }); }
             }
@@ -11772,7 +11924,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         return { files, errors };
     }
     global.SyncFolderAdapter = Object.freeze({ supported, pick, binding, permission, requestPermission,
-        openWorkspace, workspace, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
+        openWorkspace, workspace, assertBackupDestination, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
@@ -11782,12 +11934,13 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     if (global.FolderSyncService) return;
     const adapter = global.SyncFolderAdapter, model = global.FolderSyncModel;
     const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
+    const POLL_MS = 5000;
     const listeners = new Set();
     let binding = null, timer = null, running = null, initPromise = null, suspended = false;
     let channel = null, resumeAttempted = false, earlyInteraction = false, recovery = null, skipInteractionClick = false;
     let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
         permission: 'prompt', initializing: true, recovering: false, busy: false, completedSyncs: 0,
-        errors: [], lastPublishAt: null, lastReceiveAt: null };
+        errors: [], lastCheckAt: null, lastPublishAt: null, lastReceiveAt: null };
     function emit(patch = {}) {
         view = Object.assign({}, view, patch);
         for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
@@ -11821,19 +11974,20 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         const root = await adapter.workspace(binding);
         const pending = await global.AppData.folderSync.pending();
         const errors = [];
-        let published = 0, received = 0;
+        const written = [];
+        let received = 0;
         for (const operation of pending.slice(0, 100)) {
             try {
                 await adapter.publish(root, operation);
-                await global.AppData.folderSync.acknowledge([operation.id]);
-                published++;
-            } catch (error) { errors.push({ path: operation.id, message: error.message }); break; }
+                written.push(operation.id);
+            } catch (error) { errors.push({ path: operation.id, message: error.message }); }
         }
+        if (written.length) await global.AppData.folderSync.acknowledge(written);
+        const published = written.length;
         const known = await global.AppData.folderSync.known();
-        const scan = await adapter.scan(root, async operation => {
+        const scan = await adapter.scan(root, async (operation, hash) => {
             if (suspended) throw new Error('本机同步已暂停');
             if (operation.spaceId !== state.spaceId) throw new Error('该日志不属于当前数据空间');
-            const hash = model.digest(operation);
             if (known[operation.id] === hash) return;
             await global.AppData.folderSync.receive(operation);
             known[operation.id] = hash;
@@ -11843,7 +11997,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         if (published) binding.lastPublishAt = new Date().toISOString();
         if (received) binding.lastReceiveAt = new Date().toISOString();
         if (published || received) await adapter.binding(binding);
-        emit({ errors, completedSyncs: view.completedSyncs + (errors.length ? 0 : 1) });
+        emit({ errors, lastCheckAt: new Date().toISOString(), completedSyncs: view.completedSyncs + (errors.length ? 0 : 1) });
         const latest = await refresh();
         if (received && typeof global.syncPracticeRecords === 'function') {
             try { await global.syncPracticeRecords({ forceRender: true }); } catch (_) { /* next view activation reads durable data */ }
@@ -11854,7 +12008,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     function syncNow(background = false) {
         if (running) return running;
         emit({ busy: true });
-        running = init().then(() => withLock(runUnlocked, background)).catch(error => {
+        running = init().then(() => withLock(runUnlocked, background)).then(result => {
+            if (result?.skipped) schedule();
+            return result;
+        }).catch(error => {
             emit({ errors: [{ path: '', message: error.message }] });
             if (!background) throw error;
         }).finally(() => { running = null; emit({ busy: false }); });
@@ -11866,10 +12023,13 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         await init();
         const result = await withLock(async () => {
             const current = await global.AppData.folderSync.status();
-            const space = await adapter.openWorkspace(selected, () => {
+            const backup = global.ExternalBackupService;
+            const space = await adapter.openWorkspace(selected, async () => {
                 if (current.spaceId) throw new Error('本机已有同步空间，请选择原同步文件夹并等待 OneDrive 下载完成');
+                await backup?.assertSyncDestination?.(selected);
                 return global.confirm('这个专用文件夹为空。仅在首次启用、确认 OneDrive 已完成下载时创建。同步日志将以明文写入文件夹，确定创建空间吗？');
             });
+            if (space.existing) await backup?.assertSyncDestination?.(space.directory);
             if (current.enabled && current.spaceId !== space.spaceId) throw new Error('请先断开当前空间，再连接其他空间');
             const previous = await adapter.binding();
             const next = { directory: space.directory, spaceId: space.spaceId, name: space.name };
@@ -11878,7 +12038,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             catch (error) { await adapter.binding(previous); throw error; }
             binding = next;
             adapter.clearCache(); suspended = false; resumeAttempted = false;
-            emit({ permission: await adapter.permission(binding.directory), errors: [] });
+            emit({ permission: await adapter.permission(binding.directory), errors: [], lastCheckAt: null });
             await refresh();
             return { existing: space.existing, spaceId: space.spaceId };
         });
@@ -12012,13 +12172,17 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             if (global.document.visibilityState === 'visible') schedule(0);
         });
         global.addEventListener?.('online', () => schedule(0));
+        global.addEventListener?.('focus', () => schedule(0));
         global.setInterval(() => {
             if (global.document?.visibilityState !== 'hidden') schedule(0);
-        }, 15000);
+        }, POLL_MS);
         // Complete the first background pass during startup, without waiting for settings or a timer.
         if (binding && view.enabled) {
             emit({ busy: true });
-            try { await withLock(runUnlocked, true); }
+            try {
+                const result = await withLock(runUnlocked, true);
+                if (result?.skipped) schedule();
+            }
             catch (error) { emit({ errors: [{ path: '', message: error.message }] }); }
             finally { emit({ busy: false }); }
         }

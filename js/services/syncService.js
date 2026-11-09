@@ -3,12 +3,13 @@
     if (global.FolderSyncService) return;
     const adapter = global.SyncFolderAdapter, model = global.FolderSyncModel;
     const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
+    const POLL_MS = 5000;
     const listeners = new Set();
     let binding = null, timer = null, running = null, initPromise = null, suspended = false;
     let channel = null, resumeAttempted = false, earlyInteraction = false, recovery = null, skipInteractionClick = false;
     let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
         permission: 'prompt', initializing: true, recovering: false, busy: false, completedSyncs: 0,
-        errors: [], lastPublishAt: null, lastReceiveAt: null };
+        errors: [], lastCheckAt: null, lastPublishAt: null, lastReceiveAt: null };
     function emit(patch = {}) {
         view = Object.assign({}, view, patch);
         for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
@@ -42,19 +43,20 @@
         const root = await adapter.workspace(binding);
         const pending = await global.AppData.folderSync.pending();
         const errors = [];
-        let published = 0, received = 0;
+        const written = [];
+        let received = 0;
         for (const operation of pending.slice(0, 100)) {
             try {
                 await adapter.publish(root, operation);
-                await global.AppData.folderSync.acknowledge([operation.id]);
-                published++;
-            } catch (error) { errors.push({ path: operation.id, message: error.message }); break; }
+                written.push(operation.id);
+            } catch (error) { errors.push({ path: operation.id, message: error.message }); }
         }
+        if (written.length) await global.AppData.folderSync.acknowledge(written);
+        const published = written.length;
         const known = await global.AppData.folderSync.known();
-        const scan = await adapter.scan(root, async operation => {
+        const scan = await adapter.scan(root, async (operation, hash) => {
             if (suspended) throw new Error('本机同步已暂停');
             if (operation.spaceId !== state.spaceId) throw new Error('该日志不属于当前数据空间');
-            const hash = model.digest(operation);
             if (known[operation.id] === hash) return;
             await global.AppData.folderSync.receive(operation);
             known[operation.id] = hash;
@@ -64,7 +66,7 @@
         if (published) binding.lastPublishAt = new Date().toISOString();
         if (received) binding.lastReceiveAt = new Date().toISOString();
         if (published || received) await adapter.binding(binding);
-        emit({ errors, completedSyncs: view.completedSyncs + (errors.length ? 0 : 1) });
+        emit({ errors, lastCheckAt: new Date().toISOString(), completedSyncs: view.completedSyncs + (errors.length ? 0 : 1) });
         const latest = await refresh();
         if (received && typeof global.syncPracticeRecords === 'function') {
             try { await global.syncPracticeRecords({ forceRender: true }); } catch (_) { /* next view activation reads durable data */ }
@@ -75,7 +77,10 @@
     function syncNow(background = false) {
         if (running) return running;
         emit({ busy: true });
-        running = init().then(() => withLock(runUnlocked, background)).catch(error => {
+        running = init().then(() => withLock(runUnlocked, background)).then(result => {
+            if (result?.skipped) schedule();
+            return result;
+        }).catch(error => {
             emit({ errors: [{ path: '', message: error.message }] });
             if (!background) throw error;
         }).finally(() => { running = null; emit({ busy: false }); });
@@ -87,10 +92,13 @@
         await init();
         const result = await withLock(async () => {
             const current = await global.AppData.folderSync.status();
-            const space = await adapter.openWorkspace(selected, () => {
+            const backup = global.ExternalBackupService;
+            const space = await adapter.openWorkspace(selected, async () => {
                 if (current.spaceId) throw new Error('本机已有同步空间，请选择原同步文件夹并等待 OneDrive 下载完成');
+                await backup?.assertSyncDestination?.(selected);
                 return global.confirm('这个专用文件夹为空。仅在首次启用、确认 OneDrive 已完成下载时创建。同步日志将以明文写入文件夹，确定创建空间吗？');
             });
+            if (space.existing) await backup?.assertSyncDestination?.(space.directory);
             if (current.enabled && current.spaceId !== space.spaceId) throw new Error('请先断开当前空间，再连接其他空间');
             const previous = await adapter.binding();
             const next = { directory: space.directory, spaceId: space.spaceId, name: space.name };
@@ -99,7 +107,7 @@
             catch (error) { await adapter.binding(previous); throw error; }
             binding = next;
             adapter.clearCache(); suspended = false; resumeAttempted = false;
-            emit({ permission: await adapter.permission(binding.directory), errors: [] });
+            emit({ permission: await adapter.permission(binding.directory), errors: [], lastCheckAt: null });
             await refresh();
             return { existing: space.existing, spaceId: space.spaceId };
         });
@@ -233,13 +241,17 @@
             if (global.document.visibilityState === 'visible') schedule(0);
         });
         global.addEventListener?.('online', () => schedule(0));
+        global.addEventListener?.('focus', () => schedule(0));
         global.setInterval(() => {
             if (global.document?.visibilityState !== 'hidden') schedule(0);
-        }, 15000);
+        }, POLL_MS);
         // Complete the first background pass during startup, without waiting for settings or a timer.
         if (binding && view.enabled) {
             emit({ busy: true });
-            try { await withLock(runUnlocked, true); }
+            try {
+                const result = await withLock(runUnlocked, true);
+                if (result?.skipped) schedule();
+            }
             catch (error) { emit({ errors: [{ path: '', message: error.message }] }); }
             finally { emit({ busy: false }); }
         }

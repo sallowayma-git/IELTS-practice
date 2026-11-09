@@ -4263,22 +4263,22 @@
 
     function projectFolderSync(next, original, opId) {
         const model = global.FolderSyncModel;
-        const before = model.unitsFrom(original, false).vocabulary;
-        const after = model.unitsFrom(next, false).vocabulary;
-        if (model.equal(before, after)) {
-            for (const key of [...READING_DOCUMENT_KEYS, 'vocab.userConfig']) next.documents[key] = clone(original.documents[key]);
-        } else {
+        const readingChanged = !model.equal(next.documents[READING_STATE_KEY], original.documents[READING_STATE_KEY]);
+        const wordsChanged = ['vocab.words', 'vocab.lists'].some(key => !model.equal(next.documents[key], original.documents[key]));
+        if (readingChanged || wordsChanged) {
             const state = normalizeReadingState(next.documents[READING_STATE_KEY]);
             const snapshot = readingModel().createSnapshot({ words: next.documents['vocab.words'],
                 lists: next.documents['vocab.lists'], reading: state.reading });
-            state.generation = opId;
-            state.allowDefaultWordSeed = false;
-            for (const [table, rows] of Object.entries(state.tombstones)) {
-                for (const stamp of table === 'all' ? (rows ? [rows] : []) : Object.values(rows)) {
-                    stamp.revision = (original.revisions[READING_STATE_KEY] || 0) + 1;
+            if (readingChanged) {
+                state.generation = opId;
+                state.allowDefaultWordSeed = false;
+                for (const [table, rows] of Object.entries(state.tombstones)) {
+                    for (const stamp of table === 'all' ? (rows ? [rows] : []) : Object.values(rows)) {
+                        stamp.revision = (original.revisions[READING_STATE_KEY] || 0) + 1;
+                    }
                 }
+                next.documents[READING_STATE_KEY] = state;
             }
-            next.documents[READING_STATE_KEY] = state;
             const mirrors = readingProjection(snapshot);
             next.documents['vocab.readingVocabWords'] = mirrors.words;
             next.documents['vocab.readingBookshelfExams'] = mirrors.bookshelf;

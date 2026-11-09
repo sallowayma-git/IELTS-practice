@@ -4,6 +4,15 @@
     if (global.FolderSyncModel) return;
     const FORMAT = 'ielts-atlas-static-folder-sync';
     const VERSION = 1;
+    // Keep the workspace and IndexedDB binding readable. Older builds reject v2
+    // operations instead of applying a vocabulary structure without its progress.
+    const OPERATION_VERSION = 2;
+    const PROGRESS_PREFIX = 'vocabProgress/';
+    const REVIEW_DEFAULTS = Object.freeze({
+        easeFactor: null, interval: 1, repetitions: 0, intraCycles: 0, correctCount: 0,
+        lastReviewed: null, nextReview: null, box: 1
+    });
+    const REVIEW_FIELDS = Object.keys(REVIEW_DEFAULTS);
     const STATE_KEY = 'system.folderSyncStatic';
     const RESET_KEY = 'system.folderSyncStaticResetBarrier';
     const STORES = ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
@@ -21,7 +30,7 @@
         if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
         return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
     }
-    const equal = (left, right) => stable(left) === stable(right);
+    const equal = (left, right) => left === right || stable(left) === stable(right);
     function safeJson(value, depth = 0) {
         if (depth > 90) fail('同步数据嵌套过深');
         if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
@@ -146,6 +155,75 @@
         return { words: documents['vocab.words'] || [], lists: documents['vocab.lists'] || {},
             state: hasReadingData ? state : {}, config: documents['vocab.userConfig'] || {} };
     }
+    function wordProgressKey(listId, word) {
+        const id = word?.id || word?.key || word?.word;
+        if (!id || typeof word.word !== 'string') return null;
+        const key = PROGRESS_PREFIX + JSON.stringify([listId, String(id), word.word]);
+        return key.length <= PROGRESS_PREFIX.length + 2000 ? key : null;
+    }
+    function mapVocabularyWords(value, transform) {
+        const mapList = (list, listId) => {
+            const keys = list.map(word => wordProgressKey(listId, word));
+            const unique = new Set(), duplicates = new Set();
+            for (const key of keys) {
+                if (unique.has(key)) duplicates.add(key);
+                unique.add(key);
+            }
+            return list.map((word, index) => keys[index] && !duplicates.has(keys[index])
+                ? transform(word, keys[index]) : word);
+        };
+        const lists = Object.fromEntries(Object.entries(value.lists).map(([id, list]) => {
+            if (Array.isArray(list)) return [id, mapList(list, id)];
+            return [id, Array.isArray(list?.words) ? { ...list, words: mapList(list.words, id) } : list];
+        }));
+        return { ...value, words: mapList(value.words, null), lists };
+    }
+    function splitVocabulary(value) {
+        const result = {};
+        const { config, ...structure } = mapVocabularyWords(value, (word, key) => {
+            const structuralWord = { ...word };
+            const progress = {};
+            for (const field of REVIEW_FIELDS) {
+                if (own(word, field)) progress[field] = word[field];
+                delete structuralWord[field];
+            }
+            delete structuralWord.updatedAt;
+            if (REVIEW_FIELDS.some(field => own(progress, field) && progress[field] !== REVIEW_DEFAULTS[field])) {
+                if (own(word, 'updatedAt')) progress.updatedAt = word.updatedAt;
+                result[key] = present(progress);
+            }
+            return structuralWord;
+        });
+        for (const [id, list] of Object.entries(structure.lists)) {
+            if (Array.isArray(list?.words)) delete list.updatedAt;
+        }
+        result.vocabulary = present(structure);
+        result.vocabConfig = present(config || {});
+        return result;
+    }
+    function restoreVocabulary(structure, local, units) {
+        const localWords = new Map();
+        mapVocabularyWords(local, (word, key) => { localWords.set(key, word); return word; });
+        const restored = mapVocabularyWords(structure, (word, key) => {
+            const previous = localWords.get(key);
+            const progress = units[key]?.value;
+            if (progress?.exists) return { ...word, ...progress.value };
+            // Keep the local row's field shape for unreviewed words. A progress
+            // tombstone restores defaults without dropping the word or its links.
+            const defaults = {};
+            if (previous) {
+                for (const field of REVIEW_FIELDS) if (own(previous, field)) defaults[field] = REVIEW_DEFAULTS[field];
+                if (own(previous, 'updatedAt')) defaults.updatedAt = previous.updatedAt;
+            }
+            return { ...word, ...defaults };
+        });
+        for (const [id, list] of Object.entries(restored.lists)) {
+            if (Array.isArray(list?.words) && own(local.lists[id] || {}, 'updatedAt')) {
+                list.updatedAt = local.lists[id].updatedAt;
+            }
+        }
+        return restored;
+    }
     const locatorField = /^(?:url|uri|href|(?:audio|directory|exam|file|resource|source)(?:url|path)|path)$/i;
     const absoluteLocator = /^(?:[a-z][a-z\d+.-]*:|[\\/])/i;
     function localLocator(key, value) {
@@ -177,7 +255,7 @@
             if (!id) fail('同步集合缺少稳定 ID：' + key);
             result[key + '/' + id] = present(row);
         }
-        result.vocabulary = present(vocabValue(docs));
+        Object.assign(result, splitVocabulary(vocabValue(docs)));
         result.achievements = present(docs['achievements.manual'] || {});
         if (preferences) {
             const selected = {};
@@ -187,7 +265,16 @@
         return result;
     }
     function validUnitKey(key) {
-        return ['vocabulary', 'achievements', 'preferences'].includes(key)
+        if (typeof key !== 'string') return false;
+        if (key.startsWith(PROGRESS_PREFIX)) {
+            if (key.length > PROGRESS_PREFIX.length + 2000) return false;
+            try {
+                const parts = JSON.parse(key.slice(PROGRESS_PREFIX.length));
+                return Array.isArray(parts) && parts.length === 3 && (parts[0] === null || typeof parts[0] === 'string')
+                    && typeof parts[1] === 'string' && typeof parts[2] === 'string' && key === PROGRESS_PREFIX + JSON.stringify(parts);
+            } catch (_) { return false; }
+        }
+        return ['vocabulary', 'vocabConfig', 'achievements', 'preferences'].includes(key)
             || /^(practice|practice\.reviewPlans|goals\.items)\/.{1,2000}$/.test(key);
     }
     function validateUnit(key, wrapped) {
@@ -201,12 +288,16 @@
                 || value[store][store === 'practiceSummaries' ? 'id' : 'recordId'] !== id)) fail('同步练习身份或实体层不匹配');
             if (!equal(value, practiceLayer(value))) fail('同步练习包含本机文件路径或地址');
         } else if (key === 'vocabulary') {
-            if (!plain(value) || !Array.isArray(value.words) || !plain(value.lists) || !plain(value.state) || !plain(value.config)) fail('同步词汇格式无效');
+            if (!plain(value) || !Array.isArray(value.words) || !plain(value.lists) || !plain(value.state)
+                || (own(value, 'config') && !plain(value.config))) fail('同步词汇格式无效');
             if (global.ReadingVocabularyModel) global.ReadingVocabularyModel.createSnapshot({
                 words: value.words, lists: value.lists, ...(value.state.reading ? { reading: value.state.reading } : {})
             });
         } else {
             if (!plain(value)) fail('同步实体格式无效');
+            if (key.startsWith(PROGRESS_PREFIX) && Object.keys(value).some(field => field !== 'updatedAt' && !own(REVIEW_DEFAULTS, field))) {
+                fail('同步复习进度格式无效');
+            }
             if (key.startsWith('practice.reviewPlans/') && (!value.recordId || key !== 'practice.reviewPlans/' + value.id)
                 || key.startsWith('goals.items/') && key !== 'goals.items/' + (value.id || value.goalId)) {
                 fail('同步集合实体身份不匹配');
@@ -220,7 +311,8 @@
         }
         const sameBase = heads.every(head => equal(head.base, heads[0].base));
         const base = sameBase ? heads[0].base : absent();
-        let merged = sameBase ? mergeValue(base, heads.map(head => head.value), key.startsWith('practice.reviewPlans/'))
+        let merged = sameBase ? mergeValue(base, heads.map(head => head.value),
+            key.startsWith('practice.reviewPlans/') || key.startsWith(PROGRESS_PREFIX))
             : { value: copy(heads[0].value), conflict: true };
         // A conflicting partial merge can violate entity/word relationships. Keep a valid baseline.
         if (merged.conflict) merged.value = base.exists ? copy(base) : copy(heads.find(head => head.value.exists)?.value || heads[0].value);
@@ -238,13 +330,38 @@
     }
     function newState(spaceId, preferences = false) {
         if (!identifier(spaceId)) fail('数据空间 ID 无效');
-        return { format: FORMAT, version: VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
+        return { format: FORMAT, version: VERSION, vocabLayout: OPERATION_VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
             units: {}, materialized: {}, pending: [], seen: {}, blocked: {} };
     }
     function assertState(state) {
         if (!state || state.format !== FORMAT || state.version !== VERSION || !identifier(state.spaceId) || !identifier(state.writerId)
             || !Number.isSafeInteger(state.seq) || !plain(state.units) || !plain(state.materialized)
             || !Array.isArray(state.pending) || !plain(state.seen)) fail('同步状态版本无效，请升级所有电脑上的网页');
+    }
+    function splitLegacyChange(change, retainUnchanged) {
+        if (change.key !== 'vocabulary') return [change];
+        const values = change.value.exists ? splitVocabulary(change.value.value) : {};
+        const bases = change.base.exists ? splitVocabulary(change.base.value) : {};
+        return [...new Set([...Object.keys(values), ...Object.keys(bases)])].flatMap(key => {
+            const value = values[key] || absent(), base = bases[key] || absent();
+            return retainUnchanged || key === 'vocabulary' || !equal(value, base)
+                ? [{ ...change, key, value, base }] : [];
+        });
+    }
+    function upgradeVocabulary(state) {
+        if (state.vocabLayout === OPERATION_VERSION) return;
+        const legacy = state.units.vocabulary;
+        delete state.units.vocabulary;
+        for (const head of legacy?.heads || []) {
+            for (const change of splitLegacyChange({ ...head, key: 'vocabulary' }, true)) {
+                installChange(state, change, head.id);
+            }
+        }
+        const materialized = state.materialized.vocabulary;
+        delete state.materialized.vocabulary;
+        if (materialized?.exists) Object.assign(state.materialized, splitVocabulary(materialized.value));
+        // Original queued files, operation IDs and hashes remain byte-compatible.
+        state.vocabLayout = OPERATION_VERSION;
     }
     function publish(state, entries, sourceId, resolve = false) {
         if (!entries.length) return;
@@ -264,7 +381,7 @@
             clock[state.writerId] = state.seq;
             return { key, value: copy(value), base: copy(state.materialized[key] || absent()), clock };
         });
-        const operation = { format: FORMAT, version: VERSION, spaceId: state.spaceId,
+        const operation = { format: FORMAT, version: OPERATION_VERSION, spaceId: state.spaceId,
             writerId: state.writerId, seq: state.seq, id, sourceId: String(sourceId || ''),
             createdAt: new Date().toISOString(), changes };
         for (const change of changes) installChange(state, change, id);
@@ -273,6 +390,7 @@
     function capture(state, snapshot, sourceId) {
         assertState(state);
         if (!state.enabled) return state;
+        upgradeVocabulary(state);
         const actual = unitsFrom(snapshot, state.preferences);
         const keys = [...new Set(Object.keys(state.materialized).concat(Object.keys(actual)))].filter(key => key !== 'preferences' || state.preferences);
         const entries = keys.map(key => [key, actual[key] || absent()]).filter(([key, value]) => !equal(value, state.materialized[key] || absent()));
@@ -290,13 +408,17 @@
     }
     function validateOperation(operation) {
         safeJson(operation);
-        if (!plain(operation) || operation.format !== FORMAT || operation.version !== VERSION
+        if (!plain(operation) || operation.format !== FORMAT || ![VERSION, OPERATION_VERSION].includes(operation.version)
             || !identifier(operation.spaceId) || !identifier(operation.writerId)
             || !Number.isSafeInteger(operation.seq) || operation.seq < 1
             || operation.id !== operation.writerId + '-' + String(operation.seq).padStart(12, '0')
             || !Array.isArray(operation.changes) || !operation.changes.length || operation.changes.length > 20000) fail('不支持或损坏的同步日志');
         const keys = new Set();
         for (const change of operation.changes) {
+            if (operation.version === VERSION && (change.key === 'vocabConfig'
+                || (typeof change.key === 'string' && change.key.startsWith(PROGRESS_PREFIX)))) {
+                fail('同步日志版本与词汇实体不匹配');
+            }
             if (keys.has(change.key)) fail('同步日志包含重复实体'); keys.add(change.key);
             validateUnit(change.key, change.value); validateUnit(change.key, change.base);
             if (!plain(change.clock) || Object.keys(change.clock).length > 1000 || change.clock[operation.writerId] !== operation.seq
@@ -321,13 +443,18 @@
             state.blocked[operation.id] = copy(operation);
             return { state, duplicate: false, blocked: true };
         }
-        for (const change of operation.changes) installChange(state, change, operation.id);
+        upgradeVocabulary(state);
+        for (const change of operation.changes) {
+            const changes = operation.version === VERSION ? splitLegacyChange(change, false) : [change];
+            for (const entry of changes) installChange(state, entry, operation.id);
+        }
         state.seen[operation.id] = hash;
         delete state.blocked[operation.id];
         return { state, duplicate: false };
     }
     function resolve(state, key, headId) {
         assertState(state);
+        upgradeVocabulary(state);
         const unit = state.units[key];
         const head = unit?.heads.find(item => item.id === headId);
         if (!unit?.conflict || !head) fail('冲突已经变化，请刷新后重新选择');
@@ -335,6 +462,7 @@
     }
     function toSnapshot(state, original) {
         const result = copy(original), docs = result.documents;
+        const localVocabulary = vocabValue(original.documents);
         const localLayers = Object.fromEntries(STORES.map(store => [store,
             new Map((original.entities[store] || []).map(row => [row.recordId, row.data]))]));
         const units = {};
@@ -351,15 +479,21 @@
                 }
             } else if (key.startsWith('practice.reviewPlans/')) docs['practice.reviewPlans'].push(value);
             else if (key.startsWith('goals.items/')) docs['goals.items'].push(value);
-            else if (key === 'vocabulary') {
-                docs['vocab.words'] = value.words; docs['vocab.lists'] = value.lists;
-                docs['vocab.readingState'] = value.state; docs['vocab.userConfig'] = value.config;
+            else if (key === 'vocabulary' && !equal(value.state, localVocabulary.state)) {
+                docs['vocab.readingState'] = value.state;
+            } else if (key === 'vocabConfig') {
+                docs['vocab.userConfig'] = value;
             } else if (key === 'achievements') docs['achievements.manual'] = value;
             else if (key === 'preferences' && state.preferences) {
                 const prefs = docs['preferences.values'] || {};
                 for (const field of ['theme', 'readingDisplay', 'timer']) delete prefs[field];
                 docs['preferences.values'] = Object.assign(prefs, value);
             }
+        }
+        if (units.vocabulary?.exists) {
+            const vocabulary = restoreVocabulary(units.vocabulary.value, localVocabulary, state.units);
+            docs['vocab.words'] = vocabulary.words;
+            docs['vocab.lists'] = vocabulary.lists;
         }
         for (const store of STORES) result.entities[store].sort((a, b) => a.recordId.localeCompare(b.recordId));
         for (const key of ['practice.reviewPlans', 'goals.items']) docs[key].sort((a, b) => String(a.id).localeCompare(String(b.id)));
@@ -380,7 +514,7 @@
             conflicts: Object.entries(state.units).filter(([, unit]) => unit.conflict)
                 .map(([key, unit]) => ({ key, versions: copy(unit.heads) })) };
     }
-    global.FolderSyncModel = Object.freeze({ FORMAT, VERSION, STATE_KEY, RESET_KEY, STORES, DOCUMENT_KEYS,
+    global.FolderSyncModel = Object.freeze({ FORMAT, VERSION, OPERATION_VERSION, STATE_KEY, RESET_KEY, STORES, DOCUMENT_KEYS,
         copy, stable, equal, digest, safeJson, identifier, uuid, unitsFrom, newState, capture,
         validateOperation, receive, resolve, toSnapshot, rememberMaterialized, status, assertState });
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -127,7 +127,8 @@
         if (status.permission !== 'granted') return '同步已暂停（自动同步设置仍为开启），等待浏览器授权。点击网页可自动请求恢复；若出现“每次访问都允许”，请选择以便下次自动连接。学习记录仍保存在本机，也可点击“恢复同步”。';
         if (status.busy) return '正在检查并合并同步文件…';
         return '自动同步已开启 · ' + status.directoryName + ' · 待发送 ' + status.pending + ' 条 · 待处理冲突 ' + status.conflicts.length
-            + ' 项\n最近写入文件夹：' + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
+            + ' 项\n最近检查本机文件夹：' + formatDate(status.lastCheckAt) + '\n最近写入文件夹：'
+            + formatDate(status.lastPublishAt) + '\n最近接收：' + formatDate(status.lastReceiveAt);
     }
     function render(status) {
         // A later verified pass also retires errors from a failed manual action.
@@ -175,7 +176,9 @@
         for (const conflict of status.conflicts) {
             const item = element('section', '', 'folder-sync-conflict');
             const first = conflict.versions.find(version => version.value.exists)?.value.value;
-            const name = first?.practiceSummaries?.title || first?.title || ({ vocabulary: '词汇数据', libraries: '题库配置', achievements: '成就标记', preferences: '外观偏好' })[conflict.key] || conflict.key;
+            const progressWord = conflict.key.startsWith('vocabProgress/') ? JSON.parse(conflict.key.slice('vocabProgress/'.length))[2] : '';
+            const name = first?.practiceSummaries?.title || first?.title || (progressWord && '单词复习 · ' + progressWord)
+                || ({ vocabulary: '词汇及阅读收藏', vocabConfig: '词汇设置', achievements: '成就标记', preferences: '外观偏好' })[conflict.key] || conflict.key;
             item.append(element('strong', name));
             conflict.versions.forEach((version, index) => {
                 const details = element('details');

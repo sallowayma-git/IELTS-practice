@@ -515,6 +515,7 @@
                     return { success: false, reason: 'permission_denied' };
                 }
 
+                await global.SyncFolderAdapter?.assertBackupDestination?.(state.directoryHandle);
                 var backups = requireBackupApi();
                 var storageIdentity = typeof backups.getStorageIdentity === 'function' ? await backups.getStorageIdentity() : null;
                 if (state.meta.storageIdentity && storageIdentity && state.meta.storageIdentity !== storageIdentity
@@ -659,6 +660,7 @@
             if (state.suspended || state.resetPreparing) throw new Error('本地备份服务正在重置');
             // An unreadable or unsupported latest file must remain protected even
             // when this version cannot restore it and no valid generation exists.
+            await global.SyncFolderAdapter?.assertBackupDestination?.(handle);
             var existingLatestFound = await fileExists(handle, LATEST_FILENAME);
             var existingGeneration = existingLatestFound ? null : await findLatestDatedGeneration(handle);
             existingBackupFound = existingLatestFound || Boolean(existingGeneration);
@@ -1889,6 +1891,12 @@
         openModal: openModal,
         closeModal: closeModal,
         bindDirectory: bindDirectory,
+        async assertSyncDestination(directory) {
+            const handle = await readStoredValue(HANDLE_KEY);
+            if (handle && await directory.resolve(handle) !== null) {
+                throw new Error('这个同步目录包含本地磁盘备份的位置，请选择独立的 OneDrive 同步目录');
+            }
+        },
         unbindDirectory: unbindDirectory,
         withFullResetLock: withFullResetLock,
         prepareForFullReset: prepareForFullReset,

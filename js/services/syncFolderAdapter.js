@@ -5,6 +5,7 @@
     const DB = 'IELTSAtlasExternalBackupV2', STORE = 'binding', KEY = 'onedrive-static-sync-binding-v1';
     const MAX_BYTES = 32 * 1024 * 1024;
     const cache = new Map();
+    const fileSignature = file => file.lastModified + ':' + file.size;
     function supported() { return global.isSecureContext !== false && typeof global.showDirectoryPicker === 'function' && !!global.navigator?.locks; }
     function pick() {
         if (!supported()) throw new Error('请使用桌面 Chrome / Edge；若直接打开文件不支持，请通过固定 localhost 地址打开');
@@ -100,8 +101,10 @@
             await writer.write(text); await writer.close();
         }
         catch (error) { try { await writer.abort(); } catch (_) { /* already closed */ } throw error; }
-        const stored = await parseFile(await file.getFile());
+        const storedFile = await file.getFile();
+        const stored = await parseFile(storedFile);
         if (!model.equal(stored, value)) throw new Error('同步文件回读校验失败，稍后会重试');
+        return fileSignature(storedFile);
     }
     function assertWorkspace(value, expected) {
         if (!value || value.format !== model.FORMAT || value.version !== model.VERSION || !model.identifier(value.spaceId)) {
@@ -146,11 +149,20 @@
         const space = await version.getDirectoryHandle(binding.spaceId, { create: true });
         return space.getDirectoryHandle('ops', { create: true });
     }
+    async function assertBackupDestination(directory) {
+        const saved = await binding();
+        const withinSync = saved?.directory && await saved.directory.resolve(directory) !== null;
+        const marker = await readJson(directory, 'workspace.json').catch(() => null);
+        if (withinSync || marker?.format === model.FORMAT) {
+            throw new Error('请为本地磁盘备份选择另一个文件夹，避免将整份备份写进 OneDrive 同步空间');
+        }
+    }
     async function publish(root, operation) {
         model.validateOperation(operation);
         const folder = await root.getDirectoryHandle(operation.writerId, { create: true });
         const name = operation.id + '.json';
-        const envelope = { format: model.FORMAT + '-file', version: model.VERSION, sha256: model.digest(operation), operation };
+        const path = operation.writerId + '/' + name;
+        const envelope = { format: model.FORMAT + '-file', version: operation.version, sha256: model.digest(operation), operation };
         let previous = null;
         try { previous = await folder.getFileHandle(name, { create: false }); }
         catch (error) { if (error.name !== 'NotFoundError') throw error; }
@@ -158,7 +170,10 @@
             const file = await previous.getFile();
             let existing = null;
             try { existing = await parseFile(file); } catch (_) { /* an interrupted own write can be recovered */ }
-            if (existing && model.equal(existing, envelope)) return;
+            if (existing && model.equal(existing, envelope)) {
+                cache.set(path, fileSignature(file));
+                return;
+            }
             if (existing?.format === model.FORMAT + '-file' && existing.sha256 === model.digest(existing.operation)) {
                 throw new Error('日志文件名已存在但内容不同，已保留队列：' + name);
             }
@@ -168,7 +183,7 @@
             try { await writer.write(await file.text()); await writer.close(); }
             catch (error) { try { await writer.abort(); } catch (_) { } throw error; }
         }
-        await writeJson(folder, name, envelope);
+        cache.set(path, await writeJson(folder, name, envelope));
     }
     async function scan(root, visit) {
         const errors = [];
@@ -180,13 +195,16 @@
                 const path = writer.name + '/' + handle.name;
                 try {
                     const file = await handle.getFile();
-                    const signature = file.lastModified + ':' + file.size;
+                    const signature = fileSignature(file);
                     if (cache.get(path) === signature) continue;
                     const envelope = await parseFile(file);
-                    if (envelope.format !== model.FORMAT + '-file' || envelope.version !== model.VERSION
-                        || envelope.sha256 !== model.digest(envelope.operation)) throw new Error('同步日志摘要校验失败');
+                    if (envelope.format !== model.FORMAT + '-file' || envelope.version !== envelope.operation?.version) {
+                        throw new Error('同步日志格式不兼容，请更新两台电脑上的项目');
+                    }
                     model.validateOperation(envelope.operation);
-                    await visit(envelope.operation);
+                    const hash = model.digest(envelope.operation);
+                    if (envelope.sha256 !== hash) throw new Error('同步日志摘要校验失败');
+                    await visit(envelope.operation, hash);
                     cache.set(path, signature); files++;
                 } catch (error) { errors.push({ path, message: error.message }); }
             }
@@ -194,5 +212,5 @@
         return { files, errors };
     }
     global.SyncFolderAdapter = Object.freeze({ supported, pick, binding, permission, requestPermission,
-        openWorkspace, workspace, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
+        openWorkspace, workspace, assertBackupDestination, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
 })(typeof window !== 'undefined' ? window : globalThis);

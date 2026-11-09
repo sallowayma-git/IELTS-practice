@@ -1436,6 +1436,17 @@ async function run() {
         assert.strictEqual(elements.settingsModal.dataset.open, 'false');
     });
 
+    await record('an open settings form saves only edited fields after a remote update', async () => {
+        const store = createMockStore();
+        hooks.setStore(store);
+        hooks.openSettingsModal(elements.menuButton);
+        store.config.dailyNew = 55;
+        elements.settingsForm.__fields = { dailyNew: '20', reviewLimit: '100', masteryCount: '4' };
+        await hooks.handleSettingsSubmit({ preventDefault() {}, currentTarget: elements.settingsForm });
+        assert.strictEqual(store.config.notify, false);
+        assert.strictEqual(store.config.dailyNew, 55);
+    });
+
     await record('Tab stays inside the active modal', async () => {
         let prevented = false;
         hooks.openSettingsModal(elements.menuButton);

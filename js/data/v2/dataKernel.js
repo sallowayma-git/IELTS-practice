@@ -749,7 +749,7 @@
         const envelope = makeEnvelope(lookupEntry(key), data, {
             revision: incrementCounter(previous?.envelope?.revision || 0, key), operationId: opId, normalized: true
         });
-        tx.objectStore(SYSTEM_STORE).put({ logicalKey: key, envelope: canonicalizeJson(envelope) });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey: key, envelope });
     }
     function captureFolderSync(tx, opId, relevant, complete, fail) {
         const model = folderSyncModel();
@@ -763,7 +763,7 @@
                 if (!validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
                 readSyncSnapshot(tx, snapshot => {
                     try {
-                        const state = model.capture(clone(row.envelope.data), snapshot, opId);
+                        const state = model.capture(row.envelope.data, snapshot, opId);
                         putSyncState(tx, row, state, opId);
                         complete();
                     } catch (error) { fail(error instanceof AppDataError ? error : validation(error.message)); }

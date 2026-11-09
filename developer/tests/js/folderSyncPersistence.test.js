@@ -179,7 +179,14 @@ test('real FileSystemDirectoryHandle: persistent binding, automatic exchange, an
         await b.evaluate(() => FolderSyncService.connect());
         assert(await b.evaluate(() => AppData.practice.get('filesystem-A')));
         await complete(b, 'filesystem-B'); await b.evaluate(() => FolderSyncService.syncNow());
-        await copyFiles(b, a); await a.evaluate(() => FolderSyncService.syncNow());
+        const lastReceive = await a.evaluate(() => FolderSyncService.getStatus().lastReceiveAt);
+        await copyFiles(b, a);
+        await a.waitForFunction(previous => {
+            const status = FolderSyncService.getStatus();
+            return status.lastReceiveAt && status.lastReceiveAt !== previous && !status.busy;
+        }, lastReceive,
+            { polling: 100, timeout: 8000 });
+        assert(await a.evaluate(() => FolderSyncService.getStatus().lastCheckAt));
         assert.equal((await a.evaluate(() => AppData.practice.list())).length, 2);
         await complete(a, 'closed-before-send');
         assert((await pending(a)).length > 0);
@@ -247,6 +254,85 @@ test('real vocabulary: offline collections preserve graph, mirrors and later rem
         assert.notDeepEqual(await shelf(b), populated, 'receiving changes invalidates the reading view cache');
         const after = await pending(b);
         await send(a, b); assert.equal((await pending(b)).length, after.length);
+    });
+});
+
+test('received vocabulary settings refresh an initialized store and a partial save preserves remote settings', async () => {
+    await fixture(async ({ page }) => {
+        const a = await page(), b = await page();
+        for (const tab of [a, b]) {
+            await tab.evaluate(async () => {
+                await AppData.vocab.saveWords([{ id: 'a', word: 'apple', meaning: 'fruit' }]);
+                await AppData.vocab.saveCollection('spelling-errors-p1', {
+                    id: 'spelling-errors-p1', words: [{ id: 'b', word: 'boat', meaning: 'vessel' }]
+                });
+            });
+            await connect(tab);
+        }
+        await send(a, b); await send(b, a);
+        await b.addScriptTag({ path: path.join(root, 'js/core/vocabStore.js') });
+        await b.evaluate(() => VocabStore.init());
+        assert.equal(await b.evaluate(() => VocabStore.getConfig().dailyNew), 20);
+        await a.evaluate(() => AppData.vocab.patchConfig({ dailyNew: 55, activeListId: 'spelling-errors-p1' }));
+        await send(a, b);
+        await b.waitForFunction(() => VocabStore.getConfig().dailyNew === 55
+            && VocabStore.getActiveListId() === 'spelling-errors-p1' && VocabStore.getWords()[0]?.word === 'boat');
+        await b.evaluate(() => VocabStore.setConfig({ notify: false }));
+        assert.deepEqual(await b.evaluate(() => AppData.vocab.getConfig()),
+            { activeListId: 'spelling-errors-p1', dailyNew: 55, notify: false });
+        await b.evaluate(() => VocabStore.updateWord('a', { correctCount: 1 }, 'default'));
+        assert.equal(await b.evaluate(async () => (await AppData.vocab.listWords())[0].correctCount), 1);
+        assert.equal(await b.evaluate(() => VocabStore.getWords()[0].word), 'boat');
+        await send(b, a);
+        assert.equal(await a.evaluate(async () => (await AppData.vocab.getConfig()).dailyNew), 55);
+    });
+});
+
+test('disk backup and OneDrive serialize writes, use separate folders, and preserve each other’s data', async () => {
+    await fixture(async ({ page }) => {
+        const a = await page();
+        await installTransport(a);
+        await a.addScriptTag({ path: path.join(root, 'js/core/externalBackupService.js') });
+        const result = await a.evaluate(async () => {
+            const base = await navigator.storage.getDirectory();
+            const sync = await base.getDirectoryHandle('user-data', { create: true });
+            const backups = await base.getDirectoryHandle('backups', { create: true });
+            window.showDirectoryPicker = () => Promise.resolve(sync);
+            await ExternalBackupService.bindDirectory({ writeNow: false });
+            const rejectedSync = await FolderSyncService.connect().then(() => false, error => /磁盘备份/.test(error.message));
+            window.showDirectoryPicker = () => Promise.resolve(backups);
+            await ExternalBackupService.bindDirectory({ writeNow: false });
+            window.showDirectoryPicker = () => Promise.resolve(sync);
+            await FolderSyncService.connect();
+            const rejectedBackup = await ExternalBackupService.bindDirectory().then(() => false, error => /另一个文件夹/.test(error.message));
+            await AppData.practice.completeAttempt({ record: { id: 'backup-and-sync', type: 'reading',
+                examId: 'test', totalQuestions: 1, correctAnswers: 1 } });
+            const [transfer, disk] = await Promise.all([FolderSyncService.syncNow(), ExternalBackupService.writeNow()]);
+            const text = await (await (await backups.getFileHandle(ExternalBackupService.LATEST_FILENAME)).getFile()).text();
+            const snapshot = JSON.parse(text);
+            const queryPermission = FileSystemDirectoryHandle.prototype.queryPermission;
+            FileSystemDirectoryHandle.prototype.queryPermission = function (options) {
+                return this.name === 'user-data' ? Promise.resolve('prompt') : queryPermission.call(this, options);
+            };
+            await AppData.practice.completeAttempt({ record: { id: 'offline-before-restore', type: 'reading',
+                examId: 'test', totalQuestions: 1, correctAnswers: 1 } });
+            const restored = await ExternalBackupService.restorePayload(snapshot, { confirmed: true });
+            const unsent = (await AppData.folderSync.pending()).flatMap(operation => operation.changes)
+                .filter(change => change.key === 'practice/offline-before-restore').map(change => change.value.exists);
+            FileSystemDirectoryHandle.prototype.queryPermission = queryPermission;
+            await FolderSyncService.syncNow();
+            return { rejectedSync, rejectedBackup, disk: disk.success, published: transfer.published,
+                records: snapshot.entities.practiceSummaries.map(row => row.recordId),
+                syncKeys: Object.keys(snapshot.envelopes).filter(key => /folderSync/i.test(key)),
+                restored: restored.success, unsent, pending: (await AppData.folderSync.pending()).length };
+        });
+        assert(result.rejectedSync && result.rejectedBackup && result.disk);
+        assert.equal(result.published, 1);
+        assert.deepEqual(result.records, ['backup-and-sync']);
+        assert.deepEqual(result.syncKeys, []);
+        assert(result.restored);
+        assert.deepEqual(result.unsent, [true, false], 'restoring a snapshot queues the deletion and preserves the earlier unsent edit');
+        assert.equal(result.pending, 0);
     });
 });
 test('real review plans: causal review sync is stable; concurrent outcomes stay separate', async () => {
