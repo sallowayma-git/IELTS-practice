@@ -16,7 +16,7 @@ REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 REPORT_PATH = REPORT_DIR / "browse-preference-toggle-report.json"
 
 try:
-    from playwright.async_api import async_playwright
+    from local_file_storage_fixture import async_playwright
 except ModuleNotFoundError:
     venv_dir = (REPO_ROOT / ".venv").resolve()
     venv_python = REPO_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")

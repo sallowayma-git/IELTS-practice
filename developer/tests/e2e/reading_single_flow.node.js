@@ -339,20 +339,8 @@ async function run() {
   let manualPdfUrl = null;
   let failure = null;
 
-  const { chromium, firefox } = await import('playwright');
-  let browser;
-  try {
-    browser = await firefox.launch({ headless: true });
-  } catch (firefoxError) {
-    try {
-      browser = await chromium.launch({
-        headless: true,
-        args: ['--allow-file-access-from-files'],
-      });
-    } catch (chromiumError) {
-      throw new AggregateError([firefoxError, chromiumError], 'No installed Playwright browser could be launched');
-    }
-  }
+  const { chromium } = await import('./localFileStorageFixture.js');
+  const browser = await chromium.launch({ headless: true, args: ['--allow-file-access-from-files'] });
 
   try {
     const context = await browser.newContext();

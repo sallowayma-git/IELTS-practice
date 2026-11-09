@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
-from playwright.async_api import (
+from local_file_storage_fixture import (
     Browser,
     ConsoleMessage,
     Error as PlaywrightError,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 import { runtimeFixture, runtimeRoot, reportRoot } from './diagnosticRuntimeFixture.js';
 
 const fixture = await runtimeFixture();

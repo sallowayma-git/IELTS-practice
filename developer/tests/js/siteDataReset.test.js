@@ -227,7 +227,8 @@ async function testSuccessfulReset() {
         'ExamSystemExternalBackup',
         'IELTSAtlasExternalBackupV2',
         'IELTSAtlasDiagnosticsV1',
-        'IELTSAtlasReadingViewCache'
+        'IELTSAtlasReadingViewCache',
+        'IELTSAtlasLocalFilesV1'
     ]);
     assert.equal(result.databases.includes('ExamSystemExternalBackup'), true,
         'full reset must remove the legacy directory handle so old data cannot auto-migrate on reload');
@@ -321,6 +322,7 @@ async function testDeletionFailureIsVisible() {
             'deleted:IELTSAtlasDataV2',
             'deleted:IELTSAtlasDiagnosticsV1',
             'deleted:IELTSAtlasExternalBackupV2',
+            'deleted:IELTSAtlasLocalFilesV1',
             'deleted:IELTSAtlasReadingViewCache'
         ],
         'a failed database deletion does not undo the other completed deletions'
@@ -507,7 +509,7 @@ async function testConcurrentCallsShareOneRun() {
     const second = harness.windowStub.SiteDataReset.perform({ reload: false });
     assert.equal(first, second);
     await flush();
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 6);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 7);
     assert.equal(harness.externalBackup.calls, 1);
     harness.complete('IELTSAtlasDataV2');
     const [left, right] = await Promise.all([first, second]);
@@ -518,7 +520,7 @@ async function testFinishedNonTerminalRunCanRepeat() {
     const harness = createHarness();
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
     assert.equal((await harness.windowStub.SiteDataReset.perform({ reload: false })).success, true);
-    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 12);
+    assert.equal(harness.events.filter((entry) => entry.startsWith('delete:')).length, 14);
     assert.equal(harness.localStorage.clearCalls, 2);
 }
 
@@ -534,6 +536,21 @@ async function testDiagnosticCoordinationFailsClosed() {
     }
 }
 
+async function testFileResetPrecedesCacheDeletion() {
+    const success = createHarness();
+    success.windowStub.FileJournal = { async resetLocal() { success.events.push('files:reset'); } };
+    assert.equal((await success.windowStub.SiteDataReset.perform({ reload: false })).success, true);
+    assert(success.events.indexOf('files:reset') < success.events.findIndex(event => event.startsWith('delete:')));
+    const failure = createHarness();
+    failure.windowStub.FileJournal = { async resetLocal() { throw new Error('file permission lost'); } };
+    const result = await failure.windowStub.SiteDataReset.perform({ reload: false });
+    assert.equal(result.success, false);
+    assert.equal(result.errors[0].stage, 'reset-local-files');
+    assert.equal(failure.requests.length, 0, 'failed file reset must preserve the browser cache');
+    assert.equal(failure.localStorage.clearCalls, 0);
+}
+
+await testFileResetPrecedesCacheDeletion();
 await testDiagnosticCoordinationFailsClosed();
 await testCancelledReset();
 await testSuccessfulReset();

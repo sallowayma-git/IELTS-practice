@@ -8,7 +8,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium, authorizeLocalFileStorage } from './localFileStorageFixture.js';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const options = {};
@@ -114,12 +114,13 @@ async function ready(page, protocol) {
     const url = protocol === 'file' ? pathToFileURL(path.join(root, 'index.html')).href
         : `${protocol === 'https' ? secureOrigin : origin}/index.html`;
     await page.goto(`${url}?test_env=1`);
+    await authorizeLocalFileStorage(page);
     await page.waitForFunction(() => window.app?.isInitialized && window.AppData, null, { timeout: 60_000 });
     await page.evaluate(async () => {
         await AppData.ready; await window.LicenseModal?.accept();
         document.querySelector('#library-loader-overlay [data-library-action="close"]')?.click();
     });
-    assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');
+    assert.equal(await page.evaluate(() => AppData.status().backend), protocol === 'file' ? 'directory-json' : 'opfs-json');
 }
 const snapshot = page => page.evaluate(async () => (await AppData.vocab.getReadingSnapshot()).snapshot);
 const state = page => page.evaluate(() => AppData.vocab.getReadingSnapshot());
@@ -300,19 +301,19 @@ async function multiWindow(page, context, protocol, { examB, wordsB }) {
         assert.deepEqual(stale, { code: 'CONFLICT', committed: false });
         await shelfSettled(page);
         await download(page, globalButton(page), [...wordsB, 'windowbeta'], `${protocol}-deletion-fences-stale-window`);
-        // Inject an actual IndexedDB transaction failure at its put boundary.
+        // Fail the authoritative JSONL write before close, preserving the last head.
         await card(page, examB).locator('button[data-action="open-reading-vocab"]').click(); await readerReady(page, examB);
         await page.locator('#vocab-fab').click();
         const before = await snapshot(page);
         await page.evaluate(() => {
-            const put = IDBObjectStore.prototype.put;
-            window.__txtRestorePut = () => { IDBObjectStore.prototype.put = put; };
-            IDBObjectStore.prototype.put = function(value, ...args) {
-                if (value?.logicalKey === 'vocab.readingState') {
+            const create = FileSystemFileHandle.prototype.createWritable;
+            window.__txtRestorePut = () => { FileSystemFileHandle.prototype.createWritable = create; };
+            FileSystemFileHandle.prototype.createWritable = function(...args) {
+                if (this.name.startsWith('ops-')) {
                     window.__txtFailedPuts = (window.__txtFailedPuts || 0) + 1;
                     throw new DOMException('Issue 160 injected storage failure', 'QuotaExceededError');
                 }
-                return put.call(this, value, ...args);
+                return create.apply(this, args);
             };
         });
         await page.locator('#vocab-manual-input').fill('failedwriteword'); await page.locator('#vocab-manual-add-btn').click();

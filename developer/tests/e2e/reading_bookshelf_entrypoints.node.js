@@ -7,7 +7,7 @@ import https from 'node:https';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
@@ -111,7 +111,7 @@ async function ready(page, protocol) {
         await window.LicenseModal?.accept();
         document.querySelector('#library-loader-overlay [data-library-action="close"]')?.click();
     });
-    assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');
+    assert.match(await page.evaluate(() => AppData.status().backend), protocol === 'file' ? /^(opfs|directory)-json$/ : /^opfs-json$/);
 }
 
 function urlFor(protocol, relative) {
@@ -422,7 +422,7 @@ async function practiceFirstInvocation(protocol) {
         assert.equal(await page.locator('#reading-vocab-header-btn').count(), 0, 'practice must not expose a vocabulary entry');
         await page.evaluate(() => ReadingVocabReader.open('p2-low-08', { fromPractice: true }));
         await readerReady(page, 'p2-low-08');
-        assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');
+        assert.match(await page.evaluate(() => AppData.status().backend), protocol === 'file' ? /^(opfs|directory)-json$/ : /^opfs-json$/);
         const selected = await page.evaluate(() => {
             const paragraph = document.querySelector('.vocab-paragraph-text');
             const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);

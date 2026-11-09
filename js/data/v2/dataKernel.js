@@ -473,11 +473,12 @@
             this.db = null;
             this.mutationTimeoutMs = options.mutationTimeoutMs;
             this.requestTimeoutMs = options.requestTimeoutMs;
+            this.databaseVersion = options.databaseVersion || DATABASE_VERSION;
         }
         async initialize() {
             if (!this.indexedDB || typeof this.indexedDB.open !== 'function') throw new Error('IndexedDB unavailable');
             this.db = await new Promise((resolve, reject) => {
-                const request = this.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+                const request = this.indexedDB.open(DATABASE_NAME, this.databaseVersion);
                 let abandoned = false;
                 let settle;
                 request.onsuccess = () => { if (abandoned || !settle) { try { request.result.close(); } catch (_) {} } else settle.resolve(request.result); };
@@ -596,7 +597,17 @@
                 const journalRequest = tx.objectStore(SYSTEM_STORE).get('system.operationJournal');
                 journalRequest.onerror = () => fail(journalRequest.error || new Error('Journal read failed'));
                 journalRequest.onsuccess = () => {
-                    try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    const apply = () => {
+                        try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); }
+                        catch (error) { fail(error); }
+                    };
+                    if (!folderSyncModel() || spec.resetAllowed) { apply(); return; }
+                    const barrier = tx.objectStore(SYSTEM_STORE).get(folderSyncModel().RESET_KEY);
+                    barrier.onerror = () => fail(barrier.error);
+                    barrier.onsuccess = () => {
+                        if (barrier.result) fail(validation('本机正在清理数据，请等待清理完成后重新打开网页'));
+                        else apply();
+                    };
                 };
             }, true);
         }
@@ -704,6 +715,64 @@
         return receipt;
     }
 
+    function folderSyncModel() { return global.FolderSyncModel || null; }
+    function syncStores(stores, capture = true) { return folderSyncModel() && capture ? STORE_NAMES.slice() : stores; }
+    function readSyncSnapshot(tx, complete, fail) {
+        const model = folderSyncModel();
+        const keys = model.DOCUMENT_KEYS.concat(['vocab.readingVocabWords', 'vocab.readingBookshelfExams']);
+        const snapshot = { documents: {}, revisions: {}, entities: {} };
+        const reads = keys.map(logicalKey => ({ logicalKey,
+            request: tx.objectStore(storeFor(logicalKey)).get(logicalKey) }))
+            .concat(ENTITY_STORES.map(store => ({ store, request: tx.objectStore(store).getAll() })));
+        let remaining = reads.length;
+        for (const read of reads) {
+            read.request.onerror = () => fail(read.request.error || validation('同步快照读取失败'));
+            read.request.onsuccess = () => {
+                try {
+                    if (read.logicalKey) {
+                        const entry = lookupEntry(read.logicalKey), row = read.request.result;
+                        if (row && !validateEnvelope(entry, row.envelope)) throw corruption('Invalid sync source: ' + read.logicalKey);
+                        snapshot.documents[read.logicalKey] = row?.envelope.state === 'present' ? clone(row.envelope.data) : entry.defaultValue();
+                        snapshot.revisions[read.logicalKey] = row?.envelope.revision || 0;
+                    } else {
+                        snapshot.entities[read.store] = (read.request.result || []).map(row => {
+                            validateEntityRow(read.store, row);
+                            return clone(row);
+                        });
+                    }
+                    if (!--remaining) complete(snapshot);
+                } catch (error) { fail(error); }
+            };
+        }
+    }
+    function putSyncState(tx, previous, data, opId) {
+        const key = folderSyncModel().STATE_KEY;
+        const envelope = makeEnvelope(lookupEntry(key), data, {
+            revision: incrementCounter(previous?.envelope?.revision || 0, key), operationId: opId, normalized: true
+        });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey: key, envelope });
+    }
+    function captureFolderSync(tx, opId, relevant, complete, fail) {
+        const model = folderSyncModel();
+        if (!model || !relevant) { complete(); return; }
+        const request = tx.objectStore(SYSTEM_STORE).get(model.STATE_KEY);
+        request.onerror = () => fail(request.error || validation('同步队列读取失败'));
+        request.onsuccess = () => {
+            try {
+                const row = request.result;
+                if (!row?.envelope?.data?.enabled) { complete(); return; }
+                if (!validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
+                readSyncSnapshot(tx, snapshot => {
+                    try {
+                        const state = model.capture(row.envelope.data, snapshot, opId);
+                        putSyncState(tx, row, state, opId);
+                        complete();
+                    } catch (error) { fail(error instanceof AppDataError ? error : validation(error.message)); }
+                }, fail);
+            } catch (error) { fail(error); }
+        };
+    }
+
     class DataKernel {
         constructor(options = {}) {
             this.driver = null;
@@ -746,12 +815,14 @@
         initialize() {
             if (this.ready) return this.ready;
             this.state = 'initializing';
-            this.ready = new IndexedDBDriver(this.indexedDB, {
+            const Driver = global.FileJournal ? global.FileJournal.driverClass(IndexedDBDriver) : IndexedDBDriver;
+            const pendingDriver = new Driver(this.indexedDB, {
                 mutationTimeoutMs: this.indexedDBMutationTimeoutMs, requestTimeoutMs: this.indexedDBRequestTimeoutMs
-            }).initialize().then((driver) => {
-                this.driver = driver; this.backend = 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
-            }).catch((error) => { this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
-                throw error instanceof AppDataError ? error : new AppDataError('BACKEND_UNAVAILABLE', 'IndexedDB is required for AppData v2', { cause: error && error.message }); });
+            });
+            this.ready = pendingDriver.initialize().then((driver) => {
+                this.driver = driver; this.backend = driver.backend || 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
+            }).catch((error) => { pendingDriver.close(); this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
+                throw new AppDataError('BACKEND_UNAVAILABLE', global.FileJournal ? 'Local JSON storage is unavailable: ' + error.message : 'IndexedDB is required for AppData v2', { cause: error?.message, originalName: error?.name, originalCode: error?.code }); });
             return this.ready;
         }
         close() {
@@ -761,13 +832,15 @@
             if (this.state !== 'failed') this.state = 'closed';
         }
         _assertReady() {
-            if (this.state === 'failed') throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 backend failed', { cause: this.failure && this.failure.message });
+            if (this.state === 'failed') throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 backend failed', {
+                cause: this.failure?.message, originalName: this.failure?.name, originalCode: this.failure?.code
+            });
             if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
         }
         _latch(error) {
-            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
+            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'Local save failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
-            return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
+            return new AppDataError('BACKEND_UNAVAILABLE', 'Local data backend failed; reload is required', { cause: error?.message, originalName: error?.name, originalCode: error?.code });
         }
         onCommitted(listener) {
             if (typeof listener !== 'function') throw validation('Committed listener must be a function');
@@ -831,7 +904,8 @@
             const prepared = changes.map((change, index) => {
                 if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
                 const logicalKey = String(change.logicalKey || ''); const entry = lookupEntry(logicalKey);
-                if (logicalKey === 'system.operationJournal' || logicalKey === 'system.readingViewToken' || logicalKey === ENTITY_REVISION_LOGICAL_KEY) {
+                if (logicalKey === 'system.operationJournal' || logicalKey === 'system.readingViewToken'
+                    || logicalKey === ENTITY_REVISION_LOGICAL_KEY || logicalKey === folderSyncModel()?.STATE_KEY) {
                     throw validation(`${logicalKey} is managed by DataKernel`);
                 }
                 if (seen.has(logicalKey)) throw validation(`Duplicate mutation key: ${logicalKey}`); seen.add(logicalKey);
@@ -848,7 +922,9 @@
                 changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })),
                 warnings
             }, warnings);
-            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
+            const captureSync = prepared.some(change => folderSyncModel()?.DOCUMENT_KEYS.includes(change.logicalKey));
+            const stores = Array.from(new Set([SYSTEM_STORE].concat(prepared.map(item => storeFor(item.logicalKey)))));
+            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, captureSync, stores: syncStores(stores, captureSync) };
         }
         async mutate(changes, options = {}) {
             this._assertReady(); const spec = this._documentSpec(changes, options);
@@ -875,7 +951,7 @@
                         invalidateReadingView(tx, spec.changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, spec.warnings, []);
                         putJournal(tx, journalRow, journal, spec, receipt);
-                        done(receipt);
+                        captureFolderSync(tx, spec.operationId, spec.captureSync, () => done(receipt), fail);
                     };
                     if (!remaining) { finish(); return; }
                     for (const item of reads) { item.request.onerror = () => fail(item.request.error || new Error('Mutation read failed')); item.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } }; }
@@ -983,7 +1059,7 @@
                 pending: [],
                 fingerprint: requestFingerprint(options, { operations: items,
                     ...(documents.length ? { documents: documents.map(({ entry, ...item }) => item) } : {}), warnings }, warnings),
-                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store), documents.map(item => storeFor(item.logicalKey)))))
+                stores: syncStores(Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store), documents.map(item => storeFor(item.logicalKey))))))
             };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
@@ -1067,7 +1143,7 @@
                             invalidateReadingView(tx, documents, spec.operationId);
                             const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                             putJournal(tx, journalRow, journal, spec, receipt);
-                            done(receipt);
+                            captureFolderSync(tx, spec.operationId, true, () => done(receipt), fail);
                         };
                         for (const read of reads.concat(documentReads)) {
                             read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed'));
@@ -1298,7 +1374,9 @@
                         invalidateReadingView(tx, changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                         putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt);
-                        done(receipt);
+                        captureFolderSync(tx, spec.operationId, Object.keys(entityRows).length > 0
+                            || changes.some(change => folderSyncModel()?.DOCUMENT_KEYS.includes(change.logicalKey)),
+                            () => done(receipt), fail);
                     };
                     let remaining = reads.length;
                     for (const read of reads) {
@@ -1315,7 +1393,139 @@
             }
             catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
         }
-        status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null }); }
+        async folderSyncAction(action, input = {}, project = null) {
+            this._assertReady();
+            const model = folderSyncModel();
+            if (!model) throw validation('同步模块未加载，请更新所有网页文件');
+            if (['status', 'pending', 'known'].includes(action)) {
+                const state = await this.read(model.STATE_KEY);
+                if (action === 'status') return { result: model.status(state) };
+                if (state.version) model.assertState(state);
+                return { result: action === 'pending' ? (state.pending || []) : (state.seen || {}) };
+            }
+            const command = canonicalizeJson(input);
+            const opId = randomId('folder-sync-' + action);
+            const stateOnly = action === 'ack' || action === 'disconnect';
+            const spec = { operationId: opId, stores: stateOnly ? [SYSTEM_STORE] : STORE_NAMES.slice(),
+                resetAllowed: action === 'ack' || action === 'receive' };
+            const targets = [];
+            let result;
+            const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, _journalRow, _journal, done, fail) => {
+                const reject = error => fail(error instanceof AppDataError ? error : validation(error.message || String(error)));
+                const request = tx.objectStore(SYSTEM_STORE).get(model.STATE_KEY);
+                request.onerror = () => reject(request.error || validation('同步状态读取失败'));
+                request.onsuccess = () => {
+                    try {
+                        const row = request.result;
+                        if (row && !validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
+                        let state = clone(row?.envelope?.data || {});
+                        function finish(revisions = {}) {
+                            putSyncState(tx, row, state, opId);
+                            result = model.status(state);
+                            done(receiptFor(opId, revisions, [], []));
+                        }
+                        if (stateOnly) {
+                            model.assertState(state);
+                            if (action === 'disconnect') state.enabled = false;
+                            else {
+                                const ids = new Set(command.ids || []);
+                                state.pending = state.pending.filter(item => !ids.has(item.id));
+                            }
+                            finish(); return;
+                        }
+                        readSyncSnapshot(tx, original => {
+                            try {
+                                let apply = false;
+                                if (action === 'connect') {
+                                    if (state.enabled && state.spaceId !== command.spaceId) throw validation('请先断开当前数据空间');
+                                    if (state.pending?.length && state.spaceId !== command.spaceId) {
+                                        throw validation('原空间仍有未写入的学习记录，请重新连接原文件夹并先同步');
+                                    }
+                                    if (state.spaceId !== command.spaceId || !state.version) state = model.newState(command.spaceId, command.preferences === true);
+                                    state.enabled = true;
+                                    model.capture(state, original, opId);
+                                } else {
+                                    model.assertState(state);
+                                    if (action === 'preferences') {
+                                        state.preferences = command.enabled === true;
+                                        model.capture(state, original, opId);
+                                        apply = state.preferences;
+                                    } else {
+                                        if (!state.enabled) throw validation('同步已暂停');
+                                        // Reconcile any local write before observing incoming versions.
+                                        model.capture(state, original, opId);
+                                        if (action === 'receive') {
+                                            const received = model.receive(state, command.operation);
+                                            apply = !received.duplicate && !received.blocked;
+                                        }
+                                        else if (action === 'approveDelete') {
+                                            const operation = state.blocked?.[command.id];
+                                            if (!operation) throw validation('批量删除请求已变化，请刷新');
+                                            model.receive(state, operation, true); apply = true;
+                                        }
+                                        else if (action === 'resolve') { model.resolve(state, command.key, command.headId); apply = true; }
+                                        else throw validation('未知同步操作');
+                                    }
+                                }
+                                const revisions = {};
+                                if (apply) {
+                                    let next = model.toSnapshot(state, original);
+                                    if (project) next = project(next, original, opId);
+                                    const docs = [];
+                                    for (const [key, data] of Object.entries(next.documents)) {
+                                        if (model.equal(data, original.documents[key])) continue;
+                                        const entry = lookupEntry(key), normalized = canonicalizeJson(entry.normalize(data));
+                                        if (!entry.validate(normalized)) throw validation('同步文档格式无效：' + key);
+                                        const envelope = makeEnvelope(entry, normalized, { revision: incrementCounter(original.revisions[key] || 0, key), operationId: opId, normalized: true });
+                                        tx.objectStore(storeFor(key)).put({ logicalKey: key, envelope: canonicalizeJson(envelope) });
+                                        revisions[key] = envelope.revision; docs.push({ logicalKey: key });
+                                        targets.push({ logicalKey: key, owner: entry.owner, classification: entry.classification });
+                                    }
+                                    invalidateReadingView(tx, docs, opId);
+                                    const revisionRequest = tx.objectStore(SYSTEM_STORE).get(ENTITY_REVISION_LOGICAL_KEY);
+                                    revisionRequest.onerror = () => reject(revisionRequest.error);
+                                    revisionRequest.onsuccess = () => {
+                                        try {
+                                            const tracked = readEntityRevisionState(revisionRequest.result || null);
+                                            let changed = false;
+                                            for (const store of ENTITY_STORES) {
+                                                const previous = new Map(original.entities[store].map(item => [item.recordId, item]));
+                                                const incoming = new Map(next.entities[store].map(item => [item.recordId, item]));
+                                                let affected = false;
+                                                for (const id of new Set([...previous.keys(), ...incoming.keys()])) {
+                                                    const old = previous.get(id), value = incoming.get(id);
+                                                    if (old && value && model.equal(old.data, value.data)) continue;
+                                                    const revision = incrementCounter(trackedEntityRevision(tracked, store, id, old), store + '/' + id);
+                                                    if (!value) tx.objectStore(store).delete(id);
+                                                    else {
+                                                        assertEntityIdentity(store, id, value.data);
+                                                        tx.objectStore(store).put({ recordId: id, revision, operationId: opId, updatedAt: nowIso(),
+                                                            data: canonicalizeJson(value.data), checksum: checksum(value.data) });
+                                                    }
+                                                    trackEntityRevision(tracked, store, id, revision);
+                                                    revisions[store + '/' + id] = revision;
+                                                    targets.push({ store, recordId: id, type: value ? 'put' : 'delete' });
+                                                    affected = changed = true;
+                                                }
+                                                if (affected) bumpEntityEpoch(tracked, store);
+                                            }
+                                            if (changed) putEntityRevisionState(tx, revisionRequest.result || null, tracked, opId);
+                                            invalidateReadingView(tx, docs, opId);
+                                            model.rememberMaterialized(state, next);
+                                            finish(revisions);
+                                        } catch (error) { reject(error); }
+                                    };
+                                } else finish(revisions);
+                            } catch (error) { reject(error); }
+                        }, reject);
+                    } catch (error) { reject(error); }
+                };
+            } }));
+            if (targets.length) this._notifyCommitted(targets.concat({ logicalKey: model.STATE_KEY, syncOrigin: true }), receipt);
+            return { ...receipt, result: clone(result) };
+        }
+        status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null,
+            ...(global.FileJournal ? { files: global.FileJournal.status() } : {}) }); }
     }
 
     Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, validateEntityRow, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });

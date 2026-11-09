@@ -883,7 +883,8 @@
         listCache: new Map(),
         bundledPhoneticIndex: null,
         commitSubscriptionAttached: false,
-        activeRefreshToken: 0
+        activeRefreshToken: 0,
+        configRefreshToken: 0
     };
 
     function cloneValue(value) {
@@ -1152,12 +1153,6 @@
         return Object.prototype.hasOwnProperty.call(collections, listId) ? collections[listId] : null;
     }
 
-    async function saveConfigData(configPatch = state.config) {
-        const vocab = await requireVocabData();
-        await vocab.patchConfig(Object.assign({}, configPatch, { activeListId: state.activeListId }));
-        return true;
-    }
-
     function mergeConfig(config) {
         const base = { ...DEFAULT_CONFIG };
         if (!config || typeof config !== 'object' || Array.isArray(config)) {
@@ -1200,7 +1195,7 @@
     function refreshActiveListFromStorage() {
         const refreshToken = ++state.activeRefreshToken;
         const listId = state.activeListId;
-        Promise.resolve()
+        return Promise.resolve()
             .then(() => readListData(listId))
             .then((storedData) => {
                 if (refreshToken !== state.activeRefreshToken || listId !== state.activeListId) {
@@ -1212,6 +1207,25 @@
             .catch((error) => {
                 console.error('[VocabStore] 提交后刷新激活词表失败:', error);
             });
+    }
+
+    function configuredListId(config) {
+        return typeof config?.activeListId === 'string' && Object.hasOwn(VOCAB_LISTS, config.activeListId)
+            ? config.activeListId : DEFAULT_LIST_ID;
+    }
+
+    async function refreshConfigFromStorage(vocab) {
+        const token = ++state.configRefreshToken;
+        const stored = await vocab.getConfig();
+        if (token !== state.configRefreshToken) return;
+        state.config = mergeConfig(stored);
+        state.listCache.clear();
+        const listId = configuredListId(stored);
+        if (listId !== state.activeListId) {
+            state.activeListId = listId;
+            setWordsInternal([]);
+            await refreshActiveListFromStorage();
+        }
     }
 
     function handleDataCommitted(event) {
@@ -1233,6 +1247,11 @@
             shouldRefreshActiveList = shouldRefreshActiveList || state.activeListId !== DEFAULT_LIST_ID;
         }
 
+        if (logicalKeys.has('vocab.userConfig')) {
+            requireVocabData().then(refreshConfigFromStorage).catch(error => {
+                console.error('[VocabStore] 提交后刷新词汇设置失败:', error);
+            });
+        }
         if (shouldRefreshActiveList) {
             refreshActiveListFromStorage();
         }
@@ -1404,21 +1423,21 @@
         }
         state.loadingPromise = (async () => {
             const vocab = await requireVocabData();
+            const token = ++state.configRefreshToken;
             const storedConfig = await vocab.getConfig();
-            const storedActiveList = storedConfig && storedConfig.activeListId;
+            if (token !== state.configRefreshToken) return;
+            const listId = configuredListId(storedConfig);
+            state.activeListId = listId;
+            state.config = mergeConfig(storedConfig);
 
-            state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList]
-                ? storedActiveList
-                : DEFAULT_LIST_ID;
-
-            const storedWords = await readListData(state.activeListId);
-            const normalizedWords = normalizeStoredListWords(storedWords, state.activeListId);
+            const storedWords = await readListData(listId);
+            if (token !== state.configRefreshToken || listId !== state.activeListId) return;
+            const normalizedWords = normalizeStoredListWords(storedWords, listId);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
                 state.lastLoadSource = 'appData-v2';
             }
 
-            state.config = mergeConfig(storedConfig);
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
@@ -1546,8 +1565,8 @@
         };
     }
 
-    async function updateWord(id, patch = {}) {
-        if (!id || !state.wordIndex.has(id)) {
+    async function updateWord(id, patch = {}, listId = state.activeListId) {
+        if (!id || (listId === state.activeListId && !state.wordIndex.has(id))) {
             return null;
         }
         const vocab = await requireVocabData();
@@ -1560,16 +1579,16 @@
                 delete normalizedPatch.phonetic;
             }
         }
-        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch: normalizedPatch });
-        const updated = normalizeMutationWord(receipt.word, state.activeListId);
-        const index = state.words.findIndex((word) => word.id === id);
-        if (index >= 0 && updated) {
+        const receipt = await vocab.patchWord({ listId, wordId: id, patch: normalizedPatch });
+        const updated = normalizeMutationWord(receipt.word, listId);
+        if (!updated) return null;
+        const index = listId === state.activeListId ? state.words.findIndex((word) => word.id === id) : -1;
+        if (index >= 0) {
             state.words.splice(index, 1, updated);
             state.wordIndex.set(id, updated);
-            state.listCache.delete(state.activeListId);
-            return cloneValue(updated);
         }
-        return null;
+        state.listCache.delete(listId);
+        return cloneValue(updated);
     }
 
     function getConfig() {
@@ -1577,9 +1596,13 @@
     }
 
     async function setConfig(config) {
-        const next = mergeConfig(config);
-        await saveConfigData(next);
-        state.config = next;
+        const normalized = mergeConfig(config);
+        const patch = Object.fromEntries(Object.keys(normalized)
+            .filter(key => config && Object.hasOwn(config, key))
+            .map(key => [key, normalized[key]]));
+        const vocab = await requireVocabData();
+        if (Object.keys(patch).length) await vocab.patchConfig(patch);
+        await refreshConfigFromStorage(vocab);
         return getConfig();
     }
 
@@ -2693,12 +2716,15 @@
             settingsRestoreFocus: null,
             listRestoreFocus: null,
             settingsSaveToken: 0,
+            settingsBaseline: null,
+            settingsPending: null,
             settingsSaveTail: Promise.resolve(),
             listSwitcher: null,
             listSwitcherListenerAttached: false
         },
         session: {
             stage: 'loading',
+            listId: undefined,
             backlog: [],
             activeQueue: [],
             completed: [],
@@ -2834,6 +2860,7 @@
     }
 
     function resetSessionState() {
+        state.session.listId = undefined;
         state.session.backlog = [];
         state.session.activeQueue = [];
         state.session.completed = [];
@@ -3477,19 +3504,26 @@
         if (!state.store || !state.elements.settingsFields) {
             return;
         }
-        const config = state.store.getConfig ? state.store.getConfig() : {};
+        const config = { ...state.store.getConfig?.(), ...state.ui.settingsPending };
         const { dailyNew, reviewLimit, masteryCount, notify } = state.elements.settingsFields;
+        const baseline = {
+            dailyNew: Number(config.dailyNew ?? DEFAULT_BATCH_SIZE),
+            reviewLimit: Number(config.reviewLimit ?? DEFAULT_BATCH_SIZE),
+            masteryCount: Number(config.masteryCount ?? 4),
+            notify: config.notify !== false
+        };
+        state.ui.settingsBaseline = baseline;
         if (dailyNew) {
-            dailyNew.value = Number(config.dailyNew ?? DEFAULT_BATCH_SIZE);
+            dailyNew.value = baseline.dailyNew;
         }
         if (reviewLimit) {
-            reviewLimit.value = Number(config.reviewLimit ?? DEFAULT_BATCH_SIZE);
+            reviewLimit.value = baseline.reviewLimit;
         }
         if (masteryCount) {
-            masteryCount.value = Number(config.masteryCount ?? 4);
+            masteryCount.value = baseline.masteryCount;
         }
         if (notify) {
-            notify.checked = Boolean(config.notify !== false);
+            notify.checked = baseline.notify;
         }
         if (state.elements.settingsError) {
             state.elements.settingsError.textContent = '';
@@ -3571,19 +3605,23 @@
 
         const saveToken = ++state.ui.settingsSaveToken;
         const modalToken = state.ui.modalEpoch;
+        const baseline = state.ui.settingsBaseline;
+        const patch = Object.fromEntries(Object.entries({ dailyNew, reviewLimit, masteryCount, notify })
+            .filter(([key, value]) => baseline?.[key] !== value));
+        const pending = { ...state.ui.settingsPending, ...patch };
+        state.ui.settingsPending = pending;
+        state.ui.settingsBaseline = { ...baseline, ...patch };
         try {
-            const commit = state.ui.settingsSaveTail.then(
-                () => state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify }),
-                () => state.store.setConfig({ dailyNew, reviewLimit, masteryCount, notify })
-            );
+            const save = () => state.store.setConfig(patch);
+            const commit = state.ui.settingsSaveTail.then(save, save);
             state.ui.settingsSaveTail = commit.catch(() => undefined);
-            await commit;
+            const saved = await commit;
             if (saveToken !== state.ui.settingsSaveToken
                 || modalToken !== state.ui.modalEpoch
                 || state.ui.modalOwner !== 'settings') {
                 return;
             }
-            state.session.batchSize = Math.max(1, Math.min(reviewLimit, DEFAULT_BATCH_SIZE));
+            state.session.batchSize = Math.max(1, Math.min(saved?.reviewLimit ?? reviewLimit, DEFAULT_BATCH_SIZE));
             closeSettingsModal();
             refreshDashboard();
             render();
@@ -3595,10 +3633,13 @@
                 return;
             }
             console.error('[VocabSessionView] 设置保存失败:', error);
+            state.ui.settingsBaseline = baseline;
             if (state.elements.settingsError) {
                 state.elements.settingsError.textContent = error.message || '保存失败，请稍后再试。';
             }
             showFeedbackMessage(`保存失败：${error.message || error}`, 'error');
+        } finally {
+            if (state.ui.settingsPending === pending) state.ui.settingsPending = null;
         }
     }
 
@@ -4457,6 +4498,11 @@
         }
     }
 
+    function reviewPatch(word) {
+        return Object.fromEntries(['easeFactor', 'interval', 'repetitions', 'intraCycles', 'correctCount', 'lastReviewed', 'nextReview', 'box']
+            .filter(key => Object.hasOwn(word, key)).map(key => [key, word[key]]));
+    }
+
     async function applyResult(qualityOrStatus, options = {}) {
         const session = state.session;
         const word = session.currentWord;
@@ -4559,7 +4605,7 @@
         let updated = patch;
 
         if (shouldSave) {
-            updated = await state.store.updateWord(word.id, patch) || patch;
+            updated = await state.store.updateWord(word.id, reviewPatch(patch), session.listId) || patch;
         }
 
         session.currentWord = updated;
@@ -4643,7 +4689,7 @@
             const now = new Date();
             const patch = state.scheduler.scheduleAfterResult(word, quality, now);
             try {
-                const committedWord = await state.store.updateWord(word.id, patch);
+                const committedWord = await state.store.updateWord(word.id, reviewPatch(patch), session.listId);
                 if (!committedWord) {
                     throw new Error('词汇记录不存在');
                 }
@@ -4692,7 +4738,7 @@
         const note = state.elements.noteInput.value.trim();
         let committedWord;
         try {
-            committedWord = await state.store.updateWord(word.id, { note });
+            committedWord = await state.store.updateWord(word.id, { note }, state.session.listId);
             if (!committedWord) {
                 throw new Error('词汇记录不存在');
             }
@@ -5066,6 +5112,7 @@
         }
         const config = store.getConfig();
         const { preferNew = false } = options;
+        state.session.listId = store.getActiveListId?.();
         const reviewLimit = Number(config.reviewLimit) || DEFAULT_BATCH_SIZE;
         const now = new Date();
         const dueAll = store.getDueWords(now);

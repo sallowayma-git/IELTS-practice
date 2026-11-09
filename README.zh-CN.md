@@ -36,26 +36,28 @@
 
 IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的纯前端练习系统。当前主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。
 
-系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
+系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。AppData 数据始终写入本地 JSON 快照和 JSONL 事务，与同步开关无关。安全 HTTP 环境默认使用浏览器私有文件系统（OPFS）；`file://` 无法使用 OPFS 时需要连接专用本地目录。IndexedDB 作为可重建的读取缓存。恢复和兼容性说明见 [本地存储与同步](ONEDRIVE_SYNC.md)。
 
 ## 快速开始
+
+如需在多台电脑间同步学习记录，请参阅 [OneDrive 文件夹同步](ONEDRIVE_SYNC.md)。
 
 ![首次启动、学习总览与题库浏览的实际画面](.github/assets/quick-start.gif)
 
 ### 系统要求
 
 - 推荐浏览器：Chrome 或 Edge 最新稳定版。
-- 基础能力：支持 ES6、IndexedDB、localStorage、sessionStorage、`window.open` 和 `postMessage`。
+- 基础能力：支持 ES6、Web Locks、OPFS（或可授权的目录访问）、IndexedDB、localStorage、sessionStorage、`window.open` 和 `postMessage`。
 - 运行方式：支持直接通过 `file://` 打开，也支持通过本地静态服务器或静态网页托管访问。
 - 浏览器设置：首次练习时需要允许弹窗，否则练习窗口可能无法打开。
 
-Firefox、Safari 和移动浏览器可以使用，但对 `file://`、PDF、音频、跨窗口通信和弹窗策略的限制可能更严格。
+Firefox、Safari 和移动浏览器应通过支持 OPFS 和 Web Locks 的安全 HTTP 入口访问；无法使用 OPFS 且不支持目录选择时会阻止保存。PDF、音频、跨窗口通信和弹窗策略也受浏览器限制。
 
 ### 本地直接运行
 
 1. 从上方链接下载并完整解压运行 ZIP。
 2. 保持目录结构完整，不要只复制 `index.html`。
-3. 双击打开根目录下的 `index.html`。
+3. 双击打开根目录下的 `index.html`。如果出现本地存储提示，连接项目目录和云同步目录之外的专用本地数据目录；也可通过固定 localhost 地址打开以使用 OPFS。
 4. 进入“题库浏览”确认题库列表是否正常显示。
 5. 点击任意练习项时，如浏览器提示弹窗拦截，请允许该页面打开新窗口。
 

@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from playwright.async_api import async_playwright
+from local_file_storage_fixture import async_playwright
 
 REPO = Path(__file__).resolve().parents[3]
 INDEX = (REPO / "index.html").as_uri() + "?view=practice"

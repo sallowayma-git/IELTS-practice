@@ -1,4 +1,4 @@
-globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":"sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
+globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":"sha256:1ca2c97af89bb4fcb40967bdbc5b2772c31db3dc335ea6ca1f7a235a572d3872","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
 /* Generated by scripts/build-bundles.mjs. Do not edit by hand. */
 
 /* ===== js/diagnostics/diagnosticContract.js ===== */
@@ -3677,6 +3677,12 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     // not as document keys. import merge identity is resolved in AppData, not here.
     const definitions = [
         {
+            // Installation identity, causal versions and durable outbox. Never portable backup data.
+            logicalKey: 'system.folderSyncStatic', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
+        },
+        {
             logicalKey: 'practice.reviewPlans', classification: 'authoritative',
             defaultValue: arrayDefault, normalize: normalizeArray, validate: isArray,
             export: true, import: 'merge-by-id'
@@ -3884,6 +3890,1142 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         enumerable: false,
         configurable: true,
         writable: false
+    });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/data/v2/syncModel.js ===== */
+/* Portable folder-sync protocol. No filesystem, timers, or database access. */
+(function installFolderSyncModel(global) {
+    'use strict';
+    if (global.FolderSyncModel) return;
+    const FORMAT = 'ielts-atlas-static-folder-sync';
+    const VERSION = 1;
+    // v3 adds deterministic field competition for settings. Older builds must
+    // reject these operations rather than calculate a different projection.
+    const OPERATION_VERSION = 3;
+    const VOCAB_LAYOUT_VERSION = 2;
+    const PROGRESS_PREFIX = 'vocabProgress/';
+    const REVIEW_DEFAULTS = Object.freeze({
+        easeFactor: null, interval: 1, repetitions: 0, intraCycles: 0, correctCount: 0,
+        lastReviewed: null, nextReview: null, box: 1
+    });
+    const REVIEW_FIELDS = Object.keys(REVIEW_DEFAULTS);
+    const STATE_KEY = 'system.folderSyncStatic';
+    const RESET_KEY = 'system.folderSyncStaticResetBarrier';
+    const STORES = ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
+    const DOCUMENT_KEYS = ['practice.reviewPlans', 'vocab.words', 'vocab.lists', 'vocab.readingState',
+        'vocab.userConfig', 'goals.items',
+        'achievements.manual', 'preferences.values'];
+    const copy = value => JSON.parse(JSON.stringify(value));
+    const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+    const plain = value => !!value && typeof value === 'object' && !Array.isArray(value);
+    const absent = () => ({ exists: false });
+    const present = value => ({ exists: true, value: copy(value) });
+    function fail(message) { const error = new Error(message); error.code = 'VALIDATION'; throw error; }
+    function stable(value) {
+        if (value === null || typeof value !== 'object') return JSON.stringify(value);
+        if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
+        return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
+    }
+    const equal = (left, right) => left === right || stable(left) === stable(right);
+    function safeJson(value, depth = 0) {
+        if (depth > 90) fail('同步数据嵌套过深');
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+        if (typeof value === 'number' && Number.isFinite(value)) return;
+        if (!value || typeof value !== 'object') fail('同步数据不是有效 JSON');
+        for (const key of Object.keys(value)) {
+            if (['__proto__', 'prototype', 'constructor'].includes(key)) fail('同步数据包含不安全的属性');
+            safeJson(value[key], depth + 1);
+        }
+    }
+    function identifier(value) { return typeof value === 'string' && /^[a-zA-Z0-9_-]{8,100}$/.test(value); }
+    function uuid() {
+        if (!global.crypto || typeof global.crypto.randomUUID !== 'function') fail('当前环境不支持安全的同步身份生成，请使用 Chrome / Edge 或 localhost');
+        return global.crypto.randomUUID();
+    }
+    // SHA-256 over canonical UTF-8 JSON, synchronous so it can run inside IDB transactions.
+    function digest(value) {
+        const bytes = new TextEncoder().encode(stable(value));
+        const length = Math.ceil((bytes.length + 9) / 64) * 64;
+        const padded = new Uint8Array(length); padded.set(bytes); padded[bytes.length] = 128;
+        const view = new DataView(padded.buffer);
+        view.setUint32(length - 8, Math.floor(bytes.length / 0x20000000));
+        view.setUint32(length - 4, (bytes.length * 8) >>> 0);
+        const primes = []; const h = []; const k = [];
+        for (let number = 2; primes.length < 64; number++) {
+            if (primes.some(prime => number % prime === 0)) continue;
+            primes.push(number);
+            if (h.length < 8) h.push((Math.sqrt(number) % 1 * 0x100000000) | 0);
+            k.push((Math.cbrt(number) % 1 * 0x100000000) | 0);
+        }
+        const rotate = (word, bits) => (word >>> bits) | (word << (32 - bits));
+        const words = new Int32Array(64);
+        for (let offset = 0; offset < length; offset += 64) {
+            for (let i = 0; i < 64; i++) {
+                if (i < 16) words[i] = view.getInt32(offset + i * 4);
+                else {
+                    const a = words[i - 15], b = words[i - 2];
+                    words[i] = (words[i - 16] + (rotate(a, 7) ^ rotate(a, 18) ^ (a >>> 3))
+                        + words[i - 7] + (rotate(b, 17) ^ rotate(b, 19) ^ (b >>> 10))) | 0;
+                }
+            }
+            let [a, b, c, d, e, f, g, hh] = h;
+            for (let i = 0; i < 64; i++) {
+                const t1 = (hh + (rotate(e, 6) ^ rotate(e, 11) ^ rotate(e, 25))
+                    + ((e & f) ^ (~e & g)) + k[i] + words[i]) | 0;
+                const t2 = ((rotate(a, 2) ^ rotate(a, 13) ^ rotate(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+                hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+            }
+            [a, b, c, d, e, f, g, hh].forEach((word, i) => { h[i] = (h[i] + word) | 0; });
+        }
+        return h.map(word => (word >>> 0).toString(16).padStart(8, '0')).join('');
+    }
+    function clockJoin(clocks) {
+        const result = {};
+        for (const clock of clocks) for (const [writer, value] of Object.entries(clock || {})) {
+            result[writer] = Math.max(result[writer] || 0, value);
+        }
+        return result;
+    }
+    const covers = (left, right) => Object.entries(right).every(([writer, n]) => (left[writer] || 0) >= n);
+    function valueAt(object, key) { return own(object, key) ? present(object[key]) : absent(); }
+    function arrayMap(array) {
+        const result = {};
+        for (const row of array) {
+            const id = plain(row) && (row.id ?? row.key ?? row.articleId ?? row.word ?? row.examId);
+            if (id === undefined || own(result, String(id))) return null;
+            if (['__proto__', 'constructor', 'prototype'].includes(String(id))) return null;
+            result[String(id)] = row;
+        }
+        return result;
+    }
+    // Conservative, symmetric three-way merge. Unknown arrays and competing scalars conflict.
+    function mergeValue(base, versions, atomic = false) {
+        const changed = versions.filter(value => !equal(value, base));
+        if (!changed.length) return { value: copy(base), conflict: false };
+        if (changed.every(value => equal(value, changed[0]))) return { value: copy(changed[0]), conflict: false };
+        if (atomic || changed.some(value => !value.exists)) return { value: copy(base), conflict: true };
+        const values = changed.map(value => value.value);
+        if (values.every(plain) && (!base.exists || plain(base.value))) {
+            const original = base.exists ? base.value : {};
+            const keys = [...new Set(Object.keys(original).concat(...values.map(Object.keys)))].sort();
+            const merged = {}; let conflict = false;
+            for (const key of keys) {
+                // Metadata clocks may be combined; learning/SM-2 clocks are deliberately excluded.
+                const timestamps = values.map(value => value[key]);
+                if (['createdAt', 'updatedAt', 'titleUpdatedAt', 'firstVisitedAt', 'lastVisitedAt'].includes(key)
+                    && timestamps.every(value => typeof value === 'string' && Number.isFinite(Date.parse(value)))) {
+                    merged[key] = timestamps.sort()[['createdAt', 'firstVisitedAt'].includes(key) ? 0 : timestamps.length - 1];
+                    continue;
+                }
+                const child = mergeValue(valueAt(original, key), values.map(value => valueAt(value, key)),
+                    ['practiceSummaries', 'practiceDetails', 'reviewState'].includes(key));
+                if (child.value.exists) merged[key] = child.value.value;
+                conflict = conflict || child.conflict;
+            }
+            return { value: present(merged), conflict };
+        }
+        if (values.every(Array.isArray) && (!base.exists || Array.isArray(base.value))) {
+            const maps = values.map(arrayMap), original = arrayMap(base.exists ? base.value : []);
+            if (original && maps.every(Boolean)) {
+                const merged = mergeValue(present(original), maps.map(present));
+                const ids = Object.keys(merged.value.value);
+                const order = Object.keys(original).filter(key => own(merged.value.value, key))
+                    .concat(ids.filter(key => !own(original, key)).sort());
+                return { value: present(order.map(key => merged.value.value[key])), conflict: merged.conflict };
+            }
+        }
+        return { value: copy(base), conflict: true };
+    }
+    function vocabValue(documents) {
+        const state = copy(documents['vocab.readingState'] || {});
+        if (Object.keys(state).length) {
+            state.generation = 'folder-sync-v1'; delete state.clockAt;
+            delete state.allowDefaultWordSeed;
+            for (const [table, rows] of Object.entries(state.tombstones || {})) {
+                if (table === 'all') { if (rows) rows.revision = 0; }
+                else for (const stamp of Object.values(rows)) stamp.revision = 0;
+            }
+        }
+        const hasReadingData = Object.values(state.reading || {}).some(value => Array.isArray(value) && value.length)
+            || Object.values(state.tombstones || {}).some(value => value && Object.keys(value).length);
+        return { words: documents['vocab.words'] || [], lists: documents['vocab.lists'] || {},
+            state: hasReadingData ? state : {}, config: documents['vocab.userConfig'] || {} };
+    }
+    function wordProgressKey(listId, word) {
+        const id = word?.id || word?.key || word?.word;
+        if (!id || typeof word.word !== 'string') return null;
+        const key = PROGRESS_PREFIX + JSON.stringify([listId, String(id), word.word]);
+        return key.length <= PROGRESS_PREFIX.length + 2000 ? key : null;
+    }
+    function mapVocabularyWords(value, transform) {
+        const mapList = (list, listId) => {
+            const keys = list.map(word => wordProgressKey(listId, word));
+            const unique = new Set(), duplicates = new Set();
+            for (const key of keys) {
+                if (unique.has(key)) duplicates.add(key);
+                unique.add(key);
+            }
+            return list.map((word, index) => keys[index] && !duplicates.has(keys[index])
+                ? transform(word, keys[index]) : word);
+        };
+        const lists = Object.fromEntries(Object.entries(value.lists).map(([id, list]) => {
+            if (Array.isArray(list)) return [id, mapList(list, id)];
+            return [id, Array.isArray(list?.words) ? { ...list, words: mapList(list.words, id) } : list];
+        }));
+        return { ...value, words: mapList(value.words, null), lists };
+    }
+    function splitVocabulary(value) {
+        const result = {};
+        const { config, ...structure } = mapVocabularyWords(value, (word, key) => {
+            const structuralWord = { ...word };
+            const progress = {};
+            for (const field of REVIEW_FIELDS) {
+                if (own(word, field)) progress[field] = word[field];
+                delete structuralWord[field];
+            }
+            delete structuralWord.updatedAt;
+            if (REVIEW_FIELDS.some(field => own(progress, field) && progress[field] !== REVIEW_DEFAULTS[field])) {
+                if (own(word, 'updatedAt')) progress.updatedAt = word.updatedAt;
+                result[key] = present(progress);
+            }
+            return structuralWord;
+        });
+        for (const [id, list] of Object.entries(structure.lists)) {
+            if (Array.isArray(list?.words)) delete list.updatedAt;
+        }
+        result.vocabulary = present(structure);
+        result.vocabConfig = present(config || {});
+        return result;
+    }
+    function restoreVocabulary(structure, local, units) {
+        const localWords = new Map();
+        mapVocabularyWords(local, (word, key) => { localWords.set(key, word); return word; });
+        const restored = mapVocabularyWords(structure, (word, key) => {
+            const previous = localWords.get(key);
+            const progress = units[key]?.value;
+            if (progress?.exists) return { ...word, ...progress.value };
+            // Keep the local row's field shape for unreviewed words. A progress
+            // tombstone restores defaults without dropping the word or its links.
+            const defaults = {};
+            if (previous) {
+                for (const field of REVIEW_FIELDS) if (own(previous, field)) defaults[field] = REVIEW_DEFAULTS[field];
+                if (own(previous, 'updatedAt')) defaults.updatedAt = previous.updatedAt;
+            }
+            return { ...word, ...defaults };
+        });
+        for (const [id, list] of Object.entries(restored.lists)) {
+            if (Array.isArray(list?.words) && own(local.lists[id] || {}, 'updatedAt')) {
+                list.updatedAt = local.lists[id].updatedAt;
+            }
+        }
+        return restored;
+    }
+    const locatorField = /^(?:url|uri|href|(?:audio|directory|exam|file|resource|source)(?:url|path)|path)$/i;
+    const absoluteLocator = /^(?:[a-z][a-z\d+.-]*:|[\\/])/i;
+    function localLocator(key, value) {
+        return typeof value === 'string' && locatorField.test(key) && absoluteLocator.test(value.trim());
+    }
+    // Completed records may retain the URL of the submitting file or local server.
+    // Strip it from the wire copy and retain each installation's own value on receive.
+    function practiceLayer(value, local) {
+        if (Array.isArray(value)) return value.map((item, index) => practiceLayer(item, local?.[index]));
+        if (!plain(value)) return value;
+        const fields = Object.entries(value)
+            .filter(([key, item]) => !localLocator(key, item))
+            .map(([key, item]) => [key, practiceLayer(item, local?.[key])]);
+        return Object.fromEntries(fields.concat(Object.entries(local || {}).filter(([key, item]) => localLocator(key, item))));
+    }
+    function unitsFrom(snapshot, preferences) {
+        const result = {}, docs = snapshot.documents;
+        const layers = Object.fromEntries(STORES.map(store => [store, new Map((snapshot.entities[store] || []).map(row => [row.recordId, row.data]))]));
+        for (const [id, summary] of layers.practiceSummaries) {
+            const bundle = { practiceSummaries: summary };
+            for (const store of STORES.slice(1)) {
+                if (!layers[store].has(id)) fail('练习记录实体层不完整，无法同步：' + id);
+                bundle[store] = layers[store].get(id);
+            }
+            result['practice/' + id] = present(practiceLayer(bundle));
+        }
+        for (const key of ['practice.reviewPlans', 'goals.items']) for (const row of docs[key] || []) {
+            const id = row.id || row.goalId;
+            if (!id) fail('同步集合缺少稳定 ID：' + key);
+            result[key + '/' + id] = present(row);
+        }
+        Object.assign(result, splitVocabulary(vocabValue(docs)));
+        result.achievements = present(docs['achievements.manual'] || {});
+        if (preferences) {
+            const selected = {};
+            for (const key of ['theme', 'readingDisplay', 'timer']) if (own(docs['preferences.values'] || {}, key)) selected[key] = docs['preferences.values'][key];
+            result.preferences = present(selected);
+        }
+        return result;
+    }
+    function validUnitKey(key) {
+        if (typeof key !== 'string') return false;
+        if (key.startsWith(PROGRESS_PREFIX)) {
+            if (key.length > PROGRESS_PREFIX.length + 2000) return false;
+            try {
+                const parts = JSON.parse(key.slice(PROGRESS_PREFIX.length));
+                return Array.isArray(parts) && parts.length === 3 && (parts[0] === null || typeof parts[0] === 'string')
+                    && typeof parts[1] === 'string' && typeof parts[2] === 'string' && key === PROGRESS_PREFIX + JSON.stringify(parts);
+            } catch (_) { return false; }
+        }
+        return ['vocabulary', 'vocabConfig', 'achievements', 'preferences'].includes(key)
+            || /^(practice|practice\.reviewPlans|goals\.items)\/.{1,2000}$/.test(key);
+    }
+    function validateUnit(key, wrapped) {
+        if (!validUnitKey(key) || !plain(wrapped) || typeof wrapped.exists !== 'boolean') fail('不支持的同步实体');
+        if (!wrapped.exists) return;
+        if (!own(wrapped, 'value')) fail('同步实体缺少内容');
+        const value = wrapped.value;
+        if (key.startsWith('practice/')) {
+            const id = key.slice(9);
+            if (!plain(value) || STORES.some(store => !plain(value[store])
+                || value[store][store === 'practiceSummaries' ? 'id' : 'recordId'] !== id)) fail('同步练习身份或实体层不匹配');
+            if (!equal(value, practiceLayer(value))) fail('同步练习包含本机文件路径或地址');
+        } else if (key === 'vocabulary') {
+            if (!plain(value) || !Array.isArray(value.words) || !plain(value.lists) || !plain(value.state)
+                || (own(value, 'config') && !plain(value.config))) fail('同步词汇格式无效');
+            if (global.ReadingVocabularyModel) global.ReadingVocabularyModel.createSnapshot({
+                words: value.words, lists: value.lists, ...(value.state.reading ? { reading: value.state.reading } : {})
+            });
+        } else {
+            if (!plain(value)) fail('同步实体格式无效');
+            if (key.startsWith(PROGRESS_PREFIX) && Object.keys(value).some(field => field !== 'updatedAt' && !own(REVIEW_DEFAULTS, field))) {
+                fail('同步复习进度格式无效');
+            }
+            if (key.startsWith('practice.reviewPlans/') && (!value.recordId || key !== 'practice.reviewPlans/' + value.id)
+                || key.startsWith('goals.items/') && key !== 'goals.items/' + (value.id || value.goalId)) {
+                fail('同步集合实体身份不匹配');
+            }
+        }
+    }
+    function compareStamp(left, right) {
+        const difference = left.stamp.time - right.stamp.time;
+        if (difference) return difference;
+        if (left.stamp.writer !== right.stamp.writer) return left.stamp.writer < right.stamp.writer ? -1 : 1;
+        return left.stamp.seq - right.stamp.seq;
+    }
+    // Like Super Productivity, causality is checked before timestamps. Only
+    // independent setting fields use LWW; deletion and coupled learning data
+    // retain alternatives. Stamps always belong to the originating edit.
+    function mergeSettings(base, heads) {
+        const changed = heads.filter(head => !equal(head.value, base));
+        if (!changed.length) return { value: copy(base), conflict: false };
+        if (changed.every(head => equal(head.value, changed[0].value))) return { value: copy(changed[0].value), conflict: false };
+        if (changed.some(head => !head.value.exists)) return { value: copy(base), conflict: true };
+        const values = changed.map(head => head.value.value);
+        if (values.every(plain) && (!base.exists || plain(base.value))) {
+            const original = base.exists ? base.value : {}, result = {}; let conflict = false;
+            for (const field of [...new Set([...Object.keys(original), ...values.flatMap(Object.keys)])].sort()) {
+                const merged = mergeSettings(valueAt(original, field), changed.map(head => ({ ...head, value: valueAt(head.value.value, field) })));
+                if (merged.value.exists) result[field] = merged.value.value;
+                conflict ||= merged.conflict;
+            }
+            return { value: present(result), conflict };
+        }
+        if (values.some(value => value && typeof value === 'object')) return { value: copy(base), conflict: true };
+        return { value: copy([...changed].sort(compareStamp).at(-1).value), conflict: false };
+    }
+    function projection(key, heads) {
+        heads.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+        if (heads.length === 1 || heads.every(head => equal(head.value, heads[0].value))) {
+            return { value: copy(heads[0].value), conflict: false, viewClock: clockJoin(heads.map(head => head.clock)) };
+        }
+        const sameBase = heads.every(head => equal(head.base, heads[0].base));
+        const base = sameBase ? heads[0].base : absent();
+        let merged = sameBase ? mergeValue(base, heads.map(head => head.value),
+            key.startsWith('practice.reviewPlans/') || key.startsWith(PROGRESS_PREFIX))
+            : { value: copy(heads[0].value), conflict: true };
+        if (sameBase && ['preferences', 'vocabConfig'].includes(key) && heads.every(head => head.stamp)) {
+            merged = mergeSettings(base, heads);
+        }
+        // A conflicting partial merge can violate entity/word relationships. Keep a valid baseline.
+        if (merged.conflict) merged.value = base.exists ? copy(base) : copy(heads.find(head => head.value.exists)?.value || heads[0].value);
+        try { validateUnit(key, merged.value); }
+        catch (_) { merged = { value: copy(heads[0].value), conflict: true }; }
+        return { ...merged, viewClock: merged.conflict ? {} : clockJoin(heads.map(head => head.clock)) };
+    }
+    function installChange(state, change, id, operation) {
+        const unit = state.units[change.key] || { heads: [] };
+        if (unit.heads.some(head => covers(head.clock, change.clock))) return;
+        unit.heads = unit.heads.filter(head => !covers(change.clock, head.clock));
+        unit.heads.push({ id, clock: copy(change.clock), value: copy(change.value), base: copy(change.base),
+            ...(operation?.version >= 3 ? { stamp: { time: Date.parse(operation.createdAt), writer: operation.writerId, seq: operation.seq } } : {}) });
+        Object.assign(unit, projection(change.key, unit.heads));
+        state.units[change.key] = unit;
+    }
+    function newState(spaceId, preferences = false) {
+        if (!identifier(spaceId)) fail('数据空间 ID 无效');
+        return { format: FORMAT, version: VERSION, vocabLayout: VOCAB_LAYOUT_VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
+            units: {}, materialized: {}, pending: [], seen: {}, blocked: {} };
+    }
+    function assertState(state) {
+        if (!state || state.format !== FORMAT || state.version !== VERSION || !identifier(state.spaceId) || !identifier(state.writerId)
+            || !Number.isSafeInteger(state.seq) || !plain(state.units) || !plain(state.materialized)
+            || !Array.isArray(state.pending) || !plain(state.seen)) fail('同步状态版本无效，请升级所有电脑上的网页');
+    }
+    function splitLegacyChange(change, retainUnchanged) {
+        if (change.key !== 'vocabulary') return [change];
+        const values = change.value.exists ? splitVocabulary(change.value.value) : {};
+        const bases = change.base.exists ? splitVocabulary(change.base.value) : {};
+        return [...new Set([...Object.keys(values), ...Object.keys(bases)])].flatMap(key => {
+            const value = values[key] || absent(), base = bases[key] || absent();
+            return retainUnchanged || key === 'vocabulary' || !equal(value, base)
+                ? [{ ...change, key, value, base }] : [];
+        });
+    }
+    function upgradeVocabulary(state) {
+        if (state.vocabLayout === VOCAB_LAYOUT_VERSION) return;
+        const legacy = state.units.vocabulary;
+        delete state.units.vocabulary;
+        for (const head of legacy?.heads || []) {
+            for (const change of splitLegacyChange({ ...head, key: 'vocabulary' }, true)) {
+                installChange(state, change, head.id);
+            }
+        }
+        const materialized = state.materialized.vocabulary;
+        delete state.materialized.vocabulary;
+        if (materialized?.exists) Object.assign(state.materialized, splitVocabulary(materialized.value));
+        // Original queued files, operation IDs and hashes remain byte-compatible.
+        state.vocabLayout = VOCAB_LAYOUT_VERSION;
+    }
+    function publish(state, entries, sourceId, resolve = false) {
+        if (!entries.length) return;
+        // Large first-time histories are independent complete units, not one ever-growing file.
+        // Keep a bulk delete in one operation so chunking cannot bypass receiver approval.
+        const practiceDeletes = entries.filter(([key, value]) => key.startsWith('practice/') && !value.exists).length;
+        if (entries.length > 100 && practiceDeletes < 10) {
+            for (let offset = 0; offset < entries.length; offset += 100) publish(state, entries.slice(offset, offset + 100), sourceId, resolve);
+            return;
+        }
+        state.seq++;
+        if (!Number.isSafeInteger(state.seq)) fail('同步序号已超出范围');
+        const id = state.writerId + '-' + String(state.seq).padStart(12, '0');
+        const changes = entries.map(([key, value]) => {
+            const unit = state.units[key];
+            const clock = clockJoin(unit ? (resolve || !unit.conflict ? unit.heads.map(head => head.clock) : [unit.viewClock]) : []);
+            clock[state.writerId] = state.seq;
+            return { key, value: copy(value), base: copy(state.materialized[key] || absent()), clock };
+        });
+        const operation = { format: FORMAT, version: OPERATION_VERSION, spaceId: state.spaceId,
+            writerId: state.writerId, seq: state.seq, id, sourceId: String(sourceId || ''),
+            createdAt: new Date().toISOString(), changes };
+        for (const change of changes) installChange(state, change, id, operation);
+        state.pending.push(operation); state.seen[id] = digest(operation);
+    }
+    function capture(state, snapshot, sourceId) {
+        assertState(state);
+        if (!state.enabled) return state;
+        upgradeVocabulary(state);
+        const actual = unitsFrom(snapshot, state.preferences);
+        const keys = [...new Set(Object.keys(state.materialized).concat(Object.keys(actual)))].filter(key => key !== 'preferences' || state.preferences);
+        const entries = keys.map(key => [key, actual[key] || absent()]).filter(([key, value]) => !equal(value, state.materialized[key] || absent()));
+        // An empty singleton on a new device is a baseline, not a competing edit.
+        const defaults = unitsFrom({ documents: {}, entities: {} }, state.preferences);
+        const meaningful = entries.filter(([key, value]) => own(state.materialized, key)
+            || !own(defaults, key) || !equal(value, defaults[key]));
+        for (const [key] of meaningful) {
+            if (!own(state.materialized, key) && own(defaults, key)) state.materialized[key] = defaults[key];
+        }
+        publish(state, meaningful, sourceId);
+        // The local user's commit stays visible. Unresolved alternatives remain in heads.
+        rememberMaterialized(state, snapshot, actual);
+        return state;
+    }
+    function validateOperation(operation) {
+        safeJson(operation);
+        if (!plain(operation) || operation.format !== FORMAT || ![VERSION, 2, OPERATION_VERSION].includes(operation.version)
+            || !identifier(operation.spaceId) || !identifier(operation.writerId)
+            || !Number.isSafeInteger(operation.seq) || operation.seq < 1
+            || operation.id !== operation.writerId + '-' + String(operation.seq).padStart(12, '0')
+            || !Array.isArray(operation.changes) || !operation.changes.length || operation.changes.length > 20000) fail('不支持或损坏的同步日志');
+        if (operation.version >= 3 && (typeof operation.createdAt !== 'string' || !Number.isFinite(Date.parse(operation.createdAt)))) fail('同步操作缺少有效的原始时间戳');
+        const keys = new Set();
+        for (const change of operation.changes) {
+            if (operation.version === VERSION && (change.key === 'vocabConfig'
+                || (typeof change.key === 'string' && change.key.startsWith(PROGRESS_PREFIX)))) {
+                fail('同步日志版本与词汇实体不匹配');
+            }
+            if (keys.has(change.key)) fail('同步日志包含重复实体'); keys.add(change.key);
+            validateUnit(change.key, change.value); validateUnit(change.key, change.base);
+            if (!plain(change.clock) || Object.keys(change.clock).length > 1000 || change.clock[operation.writerId] !== operation.seq
+                || Object.entries(change.clock).some(([writer, n]) => !identifier(writer) || !Number.isSafeInteger(n) || n < 1)) fail('同步因果版本无效');
+        }
+        return operation;
+    }
+    function receive(state, operation, allowLargeDelete = false) {
+        assertState(state); validateOperation(operation);
+        if (operation.spaceId !== state.spaceId) fail('日志不属于当前数据空间');
+        const hash = digest(operation);
+        if (own(state.seen, operation.id)) {
+            if (state.seen[operation.id] !== hash) fail('相同同步操作 ID 对应不同内容，已停止应用该文件');
+            return { state, duplicate: true };
+        }
+        state.blocked = state.blocked || {};
+        if (state.blocked[operation.id] && digest(state.blocked[operation.id]) !== hash) fail('待确认日志的内容发生变化');
+        const deleting = operation.changes.filter(change => change.key.startsWith('practice/')
+            && !change.value.exists && state.units[change.key]?.value.exists);
+        const count = Object.entries(state.units).filter(([key, unit]) => key.startsWith('practice/') && unit.value.exists).length;
+        if (!allowLargeDelete && deleting.length >= 10 && deleting.length >= count * .5) {
+            state.blocked[operation.id] = copy(operation);
+            return { state, duplicate: false, blocked: true };
+        }
+        upgradeVocabulary(state);
+        for (const change of operation.changes) {
+            const changes = operation.version === VERSION ? splitLegacyChange(change, false) : [change];
+            for (const entry of changes) installChange(state, entry, operation.id, operation);
+        }
+        state.seen[operation.id] = hash;
+        delete state.blocked[operation.id];
+        return { state, duplicate: false };
+    }
+    function resolve(state, key, headId) {
+        assertState(state);
+        upgradeVocabulary(state);
+        const unit = state.units[key];
+        const head = unit?.heads.find(item => item.id === headId);
+        if (!unit?.conflict || !head) fail('冲突已经变化，请刷新后重新选择');
+        publish(state, [[key, head.value]], 'conflict-resolution', true);
+    }
+    function toSnapshot(state, original) {
+        const result = copy(original), docs = result.documents;
+        const localVocabulary = vocabValue(original.documents);
+        const localLayers = Object.fromEntries(STORES.map(store => [store,
+            new Map((original.entities[store] || []).map(row => [row.recordId, row.data]))]));
+        const units = {};
+        for (const [key, unit] of Object.entries(state.units)) units[key] = copy(unit.value);
+        for (const store of STORES) result.entities[store] = [];
+        docs['practice.reviewPlans'] = []; docs['goals.items'] = [];
+        for (const [key, wrapped] of Object.entries(units)) {
+            if (!wrapped.exists) continue;
+            const value = wrapped.value;
+            if (key.startsWith('practice/')) {
+                const recordId = key.slice(9);
+                for (const store of STORES) {
+                    result.entities[store].push({ recordId, data: practiceLayer(value[store], localLayers[store].get(recordId)) });
+                }
+            } else if (key.startsWith('practice.reviewPlans/')) docs['practice.reviewPlans'].push(value);
+            else if (key.startsWith('goals.items/')) docs['goals.items'].push(value);
+            else if (key === 'vocabulary' && !equal(value.state, localVocabulary.state)) {
+                docs['vocab.readingState'] = value.state;
+            } else if (key === 'vocabConfig') {
+                docs['vocab.userConfig'] = value;
+            } else if (key === 'achievements') docs['achievements.manual'] = value;
+            else if (key === 'preferences' && state.preferences) {
+                const prefs = docs['preferences.values'] || {};
+                for (const field of ['theme', 'readingDisplay', 'timer']) delete prefs[field];
+                docs['preferences.values'] = Object.assign(prefs, value);
+            }
+        }
+        if (units.vocabulary?.exists) {
+            const vocabulary = restoreVocabulary(units.vocabulary.value, localVocabulary, state.units);
+            docs['vocab.words'] = vocabulary.words;
+            docs['vocab.lists'] = vocabulary.lists;
+        }
+        for (const store of STORES) result.entities[store].sort((a, b) => a.recordId.localeCompare(b.recordId));
+        for (const key of ['practice.reviewPlans', 'goals.items']) docs[key].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        const owners = new Set(result.entities.practiceSummaries.map(row => row.recordId));
+        docs['practice.reviewPlans'] = docs['practice.reviewPlans'].filter(plan => owners.has(plan.recordId));
+        return result;
+    }
+    function rememberMaterialized(state, snapshot, actual = unitsFrom(snapshot, state.preferences)) {
+        if (!state.preferences && state.materialized.preferences) actual.preferences = state.materialized.preferences;
+        state.materialized = actual;
+    }
+    function status(state) {
+        if (!state?.version) return { enabled: false, pending: 0, conflicts: [], blocked: [], spaceId: null };
+        assertState(state);
+        return { enabled: state.enabled, spaceId: state.spaceId, writerId: state.writerId, preferences: state.preferences,
+            pending: state.pending.length, blocked: Object.values(state.blocked || {}).map(op => ({ id: op.id, createdAt: op.createdAt,
+                count: op.changes.filter(change => change.key.startsWith('practice/') && !change.value.exists).length })),
+            conflicts: Object.entries(state.units).filter(([, unit]) => unit.conflict)
+                .map(([key, unit]) => ({ key, versions: copy(unit.heads) })) };
+    }
+    global.FolderSyncModel = Object.freeze({ FORMAT, VERSION, OPERATION_VERSION, STATE_KEY, RESET_KEY, STORES, DOCUMENT_KEYS,
+        copy, stable, equal, digest, safeJson, identifier, uuid, unitsFrom, newState, capture,
+        validateOperation, receive, resolve, toSnapshot, rememberMaterialized, status, assertState });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/data/v2/fileJournal.js ===== */
+/* Always-on local JSON persistence. IndexedDB is a disposable projection. */
+(function installFileJournal(global) {
+    'use strict';
+    if (global.FileJournal) return;
+    const FORMAT = 'ielts-atlas-local-journal';
+    const VERSION = 1;
+    const DIRECTORY = 'ielts-atlas-local-v1';
+    const LOCK = 'ielts-atlas-local-journal-v1';
+    const RESET_LOCK = 'ielts-atlas-external-backup-write';
+    const CACHE_KEY = '__fileJournalCache';
+    const BINDING_DB = 'IELTSAtlasLocalFilesV1';
+    const BOOTSTRAP = 'bootstrap.json';
+    const RESET_BARRIER = 'recovery-reset.json';
+    const STORES = ['documents', 'system', 'practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
+    const keyOf = (store, row) => row[store === 'documents' || store === 'system' ? 'logicalKey' : 'recordId'];
+    const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+    const empty = () => Object.fromEntries(STORES.map(store => [store, new Map()]));
+    const rowsOf = tables => Object.fromEntries(STORES.map(store => [store, [...tables[store].values()].sort((a, b) => {
+        const left = keyOf(store, a), right = keyOf(store, b);
+        return left < right ? -1 : left > right ? 1 : 0;
+    })]));
+    const uid = () => global.crypto.randomUUID();
+    let activeDriver = null;
+    let attemptedDriver = null;
+    let recoveryDriver = null;
+    let storageStatus = { backend: 'initializing', readPath: null, cache: 'unavailable' };
+
+    function problem(message, code = 'FILE_STORAGE_UNAVAILABLE') {
+        const error = new Error(message); error.code = code; return error;
+    }
+    async function digest(text) {
+        const bytes = await global.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+        return [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, '0')).join('');
+    }
+    async function locked(work) {
+        if (!global.navigator?.locks?.request) throw problem('本地文件保存需要 Web Locks，请通过固定 localhost 地址打开。');
+        for (let attempt = 0; ; attempt++) {
+            let entered = false;
+            try {
+                return await global.navigator.locks.request(LOCK, { mode: 'exclusive' }, () => {
+                    entered = true;
+                    return work();
+                });
+            } catch (error) {
+                // Chromium can refuse a queued callback while window.open briefly
+                // disables script. Only retry before entry: never replay a started
+                // transaction, whose files may already have committed.
+                if (entered || attempt || !String(error?.message).includes('callback is no longer runnable')) throw error;
+                await new Promise(resolve => global.setTimeout(resolve, 0));
+            }
+        }
+    }
+    async function binding(value) {
+        if (!global.indexedDB) return null;
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open(BINDING_DB, 1);
+            request.onupgradeneeded = () => request.result.createObjectStore('handles');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        try {
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('handles', value === undefined ? 'readonly' : 'readwrite');
+                const request = value === undefined ? tx.objectStore('handles').get('local') : tx.objectStore('handles').put(value, 'local');
+                tx.oncomplete = () => resolve(value === undefined ? request.result : value);
+                tx.onabort = tx.onerror = () => reject(tx.error);
+            });
+        } finally { db.close(); }
+    }
+    async function exchangeBinding() {
+        // Local startup precedes the optional sync adapter in shipped bundles.
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open('IELTSAtlasExternalBackupV2', 1);
+            request.onupgradeneeded = () => request.result.createObjectStore('binding');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        try {
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('binding', 'readonly');
+                const request = tx.objectStore('binding').get('onedrive-static-sync-binding-v1');
+                tx.oncomplete = () => resolve(request.result);
+                tx.onabort = tx.onerror = () => reject(tx.error);
+            });
+        } finally { db.close(); }
+    }
+    async function overlaps(left, right) {
+        return !!left && !!right && (await left.isSameEntry(right)
+            || await left.resolve(right) !== null || await right.resolve(left) !== null);
+    }
+    async function validateLocalDirectory(handle) {
+        if (await overlaps(handle, (await exchangeBinding())?.directory)) {
+            throw problem('本地数据目录与同步交换目录必须分开，请选择另一个专用目录。');
+        }
+    }
+    // This prompt belongs to local storage, independently of the optional sync UI.
+    function requestDirectory(saved) {
+        if (!global.document) throw problem('OPFS 不可用，需要连接本地数据目录。');
+        storageStatus = { ...storageStatus, backend: 'needs-directory' };
+        return new Promise((resolve, reject) => {
+            const show = () => {
+                const dialog = global.document.createElement('dialog');
+                dialog.id = 'local-file-storage-dialog';
+                dialog.setAttribute('aria-labelledby', 'local-file-storage-title');
+                dialog.style.cssText = 'max-width:32rem;padding:1.5rem;border-radius:12px;z-index:2147483647';
+                const title = global.document.createElement('h2');
+                title.id = 'local-file-storage-title'; title.textContent = '连接本地数据目录';
+                const message = global.document.createElement('p');
+                message.textContent = '当前打开方式无法使用浏览器私有文件。请选择专用的本地目录保存练习数据；之后的保存会自动写入。这个目录与可选的 OneDrive 同步目录分开。也可以通过固定 localhost 地址打开以使用私有文件。';
+                const button = global.document.createElement('button');
+                button.textContent = saved ? '恢复目录访问' : '选择本地数据目录';
+                const errorText = global.document.createElement('p'); errorText.setAttribute('role', 'alert');
+                dialog.append(title, message, button, errorText);
+                dialog.addEventListener('cancel', event => event.preventDefault());
+                button.addEventListener('click', async () => {
+                    try {
+                        // Both permission methods must start inside this user gesture.
+                        const handle = saved ? (await saved.requestPermission({ mode: 'readwrite' }) === 'granted' ? saved : null)
+                            : await global.showDirectoryPicker({ id: 'ielts-atlas-local-data', mode: 'readwrite' });
+                        if (!handle) throw problem('未获得目录写入权限，请重试。');
+                        await validateLocalDirectory(handle);
+                        const root = await handle.getDirectoryHandle(DIRECTORY, { create: true });
+                        await binding(handle);
+                        dialog.close(); dialog.remove(); resolve({ root, backend: 'directory-json', handle });
+                    } catch (error) { errorText.textContent = error.name === 'AbortError' ? '尚未选择目录，数据保存还未启用。' : error.message; }
+                });
+                if (typeof global.showDirectoryPicker !== 'function') {
+                    button.disabled = true;
+                    errorText.textContent = '当前浏览器不能连接目录。请使用固定 localhost 地址，或桌面 Chrome / Edge。';
+                    reject(problem(errorText.textContent));
+                }
+                global.document.body.append(dialog); dialog.showModal();
+            };
+            if (global.document.body) show(); else global.document.addEventListener('DOMContentLoaded', show, { once: true });
+        });
+    }
+    async function directory() {
+        // Once a visible directory is selected, never silently switch authorities.
+        let saved, bindingFailure;
+        try { saved = await binding(); } catch (error) { bindingFailure = error; }
+        if (saved) {
+            if (await saved.queryPermission({ mode: 'readwrite' }) !== 'granted') return requestDirectory(saved);
+            await validateLocalDirectory(saved);
+            return { root: await saved.getDirectoryHandle(DIRECTORY, { create: true }), backend: 'directory-json', handle: saved };
+        }
+        try {
+            const root = await global.navigator.storage.getDirectory();
+            const local = await root.getDirectoryHandle(DIRECTORY, { create: true });
+            // An established OPFS journal works without IndexedDB. On a first
+            // launch we still need to establish that no saved directory or old
+            // database is being abandoned before creating an empty authority.
+            if (bindingFailure && !await readHead(local)) throw problem('无法确认旧数据目录，请恢复浏览器数据库访问后重试。');
+            return { root: local, backend: 'opfs-json', handle: null };
+        } catch (error) {
+            // Quota/device failures must not create a second empty authority.
+            if (!['SecurityError', 'NotSupportedError', 'TypeError'].includes(error.name)) throw error;
+            if (bindingFailure) throw bindingFailure;
+            return requestDirectory(null);
+        }
+    }
+    async function readText(root, name) { return (await (await root.getFileHandle(name)).getFile()).text(); }
+    async function exists(root, name) {
+        try { await root.getFileHandle(name); return true; }
+        catch (error) { if (error.name === 'NotFoundError') return false; throw error; }
+    }
+    async function removeIfPresent(root, name) {
+        try { await root.removeEntry(name); }
+        catch (error) { if (error.name !== 'NotFoundError') throw error; }
+    }
+    async function recoveryBlocked(root) {
+        if (!await exists(root, RESET_BARRIER)) return false;
+        try {
+            const marker = JSON.parse(await readText(root, RESET_BARRIER));
+            return !marker.token || (await readHead(root))?.resetToken !== marker.token;
+        } catch (_) { return true; }
+    }
+    async function incompleteBootstrap(root) {
+        const names = [];
+        for await (const name of root.keys()) names.push(name);
+        if (!names.length) return true;
+        if (!names.includes(BOOTSTRAP) || names.some(name => name !== BOOTSTRAP && name !== 'head.json'
+            && !/^snapshot-000000000000-[a-f\d-]+\.json$/.test(name))) return false;
+        // A marker write can itself be interrupted, before any data files exist.
+        if (names.length === 1) return true;
+        try {
+            const marker = JSON.parse(await readText(root, BOOTSTRAP));
+            return marker.format === FORMAT && marker.version === VERSION && marker.initializing === true;
+        } catch (_) { return false; }
+    }
+    async function writeText(root, name, text) {
+        const handle = await root.getFileHandle(name, { create: true });
+        const writer = await handle.createWritable({ mode: 'exclusive' });
+        try { await writer.write(text); await writer.close(); }
+        catch (error) { try { await writer.abort(); } catch (_) {} throw error; }
+        if (await readText(root, name) !== text) throw problem('本地文件回读校验失败：' + name, 'CORRUPT_RECORD');
+    }
+    async function readHead(root) {
+        let text;
+        try { text = await readText(root, 'head.json'); }
+        catch (error) { if (error.name === 'NotFoundError') return null; throw error; }
+        const envelope = JSON.parse(text), head = envelope.head;
+        if (!head || head.format !== FORMAT || head.version !== VERSION || envelope.sha256 !== await digest(JSON.stringify(head))
+            || typeof head.workspaceId !== 'string' || !Number.isSafeInteger(head.sequence) || head.sequence < 0
+            || !Array.isArray(head.tail) || head.tail.length > 128 || !head.snapshot) {
+            throw problem('本地数据清单损坏或版本不受支持，已停止写入。', 'CORRUPT_RECORD');
+        }
+        return { ...head, token: envelope.sha256 };
+    }
+    async function publishHead(root, value) {
+        const head = { ...value }; delete head.token;
+        const sha256 = await digest(JSON.stringify(head));
+        try { await writeText(root, 'head.json', JSON.stringify({ head, sha256 }) + '\n'); }
+        catch (error) {
+            // close() can have committed even when a subsequent read failed. Never
+            // report a false rollback if the committed frontier can be verified.
+            try { if ((await readHead(root))?.token === sha256) return { ...head, token: sha256 }; } catch (_) {}
+            throw error;
+        }
+        return { ...head, token: sha256 };
+    }
+    async function writePart(root, kind, sequence, payload) {
+        const name = `${kind}-${String(sequence).padStart(12, '0')}-${uid()}.${kind === 'ops' ? 'jsonl' : 'json'}`;
+        const text = JSON.stringify(payload) + '\n';
+        const sha256 = await digest(text);
+        await writeText(root, name, text);
+        return { name, sha256, sequence };
+    }
+    async function readPart(root, part) {
+        if (!part || !/^(snapshot|ops)-\d{12,}-[a-f\d-]+\.(json|jsonl)$/.test(part.name)
+            || !Number.isSafeInteger(part.sequence) || part.sequence < 0) throw problem('无效的本地数据分段。', 'CORRUPT_RECORD');
+        const text = await readText(root, part.name);
+        if (await digest(text) !== part.sha256) throw problem('本地数据分段不完整或校验失败：' + part.name, 'CORRUPT_RECORD');
+        const value = JSON.parse(text);
+        if (value.format !== FORMAT || value.version !== VERSION || value.sequence !== part.sequence) throw problem('本地数据分段版本不受支持。', 'CORRUPT_RECORD');
+        return value;
+    }
+    function tablesFrom(rows) {
+        const tables = empty();
+        for (const store of STORES) {
+            if (!Array.isArray(rows[store])) throw problem('本地快照缺少数据表。', 'CORRUPT_RECORD');
+            for (const row of rows[store]) {
+                const key = row && keyOf(store, row);
+                if (typeof key !== 'string' || tables[store].has(key)) throw problem('本地快照包含无效或重复记录。', 'CORRUPT_RECORD');
+                tables[store].set(key, row);
+            }
+        }
+        return tables;
+    }
+    function applyChanges(tables, changes) {
+        if (!Array.isArray(changes)) throw problem('本地事务缺少变更。', 'CORRUPT_RECORD');
+        for (const change of changes) {
+            if (!STORES.includes(change.store)) throw problem('本地事务包含未知数据表。', 'CORRUPT_RECORD');
+            const table = tables[change.store];
+            if (change.type === 'clear') table.clear();
+            else if (change.type === 'delete' && typeof change.key === 'string') table.delete(change.key);
+            else if (change.type === 'put' && typeof keyOf(change.store, change.row) === 'string') table.set(keyOf(change.store, change.row), change.row);
+            else throw problem('本地事务变更无效。', 'CORRUPT_RECORD');
+        }
+    }
+    // Execute the existing kernel's transaction callbacks against private staged
+    // maps. A failed request or callback discards the entire transaction.
+    function stage(tables, stores, writable, work) {
+        return new Promise((resolve, reject) => {
+            const next = { ...tables }, changes = [];
+            if (writable) for (const store of stores) next[store] = new Map(tables[store]);
+            let pending = 0, value, stopped = false;
+            const fail = error => { if (!stopped) { stopped = true; reject(error); } };
+            const finish = () => { if (!stopped && pending === 0) { stopped = true; resolve({ tables: next, changes, value }); } };
+            const request = callback => {
+                const result = {}; pending++;
+                queueMicrotask(() => {
+                    if (stopped) return;
+                    try { result.result = clone(callback()); result.onsuccess?.({ target: result }); }
+                    catch (error) { result.error = error; fail(error); }
+                    pending--; queueMicrotask(finish);
+                });
+                return result;
+            };
+            const change = (store, item) => {
+                if (!writable) throw problem('Read-only transaction');
+                changes.push({ store, ...clone(item) });
+            };
+            const tx = {
+                abort() { fail(problem('Local transaction aborted')); },
+                objectStore(store) {
+                    if (!stores.includes(store)) throw problem('Store not in transaction: ' + store);
+                    return {
+                        get: key => request(() => next[store].get(key)),
+                        getAll: () => request(() => [...next[store].values()]),
+                        put: row => {
+                            const saved = clone(row);
+                            return request(() => { change(store, { type: 'put', row: saved }); next[store].set(keyOf(store, saved), saved); return keyOf(store, saved); });
+                        },
+                        delete: key => request(() => { change(store, { type: 'delete', key }); next[store].delete(key); }),
+                        clear: () => request(() => { change(store, { type: 'clear' }); next[store].clear(); })
+                    };
+                }
+            };
+            try { work(tx, result => { value = result; }, fail); queueMicrotask(finish); }
+            catch (error) { fail(error); }
+        });
+    }
+
+    function driverClass(IndexedDBDriver) {
+        return class FileJournalDriver extends IndexedDBDriver {
+            constructor(indexedDB, options) {
+                super(indexedDB, options);
+                // Fence pre-file releases before importing their rows: their v2
+                // connections close on versionchange and cannot reopen at v2.
+                // Otherwise an old tab could keep writing only to the cache.
+                this.cache = new IndexedDBDriver(indexedDB, { ...options, databaseVersion: 3 });
+                this.tables = null; this.head = null; this.closed = false;
+                this.cacheToken = null;
+            }
+            async initialize() {
+                attemptedDriver = this;
+                const chosen = await directory();
+                this.root = chosen.root; this.backend = chosen.backend; this.directoryHandle = chosen.handle;
+                await locked(async () => {
+                    if (await recoveryBlocked(this.root)) throw problem('本地数据正在清理，请完成清理后重新打开应用。');
+                    let head;
+                    try { head = await readHead(this.root); }
+                    catch (error) { if (!await incompleteBootstrap(this.root)) throw error; }
+                    // The first import must be complete. A failed legacy DB read
+                    // cannot be mistaken for a new, empty installation.
+                    if (!head) {
+                        if (!await incompleteBootstrap(this.root)) throw problem('本地清单缺失但仍有数据文件，请恢复清单后重试。', 'CORRUPT_RECORD');
+                        await this.cache.initialize();
+                        if (await this.cacheMarker()) throw problem('本地文件已移除，不能用旧缓存替代已提交的数据。请恢复本地文件或备份。', 'CORRUPT_RECORD');
+                        const rows = await this.cacheRows();
+                        this.tables = tablesFrom(rows);
+                        const workspaceId = uid();
+                        await writeText(this.root, BOOTSTRAP, JSON.stringify({ format: FORMAT, version: VERSION, initializing: true }));
+                        const snapshot = await writePart(this.root, 'snapshot', 0, {
+                            format: FORMAT, version: VERSION, workspaceId, sequence: 0, rows
+                        });
+                        this.head = await publishHead(this.root, { format: FORMAT, version: VERSION, workspaceId, sequence: 0, snapshot, tail: [] });
+                    } else {
+                        try { await this.cache.initialize(); } catch (_) { this.cache.close(); }
+                        await this.refresh(head);
+                    }
+                    // No application writes or cache frontier may be exposed while
+                    // a bootstrap intent could still authorize a legacy reimport.
+                    await removeIfPresent(this.root, BOOTSTRAP);
+                    await this.project();
+                });
+                activeDriver = this;
+                storageStatus = { ...storageStatus, backend: this.backend, sequence: this.head.sequence };
+                return this;
+            }
+            close() { this.closed = true; this.cache.close(); this.tables = null; }
+            cacheMarker() {
+                return this.cache._transaction(['documents'], 'readonly', 'read file cache frontier', (tx, done, fail) => {
+                    const request = tx.objectStore('documents').get(CACHE_KEY);
+                    request.onsuccess = () => done(request.result?.envelope || null);
+                    request.onerror = () => fail(request.error);
+                });
+            }
+            cacheRows() {
+                return this.cache._transaction(STORES, 'readonly', 'read file cache', (tx, done, fail) => {
+                    const rows = {}; let pending = STORES.length;
+                    for (const store of STORES) {
+                        const request = tx.objectStore(store).getAll();
+                        request.onerror = () => fail(request.error);
+                        request.onsuccess = () => { rows[store] = request.result.filter(row => store !== 'documents' || row.logicalKey !== CACHE_KEY); if (!--pending) done(rows); };
+                    }
+                });
+            }
+            async refresh(knownHead) {
+                const head = knownHead || await readHead(this.root);
+                if (!head) throw problem('本地数据文件已移除，请重新打开应用。');
+                if (this.head && head.workspaceId !== this.head.workspaceId) throw problem('本地数据已重置，请重新打开应用。');
+                if (this.head && head.sequence < this.head.sequence) throw problem('本地文件版本发生回退，已停止读写。', 'CORRUPT_RECORD');
+                if (this.head?.token === head.token && this.tables) { storageStatus.readPath = 'memory'; return; }
+                if (!this.tables && this.cache.db) {
+                    try {
+                        const marker = await this.cacheMarker();
+                        if (marker?.token === head.token) {
+                            const rows = await this.cacheRows();
+                            if (await digest(JSON.stringify(rows)) === marker.rowsHash) {
+                                this.tables = tablesFrom(rows); this.head = head; this.cacheToken = head.token;
+                                storageStatus.readPath = 'indexeddb'; return;
+                            }
+                        }
+                    } catch (_) { /* Rebuild from verified files. */ }
+                }
+                let tables, sequence;
+                if (this.tables && this.head && this.head.sequence >= head.snapshot.sequence && this.head.sequence <= head.sequence
+                    && head.tail.some(part => part.sequence === this.head.sequence + 1)) {
+                    tables = Object.fromEntries(STORES.map(store => [store, new Map(this.tables[store])]));
+                    sequence = this.head.sequence;
+                } else {
+                    const snapshot = await readPart(this.root, head.snapshot);
+                    if (snapshot.workspaceId !== head.workspaceId) throw problem('本地快照所属空间无效。', 'CORRUPT_RECORD');
+                    tables = tablesFrom(snapshot.rows); sequence = snapshot.sequence;
+                }
+                for (const part of head.tail) {
+                    if (part.sequence <= sequence) continue;
+                    if (part.sequence !== sequence + 1) throw problem('本地事务日志缺少分段。', 'CORRUPT_RECORD');
+                    const transaction = await readPart(this.root, part);
+                    if (transaction.workspaceId !== head.workspaceId || transaction.previousSequence !== sequence) throw problem('本地事务因果版本无效。', 'CORRUPT_RECORD');
+                    applyChanges(tables, transaction.changes); sequence = transaction.sequence;
+                }
+                if (sequence !== head.sequence) throw problem('本地文件版本不完整。', 'CORRUPT_RECORD');
+                this.tables = tables; this.head = head; storageStatus.readPath = 'json';
+            }
+            async project(changes) {
+                if (!this.cache.db) { storageStatus.cache = 'unavailable'; return; }
+                try {
+                    const rows = rowsOf(this.tables);
+                    const marker = { token: this.head.token, rowsHash: await digest(JSON.stringify(rows)) };
+                    // Both rows and the frontier marker move in one cache transaction.
+                    await this.cache._transaction(STORES, 'readwrite', 'project local files', (tx, done) => {
+                        if (!changes || this.cacheToken === null) {
+                            for (const store of STORES) { tx.objectStore(store).clear(); for (const row of rows[store]) tx.objectStore(store).put(row); }
+                        } else for (const item of changes) {
+                            const store = tx.objectStore(item.store);
+                            if (item.type === 'clear') store.clear();
+                            else if (item.type === 'delete') store.delete(item.key);
+                            else store.put(item.row);
+                        }
+                        tx.objectStore('documents').put({ logicalKey: CACHE_KEY, envelope: marker }); done(true);
+                    }, true);
+                    this.cacheToken = this.head.token; storageStatus.cache = 'current';
+                } catch (_) {
+                    this.cache.close(); this.cacheToken = null; storageStatus.cache = 'unavailable';
+                    // Files are committed. A projection failure is not a failed save.
+                }
+            }
+            async _transaction(stores, mode, description, work) {
+                return locked(async () => {
+                    if (this.closed) throw problem('本地文件连接已关闭，请重新打开应用。');
+                    if (await recoveryBlocked(this.root)) throw problem('本地数据正在清理，请重新打开应用。');
+                    const previousCache = this.cacheToken;
+                    await this.refresh();
+                    if (previousCache !== this.head.token) this.cacheToken = null;
+                    const staged = await stage(this.tables, stores, mode === 'readwrite', work);
+                    if (staged.changes.length) {
+                        const sequence = this.head.sequence + 1;
+                        if (!Number.isSafeInteger(sequence)) throw problem('本地事务序号超出范围。');
+                        const part = await writePart(this.root, 'ops', sequence, {
+                            format: FORMAT, version: VERSION, workspaceId: this.head.workspaceId,
+                            sequence, previousSequence: this.head.sequence, description, changes: staged.changes
+                        });
+                        let snapshot = this.head.snapshot, tail = [...this.head.tail, part];
+                        if (tail.length >= 128) {
+                            snapshot = await writePart(this.root, 'snapshot', sequence, {
+                                format: FORMAT, version: VERSION, workspaceId: this.head.workspaceId, sequence, rows: rowsOf(staged.tables)
+                            });
+                            tail = [];
+                        }
+                        const committed = await publishHead(this.root, { ...this.head, sequence, snapshot, tail });
+                        this.tables = staged.tables; this.head = committed;
+                        storageStatus.sequence = sequence;
+                        await this.project(staged.changes);
+                    }
+                    return clone(staged.value);
+                });
+            }
+            resetBarrier(active) {
+                const model = global.FolderSyncModel;
+                return this._transaction(['system'], 'readwrite', 'reset barrier', (tx, done, fail) => {
+                    const store = tx.objectStore('system'), request = store.get(model.STATE_KEY);
+                    request.onerror = () => fail(request.error);
+                    request.onsuccess = () => {
+                        const state = request.result?.envelope?.data;
+                        if (active) store.put({ logicalKey: model.RESET_KEY, active: true }); else store.delete(model.RESET_KEY);
+                        done(state ? model.status(state) : { enabled: false, pending: 0 });
+                    };
+                });
+            }
+            async resetLocal() {
+                return locked(async () => {
+                    const workspaceId = uid();
+                    const snapshot = await writePart(this.root, 'snapshot', 0, { format: FORMAT, version: VERSION, workspaceId, sequence: 0, rows: rowsOf(empty()) });
+                    await publishHead(this.root, { format: FORMAT, version: VERSION, workspaceId, sequence: 0, snapshot, tail: [], resetToken: this.recoveryResetToken || null });
+                    storageStatus.resetCommitted = true;
+                    this.close();
+                    // External histories remain recoverable. Private files are removed
+                    // only after the new empty frontier prevents stale-cache imports.
+                    const cleanupErrors = [];
+                    try {
+                        for await (const name of this.root.keys()) {
+                            if (name === 'head.json' || name === snapshot.name) continue;
+                            if (this.backend !== 'opfs-json' && name !== BOOTSTRAP && name !== RESET_BARRIER) continue;
+                            try { await this.root.removeEntry(name); }
+                            catch (error) { cleanupErrors.push({ name, message: error.message }); }
+                        }
+                    } catch (error) { cleanupErrors.push({ message: error.message }); }
+                    return { committed: true, cleanupErrors };
+                });
+            }
+            async prepareRecoveryReset(resetLock) {
+                return locked(async () => {
+                    if (!this.root) throw problem('无法访问本地文件，不能安全清理。');
+                    // A full reset holds this lock from preparation through commit
+                    // or rollback. Only its next holder may take over a marker left
+                    // by an exited page; direct barrier calls cannot claim it.
+                    if (await exists(this.root, RESET_BARRIER)
+                        && (resetLock?.name !== RESET_LOCK || resetLock.mode !== 'exclusive')) {
+                        throw problem('本地数据已有清理标记，请完成已有清理后重试。');
+                    }
+                    if ((await exchangeBinding())?.directory) throw problem('请先恢复同步目录和本地数据，再清理本机。');
+                    const model = global.FolderSyncModel;
+                    const check = rows => {
+                        for (const row of rows) if (row?.logicalKey === model.STATE_KEY) {
+                            const state = row.envelope?.data;
+                            model.assertState(state);
+                            if (state.enabled || state.pending.length) throw problem('无法确认同步记录已落盘，请先恢复本地数据再清理。');
+                        }
+                    };
+                    // The cache alone may lag a committed file transaction. Inspect
+                    // retained history too; unreadable sync evidence fails closed.
+                    try {
+                        if (!this.cache.db) await this.cache.initialize();
+                        check((await this.cacheRows()).system);
+                    } finally { this.cache.close(); }
+                    for await (const name of this.root.keys()) {
+                        if (!/^(snapshot|ops)-/.test(name)) continue;
+                        const part = JSON.parse(await readText(this.root, name));
+                        if (part.format !== FORMAT || part.version !== VERSION) throw problem('无法验证本地同步历史。');
+                        if (name.startsWith('snapshot-')) check(part.rows.system);
+                        else check(part.changes.filter(change => change.store === 'system' && change.type === 'put').map(change => change.row));
+                    }
+                    this.recoveryResetToken = uid();
+                    recoveryDriver = this;
+                    try { await writeText(this.root, RESET_BARRIER, JSON.stringify({ token: this.recoveryResetToken })); }
+                    catch (error) {
+                        // The marker was absent or abandoned under the full-reset
+                        // lock. Own even a partially written file, and remove it before
+                        // queued readers or writers can observe a cancelled reset.
+                        await this.rollbackRecoveryReset(true);
+                        throw error;
+                    }
+                    return { enabled: false, pending: 0 };
+                });
+            }
+            async rollbackRecoveryReset(publishing = false) {
+                // Called under the file lock. After publication, only our token
+                // authorizes removal: a later attempt may own the current marker.
+                if (publishing || !await exists(this.root, RESET_BARRIER)
+                    || JSON.parse(await readText(this.root, RESET_BARRIER)).token === this.recoveryResetToken) {
+                    await removeIfPresent(this.root, RESET_BARRIER);
+                }
+                this.recoveryResetToken = null;
+                if (recoveryDriver === this) recoveryDriver = null;
+            }
+        };
+    }
+    global.FileJournal = Object.freeze({
+        driverClass, directoryName: DIRECTORY, bindingDatabase: BINDING_DB,
+        status: () => ({ ...storageStatus }),
+        async resetBarrier(active, resetLock) {
+            if (storageStatus.resetCommitted) return { enabled: false, pending: 0 };
+            if (!active && recoveryDriver) {
+                const driver = recoveryDriver;
+                await locked(() => driver.rollbackRecoveryReset());
+                return { enabled: false, pending: 0 };
+            }
+            try { await global.AppData.ready; }
+            catch (error) {
+                if (!active) return { enabled: false, pending: 0 };
+                if (!attemptedDriver) throw error;
+                return attemptedDriver.prepareRecoveryReset(resetLock);
+            }
+            return activeDriver.resetBarrier(active);
+        },
+        async resetLocal() {
+            const driver = recoveryDriver || activeDriver;
+            if (!driver) throw problem('本地文件尚未建立清理屏障，无法安全清理。');
+            return driver.resetLocal();
+        },
+        async isLocalDirectory(handle) {
+            return overlaps(activeDriver?.directoryHandle || await binding(), handle);
+        }
     });
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -4364,11 +5506,12 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             this.db = null;
             this.mutationTimeoutMs = options.mutationTimeoutMs;
             this.requestTimeoutMs = options.requestTimeoutMs;
+            this.databaseVersion = options.databaseVersion || DATABASE_VERSION;
         }
         async initialize() {
             if (!this.indexedDB || typeof this.indexedDB.open !== 'function') throw new Error('IndexedDB unavailable');
             this.db = await new Promise((resolve, reject) => {
-                const request = this.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+                const request = this.indexedDB.open(DATABASE_NAME, this.databaseVersion);
                 let abandoned = false;
                 let settle;
                 request.onsuccess = () => { if (abandoned || !settle) { try { request.result.close(); } catch (_) {} } else settle.resolve(request.result); };
@@ -4487,7 +5630,17 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 const journalRequest = tx.objectStore(SYSTEM_STORE).get('system.operationJournal');
                 journalRequest.onerror = () => fail(journalRequest.error || new Error('Journal read failed'));
                 journalRequest.onsuccess = () => {
-                    try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); } catch (error) { fail(error); }
+                    const apply = () => {
+                        try { spec.apply(tx, journalRequest.result || null, readJournal(journalRequest.result), done, fail); }
+                        catch (error) { fail(error); }
+                    };
+                    if (!folderSyncModel() || spec.resetAllowed) { apply(); return; }
+                    const barrier = tx.objectStore(SYSTEM_STORE).get(folderSyncModel().RESET_KEY);
+                    barrier.onerror = () => fail(barrier.error);
+                    barrier.onsuccess = () => {
+                        if (barrier.result) fail(validation('本机正在清理数据，请等待清理完成后重新打开网页'));
+                        else apply();
+                    };
                 };
             }, true);
         }
@@ -4595,6 +5748,64 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         return receipt;
     }
 
+    function folderSyncModel() { return global.FolderSyncModel || null; }
+    function syncStores(stores, capture = true) { return folderSyncModel() && capture ? STORE_NAMES.slice() : stores; }
+    function readSyncSnapshot(tx, complete, fail) {
+        const model = folderSyncModel();
+        const keys = model.DOCUMENT_KEYS.concat(['vocab.readingVocabWords', 'vocab.readingBookshelfExams']);
+        const snapshot = { documents: {}, revisions: {}, entities: {} };
+        const reads = keys.map(logicalKey => ({ logicalKey,
+            request: tx.objectStore(storeFor(logicalKey)).get(logicalKey) }))
+            .concat(ENTITY_STORES.map(store => ({ store, request: tx.objectStore(store).getAll() })));
+        let remaining = reads.length;
+        for (const read of reads) {
+            read.request.onerror = () => fail(read.request.error || validation('同步快照读取失败'));
+            read.request.onsuccess = () => {
+                try {
+                    if (read.logicalKey) {
+                        const entry = lookupEntry(read.logicalKey), row = read.request.result;
+                        if (row && !validateEnvelope(entry, row.envelope)) throw corruption('Invalid sync source: ' + read.logicalKey);
+                        snapshot.documents[read.logicalKey] = row?.envelope.state === 'present' ? clone(row.envelope.data) : entry.defaultValue();
+                        snapshot.revisions[read.logicalKey] = row?.envelope.revision || 0;
+                    } else {
+                        snapshot.entities[read.store] = (read.request.result || []).map(row => {
+                            validateEntityRow(read.store, row);
+                            return clone(row);
+                        });
+                    }
+                    if (!--remaining) complete(snapshot);
+                } catch (error) { fail(error); }
+            };
+        }
+    }
+    function putSyncState(tx, previous, data, opId) {
+        const key = folderSyncModel().STATE_KEY;
+        const envelope = makeEnvelope(lookupEntry(key), data, {
+            revision: incrementCounter(previous?.envelope?.revision || 0, key), operationId: opId, normalized: true
+        });
+        tx.objectStore(SYSTEM_STORE).put({ logicalKey: key, envelope });
+    }
+    function captureFolderSync(tx, opId, relevant, complete, fail) {
+        const model = folderSyncModel();
+        if (!model || !relevant) { complete(); return; }
+        const request = tx.objectStore(SYSTEM_STORE).get(model.STATE_KEY);
+        request.onerror = () => fail(request.error || validation('同步队列读取失败'));
+        request.onsuccess = () => {
+            try {
+                const row = request.result;
+                if (!row?.envelope?.data?.enabled) { complete(); return; }
+                if (!validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
+                readSyncSnapshot(tx, snapshot => {
+                    try {
+                        const state = model.capture(row.envelope.data, snapshot, opId);
+                        putSyncState(tx, row, state, opId);
+                        complete();
+                    } catch (error) { fail(error instanceof AppDataError ? error : validation(error.message)); }
+                }, fail);
+            } catch (error) { fail(error); }
+        };
+    }
+
     class DataKernel {
         constructor(options = {}) {
             this.driver = null;
@@ -4637,12 +5848,14 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         initialize() {
             if (this.ready) return this.ready;
             this.state = 'initializing';
-            this.ready = new IndexedDBDriver(this.indexedDB, {
+            const Driver = global.FileJournal ? global.FileJournal.driverClass(IndexedDBDriver) : IndexedDBDriver;
+            const pendingDriver = new Driver(this.indexedDB, {
                 mutationTimeoutMs: this.indexedDBMutationTimeoutMs, requestTimeoutMs: this.indexedDBRequestTimeoutMs
-            }).initialize().then((driver) => {
-                this.driver = driver; this.backend = 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
-            }).catch((error) => { this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
-                throw error instanceof AppDataError ? error : new AppDataError('BACKEND_UNAVAILABLE', 'IndexedDB is required for AppData v2', { cause: error && error.message }); });
+            });
+            this.ready = pendingDriver.initialize().then((driver) => {
+                this.driver = driver; this.backend = driver.backend || 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
+            }).catch((error) => { pendingDriver.close(); this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
+                throw new AppDataError('BACKEND_UNAVAILABLE', global.FileJournal ? 'Local JSON storage is unavailable: ' + error.message : 'IndexedDB is required for AppData v2', { cause: error?.message, originalName: error?.name, originalCode: error?.code }); });
             return this.ready;
         }
         close() {
@@ -4652,13 +5865,15 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             if (this.state !== 'failed') this.state = 'closed';
         }
         _assertReady() {
-            if (this.state === 'failed') throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 backend failed', { cause: this.failure && this.failure.message });
+            if (this.state === 'failed') throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 backend failed', {
+                cause: this.failure?.message, originalName: this.failure?.name, originalCode: this.failure?.code
+            });
             if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
         }
         _latch(error) {
-            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
+            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'Local save failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
-            return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
+            return new AppDataError('BACKEND_UNAVAILABLE', 'Local data backend failed; reload is required', { cause: error?.message, originalName: error?.name, originalCode: error?.code });
         }
         onCommitted(listener) {
             if (typeof listener !== 'function') throw validation('Committed listener must be a function');
@@ -4722,7 +5937,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             const prepared = changes.map((change, index) => {
                 if (!change || typeof change !== 'object' || Array.isArray(change)) throw validation(`Invalid mutation change at index ${index}`);
                 const logicalKey = String(change.logicalKey || ''); const entry = lookupEntry(logicalKey);
-                if (logicalKey === 'system.operationJournal' || logicalKey === 'system.readingViewToken' || logicalKey === ENTITY_REVISION_LOGICAL_KEY) {
+                if (logicalKey === 'system.operationJournal' || logicalKey === 'system.readingViewToken'
+                    || logicalKey === ENTITY_REVISION_LOGICAL_KEY || logicalKey === folderSyncModel()?.STATE_KEY) {
                     throw validation(`${logicalKey} is managed by DataKernel`);
                 }
                 if (seen.has(logicalKey)) throw validation(`Duplicate mutation key: ${logicalKey}`); seen.add(logicalKey);
@@ -4739,7 +5955,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 changes: prepared.map((item) => ({ logicalKey: item.logicalKey, state: item.state, data: item.data, expectedRevision: item.expectedRevision })),
                 warnings
             }, warnings);
-            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
+            const captureSync = prepared.some(change => folderSyncModel()?.DOCUMENT_KEYS.includes(change.logicalKey));
+            const stores = Array.from(new Set([SYSTEM_STORE].concat(prepared.map(item => storeFor(item.logicalKey)))));
+            return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, captureSync, stores: syncStores(stores, captureSync) };
         }
         async mutate(changes, options = {}) {
             this._assertReady(); const spec = this._documentSpec(changes, options);
@@ -4766,7 +5984,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                         invalidateReadingView(tx, spec.changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, spec.warnings, []);
                         putJournal(tx, journalRow, journal, spec, receipt);
-                        done(receipt);
+                        captureFolderSync(tx, spec.operationId, spec.captureSync, () => done(receipt), fail);
                     };
                     if (!remaining) { finish(); return; }
                     for (const item of reads) { item.request.onerror = () => fail(item.request.error || new Error('Mutation read failed')); item.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } }; }
@@ -4874,7 +6092,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 pending: [],
                 fingerprint: requestFingerprint(options, { operations: items,
                     ...(documents.length ? { documents: documents.map(({ entry, ...item }) => item) } : {}), warnings }, warnings),
-                stores: Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store), documents.map(item => storeFor(item.logicalKey)))))
+                stores: syncStores(Array.from(new Set([SYSTEM_STORE].concat(items.map((item) => item.store), documents.map(item => storeFor(item.logicalKey))))))
             };
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
@@ -4958,7 +6176,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                             invalidateReadingView(tx, documents, spec.operationId);
                             const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                             putJournal(tx, journalRow, journal, spec, receipt);
-                            done(receipt);
+                            captureFolderSync(tx, spec.operationId, true, () => done(receipt), fail);
                         };
                         for (const read of reads.concat(documentReads)) {
                             read.request.onerror = () => fail(read.request.error || new Error('Entity mutation read failed'));
@@ -5189,7 +6407,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                         invalidateReadingView(tx, changes, spec.operationId);
                         const receipt = receiptFor(spec.operationId, revisions, warnings, []);
                         putJournal(tx, journalRow, resetJournal ? {} : journal, spec, receipt);
-                        done(receipt);
+                        captureFolderSync(tx, spec.operationId, Object.keys(entityRows).length > 0
+                            || changes.some(change => folderSyncModel()?.DOCUMENT_KEYS.includes(change.logicalKey)),
+                            () => done(receipt), fail);
                     };
                     let remaining = reads.length;
                     for (const read of reads) {
@@ -5206,7 +6426,139 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             }
             catch (error) { if (error instanceof AppDataError && (error.code === 'VALIDATION' || error.code === 'CONFLICT' || error.code === 'CORRUPT_RECORD')) throw error; throw this._latch(error); }
         }
-        status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null }); }
+        async folderSyncAction(action, input = {}, project = null) {
+            this._assertReady();
+            const model = folderSyncModel();
+            if (!model) throw validation('同步模块未加载，请更新所有网页文件');
+            if (['status', 'pending', 'known'].includes(action)) {
+                const state = await this.read(model.STATE_KEY);
+                if (action === 'status') return { result: model.status(state) };
+                if (state.version) model.assertState(state);
+                return { result: action === 'pending' ? (state.pending || []) : (state.seen || {}) };
+            }
+            const command = canonicalizeJson(input);
+            const opId = randomId('folder-sync-' + action);
+            const stateOnly = action === 'ack' || action === 'disconnect';
+            const spec = { operationId: opId, stores: stateOnly ? [SYSTEM_STORE] : STORE_NAMES.slice(),
+                resetAllowed: action === 'ack' || action === 'receive' };
+            const targets = [];
+            let result;
+            const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, _journalRow, _journal, done, fail) => {
+                const reject = error => fail(error instanceof AppDataError ? error : validation(error.message || String(error)));
+                const request = tx.objectStore(SYSTEM_STORE).get(model.STATE_KEY);
+                request.onerror = () => reject(request.error || validation('同步状态读取失败'));
+                request.onsuccess = () => {
+                    try {
+                        const row = request.result;
+                        if (row && !validateEnvelope(lookupEntry(model.STATE_KEY), row.envelope)) throw corruption('Invalid folder sync state');
+                        let state = clone(row?.envelope?.data || {});
+                        function finish(revisions = {}) {
+                            putSyncState(tx, row, state, opId);
+                            result = model.status(state);
+                            done(receiptFor(opId, revisions, [], []));
+                        }
+                        if (stateOnly) {
+                            model.assertState(state);
+                            if (action === 'disconnect') state.enabled = false;
+                            else {
+                                const ids = new Set(command.ids || []);
+                                state.pending = state.pending.filter(item => !ids.has(item.id));
+                            }
+                            finish(); return;
+                        }
+                        readSyncSnapshot(tx, original => {
+                            try {
+                                let apply = false;
+                                if (action === 'connect') {
+                                    if (state.enabled && state.spaceId !== command.spaceId) throw validation('请先断开当前数据空间');
+                                    if (state.pending?.length && state.spaceId !== command.spaceId) {
+                                        throw validation('原空间仍有未写入的学习记录，请重新连接原文件夹并先同步');
+                                    }
+                                    if (state.spaceId !== command.spaceId || !state.version) state = model.newState(command.spaceId, command.preferences === true);
+                                    state.enabled = true;
+                                    model.capture(state, original, opId);
+                                } else {
+                                    model.assertState(state);
+                                    if (action === 'preferences') {
+                                        state.preferences = command.enabled === true;
+                                        model.capture(state, original, opId);
+                                        apply = state.preferences;
+                                    } else {
+                                        if (!state.enabled) throw validation('同步已暂停');
+                                        // Reconcile any local write before observing incoming versions.
+                                        model.capture(state, original, opId);
+                                        if (action === 'receive') {
+                                            const received = model.receive(state, command.operation);
+                                            apply = !received.duplicate && !received.blocked;
+                                        }
+                                        else if (action === 'approveDelete') {
+                                            const operation = state.blocked?.[command.id];
+                                            if (!operation) throw validation('批量删除请求已变化，请刷新');
+                                            model.receive(state, operation, true); apply = true;
+                                        }
+                                        else if (action === 'resolve') { model.resolve(state, command.key, command.headId); apply = true; }
+                                        else throw validation('未知同步操作');
+                                    }
+                                }
+                                const revisions = {};
+                                if (apply) {
+                                    let next = model.toSnapshot(state, original);
+                                    if (project) next = project(next, original, opId);
+                                    const docs = [];
+                                    for (const [key, data] of Object.entries(next.documents)) {
+                                        if (model.equal(data, original.documents[key])) continue;
+                                        const entry = lookupEntry(key), normalized = canonicalizeJson(entry.normalize(data));
+                                        if (!entry.validate(normalized)) throw validation('同步文档格式无效：' + key);
+                                        const envelope = makeEnvelope(entry, normalized, { revision: incrementCounter(original.revisions[key] || 0, key), operationId: opId, normalized: true });
+                                        tx.objectStore(storeFor(key)).put({ logicalKey: key, envelope: canonicalizeJson(envelope) });
+                                        revisions[key] = envelope.revision; docs.push({ logicalKey: key });
+                                        targets.push({ logicalKey: key, owner: entry.owner, classification: entry.classification });
+                                    }
+                                    invalidateReadingView(tx, docs, opId);
+                                    const revisionRequest = tx.objectStore(SYSTEM_STORE).get(ENTITY_REVISION_LOGICAL_KEY);
+                                    revisionRequest.onerror = () => reject(revisionRequest.error);
+                                    revisionRequest.onsuccess = () => {
+                                        try {
+                                            const tracked = readEntityRevisionState(revisionRequest.result || null);
+                                            let changed = false;
+                                            for (const store of ENTITY_STORES) {
+                                                const previous = new Map(original.entities[store].map(item => [item.recordId, item]));
+                                                const incoming = new Map(next.entities[store].map(item => [item.recordId, item]));
+                                                let affected = false;
+                                                for (const id of new Set([...previous.keys(), ...incoming.keys()])) {
+                                                    const old = previous.get(id), value = incoming.get(id);
+                                                    if (old && value && model.equal(old.data, value.data)) continue;
+                                                    const revision = incrementCounter(trackedEntityRevision(tracked, store, id, old), store + '/' + id);
+                                                    if (!value) tx.objectStore(store).delete(id);
+                                                    else {
+                                                        assertEntityIdentity(store, id, value.data);
+                                                        tx.objectStore(store).put({ recordId: id, revision, operationId: opId, updatedAt: nowIso(),
+                                                            data: canonicalizeJson(value.data), checksum: checksum(value.data) });
+                                                    }
+                                                    trackEntityRevision(tracked, store, id, revision);
+                                                    revisions[store + '/' + id] = revision;
+                                                    targets.push({ store, recordId: id, type: value ? 'put' : 'delete' });
+                                                    affected = changed = true;
+                                                }
+                                                if (affected) bumpEntityEpoch(tracked, store);
+                                            }
+                                            if (changed) putEntityRevisionState(tx, revisionRequest.result || null, tracked, opId);
+                                            invalidateReadingView(tx, docs, opId);
+                                            model.rememberMaterialized(state, next);
+                                            finish(revisions);
+                                        } catch (error) { reject(error); }
+                                    };
+                                } else finish(revisions);
+                            } catch (error) { reject(error); }
+                        }, reject);
+                    } catch (error) { reject(error); }
+                };
+            } }));
+            if (targets.length) this._notifyCommitted(targets.concat({ logicalKey: model.STATE_KEY, syncOrigin: true }), receipt);
+            return { ...receipt, result: clone(result) };
+        }
+        status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null,
+            ...(global.FileJournal ? { files: global.FileJournal.status() } : {}) }); }
     }
 
     Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, validateEntityRow, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });
@@ -11096,7 +12448,47 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         else if (typeof global.setTimeout === 'function') global.setTimeout(run, 5000);
     }).catch(() => {});
 
-    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
+    function projectFolderSync(next, original, opId) {
+        const model = global.FolderSyncModel;
+        const readingChanged = !model.equal(next.documents[READING_STATE_KEY], original.documents[READING_STATE_KEY]);
+        const wordsChanged = ['vocab.words', 'vocab.lists'].some(key => !model.equal(next.documents[key], original.documents[key]));
+        if (readingChanged || wordsChanged) {
+            const state = normalizeReadingState(next.documents[READING_STATE_KEY]);
+            const snapshot = readingModel().createSnapshot({ words: next.documents['vocab.words'],
+                lists: next.documents['vocab.lists'], reading: state.reading });
+            if (readingChanged) {
+                state.generation = opId;
+                state.allowDefaultWordSeed = false;
+                for (const [table, rows] of Object.entries(state.tombstones)) {
+                    for (const stamp of table === 'all' ? (rows ? [rows] : []) : Object.values(rows)) {
+                        stamp.revision = (original.revisions[READING_STATE_KEY] || 0) + 1;
+                    }
+                }
+                next.documents[READING_STATE_KEY] = state;
+            }
+            const mirrors = readingProjection(snapshot);
+            next.documents['vocab.readingVocabWords'] = mirrors.words;
+            next.documents['vocab.readingBookshelfExams'] = mirrors.bookshelf;
+        }
+        return next;
+    }
+    const folderSync = Object.freeze({
+        async status() { await ready; return (await kernel.folderSyncAction('status')).result; },
+        async pending() { await ready; return (await kernel.folderSyncAction('pending')).result; },
+        async known() { await ready; return (await kernel.folderSyncAction('known')).result; },
+        async connect(spaceId, options = {}) {
+            await ready;
+            await backups.create({ type: 'pre-folder-sync' });
+            return kernel.folderSyncAction('connect', { spaceId, preferences: options.preferences === true });
+        },
+        async disconnect() { await ready; return kernel.folderSyncAction('disconnect'); },
+        async acknowledge(ids) { await ready; return kernel.folderSyncAction('ack', { ids }); },
+        async receive(operation) { await ready; return kernel.folderSyncAction('receive', { operation }, projectFolderSync); },
+        async resolve(key, headId) { await ready; return kernel.folderSyncAction('resolve', { key, headId }, projectFolderSync); },
+        async approveDelete(id) { await ready; return kernel.folderSyncAction('approveDelete', { id }, projectFolderSync); },
+        async setPreferences(enabled) { await ready; return kernel.folderSyncAction('preferences', { enabled }, projectFolderSync); }
+    });
+    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements, folderSync };
     Object.defineProperties(AppData, {
         ready: { value: ready, enumerable: false },
         getOperationFailureState: { value: getOperationFailureState, enumerable: false },
@@ -11109,6 +12501,506 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
     if (!Reflect.deleteProperty(global, '__AppDataV2Catalog')) {
         throw new Error('AppData v2 failed to close its catalog bootstrap channel');
+    }
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/services/syncFolderAdapter.js ===== */
+/* Local directory transport. OneDrive itself transports these files between computers. */
+(function installSyncFolderAdapter(global) {
+    'use strict';
+    const model = global.FolderSyncModel;
+    const DB = 'IELTSAtlasExternalBackupV2', STORE = 'binding', KEY = 'onedrive-static-sync-binding-v1';
+    const MAX_BYTES = 32 * 1024 * 1024;
+    const cache = new Map();
+    const fileSignature = file => file.lastModified + ':' + file.size;
+    function supported() { return global.isSecureContext !== false && typeof global.showDirectoryPicker === 'function' && !!global.navigator?.locks; }
+    function pick() {
+        if (!supported()) throw new Error('请使用桌面 Chrome / Edge；若直接打开文件不支持，请通过固定 localhost 地址打开');
+        // Invoke before awaiting anything: directory selection needs the original click activation.
+        return global.showDirectoryPicker({ id: 'ielts-atlas-onedrive-sync', mode: 'readwrite', startIn: 'documents' });
+    }
+    async function binding(value) {
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open(DB, 1);
+            request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE); };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        try {
+            return await new Promise((resolve, reject) => {
+                const write = value !== undefined;
+                const tx = db.transaction(STORE, write ? 'readwrite' : 'readonly');
+                const store = tx.objectStore(STORE);
+                const request = write ? (value === null ? store.delete(KEY) : store.put(value, KEY)) : store.get(KEY);
+                tx.oncomplete = () => resolve(write ? value : request.result || null);
+                tx.onerror = tx.onabort = () => reject(tx.error || new Error('同步文件夹绑定保存失败'));
+            });
+        } finally { db.close(); }
+    }
+    async function resetBarrier(active, resetLock) {
+        if (global.FileJournal) return global.FileJournal.resetBarrier(active, resetLock);
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open('IELTSAtlasDataV2');
+            let absent = false;
+            request.onupgradeneeded = () => { absent = true; request.transaction.abort(); };
+            request.onerror = () => absent ? resolve(null) : reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+        });
+        if (!db) return { enabled: false, pending: 0 };
+        try {
+            if (!db.objectStoreNames.contains('system')) return { enabled: false, pending: 0 };
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('system', 'readwrite');
+                const store = tx.objectStore('system');
+                const request = store.get(model.STATE_KEY);
+                if (active) {
+                    request.onsuccess = () => {
+                        if (request.result?.envelope?.data?.enabled || request.result?.envelope?.data?.pending?.length) {
+                            store.put({ logicalKey: model.RESET_KEY, active: true });
+                        }
+                    };
+                } else store.delete(model.RESET_KEY);
+                tx.oncomplete = () => {
+                    const state = request.result?.envelope?.data;
+                    try {
+                        if (active && request.result) model.assertState(state);
+                        resolve(active && state ? model.status(state) : { enabled: false, pending: 0 });
+                    }
+                    catch (error) { reject(error); }
+                };
+                tx.onabort = tx.onerror = () => reject(tx.error || new Error('无法建立数据清理屏障'));
+            });
+        } finally { db.close(); }
+    }
+    function requestPermission(handle) {
+        if (!handle?.requestPermission) return Promise.resolve('denied');
+        return handle.requestPermission({ mode: 'readwrite' });
+    }
+    async function permission(handle) {
+        if (!handle?.queryPermission) return 'denied';
+        return handle.queryPermission({ mode: 'readwrite' });
+    }
+    async function parseFile(file) {
+        if (!file.size || file.size > MAX_BYTES) throw new Error('同步文件为空或超过 32 MB，请保留文件并检查');
+        const text = await file.text();
+        let value;
+        try { value = JSON.parse(text); } catch (_) { throw new Error('同步文件尚未完整下载或 JSON 损坏，将自动重试'); }
+        model.safeJson(value);
+        return value;
+    }
+    async function readJson(dir, name) {
+        const handle = await dir.getFileHandle(name, { create: false });
+        return parseFile(await handle.getFile());
+    }
+    async function writeJson(dir, name, value) {
+        const text = JSON.stringify(value);
+        if (new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('单条同步操作超过 32 MB，已保留待发送队列');
+        const marker = name === 'workspace.json';
+        if (marker) {
+            try {
+                await dir.getFileHandle(name);
+                throw new Error('同步空间已出现，请重新连接；不会覆盖原有空间');
+            } catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        }
+        const file = await dir.getFileHandle(name, { create: true });
+        const writer = await file.createWritable({ mode: 'exclusive' });
+        try {
+            if (marker && (await file.getFile()).size) throw new Error('同步空间已出现，请重新连接；不会覆盖原有空间');
+            await writer.write(text); await writer.close();
+        }
+        catch (error) { try { await writer.abort(); } catch (_) { /* already closed */ } throw error; }
+        const storedFile = await file.getFile();
+        const stored = await parseFile(storedFile);
+        if (!model.equal(stored, value)) throw new Error('同步文件回读校验失败，稍后会重试');
+        return fileSignature(storedFile);
+    }
+    function assertWorkspace(value, expected) {
+        if (!value || value.format !== model.FORMAT || value.version !== model.VERSION || !model.identifier(value.spaceId)) {
+            throw new Error('空间标记不完整或格式不兼容，请等待下载并确认所有电脑使用同版本静态版。原有空间会保留。');
+        }
+        if (expected && value.spaceId !== expected) throw new Error('文件夹的数据空间标识已改变，请重新连接；本机记录仍然保留');
+        return value;
+    }
+    async function openWorkspace(selected, confirmCreate = () => false) {
+        if (global.FileJournal && await global.FileJournal.isLocalDirectory(selected)) {
+            throw new Error('本地数据目录与同步交换目录必须分开，请选择另一个专用目录。');
+        }
+        const found = async dir => {
+            try { return assertWorkspace(await readJson(dir, 'workspace.json')); }
+            catch (error) { if (error.name !== 'NotFoundError') throw error; return null; }
+        };
+        const direct = await found(selected);
+        if (direct) return { directory: selected, spaceId: direct.spaceId, name: selected.name, existing: true };
+        let child;
+        try { child = await selected.getDirectoryHandle('user-data'); }
+        catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        if (child) {
+            const existing = await found(child);
+            if (existing) return { directory: child, spaceId: existing.spaceId, name: child.name, existing: true };
+            throw new Error('未找到 user-data 的空间标记。已有空间请等待 OneDrive 下载完成，首次使用请直接选择空的专用目录。');
+        }
+        async function requireEmpty() {
+            for await (const entry of selected.values()) {
+                throw new Error('文件夹已有内容或尚未完整下载。请直接选择空的专用目录，或等待已有空间下载完成。');
+            }
+        }
+        await requireEmpty();
+        if (typeof confirmCreate !== 'function' || !await confirmCreate()) throw new Error('已取消初始化，本机学习记录仍保留');
+        // OneDrive may have downloaded the existing marker while confirmation was open.
+        const late = await found(selected);
+        if (late) return { directory: selected, spaceId: late.spaceId, name: selected.name, existing: true };
+        await requireEmpty();
+        const workspace = { format: model.FORMAT, version: model.VERSION, spaceId: model.uuid(), createdAt: new Date().toISOString() };
+        await writeJson(selected, 'workspace.json', workspace);
+        return { directory: selected, spaceId: workspace.spaceId, name: selected.name, existing: false };
+    }
+    async function workspace(binding) {
+        if (global.FileJournal && await global.FileJournal.isLocalDirectory(binding.directory)) {
+            throw new Error('本地数据目录与同步交换目录必须分开，请选择另一个专用目录。');
+        }
+        assertWorkspace(await readJson(binding.directory, 'workspace.json'), binding.spaceId);
+        const version = await binding.directory.getDirectoryHandle('sync-v1', { create: true });
+        const space = await version.getDirectoryHandle(binding.spaceId, { create: true });
+        return space.getDirectoryHandle('ops', { create: true });
+    }
+    async function assertBackupDestination(directory) {
+        const saved = await binding();
+        const withinSync = saved?.directory && await saved.directory.resolve(directory) !== null;
+        const marker = await readJson(directory, 'workspace.json').catch(() => null);
+        if (withinSync || marker?.format === model.FORMAT) {
+            throw new Error('请为本地磁盘备份选择另一个文件夹，避免将整份备份写进 OneDrive 同步空间');
+        }
+    }
+    async function publish(root, operation) {
+        model.validateOperation(operation);
+        const folder = await root.getDirectoryHandle(operation.writerId, { create: true });
+        const name = operation.id + '.json';
+        const path = operation.writerId + '/' + name;
+        const envelope = { format: model.FORMAT + '-file', version: operation.version, sha256: model.digest(operation), operation };
+        let previous = null;
+        try { previous = await folder.getFileHandle(name, { create: false }); }
+        catch (error) { if (error.name !== 'NotFoundError') throw error; }
+        if (previous) {
+            const file = await previous.getFile();
+            let existing = null;
+            try { existing = await parseFile(file); } catch (_) { /* an interrupted own write can be recovered */ }
+            if (existing && model.equal(existing, envelope)) {
+                cache.set(path, fileSignature(file));
+                return;
+            }
+            if (existing?.format === model.FORMAT + '-file' && existing.sha256 === model.digest(existing.operation)) {
+                throw new Error('日志文件名已存在但内容不同，已保留队列：' + name);
+            }
+            // Only an own pending filename is repaired, preserving the incomplete bytes for recovery.
+            const recovery = await folder.getFileHandle(name + '.incomplete-' + model.uuid() + '.txt', { create: true });
+            const writer = await recovery.createWritable();
+            try { await writer.write(await file.text()); await writer.close(); }
+            catch (error) { try { await writer.abort(); } catch (_) { } throw error; }
+        }
+        cache.set(path, await writeJson(folder, name, envelope));
+    }
+    async function scan(root, visit) {
+        const errors = [];
+        let files = 0;
+        for await (const writer of root.values()) {
+            if (writer.kind !== 'directory') continue;
+            for await (const handle of writer.values()) {
+                if (handle.kind !== 'file' || !/\.json$/i.test(handle.name)) continue;
+                const path = writer.name + '/' + handle.name;
+                try {
+                    const file = await handle.getFile();
+                    const signature = fileSignature(file);
+                    if (cache.get(path) === signature) continue;
+                    const envelope = await parseFile(file);
+                    if (envelope.format !== model.FORMAT + '-file' || envelope.version !== envelope.operation?.version) {
+                        throw new Error('同步日志格式不兼容，请更新两台电脑上的项目');
+                    }
+                    model.validateOperation(envelope.operation);
+                    const hash = model.digest(envelope.operation);
+                    if (envelope.sha256 !== hash) throw new Error('同步日志摘要校验失败');
+                    await visit(envelope.operation, hash);
+                    cache.set(path, signature); files++;
+                } catch (error) { errors.push({ path, message: error.message }); }
+            }
+        }
+        return { files, errors };
+    }
+    global.SyncFolderAdapter = Object.freeze({ supported, pick, binding, permission, requestPermission,
+        openWorkspace, workspace, assertBackupDestination, publish, scan, resetBarrier, clearCache() { cache.clear(); } });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
+/* ===== js/services/syncService.js ===== */
+(function installFolderSyncService(global) {
+    'use strict';
+    if (global.FolderSyncService) return;
+    const adapter = global.SyncFolderAdapter, model = global.FolderSyncModel;
+    const LOCK = 'ielts-atlas-external-backup-write'; // Shares the existing full-reset barrier.
+    const POLL_MS = 5000;
+    const listeners = new Set();
+    let binding = null, timer = null, running = null, initPromise = null, suspended = false;
+    let channel = null, resumeAttempted = false, earlyInteraction = false, recovery = null, skipInteractionClick = false;
+    let view = { supported: adapter.supported(), enabled: false, bound: false, pending: 0, conflicts: [], blocked: [],
+        permission: 'prompt', initializing: true, recovering: false, busy: false, completedSyncs: 0,
+        errors: [], lastCheckAt: null, lastPublishAt: null, lastReceiveAt: null };
+    function emit(patch = {}) {
+        view = Object.assign({}, view, patch);
+        for (const listener of listeners) { try { listener(getStatus()); } catch (_) { /* isolated UI */ } }
+    }
+    function getStatus() { return model.copy({ ...view, suspended }); }
+    async function refresh() {
+        const state = await global.AppData.folderSync.status();
+        emit({ ...state, bound: !!binding, directoryName: binding?.name || null,
+            lastPublishAt: binding?.lastPublishAt || null, lastReceiveAt: binding?.lastReceiveAt || null });
+        return state;
+    }
+    function announce(type) { try { channel?.postMessage({ type }); } catch (_) { /* best effort */ } }
+    function withLock(task, background = false) {
+        if (!global.navigator?.locks?.request) throw new Error('当前浏览器缺少安全的跨标签页锁，请使用桌面 Chrome / Edge');
+        return global.navigator.locks.request(LOCK, { mode: 'exclusive', ...(background ? { ifAvailable: true } : {}) },
+            lock => lock ? task() : { skipped: true });
+    }
+    function schedule(delay = 1000) {
+        if (suspended || timer || !binding || !view.enabled) return;
+        timer = global.setTimeout(() => { timer = null; syncNow(true).catch(() => {}); }, delay);
+    }
+    async function runUnlocked() {
+        if (suspended) return;
+        binding = await adapter.binding();
+        const state = await refresh();
+        if (!binding || !state.enabled) return;
+        if (binding.spaceId !== state.spaceId) throw new Error('本机绑定与数据空间不一致，请重新连接');
+        const permission = await adapter.permission(binding.directory);
+        emit({ permission });
+        if (permission !== 'granted') return;
+        const root = await adapter.workspace(binding);
+        const pending = await global.AppData.folderSync.pending();
+        const errors = [];
+        const written = [];
+        let received = 0;
+        for (const operation of pending.slice(0, 100)) {
+            try {
+                await adapter.publish(root, operation);
+                written.push(operation.id);
+            } catch (error) { errors.push({ path: operation.id, message: error.message }); }
+        }
+        if (written.length) await global.AppData.folderSync.acknowledge(written);
+        const published = written.length;
+        const known = await global.AppData.folderSync.known();
+        const scan = await adapter.scan(root, async (operation, hash) => {
+            if (suspended) throw new Error('本机同步已暂停');
+            if (operation.spaceId !== state.spaceId) throw new Error('该日志不属于当前数据空间');
+            if (known[operation.id] === hash) return;
+            await global.AppData.folderSync.receive(operation);
+            known[operation.id] = hash;
+            received++;
+        });
+        errors.push(...scan.errors);
+        if (published) binding.lastPublishAt = new Date().toISOString();
+        if (received) binding.lastReceiveAt = new Date().toISOString();
+        if (published || received) await adapter.binding(binding);
+        emit({ errors, lastCheckAt: new Date().toISOString(), completedSyncs: view.completedSyncs + (errors.length ? 0 : 1) });
+        const latest = await refresh();
+        if (received && typeof global.syncPracticeRecords === 'function') {
+            try { await global.syncPracticeRecords({ forceRender: true }); } catch (_) { /* next view activation reads durable data */ }
+        }
+        if (latest.pending && !errors.length) schedule(1000);
+        return { published, received, errors };
+    }
+    function syncNow(background = false) {
+        if (running) return running;
+        emit({ busy: true });
+        running = init().then(() => withLock(runUnlocked, background)).then(result => {
+            if (result?.skipped) schedule();
+            return result;
+        }).catch(error => {
+            emit({ errors: [{ path: '', message: error.message }] });
+            if (!background) throw error;
+        }).finally(() => { running = null; emit({ busy: false }); });
+        return running;
+    }
+    async function connect() {
+        const selection = adapter.pick();
+        const selected = await selection;
+        await init();
+        const result = await withLock(async () => {
+            const current = await global.AppData.folderSync.status();
+            const backup = global.ExternalBackupService;
+            const space = await adapter.openWorkspace(selected, async () => {
+                if (current.spaceId) throw new Error('本机已有同步空间，请选择原同步文件夹并等待 OneDrive 下载完成');
+                await backup?.assertSyncDestination?.(selected);
+                return global.confirm('这个专用文件夹为空。仅在首次启用、确认 OneDrive 已完成下载时创建。同步日志将以明文写入文件夹，确定创建空间吗？');
+            });
+            if (space.existing) await backup?.assertSyncDestination?.(space.directory);
+            if (current.enabled && current.spaceId !== space.spaceId) throw new Error('请先断开当前空间，再连接其他空间');
+            const previous = await adapter.binding();
+            const next = { directory: space.directory, spaceId: space.spaceId, name: space.name };
+            await adapter.binding(next);
+            try { await global.AppData.folderSync.connect(space.spaceId); }
+            catch (error) { await adapter.binding(previous); throw error; }
+            binding = next;
+            adapter.clearCache(); suspended = false; resumeAttempted = false;
+            emit({ permission: await adapter.permission(binding.directory), errors: [], lastCheckAt: null });
+            await refresh();
+            return { existing: space.existing, spaceId: space.spaceId };
+        });
+        announce('binding-changed');
+        await syncNow();
+        return result;
+    }
+    // Starts requestPermission directly inside the click handler, before any asynchronous read.
+    function reauthorize() {
+        if (recovery) return recovery;
+        if (!binding?.directory) return Promise.reject(new Error('请先连接同步文件夹'));
+        resumeAttempted = true;
+        emit({ recovering: true });
+        let request;
+        try { request = adapter.requestPermission(binding.directory); }
+        catch (error) { request = Promise.reject(error); }
+        recovery = Promise.resolve(request).then(async permission => {
+            emit({ permission, ...(permission === 'granted' ? { errors: [] } : {}) });
+            if (permission !== 'granted') throw new Error('尚未获得同步文件夹读写权限');
+            announce('binding-changed');
+            // A worker may already have observed prompt; finish it, then run with the new grant.
+            if (running) await running.catch(() => {});
+            return syncNow();
+        }).catch(error => {
+            if (error.name === 'SecurityError') resumeAttempted = false;
+            throw error;
+        }).finally(() => { recovery = null; emit({ recovering: false }); });
+        return recovery;
+    }
+    async function disconnect() {
+        await withLock(async () => {
+            await global.AppData.folderSync.disconnect();
+            await adapter.binding(null);
+            binding = null; adapter.clearCache();
+            emit({ errors: [], permission: 'prompt' }); await refresh();
+        });
+        announce('binding-changed');
+    }
+    async function resolve(key, headId) {
+        await withLock(() => global.AppData.folderSync.resolve(key, headId));
+        await refresh(); await syncNow();
+    }
+    async function setPreferences(enabled) {
+        await withLock(() => global.AppData.folderSync.setPreferences(enabled));
+        await refresh(); await syncNow();
+    }
+    async function approveDelete(id) {
+        await withLock(() => global.AppData.folderSync.approveDelete(id));
+        await refresh(); await syncNow();
+    }
+    async function withReset(task, resetLock) {
+        // Called while the shared full-reset lock is already held.
+        // This durable flag and every learning write share the system-store transaction.
+        // Earlier writes finish first; later writes abort even in another tab.
+        let success = false;
+        try {
+            const state = await adapter.resetBarrier(true, resetLock);
+            binding = await adapter.binding();
+            if (binding || state.enabled || state.pending) {
+                await global.AppData.ready;
+                let pending = state.pending;
+                while (pending) {
+                    const result = await runUnlocked();
+                    const latest = await global.AppData.folderSync.status();
+                    if (!latest.pending) break;
+                    if (!result?.published || latest.pending >= pending) {
+                        throw new Error('还有未写入 OneDrive 文件夹的记录，请连接原空间并同步后再清理本机');
+                    }
+                    pending = latest.pending;
+                }
+            }
+            suspended = true; announce('reset-pause');
+            if (timer) { global.clearTimeout(timer); timer = null; }
+            const result = await task();
+            success = result?.success === true;
+            return result;
+        } finally {
+            if (!success && !global.FileJournal?.status().resetCommitted) {
+                try { await adapter.resetBarrier(false); }
+                finally { suspended = false; announce('reset-resume'); }
+            }
+        }
+    }
+    function init() {
+        if (!initPromise) initPromise = initialize().catch(error => { initPromise = null; emit({ initializing: false }); throw error; });
+        return initPromise;
+    }
+    function resumeFromInteraction(event) {
+        if (!event.isTrusted) return;
+        // A failed activation request can retry on the next gesture, not its trailing click.
+        if (event.type === 'click' && skipInteractionClick) { skipInteractionClick = false; return; }
+        if (event.type === 'pointerdown' && event.pointerType !== 'mouse') return;
+        if (event.type === 'pointerup' && event.pointerType === 'mouse') return;
+        if (event.type === 'keydown' && (event.key === 'Escape' || event.ctrlKey || event.altKey || event.metaKey)) return;
+        earlyInteraction = true;
+        if (resumeAttempted || suspended || recovery
+            || !binding || !view.enabled || view.permission !== 'prompt') return;
+        // Explicit sync controls keep their own click handler, with no duplicate permission request.
+        if (event.target?.closest?.('#folder-sync-permission-btn, #folder-sync-enable-btn, #folder-sync-disconnect-btn, #folder-sync-startup-dialog')) return;
+        skipInteractionClick = ['pointerdown', 'pointerup', 'keydown'].includes(event.type);
+        // Call synchronously during a trusted click: browsers require transient user activation.
+        reauthorize().catch(error => {
+            if (!['SecurityError', 'AbortError'].includes(error.name)) emit({ errors: [{ path: '', message: error.message }] });
+        });
+    }
+    async function initialize() {
+        // Read the saved handle as soon as the module loads, alongside data initialization.
+        const [, savedBinding] = await Promise.all([
+            adapter.supported() ? withLock(() => adapter.resetBarrier(false), true) : null,
+            adapter.binding()
+        ]);
+        await global.AppData.ready;
+        binding = savedBinding;
+        if (binding) emit({ permission: await adapter.permission(binding.directory) });
+        await refresh();
+        if (earlyInteraction && global.navigator?.userActivation?.isActive) resumeFromInteraction({ isTrusted: true });
+        if (typeof global.BroadcastChannel === 'function') {
+            channel = new global.BroadcastChannel('ielts-atlas-folder-sync-control-v1');
+            channel.onmessage = event => {
+                if (event.data?.type === 'reset-pause') { suspended = true; emit(); }
+                else if (event.data?.type === 'reset-resume') { suspended = false; schedule(); }
+                else if (event.data?.type === 'binding-changed') {
+                    adapter.binding().then(value => { binding = value; adapter.clearCache(); return refresh(); }).then(() => schedule()).catch(error => emit({ errors: [{ path: '', message: error.message }] }));
+                }
+            };
+        }
+        global.AppData.backups.onDataCommitted(event => {
+            if (!event.targets?.some(target => target.syncOrigin)) schedule();
+        });
+        global.document?.addEventListener('visibilitychange', () => {
+            if (global.document.visibilityState === 'visible') schedule(0);
+        });
+        global.addEventListener?.('online', () => schedule(0));
+        global.addEventListener?.('focus', () => schedule(0));
+        global.setInterval(() => {
+            if (global.document?.visibilityState !== 'hidden') schedule(0);
+        }, POLL_MS);
+        // Complete the first background pass during startup, without waiting for settings or a timer.
+        if (binding && view.enabled) {
+            emit({ busy: true });
+            try {
+                const result = await withLock(runUnlocked, true);
+                if (result?.skipped) schedule();
+            }
+            catch (error) { emit({ errors: [{ path: '', message: error.message }] }); }
+            finally { emit({ busy: false }); }
+        }
+        emit({ initializing: false });
+    }
+    global.FolderSyncService = Object.freeze({ init, connect, disconnect, reauthorize, syncNow, resolve,
+        setPreferences, approveDelete, withReset, getStatus,
+        deferAutomaticRecovery() { resumeAttempted = true; },
+        onStatusChange(listener) {
+            listeners.add(listener); listener(getStatus()); return () => listeners.delete(listener);
+        } });
+    if (global.document) {
+        for (const type of ['pointerdown', 'pointerup', 'keydown', 'click'])
+            global.document.addEventListener(type, resumeFromInteraction, true);
+        init().catch(error => emit({ errors: [{ path: '', message: error.message }] }));
     }
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -17506,6 +19398,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     "js/presentation/message-center.js",
     "js/data/practiceRecordSource.js",
     "js/data/v2/dataCatalog.js",
+    "js/data/v2/syncModel.js",
+    "js/data/v2/fileJournal.js",
     "js/data/v2/dataKernel.js",
     "js/core/vocabScheduler.js",
     "js/core/practiceReviewScheduler.js",
@@ -17513,6 +19407,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     "js/services/readingTiming.js",
     "js/data/v2/readingViewCache.js",
     "js/data/v2/appData.js",
+    "js/services/syncFolderAdapter.js",
+    "js/services/syncService.js",
     "js/utils/suiteBackGuard.js",
     "js/utils/answerMatchCore.js",
     "js/app/spellingErrorCollector.js",
