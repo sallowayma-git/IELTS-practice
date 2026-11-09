@@ -460,10 +460,10 @@
         if (typeof callback !== 'function') {
             throw new TypeError('withFullResetLock requires a callback');
         }
-        return withDiskWriteLock(async function () {
+        return withDiskWriteLock(async function (lock) {
             state.fullResetLockDepth += 1;
             try {
-                return await callback();
+                return await callback(lock);
             } finally {
                 state.fullResetLockDepth -= 1;
             }

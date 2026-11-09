@@ -333,11 +333,11 @@
             let callbackEntered = false;
             let result;
             try {
-                result = await serviceInfo.service.withFullResetLock(async () => {
+                result = await serviceInfo.service.withFullResetLock(async (resetLock) => {
                     callbackEntered = true;
                     const clear = () => performLocked(serviceInfo.service);
                     if (!global.FolderSyncService) return clear();
-                    try { return await global.FolderSyncService.withReset(clear); }
+                    try { return await global.FolderSyncService.withReset(clear, resetLock); }
                     catch (error) {
                         return externalBackupFailure(error, 'OneDrive 同步未能安全落盘，本次清理已取消。' + (error.message || ''));
                     }

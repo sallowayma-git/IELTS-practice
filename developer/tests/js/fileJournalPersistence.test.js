@@ -473,14 +473,105 @@ async function failedStartupWithRealResetServices(context, origin) {
     });
     await assert.rejects(() => load(page), /temporary startup head read failed/);
     await page.evaluate(() => __restoreHeadReads());
+    await realResetServices(page);
+    return page;
+}
+
+async function realResetServices(page) {
     for (const source of ['js/diagnostics/diagnosticContract.js', 'js/diagnostics/diagnosticStore.js',
         'js/services/syncFolderAdapter.js', 'js/services/syncService.js',
         'js/core/externalBackupService.js', 'js/core/siteDataReset.js']) {
         await page.addScriptTag({ content: fs.readFileSync(path.join(root, source), 'utf8') });
     }
     await page.evaluate(() => AppDiagnosticStore.ready);
-    return page;
 }
+
+const recoveryMarker = page => page.evaluate(async () => {
+    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName);
+    try { return JSON.parse(await (await (await dir.getFileHandle('recovery-reset.json')).getFile()).text()); }
+    catch (error) { if (error.name === 'NotFoundError') return null; throw error; }
+});
+
+async function pauseRecoveryBeforeSnapshot(page) {
+    await page.evaluate(() => {
+        window.__resetSnapshotPaused = false;
+        const getFileHandle = FileSystemDirectoryHandle.prototype.getFileHandle;
+        const pause = new Promise(resolve => { window.__continueReset = resolve; });
+        FileSystemDirectoryHandle.prototype.getFileHandle = async function(name, options) {
+            if (this.name === FileJournal.directoryName && name.startsWith('snapshot-') && options?.create) {
+                window.__resetSnapshotPaused = true;
+                await pause;
+            }
+            return getFileHandle.call(this, name, options);
+        };
+        window.__reset = SiteDataReset.perform({ reload: false });
+    });
+    await page.waitForFunction(() => __resetSnapshotPaused === true);
+}
+
+test('an abandoned recovery reset can be retried from a fresh page after its owner exits', async () => {
+    await fixture(async ({ page, context, origin }) => {
+        const healthy = await page(); await complete(healthy, 'original');
+        const before = await head(healthy);
+        const owner = await failedStartupWithRealResetServices(context, origin);
+        await pauseRecoveryBeforeSnapshot(owner);
+        const marker = await recoveryMarker(healthy);
+        assert(marker.token);
+        assert.deepEqual(await head(healthy), before);
+        await owner.close();
+        await healthy.waitForFunction(async () => (await navigator.locks.query()).held.length === 0);
+        assert.deepEqual(await head(healthy), before);
+        assert.deepEqual(await recoveryMarker(healthy), marker);
+
+        const recovering = await context.newPage(); await recovering.goto(origin);
+        await assert.rejects(() => load(recovering), /本地数据正在清理/);
+        await realResetServices(recovering);
+        // Taking over an abandoned marker must still honor a saved sync binding.
+        await recovering.evaluate(async () => SyncFolderAdapter.binding({ directory: await navigator.storage.getDirectory(), spaceId: 'protected-space' }));
+        assert.equal((await recovering.evaluate(() => SiteDataReset.perform({ reload: false }))).success, false);
+        assert.deepEqual(await recoveryMarker(healthy), marker);
+        assert.deepEqual(await head(healthy), before);
+        await recovering.evaluate(() => SyncFolderAdapter.binding(null));
+        const result = await recovering.evaluate(() => SiteDataReset.perform({ reload: false }));
+        assert.equal(result.success, true);
+        assert.equal(result.resetCommitted, true);
+        assert.notEqual((await head(healthy)).head.workspaceId, before.head.workspaceId);
+        assert.equal(await recoveryMarker(healthy), null);
+        await recovering.reload(); await load(recovering);
+        assert.deepEqual(await ids(recovering), []);
+        await complete(recovering, 'after-recovery');
+        await recovering.reload(); await load(recovering);
+        assert.deepEqual(await ids(recovering), ['after-recovery']);
+    });
+});
+
+test('a live recovery reset keeps its marker while another full reset waits', async () => {
+    await fixture(async ({ page, context, origin }) => {
+        const healthy = await page(); await complete(healthy, 'original');
+        const before = await head(healthy);
+        const owner = await failedStartupWithRealResetServices(context, origin);
+        const contender = await failedStartupWithRealResetServices(context, origin);
+        await pauseRecoveryBeforeSnapshot(owner);
+        const marker = await recoveryMarker(healthy);
+        await contender.evaluate(() => {
+            window.__finishedReset = false;
+            window.__reset = SiteDataReset.perform({ reload: false }).finally(() => { window.__finishedReset = true; });
+        });
+        await healthy.waitForFunction(async () => (await navigator.locks.query()).pending
+            .some(lock => lock.name === 'ielts-atlas-external-backup-write'));
+        assert.equal(await contender.evaluate(() => __finishedReset), false);
+        assert.deepEqual(await recoveryMarker(healthy), marker);
+        assert.deepEqual(await head(healthy), before);
+        await contender.close();
+        await healthy.waitForFunction(async () => !(await navigator.locks.query()).pending
+            .some(lock => lock.name === 'ielts-atlas-external-backup-write'));
+        assert.deepEqual(await recoveryMarker(healthy), marker);
+        await owner.evaluate(() => __continueReset());
+        assert.equal((await owner.evaluate(() => __reset)).success, true);
+        await healthy.reload(); await load(healthy);
+        assert.deepEqual(await ids(healthy), []);
+    });
+});
 
 for (const fault of ['writer', 'verification']) {
     test(`interrupted recovery-marker publication at ${fault} preserves surviving writes and reload`, async () => {
@@ -544,7 +635,8 @@ test('recovery-reset rollback preserves another attempt marker', async () => {
                 await writer.write(JSON.stringify({ token: 'another-reset-attempt' })); await writer.close();
             }));
             if (existing) {
-                assert.equal((await recovering.evaluate(() => SiteDataReset.perform({ reload: false }))).success, false);
+                // A direct barrier call has no full-reset lock authorizing takeover.
+                await assert.rejects(() => recovering.evaluate(() => FileJournal.resetBarrier(true)), /已有清理标记/);
             } else await recovering.evaluate(() => FileJournal.resetBarrier(false));
             const marker = await healthy.evaluate(async () => {
                 const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName);

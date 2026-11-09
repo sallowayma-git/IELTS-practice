@@ -158,13 +158,13 @@
         await withLock(() => global.AppData.folderSync.approveDelete(id));
         await refresh(); await syncNow();
     }
-    async function withReset(task) {
+    async function withReset(task, resetLock) {
         // Called while the shared full-reset lock is already held.
         // This durable flag and every learning write share the system-store transaction.
         // Earlier writes finish first; later writes abort even in another tab.
         let success = false;
         try {
-            const state = await adapter.resetBarrier(true);
+            const state = await adapter.resetBarrier(true, resetLock);
             binding = await adapter.binding();
             if (binding || state.enabled || state.pending) {
                 await global.AppData.ready;

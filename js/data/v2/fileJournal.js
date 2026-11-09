@@ -6,6 +6,7 @@
     const VERSION = 1;
     const DIRECTORY = 'ielts-atlas-local-v1';
     const LOCK = 'ielts-atlas-local-journal-v1';
+    const RESET_LOCK = 'ielts-atlas-external-backup-write';
     const CACHE_KEY = '__fileJournalCache';
     const BINDING_DB = 'IELTSAtlasLocalFilesV1';
     const BOOTSTRAP = 'bootstrap.json';
@@ -489,10 +490,16 @@
                     return { committed: true, cleanupErrors };
                 });
             }
-            async prepareRecoveryReset() {
+            async prepareRecoveryReset(resetLock) {
                 return locked(async () => {
                     if (!this.root) throw problem('无法访问本地文件，不能安全清理。');
-                    if (await exists(this.root, RESET_BARRIER)) throw problem('本地数据已有清理标记，请完成已有清理后重试。');
+                    // A full reset holds this lock from preparation through commit
+                    // or rollback. Only its next holder may take over a marker left
+                    // by an exited page; direct barrier calls cannot claim it.
+                    if (await exists(this.root, RESET_BARRIER)
+                        && (resetLock?.name !== RESET_LOCK || resetLock.mode !== 'exclusive')) {
+                        throw problem('本地数据已有清理标记，请完成已有清理后重试。');
+                    }
                     if ((await exchangeBinding())?.directory) throw problem('请先恢复同步目录和本地数据，再清理本机。');
                     const model = global.FolderSyncModel;
                     const check = rows => {
@@ -519,8 +526,8 @@
                     recoveryDriver = this;
                     try { await writeText(this.root, RESET_BARRIER, JSON.stringify({ token: this.recoveryResetToken })); }
                     catch (error) {
-                        // The marker was absent when this lock was acquired. Own
-                        // even an empty/partially written file, and remove it before
+                        // The marker was absent or abandoned under the full-reset
+                        // lock. Own even a partially written file, and remove it before
                         // queued readers or writers can observe a cancelled reset.
                         await this.rollbackRecoveryReset(true);
                         throw error;
@@ -543,7 +550,7 @@
     global.FileJournal = Object.freeze({
         driverClass, directoryName: DIRECTORY, bindingDatabase: BINDING_DB,
         status: () => ({ ...storageStatus }),
-        async resetBarrier(active) {
+        async resetBarrier(active, resetLock) {
             if (storageStatus.resetCommitted) return { enabled: false, pending: 0 };
             if (!active && recoveryDriver) {
                 const driver = recoveryDriver;
@@ -554,7 +561,7 @@
             catch (error) {
                 if (!active) return { enabled: false, pending: 0 };
                 if (!attemptedDriver) throw error;
-                return attemptedDriver.prepareRecoveryReset();
+                return attemptedDriver.prepareRecoveryReset(resetLock);
             }
             return activeDriver.resetBarrier(active);
         },

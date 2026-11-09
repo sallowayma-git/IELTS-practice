@@ -30,8 +30,8 @@
             });
         } finally { db.close(); }
     }
-    async function resetBarrier(active) {
-        if (global.FileJournal) return global.FileJournal.resetBarrier(active);
+    async function resetBarrier(active, resetLock) {
+        if (global.FileJournal) return global.FileJournal.resetBarrier(active, resetLock);
         const db = await new Promise((resolve, reject) => {
             const request = global.indexedDB.open('IELTSAtlasDataV2');
             let absent = false;
