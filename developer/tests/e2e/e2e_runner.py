@@ -45,6 +45,7 @@ E2E_CASES = [
     "interrupted_history_flow.py",
     "listening_practice_flow.py",
     "suite_practice_flow.py",
+    "practice_popup_readiness.py",
     "practice_submit_file_flow.py",
     "file_init_referrer_trap.py",
     "ui_export_import_click.py",
