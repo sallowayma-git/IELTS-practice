@@ -1744,21 +1744,35 @@ def main() -> int:
                 raise RuntimeError(f"reading {pane_name} collapsed: {layout}")
         driver.screenshot(READING_SCREENSHOT)
         metadata["readingScreenshot"] = str(READING_SCREENSHOT.resolve())
+        # Unified layout: the header button opens the notes drawer, and the
+        # drawer's "+" opens the modal note editor.
         driver.script("""
-            const button = document.querySelector('#note-btn');
+            const button = document.querySelector('#notes-drawer-btn');
             button.focus();
             button.click();
-            return document.activeElement?.id;
+            return true;
         """)
         wait_for_value(
             driver,
-            "return document.activeElement?.tagName === 'TEXTAREA' && getComputedStyle(document.querySelector('#notes-panel')).display !== 'none'",
+            "return document.querySelector('#reading-note-drawer').classList.contains('open')",
+        )
+        driver.script("""
+            const add = document.querySelector('#reading-note-drawer .reading-note-outline-add');
+            add.focus();
+            add.click();
+            return true;
+        """)
+        wait_for_value(
+            driver,
+            "return document.activeElement?.tagName === 'TEXTAREA' && getComputedStyle(document.querySelector('#reading-note-editor')).display !== 'none'",
         )
         tab_target = driver.script("""
             document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
-            return document.activeElement?.id || '';
+            const active = document.activeElement;
+            const inside = Boolean(active?.closest('#reading-note-drawer, #reading-note-editor'));
+            return {inside, tag: active?.tagName || '', className: active?.className || ''};
         """)
-        if tab_target != "close-note":
+        if not tab_target.get("inside") or tab_target.get("tag") != "BUTTON":
             raise RuntimeError(f"notes dialog did not trap Tab: {tab_target}")
         driver.script("""
             document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
@@ -1766,7 +1780,7 @@ def main() -> int:
         """)
         wait_for_value(
             driver,
-            "return getComputedStyle(document.querySelector('#notes-panel')).display === 'none' && document.activeElement?.id === 'note-btn'",
+            "return getComputedStyle(document.querySelector('#reading-note-editor')).display === 'none' && document.activeElement?.classList.contains('reading-note-outline-add')",
         )
         checks["notesDialog"] = "passed"
         negative = driver.script("""
