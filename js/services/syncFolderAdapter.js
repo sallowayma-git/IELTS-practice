@@ -31,6 +31,7 @@
         } finally { db.close(); }
     }
     async function resetBarrier(active) {
+        if (global.FileJournal) return global.FileJournal.resetBarrier(active);
         const db = await new Promise((resolve, reject) => {
             const request = global.indexedDB.open('IELTSAtlasDataV2');
             let absent = false;
@@ -114,6 +115,9 @@
         return value;
     }
     async function openWorkspace(selected, confirmCreate = () => false) {
+        if (global.FileJournal && await global.FileJournal.isLocalDirectory(selected)) {
+            throw new Error('本地数据目录与同步交换目录必须分开，请选择另一个专用目录。');
+        }
         const found = async dir => {
             try { return assertWorkspace(await readJson(dir, 'workspace.json')); }
             catch (error) { if (error.name !== 'NotFoundError') throw error; return null; }

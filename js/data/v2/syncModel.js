@@ -4,9 +4,10 @@
     if (global.FolderSyncModel) return;
     const FORMAT = 'ielts-atlas-static-folder-sync';
     const VERSION = 1;
-    // Keep the workspace and IndexedDB binding readable. Older builds reject v2
-    // operations instead of applying a vocabulary structure without its progress.
-    const OPERATION_VERSION = 2;
+    // v3 adds deterministic field competition for settings. Older builds must
+    // reject these operations rather than calculate a different projection.
+    const OPERATION_VERSION = 3;
+    const VOCAB_LAYOUT_VERSION = 2;
     const PROGRESS_PREFIX = 'vocabProgress/';
     const REVIEW_DEFAULTS = Object.freeze({
         easeFactor: null, interval: 1, repetitions: 0, intraCycles: 0, correctCount: 0,
@@ -304,8 +305,35 @@
             }
         }
     }
+    function compareStamp(left, right) {
+        const difference = left.stamp.time - right.stamp.time;
+        if (difference) return difference;
+        if (left.stamp.writer !== right.stamp.writer) return left.stamp.writer < right.stamp.writer ? -1 : 1;
+        return left.stamp.seq - right.stamp.seq;
+    }
+    // Like Super Productivity, causality is checked before timestamps. Only
+    // independent setting fields use LWW; deletion and coupled learning data
+    // retain alternatives. Stamps always belong to the originating edit.
+    function mergeSettings(base, heads) {
+        const changed = heads.filter(head => !equal(head.value, base));
+        if (!changed.length) return { value: copy(base), conflict: false };
+        if (changed.every(head => equal(head.value, changed[0].value))) return { value: copy(changed[0].value), conflict: false };
+        if (changed.some(head => !head.value.exists)) return { value: copy(base), conflict: true };
+        const values = changed.map(head => head.value.value);
+        if (values.every(plain) && (!base.exists || plain(base.value))) {
+            const original = base.exists ? base.value : {}, result = {}; let conflict = false;
+            for (const field of [...new Set([...Object.keys(original), ...values.flatMap(Object.keys)])].sort()) {
+                const merged = mergeSettings(valueAt(original, field), changed.map(head => ({ ...head, value: valueAt(head.value.value, field) })));
+                if (merged.value.exists) result[field] = merged.value.value;
+                conflict ||= merged.conflict;
+            }
+            return { value: present(result), conflict };
+        }
+        if (values.some(value => value && typeof value === 'object')) return { value: copy(base), conflict: true };
+        return { value: copy([...changed].sort(compareStamp).at(-1).value), conflict: false };
+    }
     function projection(key, heads) {
-        heads.sort((left, right) => left.id.localeCompare(right.id));
+        heads.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
         if (heads.length === 1 || heads.every(head => equal(head.value, heads[0].value))) {
             return { value: copy(heads[0].value), conflict: false, viewClock: clockJoin(heads.map(head => head.clock)) };
         }
@@ -314,23 +342,27 @@
         let merged = sameBase ? mergeValue(base, heads.map(head => head.value),
             key.startsWith('practice.reviewPlans/') || key.startsWith(PROGRESS_PREFIX))
             : { value: copy(heads[0].value), conflict: true };
+        if (sameBase && ['preferences', 'vocabConfig'].includes(key) && heads.every(head => head.stamp)) {
+            merged = mergeSettings(base, heads);
+        }
         // A conflicting partial merge can violate entity/word relationships. Keep a valid baseline.
         if (merged.conflict) merged.value = base.exists ? copy(base) : copy(heads.find(head => head.value.exists)?.value || heads[0].value);
         try { validateUnit(key, merged.value); }
         catch (_) { merged = { value: copy(heads[0].value), conflict: true }; }
         return { ...merged, viewClock: merged.conflict ? {} : clockJoin(heads.map(head => head.clock)) };
     }
-    function installChange(state, change, id) {
+    function installChange(state, change, id, operation) {
         const unit = state.units[change.key] || { heads: [] };
         if (unit.heads.some(head => covers(head.clock, change.clock))) return;
         unit.heads = unit.heads.filter(head => !covers(change.clock, head.clock));
-        unit.heads.push({ id, clock: copy(change.clock), value: copy(change.value), base: copy(change.base) });
+        unit.heads.push({ id, clock: copy(change.clock), value: copy(change.value), base: copy(change.base),
+            ...(operation?.version >= 3 ? { stamp: { time: Date.parse(operation.createdAt), writer: operation.writerId, seq: operation.seq } } : {}) });
         Object.assign(unit, projection(change.key, unit.heads));
         state.units[change.key] = unit;
     }
     function newState(spaceId, preferences = false) {
         if (!identifier(spaceId)) fail('数据空间 ID 无效');
-        return { format: FORMAT, version: VERSION, vocabLayout: OPERATION_VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
+        return { format: FORMAT, version: VERSION, vocabLayout: VOCAB_LAYOUT_VERSION, enabled: true, spaceId, writerId: uuid(), seq: 0, preferences,
             units: {}, materialized: {}, pending: [], seen: {}, blocked: {} };
     }
     function assertState(state) {
@@ -349,7 +381,7 @@
         });
     }
     function upgradeVocabulary(state) {
-        if (state.vocabLayout === OPERATION_VERSION) return;
+        if (state.vocabLayout === VOCAB_LAYOUT_VERSION) return;
         const legacy = state.units.vocabulary;
         delete state.units.vocabulary;
         for (const head of legacy?.heads || []) {
@@ -361,7 +393,7 @@
         delete state.materialized.vocabulary;
         if (materialized?.exists) Object.assign(state.materialized, splitVocabulary(materialized.value));
         // Original queued files, operation IDs and hashes remain byte-compatible.
-        state.vocabLayout = OPERATION_VERSION;
+        state.vocabLayout = VOCAB_LAYOUT_VERSION;
     }
     function publish(state, entries, sourceId, resolve = false) {
         if (!entries.length) return;
@@ -384,7 +416,7 @@
         const operation = { format: FORMAT, version: OPERATION_VERSION, spaceId: state.spaceId,
             writerId: state.writerId, seq: state.seq, id, sourceId: String(sourceId || ''),
             createdAt: new Date().toISOString(), changes };
-        for (const change of changes) installChange(state, change, id);
+        for (const change of changes) installChange(state, change, id, operation);
         state.pending.push(operation); state.seen[id] = digest(operation);
     }
     function capture(state, snapshot, sourceId) {
@@ -408,11 +440,12 @@
     }
     function validateOperation(operation) {
         safeJson(operation);
-        if (!plain(operation) || operation.format !== FORMAT || ![VERSION, OPERATION_VERSION].includes(operation.version)
+        if (!plain(operation) || operation.format !== FORMAT || ![VERSION, 2, OPERATION_VERSION].includes(operation.version)
             || !identifier(operation.spaceId) || !identifier(operation.writerId)
             || !Number.isSafeInteger(operation.seq) || operation.seq < 1
             || operation.id !== operation.writerId + '-' + String(operation.seq).padStart(12, '0')
             || !Array.isArray(operation.changes) || !operation.changes.length || operation.changes.length > 20000) fail('不支持或损坏的同步日志');
+        if (operation.version >= 3 && (typeof operation.createdAt !== 'string' || !Number.isFinite(Date.parse(operation.createdAt)))) fail('同步操作缺少有效的原始时间戳');
         const keys = new Set();
         for (const change of operation.changes) {
             if (operation.version === VERSION && (change.key === 'vocabConfig'
@@ -446,7 +479,7 @@
         upgradeVocabulary(state);
         for (const change of operation.changes) {
             const changes = operation.version === VERSION ? splitLegacyChange(change, false) : [change];
-            for (const entry of changes) installChange(state, entry, operation.id);
+            for (const entry of changes) installChange(state, entry, operation.id, operation);
         }
         state.seen[operation.id] = hash;
         delete state.blocked[operation.id];

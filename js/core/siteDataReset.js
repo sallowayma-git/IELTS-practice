@@ -13,7 +13,8 @@
         'ExamSystemExternalBackup',
         'IELTSAtlasExternalBackupV2',
         'IELTSAtlasDiagnosticsV1',
-        'IELTSAtlasReadingViewCache'
+        'IELTSAtlasReadingViewCache',
+        'IELTSAtlasLocalFilesV1'
     ]);
     let resetPromise = null;
 
@@ -192,6 +193,14 @@
 
     async function deleteAndCommit(service) {
         const errors = [];
+        try { if (global.FileJournal) await global.FileJournal.resetLocal(); }
+        catch (error) {
+            const rollbackErrors = await rollbackFullResetPreparation(service);
+            notify('本地 JSON 数据未能清理，请恢复文件访问后重试。', 'error');
+            return { success: false, reason: 'partial_reset', terminal: false, retryable: true,
+                errors: [{ stage: 'reset-local-files', error }].concat(rollbackErrors),
+                databases: DATABASE_NAMES.slice(), externalBackupFilesPreserved: true };
+        }
         let deletionResults;
         try {
             deletionResults = await Promise.allSettled(DATABASE_NAMES.map(deleteDatabase));

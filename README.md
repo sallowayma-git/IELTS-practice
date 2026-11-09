@@ -36,7 +36,7 @@ This project currently maintains three main branches, each targeting different u
 
 IELTS Atlas is a pure-frontend practice system focused on IELTS reading, with an optional local listening extension. The single entry point is `index.html`; the app runs on static HTML, CSS, JavaScript bundles, and local question-bank assets, with no backend service required.
 
-The system provides question-bank browsing, reading practice, optional listening practice, test-set practice, practice records, score statistics, mistake analysis, data backup, question-bank import, vocabulary tools, reading review, and achievements. Data is stored in browser-local storage by default; the app runs directly over `file://` and can also be deployed to static web hosting.
+The system provides question-bank browsing, reading practice, optional listening practice, test-set practice, practice records, score statistics, mistake analysis, data backup, question-bank import, vocabulary tools, reading review, and achievements. AppData records are always persisted as local JSON snapshots and JSONL transactions, independently of optional synchronization. Secure HTTP origins use the browser's private filesystem (OPFS); `file://` requires connecting a dedicated local directory when OPFS is unavailable. IndexedDB is a rebuildable read cache. See [storage and synchronization](ONEDRIVE_SYNC.md) for recovery and compatibility details.
 
 ## Quick Start
 
@@ -49,7 +49,7 @@ See [optional OneDrive folder sync](ONEDRIVE_SYNC.md) to share browser-local lea
 **Run locally:**
 
 1. Download and fully extract the runtime ZIP linked above. Keep the directory structure intact — do not copy `index.html` alone.
-2. Open `index.html` in your browser.
+2. Open `index.html` in your browser. If prompted, connect a dedicated local data directory outside the project and any cloud-synchronized folder. A fixed localhost origin can use OPFS without a directory picker.
 3. Go to **Library (题库浏览)** and confirm the question list loads.
 4. If the browser blocks a pop-up when you start a practice, allow it and try again.
 

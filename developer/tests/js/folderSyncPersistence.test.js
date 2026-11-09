@@ -6,7 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const sources = ['js/data/v2/dataCatalog.js', 'js/data/v2/syncModel.js', 'js/data/v2/dataKernel.js',
+const sources = ['js/data/v2/dataCatalog.js', 'js/data/v2/syncModel.js',
+    ...(process.env.FILE_JOURNAL_TEST === '1' ? ['js/data/v2/fileJournal.js'] : []), 'js/data/v2/dataKernel.js',
     'js/data/practiceRecordSource.js', 'js/core/vocabScheduler.js', 'js/core/practiceReviewScheduler.js',
     'js/data/v2/readingVocabularyModel.js', 'js/data/v2/readingViewCache.js', 'js/data/v2/appData.js'];
 const SPACE = 'space-persistence-001';
@@ -361,7 +362,7 @@ test('real review plans: causal review sync is stable; concurrent outcomes stay 
 async function installTransport(page) {
     await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncFolderAdapter.js'), 'utf8') });
     await page.evaluate(() => {
-        window.showDirectoryPicker = () => navigator.storage.getDirectory();
+        window.showDirectoryPicker = async () => (await navigator.storage.getDirectory()).getDirectoryHandle('sync-test', { create: true });
         window.confirm = () => true;
     });
     await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncService.js'), 'utf8') });
@@ -448,7 +449,7 @@ test('reset transaction barrier rejects another tab during preparation and publi
     await fixture(async ({ page, load }) => {
         const a = await page(); await installTransport(a);
         await a.evaluate(async () => {
-            window.SyncFolderAdapter = { ...SyncFolderAdapter, pick: () => navigator.storage.getDirectory(), permission: async () => 'granted' };
+            window.SyncFolderAdapter = { ...SyncFolderAdapter, pick: async () => (await navigator.storage.getDirectory()).getDirectoryHandle('sync-test', { create: true }), permission: async () => 'granted' };
             window.confirm = () => true;
         });
         await a.evaluate(() => FolderSyncService.connect());

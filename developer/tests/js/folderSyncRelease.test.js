@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 const root = process.env.READING_RELEASE_ROOT
     ? path.resolve(process.env.READING_RELEASE_ROOT)
     : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-test('built release: settings setup and startup permission recovery work from file and HTTP', async () => {
+test('built release: file URLs require local storage; HTTP setup and sync permission recovery work', async () => {
     const server = http.createServer((request, response) => {
         const name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
         const target = path.resolve(root, '.' + (name === '/' ? '/index.html' : name));
@@ -26,10 +26,17 @@ test('built release: settings setup and startup permission recovery work from fi
             const page = await context.newPage(); page.on('dialog', dialog => dialog.accept());
             if (base.startsWith('http')) await page.addInitScript(() => {
                 // Only the chooser is substituted; permission, IDB, FileSystem APIs and bundles are production code.
-                window.showDirectoryPicker = () => navigator.storage.getDirectory();
+                window.showDirectoryPicker = async () => (await navigator.storage.getDirectory()).getDirectoryHandle('sync-test', { create: true });
             });
             const home = base + '?view=overview&test_env=1';
             await page.goto(home);
+            if (base.startsWith('file:')) {
+                await page.getByRole('dialog', { name: '连接本地数据目录' }).waitFor();
+                assert.equal(await page.evaluate(() => FileJournal.status().backend), 'needs-directory');
+                assert.equal(await page.evaluate(() => AppData.status().state), 'initializing');
+                await context.close();
+                continue;
+            }
             await page.waitForFunction(() => window.AppData && window.app?.isInitialized);
             await page.evaluate(() => AppData.ready);
             await page.locator('#license-modal.show .lm-btn').click();
@@ -115,52 +122,21 @@ test('built release: settings setup and startup permission recovery work from fi
                     return !status.recovering && status.permission === 'granted' && status.pending === 0;
                 });
                 assert.equal(await page.evaluate(() => window.__startupRequests), 1);
-            } else {
-                // file:// has no OPFS. Keep real AppData and simulate only the saved handle and permission result.
-                await page.evaluate(async () => {
-                    await AppData.folderSync.connect('file-startup-space');
-                    await AppData.practice.completeAttempt({ operationId: 'file-resume-record', record: {
-                        id: 'file-resume-record', type: 'reading', examId: 'file-resume-exam',
-                        totalQuestions: 1, correctAnswers: 1, answers: { 1: 'yes' }
-                    } });
-                });
-                await page.addInitScript(() => {
-                    window.__startupRequests = 0;
-                    let adapter;
-                    Object.defineProperty(window, 'SyncFolderAdapter', {
-                        configurable: true, get: () => adapter,
-                        set(original) {
-                            adapter = { ...original, supported: () => true, binding: async () => ({
-                                name: 'user-data', spaceId: 'file-startup-space', directory: {
-                                    queryPermission: async () => 'prompt',
-                                    requestPermission: async () => {
-                                        if (!navigator.userActivation.isActive) throw new DOMException('activation required', 'SecurityError');
-                                        window.__startupRequests++;
-                                        return 'denied';
-                                    }
-                                }
-                            }) };
-                        }
-                    });
-                });
-                await page.goto(home);
-                const recovery = page.getByRole('dialog', { name: /恢复 OneDrive 同步/ });
-                await recovery.waitFor();
-                assert(await recovery.evaluate(dialog => dialog.matches(':modal') && dialog.clientWidth === innerWidth));
-                assert.equal(await page.locator('#folder-sync-modal').count(), 0);
-                assert.equal(await page.evaluate(() => window.__startupRequests), 0);
-                await recovery.getByRole('button', { name: '稍后再说' }).click();
-                await recovery.waitFor({ state: 'detached' });
-                await page.locator('button[data-view="settings"]').click();
-                assert.equal(await page.evaluate(() => window.__startupRequests), 0, 'deferral applies for this visit');
-                await page.goto(home);
-                await recovery.waitFor();
-                await recovery.getByRole('button', { name: '恢复同步' }).click();
-                await recovery.getByRole('status').filter({ hasText: '尚未获得同步文件夹读写权限' }).waitFor();
-                assert.equal(await page.evaluate(() => window.__startupRequests), 1);
-                assert.equal(await page.evaluate(async () => (await AppData.folderSync.pending()).length), 1);
             }
             await context.close();
         }
     } finally { await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+});
+
+test('every shipped data entry includes file persistence before the kernel', () => {
+    let entries = 0;
+    for (const name of fs.readdirSync(path.join(root, 'js/bundles'))) {
+        const source = fs.readFileSync(path.join(root, 'js/bundles', name), 'utf8');
+        const kernel = source.indexOf('(function installDataKernel');
+        if (kernel < 0) continue;
+        entries++;
+        const files = source.indexOf('(function installFileJournal');
+        assert(files >= 0 && files < kernel, name + ' must not bypass local files');
+    }
+    assert.equal(entries, 5);
 });

@@ -28,6 +28,47 @@ function exchange(a, b) {
     const left = copy(a.state.pending), right = copy(b.state.pending);
     left.forEach(op => apply(b, op)); right.forEach(op => apply(a, op));
 }
+
+test('v3 settings merge preserves disjoint fields and uses original time then writer for competition', () => {
+    const initial = empty(); initial.documents['vocab.userConfig'] = { dailyGoal: 10, sound: true };
+    const a = client(initial), b = client(initial); exchange(a, b);
+    a.snapshot.documents['vocab.userConfig'].dailyGoal = 20;
+    b.snapshot.documents['vocab.userConfig'] = { dailyGoal: 30, sound: false };
+    m.capture(a.state, a.snapshot, 'settings-a'); m.capture(b.state, b.snapshot, 'settings-b');
+    const operations = [...copy(a.state.pending), ...copy(b.state.pending)];
+    const left = operations.find(op => op.sourceId === 'settings-a'), right = operations.find(op => op.sourceId === 'settings-b');
+    left.createdAt = '2026-01-02T00:00:00.000Z'; right.createdAt = '2026-01-01T00:00:00.000Z';
+    for (let order = 0; order < 12; order++) {
+        const c = client();
+        const shuffled = [...operations].sort((x, y) => m.digest([order, x.id]).localeCompare(m.digest([order, y.id])));
+        shuffled.forEach(op => apply(c, op)); shuffled.forEach(op => apply(c, op));
+        assert.deepEqual(copy(c.snapshot.documents['vocab.userConfig']), { dailyGoal: 20, sound: false });
+        assert.equal(m.status(c.state).conflicts.length, 0);
+        assert.equal(c.state.pending.length, 0, 'receiving does not manufacture a newer edit');
+    }
+    right.createdAt = left.createdAt;
+    const c = client(); operations.forEach(op => apply(c, op));
+    assert.equal(c.snapshot.documents['vocab.userConfig'].dailyGoal, left.writerId > right.writerId ? 20 : 30);
+    c.snapshot.documents['vocab.userConfig'].dailyGoal = 40; m.capture(c.state, c.snapshot, 'causal');
+    const later = copy(c.state.pending.at(-1)); later.createdAt = '2020-01-01T00:00:00.000Z';
+    const d = client(); [later, ...operations].forEach(op => apply(d, op));
+    assert.equal(d.snapshot.documents['vocab.userConfig'].dailyGoal, 40, 'causality wins despite a slow device clock');
+});
+
+test('v2 settings retain conservative conflicts and unknown versions fail before changing state', () => {
+    const initial = empty(); initial.documents['vocab.userConfig'] = { dailyGoal: 10 };
+    const a = client(initial), b = client(initial); exchange(a, b);
+    a.snapshot.documents['vocab.userConfig'].dailyGoal = 20;
+    b.snapshot.documents['vocab.userConfig'].dailyGoal = 30;
+    m.capture(a.state, a.snapshot, 'old-a'); m.capture(b.state, b.snapshot, 'old-b');
+    const operations = [...copy(a.state.pending), ...copy(b.state.pending)];
+    operations.find(op => op.sourceId === 'old-a').version = 2;
+    const c = client(); operations.forEach(op => apply(c, op));
+    assert.equal(m.status(c.state).conflicts.length, 1);
+    const before = m.stable(c.state), invalid = copy(operations.at(-1)); invalid.version = 999;
+    assert.throws(() => m.receive(c.state, invalid));
+    assert.equal(m.stable(c.state), before);
+});
 test('SHA-256 matches Node for canonical Unicode JSON and long input', () => {
     for (const value of ['', 'abc', { 中文: '✓'.repeat(300), a: [null, true, 42] }]) {
         assert.equal(m.digest(value), createHash('sha256').update(m.stable(value)).digest('hex'));
@@ -155,7 +196,7 @@ test('existing v1 vocabulary state and queued log upgrade without replacing the 
     assert.equal(state.seen[operation.id], m.digest(operation));
     snapshot.documents['vocab.words'][0].correctCount = 3;
     m.capture(state, snapshot, 'new-review');
-    assert.equal(state.pending.at(-1).version, 2);
+    assert.equal(state.pending.at(-1).version, m.OPERATION_VERSION);
     const fresh = client();
     apply(fresh, state.pending[1]); apply(fresh, operation);
     assert.equal(fresh.snapshot.documents['vocab.words'][0].correctCount, 3);

@@ -473,11 +473,12 @@
             this.db = null;
             this.mutationTimeoutMs = options.mutationTimeoutMs;
             this.requestTimeoutMs = options.requestTimeoutMs;
+            this.databaseVersion = options.databaseVersion || DATABASE_VERSION;
         }
         async initialize() {
             if (!this.indexedDB || typeof this.indexedDB.open !== 'function') throw new Error('IndexedDB unavailable');
             this.db = await new Promise((resolve, reject) => {
-                const request = this.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+                const request = this.indexedDB.open(DATABASE_NAME, this.databaseVersion);
                 let abandoned = false;
                 let settle;
                 request.onsuccess = () => { if (abandoned || !settle) { try { request.result.close(); } catch (_) {} } else settle.resolve(request.result); };
@@ -814,12 +815,13 @@
         initialize() {
             if (this.ready) return this.ready;
             this.state = 'initializing';
-            this.ready = new IndexedDBDriver(this.indexedDB, {
+            const Driver = global.FileJournal ? global.FileJournal.driverClass(IndexedDBDriver) : IndexedDBDriver;
+            this.ready = new Driver(this.indexedDB, {
                 mutationTimeoutMs: this.indexedDBMutationTimeoutMs, requestTimeoutMs: this.indexedDBRequestTimeoutMs
             }).initialize().then((driver) => {
-                this.driver = driver; this.backend = 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
+                this.driver = driver; this.backend = driver.backend || 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
             }).catch((error) => { this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
-                throw error instanceof AppDataError ? error : new AppDataError('BACKEND_UNAVAILABLE', 'IndexedDB is required for AppData v2', { cause: error && error.message }); });
+                throw error instanceof AppDataError ? error : new AppDataError(error.code || 'BACKEND_UNAVAILABLE', global.FileJournal ? 'Local JSON storage is unavailable: ' + error.message : 'IndexedDB is required for AppData v2', { cause: error && error.message }); });
             return this.ready;
         }
         close() {
@@ -833,9 +835,9 @@
             if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
         }
         _latch(error) {
-            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'IndexedDB write failed: storage quota exceeded', { cause: error.message });
+            if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'Local save failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
-            return new AppDataError('BACKEND_UNAVAILABLE', 'Active IndexedDB backend failed; reload is required', { cause: error && error.message });
+            return new AppDataError(error?.code || 'BACKEND_UNAVAILABLE', 'Local data backend failed; reload is required', { cause: error && error.message });
         }
         onCommitted(listener) {
             if (typeof listener !== 'function') throw validation('Committed listener must be a function');
@@ -1519,7 +1521,8 @@
             if (targets.length) this._notifyCommitted(targets.concat({ logicalKey: model.STATE_KEY, syncOrigin: true }), receipt);
             return { ...receipt, result: clone(result) };
         }
-        status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null }); }
+        status() { return Object.freeze({ state: this.state, backend: this.backend, failure: this.failure ? this.failure.message : null,
+            ...(global.FileJournal ? { files: global.FileJournal.status() } : {}) }); }
     }
 
     Object.defineProperty(global, '__AppDataV2Internals', { value: { catalog, DataKernel, AppDataError, makeEnvelope, validateEnvelope, validateEntityRow, checksum, stableStringify, canonicalizeJson, clone, randomId, nowIso, parseLegacyValue, readLegacyValues, readLegacyExternalBackup, constants: Object.freeze({ DATABASE_NAME, DATABASE_VERSION, DOCUMENT_STORE, SYSTEM_STORE, ENTITY_STORES, OPERATION_JOURNAL_WINDOW }) }, enumerable: false, configurable: true, writable: false });
