@@ -20,6 +20,7 @@ pub mod memory;
 pub mod preference;
 pub mod text_guard;
 pub mod view;
+pub mod vocab_sm2;
 pub mod weekly_report;
 
 pub use agent_thread::*;
