@@ -10,10 +10,20 @@ use serde_json::Value;
 
 use ielts_domain::{estimate_tokens, is_safe_for_prompt};
 
+use crate::soul::soul_profile;
 use crate::sqlite::{DbError, DbResult};
 
 const PROFILE_USER_ID: &str = "local";
 const READING_SCOPE: &str = "activity:reading";
+/// Soul settings shown to the coach, in prompt order.
+const SOUL_LABELS: [(&str, &str); 5] = [
+    ("soul.nickname", "nickname"),
+    ("soul.address", "address"),
+    ("soul.tone", "tone"),
+    ("soul.targetBand", "target band"),
+    ("soul.examDate", "exam date"),
+];
+pub const PROFILE_MAX_SOUL_LINES: usize = 6;
 
 /// Per-list caps, then one total cap over the serialized snapshot.
 pub const PROFILE_MAX_PREFERENCES: usize = 5;
@@ -36,6 +46,9 @@ pub struct LearnerProfileSnapshot {
     pub memories: Vec<ProfileStatement>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub weak_skills: Vec<WeakSkill>,
+    /// Soul settings as labelled lines. Outside `fit()`: never changes which memories survive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub soul: Vec<String>,
 }
 
 /// One preference or learned memory. `id` is the memory id (`mem-...`) for a
@@ -107,7 +120,29 @@ pub fn select_learner_profile(conn: &Connection) -> DbResult<LearnerProfileSnaps
     let mut memories = memory_rows(conn, false)?;
     memories.truncate(PROFILE_MAX_MEMORIES);
     let weak_skills = weak_skill_rows(conn)?;
-    Ok(LearnerProfileSnapshot { preferences, memories, weak_skills }.fit(PROFILE_TOKEN_BUDGET))
+    let mut snapshot = LearnerProfileSnapshot { preferences, memories, weak_skills, soul: Vec::new() }
+        .fit(PROFILE_TOKEN_BUDGET);
+    // Added after fit(): soul lines are a separate small list and never shrink memories.
+    snapshot.soul = soul_lines(conn)?;
+    Ok(snapshot)
+}
+
+/// Soul settings that are set, as `label: value` lines that pass the prompt filter.
+fn soul_lines(conn: &Connection) -> DbResult<Vec<String>> {
+    let profile = soul_profile(conn, PROFILE_USER_ID)?;
+    Ok(SOUL_LABELS
+        .iter()
+        .filter_map(|(key, label)| accept(format!("{label}: {}", soul_text(profile.get(*key)?)?)))
+        .take(PROFILE_MAX_SOUL_LINES)
+        .collect())
+}
+
+fn soul_text(value: &Value) -> Option<String> {
+    match value {
+        Value::String(text) if !text.is_empty() => Some(text.clone()),
+        Value::Number(number) => number.as_f64().map(|band| format!("{band:.1}")),
+        _ => None,
+    }
 }
 
 fn explicit_preference_rows(conn: &Connection) -> DbResult<Vec<ProfileStatement>> {
@@ -122,6 +157,11 @@ fn explicit_preference_rows(conn: &Connection) -> DbResult<Vec<ProfileStatement>
     let mut out = Vec::new();
     for row in rows {
         let (key, scope, raw) = row?;
+        // These settings reach the coach as system-prompt soul lines; listing them
+        // here too would repeat them and crowd real preferences out of the cap.
+        if SOUL_LABELS.iter().any(|(soul_key, _)| *soul_key == key) {
+            continue;
+        }
         let value: Value = serde_json::from_str(&raw)?;
         let rendered = match value {
             Value::String(text) => text,
@@ -260,6 +300,7 @@ mod tests {
             preferences: (0..5).map(|i| statement(&format!("preference:global:k{i}"), &long)).collect(),
             memories: (0..8).map(|i| statement(&format!("mem-{i}"), &long)).collect(),
             weak_skills: vec![],
+            soul: vec![],
         };
         let fitted = snapshot.clone().fit(PROFILE_TOKEN_BUDGET);
         assert!(fitted.tokens() <= PROFILE_TOKEN_BUDGET);
@@ -274,9 +315,19 @@ mod tests {
             preferences: vec![statement("preference:global:tone", "tone: brief"), statement("mem-p", "x")],
             memories: vec![statement("mem-a", "y")],
             weak_skills: vec![],
+            soul: vec![],
         };
         assert_eq!(snapshot.memory_ids(), vec!["mem-p", "mem-a"]);
         assert!(LearnerProfileSnapshot::default().is_empty());
+    }
+
+    #[test]
+    fn profile_json_without_soul_still_deserializes() {
+        let old = r#"{"preferences":[{"id":"preference:global:tone","statement":"tone: brief"}],"memories":[],"weakSkills":[]}"#;
+        let snapshot: LearnerProfileSnapshot = serde_json::from_str(old).unwrap();
+        assert!(snapshot.soul.is_empty());
+        assert_eq!(snapshot.preferences.len(), 1);
+        assert!(serde_json::from_str::<LearnerProfileSnapshot>("{}").unwrap().is_empty());
     }
 
     #[test]
