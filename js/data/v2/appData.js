@@ -4261,7 +4261,47 @@
         else if (typeof global.setTimeout === 'function') global.setTimeout(run, 5000);
     }).catch(() => {});
 
-    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
+    function projectFolderSync(next, original, opId) {
+        const model = global.FolderSyncModel;
+        const readingChanged = !model.equal(next.documents[READING_STATE_KEY], original.documents[READING_STATE_KEY]);
+        const wordsChanged = ['vocab.words', 'vocab.lists'].some(key => !model.equal(next.documents[key], original.documents[key]));
+        if (readingChanged || wordsChanged) {
+            const state = normalizeReadingState(next.documents[READING_STATE_KEY]);
+            const snapshot = readingModel().createSnapshot({ words: next.documents['vocab.words'],
+                lists: next.documents['vocab.lists'], reading: state.reading });
+            if (readingChanged) {
+                state.generation = opId;
+                state.allowDefaultWordSeed = false;
+                for (const [table, rows] of Object.entries(state.tombstones)) {
+                    for (const stamp of table === 'all' ? (rows ? [rows] : []) : Object.values(rows)) {
+                        stamp.revision = (original.revisions[READING_STATE_KEY] || 0) + 1;
+                    }
+                }
+                next.documents[READING_STATE_KEY] = state;
+            }
+            const mirrors = readingProjection(snapshot);
+            next.documents['vocab.readingVocabWords'] = mirrors.words;
+            next.documents['vocab.readingBookshelfExams'] = mirrors.bookshelf;
+        }
+        return next;
+    }
+    const folderSync = Object.freeze({
+        async status() { await ready; return (await kernel.folderSyncAction('status')).result; },
+        async pending() { await ready; return (await kernel.folderSyncAction('pending')).result; },
+        async known() { await ready; return (await kernel.folderSyncAction('known')).result; },
+        async connect(spaceId, options = {}) {
+            await ready;
+            await backups.create({ type: 'pre-folder-sync' });
+            return kernel.folderSyncAction('connect', { spaceId, preferences: options.preferences === true });
+        },
+        async disconnect() { await ready; return kernel.folderSyncAction('disconnect'); },
+        async acknowledge(ids) { await ready; return kernel.folderSyncAction('ack', { ids }); },
+        async receive(operation) { await ready; return kernel.folderSyncAction('receive', { operation }, projectFolderSync); },
+        async resolve(key, headId) { await ready; return kernel.folderSyncAction('resolve', { key, headId }, projectFolderSync); },
+        async approveDelete(id) { await ready; return kernel.folderSyncAction('approveDelete', { id }, projectFolderSync); },
+        async setPreferences(enabled) { await ready; return kernel.folderSyncAction('preferences', { enabled }, projectFolderSync); }
+    });
+    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements, folderSync };
     Object.defineProperties(AppData, {
         ready: { value: ready, enumerable: false },
         getOperationFailureState: { value: getOperationFailureState, enumerable: false },
