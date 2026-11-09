@@ -29,6 +29,21 @@ def log(msg: str) -> None:
     print(f"[{ts}] {msg}", flush=True)
 
 
+async def wait_for_practice_popup(page, child, exam_id: str) -> None:
+    # openExam reserves about:blank before navigating. Its load state alone
+    # does not establish that the reading document is ready for evaluation.
+    expected_url = await page.evaluate(
+        "(examId) => window.app.examWindows.get(examId).expectedUrl",
+        exam_id,
+    )
+    await child.wait_for_url(
+        expected_url,
+        wait_until="domcontentloaded",
+        timeout=90000,
+    )
+    await child.locator("#submit-btn").wait_for(state="visible", timeout=60000)
+
+
 async def main() -> int:
     report = {"ok": False, "steps": [], "console": [], "errors": []}
 
@@ -132,7 +147,7 @@ async def main() -> int:
             )
         step("openExam", result=open_result)
         child = await popup_info.value
-        await child.wait_for_load_state("domcontentloaded", timeout=90000)
+        await wait_for_practice_popup(page, child, exam_id)
         child_meta = await child.evaluate(
             """() => ({
                 protocol: location.protocol,
