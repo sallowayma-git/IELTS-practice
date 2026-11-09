@@ -40,6 +40,8 @@ IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩�
 
 ## 快速开始
 
+如需在多台电脑间同步学习记录，请参阅 [OneDrive 文件夹同步](ONEDRIVE_SYNC.md)。
+
 ![首次启动、学习总览与题库浏览的实际画面](.github/assets/quick-start.gif)
 
 ### 系统要求

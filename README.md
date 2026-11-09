@@ -40,6 +40,8 @@ The system provides question-bank browsing, reading practice, optional listening
 
 ## Quick Start
 
+See [optional OneDrive folder sync](ONEDRIVE_SYNC.md) to share browser-local learning records across desktop computers.
+
 ![Quick start demo: first-run notice, learning overview, and library browsing](.github/assets/quick-start.gif)
 
 **Requirements:** a recent stable version of Chrome or Edge. Allow pop-ups when prompted — practice pages open in a new window.

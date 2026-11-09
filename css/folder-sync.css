@@ -1,0 +1,13 @@
+.folder-sync-modal .theme-modal-content { width: min(720px, calc(100vw - 32px)); max-height: 88vh; }
+.folder-sync-body { display: grid; gap: 14px; overflow-y: auto; }
+.folder-sync-body p { margin: 0; line-height: 1.65; }
+.folder-sync-muted { opacity: .75; font-size: .9rem; }
+.folder-sync-status { padding: 14px; border: 1px solid rgba(128,128,128,.3); border-radius: 12px; white-space: pre-line; }
+.folder-sync-option { display: flex; align-items: center; gap: 8px; }
+.folder-sync-error { color: var(--danger-color, #c45050); white-space: pre-line; overflow-wrap: anywhere; }
+.folder-sync-conflict { margin: 12px 0; padding: 12px; border: 1px solid rgba(128,128,128,.35); border-radius: 10px; }
+.folder-sync-conflict details { padding: 10px 0; }
+.folder-sync-conflict summary { cursor: pointer; }
+.folder-sync-conflict pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.folder-sync-modal [hidden] { display: none !important; }
+#folder-sync-setup-guide { display: grid; gap: 14px; }
