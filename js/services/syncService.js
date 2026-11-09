@@ -185,9 +185,9 @@
             success = result?.success === true;
             return result;
         } finally {
-            if (!success) {
-                await adapter.resetBarrier(false);
-                suspended = false; announce('reset-resume');
+            if (!success && !global.FileJournal?.status().resetCommitted) {
+                try { await adapter.resetBarrier(false); }
+                finally { suspended = false; announce('reset-resume'); }
             }
         }
     }

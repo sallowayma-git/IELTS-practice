@@ -7,7 +7,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from playwright.async_api import async_playwright
+from local_file_storage_fixture import async_playwright
 
 ROOT = Path(__file__).resolve().parents[3]
 # Prefer file:// so CI and local runs do not depend on a temporary HTTP host.

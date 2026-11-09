@@ -302,3 +302,221 @@ test('a missing manifest with remaining files cannot bootstrap stale IndexedDB d
         await a.reload(); await assert.rejects(() => load(a), /本地清单缺失/);
     });
 });
+
+test('interrupted initial marker, snapshot and manifest writes recover the original legacy records', async () => {
+    await fixture(async ({ page }) => {
+        for (const failure of ['bootstrap.json', 'snapshot-', 'head.json']) {
+            const a = await page(false); await complete(a, 'legacy-' + failure);
+            await a.reload();
+            await a.evaluate(failure => {
+                const original = FileSystemFileHandle.prototype.createWritable;
+                FileSystemFileHandle.prototype.createWritable = function(...args) {
+                    if (this.name.startsWith(failure)) throw new DOMException('interrupted bootstrap', 'AbortError');
+                    return original.apply(this, args);
+                };
+            }, failure);
+            await assert.rejects(() => load(a), /interrupted bootstrap/);
+            assert.deepEqual(await a.evaluate(() => AppData.ready.catch(error => ({ code: error.code, native: error.details.originalCode }))),
+                { code: 'BACKEND_UNAVAILABLE', native: 20 });
+            await a.reload(); await load(a);
+            assert((await ids(a)).includes('legacy-' + failure));
+            await a.close();
+            // Each fault starts with a fresh pre-file origin, not a previous journal.
+            const cleaner = await a.context().newPage(); await cleaner.goto(a.url());
+            await cleaner.evaluate(async () => {
+                await (await navigator.storage.getDirectory()).removeEntry('ielts-atlas-local-v1', { recursive: true });
+                await new Promise(resolve => { const r = indexedDB.deleteDatabase('IELTSAtlasDataV2'); r.onsuccess = resolve; });
+            });
+            await cleaner.close();
+        }
+    });
+});
+
+test('selected and saved local directories reject identical and nested exchange bindings before writing', async () => {
+    await fixture(async ({ context, origin }) => {
+        for (const relationship of ['same', 'local-parent', 'exchange-parent']) {
+            const isolated = await context.browser().newContext();
+            const a = await isolated.newPage(); await a.goto(origin);
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/data/v2/syncModel.js'), 'utf8') });
+            await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncFolderAdapter.js'), 'utf8') });
+            await a.evaluate(async relationship => {
+                const opfs = await navigator.storage.getDirectory();
+                const parent = await opfs.getDirectoryHandle('parent', { create: true });
+                const child = await parent.getDirectoryHandle('child', { create: true });
+                window.__local = relationship === 'exchange-parent' ? child : parent;
+                const exchange = relationship === 'local-parent' ? child : parent;
+                await SyncFolderAdapter.binding({ directory: exchange, spaceId: 'old-space' });
+                navigator.storage.getDirectory = async () => { throw new DOMException('unavailable', 'SecurityError'); };
+                window.showDirectoryPicker = async () => __local;
+            }, relationship);
+            // Load scripts without awaiting the deliberately blocked startup.
+            for (const source of sources) await a.addScriptTag({ content: fs.readFileSync(path.join(root, source), 'utf8') });
+            await a.getByRole('button', { name: '选择本地数据目录' }).click();
+            await a.waitForFunction(() => document.querySelector('#local-file-storage-dialog [role=alert]')?.textContent.includes('必须分开'));
+            assert.equal(await a.evaluate(async () => {
+                try { await __local.getDirectoryHandle(FileJournal.directoryName); return true; }
+                catch (error) { if (error.name === 'NotFoundError') return false; throw error; }
+            }), false);
+            // Simulate an overlapping binding saved by the previous release.
+            await a.evaluate(() => new Promise((resolve, reject) => {
+                const r = indexedDB.open(FileJournal.bindingDatabase, 1);
+                r.onsuccess = () => {
+                    const db = r.result, tx = db.transaction('handles', 'readwrite');
+                    tx.objectStore('handles').put(__local, 'local');
+                    tx.oncomplete = () => { db.close(); resolve(); }; tx.onabort = () => reject(tx.error);
+                };
+            }));
+            await assert.rejects(() => a.evaluate(async () => SyncFolderAdapter.workspace(await SyncFolderAdapter.binding())), /必须分开/);
+            await a.reload(); await assert.rejects(() => load(a), /必须分开/);
+            await isolated.close();
+        }
+    });
+});
+
+async function resetServices(page, fault = '') {
+    for (const source of ['js/services/syncFolderAdapter.js', 'js/services/syncService.js']) {
+        await page.addScriptTag({ content: fs.readFileSync(path.join(root, source), 'utf8') });
+    }
+    await page.evaluate(fault => {
+        window.__rollbacks = 0;
+        window.__resetCommits = 0;
+        window.AppDiagnosticStore = { withFullReset: async task => {
+            const result = await task();
+            if (fault === 'diagnostics') throw new Error('late diagnostics failure');
+            return result;
+        } };
+        window.ExternalBackupService = {
+            withFullResetLock: task => navigator.locks.request('ielts-atlas-external-backup-write', task),
+            prepareForFullReset: async () => ({ success: fault !== 'backup' }),
+            commitFullResetPreparation: async () => { window.__resetCommits++; if (fault === 'commit') throw new Error('late commit failure'); return true; },
+            rollbackFullResetPreparation: async () => { window.__rollbacks++; return true; }
+        };
+        if (fault === 'history') {
+            const remove = FileSystemDirectoryHandle.prototype.removeEntry;
+            FileSystemDirectoryHandle.prototype.removeEntry = function(name, ...args) {
+                if (name.startsWith('ops-')) throw new DOMException('cleanup denied', 'NoModificationAllowedError');
+                return remove.call(this, name, ...args);
+            };
+        }
+        if (fault === 'database') {
+            const remove = indexedDB.deleteDatabase.bind(indexedDB);
+            indexedDB.deleteDatabase = name => { if (name === 'ExamSystemDB') throw new Error('cache deletion failed'); return remove(name); };
+        }
+        if (fault === 'web-storage') Storage.prototype.clear = () => { throw new Error('web storage clear failed'); };
+    }, fault);
+    await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/core/siteDataReset.js'), 'utf8') });
+}
+
+test('reset cleanup and later-stage failures report the committed frontier without rollback', async () => {
+    await fixture(async ({ page, browser }) => {
+        for (const fault of ['history', 'database', 'web-storage', 'commit', 'diagnostics']) {
+            const context = await browser.newContext();
+            const a = await page(true, context); await complete(a, 'erased');
+            await resetServices(a, fault);
+            const result = await a.evaluate(() => SiteDataReset.perform({ reload: false }));
+            assert.equal(result.success, fault === 'history', fault);
+            assert.equal(result.resetCommitted, true, fault);
+            assert.equal(result.retryable, false, fault);
+            assert.equal(result.requiresReload, true, fault);
+            assert.equal(await a.evaluate(() => __rollbacks), 0, fault);
+            assert.equal(await a.evaluate(() => __resetCommits), 1, fault);
+            if (fault === 'history') assert(result.cleanupWarnings.length > 0);
+            await a.reload(); await load(a); assert.deepEqual(await ids(a), [], fault);
+            await complete(a, 'after-' + fault);
+            await context.close();
+        }
+    });
+});
+
+test('failed-startup reset repairs corrupt or missing manifests but retains sync and backup safeguards', async () => {
+    await fixture(async ({ page, browser }) => {
+        for (const scenario of ['corrupt', 'missing', 'pending', 'binding', 'backup']) {
+            const context = await browser.newContext();
+            const a = await page(true, context); await complete(a, 'protected');
+            if (scenario === 'pending') await a.evaluate(async () => {
+                await AppData.folderSync.connect('pending-space'); await AppData.folderSync.disconnect();
+            });
+            if (scenario === 'binding') {
+                await a.addScriptTag({ content: fs.readFileSync(path.join(root, 'js/services/syncFolderAdapter.js'), 'utf8') });
+                await a.evaluate(async () => SyncFolderAdapter.binding({ directory: await navigator.storage.getDirectory(), spaceId: 'bound-space' }));
+            }
+            await a.evaluate(async missing => {
+                const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName);
+                if (missing) await dir.removeEntry('head.json');
+                else { const w = await (await dir.getFileHandle('head.json')).createWritable(); await w.write('{broken'); await w.close(); }
+            }, scenario === 'missing');
+            await a.reload(); await assert.rejects(() => load(a));
+            await resetServices(a, scenario);
+            const result = await a.evaluate(() => SiteDataReset.perform({ reload: false }));
+            const allowed = ['corrupt', 'missing'].includes(scenario);
+            assert.equal(result.success, allowed, scenario);
+            if (allowed) { await a.reload(); await load(a); assert.deepEqual(await ids(a), []); await complete(a, 'recovered'); }
+            else {
+                assert.equal(await a.evaluate(() => FileJournal.status().resetCommitted === true), false);
+                assert.equal(await a.evaluate(() => FolderSyncService.getStatus().suspended), false);
+            }
+            await context.close();
+        }
+    });
+});
+
+test('native aborts and terminal journal failures retain details behind BACKEND_UNAVAILABLE', async () => {
+    await fixture(async ({ page, browser }) => {
+        for (const failure of ['AbortError', 'missing-head']) {
+            const context = await browser.newContext(), a = await page(true, context);
+            await a.evaluate(async failure => {
+                if (failure === 'missing-head') {
+                    await (await (await navigator.storage.getDirectory()).getDirectoryHandle(FileJournal.directoryName)).removeEntry('head.json');
+                } else {
+                    const original = FileSystemFileHandle.prototype.createWritable;
+                    FileSystemFileHandle.prototype.createWritable = function(...args) {
+                        if (this.name.startsWith('ops-')) throw new DOMException('native write aborted', 'AbortError');
+                        return original.apply(this, args);
+                    };
+                }
+            }, failure);
+            const result = await a.evaluate(() => AppData.preferences.setTheme('changed').catch(error => ({ code: error.code, details: error.details })));
+            assert.equal(result.code, 'BACKEND_UNAVAILABLE');
+            assert.equal(result.details.originalCode, failure === 'AbortError' ? 20 : 'FILE_STORAGE_UNAVAILABLE');
+            assert.equal(await a.evaluate(() => AppData.status().state), 'failed');
+            await context.close();
+        }
+    });
+});
+
+test('a popup lock-callback refusal retries only before the transaction starts', async () => {
+    await fixture(async ({ page }) => {
+        const a = await page();
+        await a.evaluate(() => {
+            const request = navigator.locks.request.bind(navigator.locks);
+            window.__refusedLock = false;
+            navigator.locks.request = function(name, ...args) {
+                if (name === 'ielts-atlas-local-journal-v1' && !window.__refusedLock) {
+                    window.__refusedLock = true;
+                    return Promise.reject(new Error("Failed to execute 'open' on 'Window': The provided callback is no longer runnable."));
+                }
+                return request(name, ...args);
+            };
+        });
+        await complete(a, 'after-popup');
+        assert.equal(await a.evaluate(() => __refusedLock), true);
+        assert.deepEqual(await ids(a), ['after-popup']);
+        const before = await head(a);
+        await a.evaluate(() => {
+            const create = FileSystemFileHandle.prototype.createWritable;
+            window.__fileWriteAttempts = 0;
+            FileSystemFileHandle.prototype.createWritable = function(...args) {
+                if (this.name.startsWith('ops-')) {
+                    window.__fileWriteAttempts++;
+                    throw new Error('The provided callback is no longer runnable.');
+                }
+                return create.apply(this, args);
+            };
+        });
+        await assert.rejects(() => complete(a, 'do-not-retry'), /backend failed/);
+        assert.equal(await a.evaluate(() => __fileWriteAttempts), 1);
+        assert.equal((await head(a)).sha256, before.sha256);
+        await a.reload(); await load(a);
+        assert.deepEqual(await ids(a), ['after-popup']);
+    });
+});

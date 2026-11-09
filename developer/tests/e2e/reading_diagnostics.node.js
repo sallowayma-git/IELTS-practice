@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 import {
     expireOrObservePendingSubmissionTimeout,
     runRejectedResubmission,

@@ -152,6 +152,23 @@
         return true;
     }
 
+    function filesReset() { return global.FileJournal?.status?.().resetCommitted === true; }
+
+    async function finishCommittedReset(service, errors, cleanupWarnings = []) {
+        // The file frontier is irreversible. Keep backup/sync writers fenced and
+        // finish preparation even if a disposable database or web storage failed.
+        try {
+            const result = await service.commitFullResetPreparation();
+            if (isExplicitFailure(result)) throw resultError(result, '外部备份清理准备提交失败');
+        } catch (error) { errors.push({ stage: 'commit-full-reset-preparation', error }); }
+        if (errors.length) notify('本地 JSON 数据已清除，部分缓存清理未完成。请重新加载后继续清理。', 'error');
+        return {
+            success: errors.length === 0, ...(errors.length ? { reason: 'partial_reset' } : {}),
+            resetCommitted: true, requiresReload: true, terminal: false, retryable: false,
+            errors, cleanupWarnings, databases: DATABASE_NAMES.slice(), externalBackupFilesPreserved: true
+        };
+    }
+
     async function performLocked(service) {
         let preparation;
         try {
@@ -176,13 +193,20 @@
             return result;
         }
 
+        let deletionResult;
         try {
             const diagnostics = global.AppDiagnosticStore;
             if (!diagnostics || typeof diagnostics.withFullReset !== 'function') {
                 throw new Error('诊断存储跨标签清理协调不可用');
             }
-            return await diagnostics.withFullReset(() => deleteAndCommit(service));
+            return await diagnostics.withFullReset(async () => (deletionResult = await deleteAndCommit(service)));
         } catch (error) {
+            if (filesReset()) {
+                if (!deletionResult) return finishCommittedReset(service, [{ stage: 'diagnostic-reset', error }]);
+                notify('本地数据已清除，诊断清理未完成。请重新加载后继续清理。', 'error');
+                return { ...deletionResult, success: false, reason: 'partial_reset',
+                    errors: [...deletionResult.errors, { stage: 'diagnostic-reset', error }] };
+            }
             const rollbackErrors = await rollbackFullResetPreparation(service);
             notify('诊断存储未能安全停止写入，本次清理需要重试。', 'error');
             return { success: false, reason: 'diagnostic_reset_failed', terminal: false, retryable: true,
@@ -193,8 +217,10 @@
 
     async function deleteAndCommit(service) {
         const errors = [];
-        try { if (global.FileJournal) await global.FileJournal.resetLocal(); }
+        let fileResult;
+        try { if (global.FileJournal) fileResult = await global.FileJournal.resetLocal(); }
         catch (error) {
+            if (filesReset()) return finishCommittedReset(service, [{ stage: 'reset-local-files', error }]);
             const rollbackErrors = await rollbackFullResetPreparation(service);
             notify('本地 JSON 数据未能清理，请恢复文件访问后重试。', 'error');
             return { success: false, reason: 'partial_reset', terminal: false, retryable: true,
@@ -245,6 +271,8 @@
         catch (error) {
             errors.push({ stage: 'clear-web-storage', error });
         }
+
+        if (filesReset()) return finishCommittedReset(service, errors, fileResult?.cleanupErrors || []);
 
         if (errors.length) {
             const rollbackErrors = await rollbackFullResetPreparation(service);
@@ -328,7 +356,7 @@
                 );
             }
 
-            if (result && result.success === true) result.terminal = reload(options);
+            if (result && (result.success === true || result.resetCommitted)) result.terminal = reload(options);
             return result;
         })();
         resetPromise = run;

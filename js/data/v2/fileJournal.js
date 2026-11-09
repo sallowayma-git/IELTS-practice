@@ -8,6 +8,8 @@
     const LOCK = 'ielts-atlas-local-journal-v1';
     const CACHE_KEY = '__fileJournalCache';
     const BINDING_DB = 'IELTSAtlasLocalFilesV1';
+    const BOOTSTRAP = 'bootstrap.json';
+    const RESET_BARRIER = 'recovery-reset.json';
     const STORES = ['documents', 'system', 'practiceSummaries', 'practiceDetails', 'practiceAnnotations'];
     const keyOf = (store, row) => row[store === 'documents' || store === 'system' ? 'logicalKey' : 'recordId'];
     const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -18,6 +20,8 @@
     })]));
     const uid = () => global.crypto.randomUUID();
     let activeDriver = null;
+    let attemptedDriver = null;
+    let recoveryDriver = null;
     let storageStatus = { backend: 'initializing', readPath: null, cache: 'unavailable' };
 
     function problem(message, code = 'FILE_STORAGE_UNAVAILABLE') {
@@ -27,9 +31,23 @@
         const bytes = await global.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
         return [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, '0')).join('');
     }
-    function locked(work) {
+    async function locked(work) {
         if (!global.navigator?.locks?.request) throw problem('本地文件保存需要 Web Locks，请通过固定 localhost 地址打开。');
-        return global.navigator.locks.request(LOCK, { mode: 'exclusive' }, work);
+        for (let attempt = 0; ; attempt++) {
+            let entered = false;
+            try {
+                return await global.navigator.locks.request(LOCK, { mode: 'exclusive' }, () => {
+                    entered = true;
+                    return work();
+                });
+            } catch (error) {
+                // Chromium can refuse a queued callback while window.open briefly
+                // disables script. Only retry before entry: never replay a started
+                // transaction, whose files may already have committed.
+                if (entered || attempt || !String(error?.message).includes('callback is no longer runnable')) throw error;
+                await new Promise(resolve => global.setTimeout(resolve, 0));
+            }
+        }
     }
     async function binding(value) {
         if (!global.indexedDB) return null;
@@ -47,6 +65,32 @@
                 tx.onabort = tx.onerror = () => reject(tx.error);
             });
         } finally { db.close(); }
+    }
+    async function exchangeBinding() {
+        // Local startup precedes the optional sync adapter in shipped bundles.
+        const db = await new Promise((resolve, reject) => {
+            const request = global.indexedDB.open('IELTSAtlasExternalBackupV2', 1);
+            request.onupgradeneeded = () => request.result.createObjectStore('binding');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        try {
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction('binding', 'readonly');
+                const request = tx.objectStore('binding').get('onedrive-static-sync-binding-v1');
+                tx.oncomplete = () => resolve(request.result);
+                tx.onabort = tx.onerror = () => reject(tx.error);
+            });
+        } finally { db.close(); }
+    }
+    async function overlaps(left, right) {
+        return !!left && !!right && (await left.isSameEntry(right)
+            || await left.resolve(right) !== null || await right.resolve(left) !== null);
+    }
+    async function validateLocalDirectory(handle) {
+        if (await overlaps(handle, (await exchangeBinding())?.directory)) {
+            throw problem('本地数据目录与同步交换目录必须分开，请选择另一个专用目录。');
+        }
     }
     // This prompt belongs to local storage, independently of the optional sync UI.
     function requestDirectory(saved) {
@@ -73,6 +117,7 @@
                         const handle = saved ? (await saved.requestPermission({ mode: 'readwrite' }) === 'granted' ? saved : null)
                             : await global.showDirectoryPicker({ id: 'ielts-atlas-local-data', mode: 'readwrite' });
                         if (!handle) throw problem('未获得目录写入权限，请重试。');
+                        await validateLocalDirectory(handle);
                         const root = await handle.getDirectoryHandle(DIRECTORY, { create: true });
                         await binding(handle);
                         dialog.close(); dialog.remove(); resolve({ root, backend: 'directory-json', handle });
@@ -94,6 +139,7 @@
         try { saved = await binding(); } catch (error) { bindingFailure = error; }
         if (saved) {
             if (await saved.queryPermission({ mode: 'readwrite' }) !== 'granted') return requestDirectory(saved);
+            await validateLocalDirectory(saved);
             return { root: await saved.getDirectoryHandle(DIRECTORY, { create: true }), backend: 'directory-json', handle: saved };
         }
         try {
@@ -107,10 +153,39 @@
         } catch (error) {
             // Quota/device failures must not create a second empty authority.
             if (!['SecurityError', 'NotSupportedError', 'TypeError'].includes(error.name)) throw error;
+            if (bindingFailure) throw bindingFailure;
             return requestDirectory(null);
         }
     }
     async function readText(root, name) { return (await (await root.getFileHandle(name)).getFile()).text(); }
+    async function exists(root, name) {
+        try { await root.getFileHandle(name); return true; }
+        catch (error) { if (error.name === 'NotFoundError') return false; throw error; }
+    }
+    async function removeIfPresent(root, name) {
+        try { await root.removeEntry(name); }
+        catch (error) { if (error.name !== 'NotFoundError') throw error; }
+    }
+    async function recoveryBlocked(root) {
+        if (!await exists(root, RESET_BARRIER)) return false;
+        try {
+            const marker = JSON.parse(await readText(root, RESET_BARRIER));
+            return !marker.token || (await readHead(root))?.resetToken !== marker.token;
+        } catch (_) { return true; }
+    }
+    async function incompleteBootstrap(root) {
+        const names = [];
+        for await (const name of root.keys()) names.push(name);
+        if (!names.length) return true;
+        if (!names.includes(BOOTSTRAP) || names.some(name => name !== BOOTSTRAP && name !== 'head.json'
+            && !/^snapshot-000000000000-[a-f\d-]+\.json$/.test(name))) return false;
+        // A marker write can itself be interrupted, before any data files exist.
+        if (names.length === 1) return true;
+        try {
+            const marker = JSON.parse(await readText(root, BOOTSTRAP));
+            return marker.format === FORMAT && marker.version === VERSION && marker.initializing === true;
+        } catch (_) { return false; }
+    }
     async function writeText(root, name, text) {
         const handle = await root.getFileHandle(name, { create: true });
         const writer = await handle.createWritable({ mode: 'exclusive' });
@@ -237,19 +312,24 @@
                 this.cacheToken = null;
             }
             async initialize() {
+                attemptedDriver = this;
                 const chosen = await directory();
                 this.root = chosen.root; this.backend = chosen.backend; this.directoryHandle = chosen.handle;
                 await locked(async () => {
-                    const head = await readHead(this.root);
+                    if (await recoveryBlocked(this.root)) throw problem('本地数据正在清理，请完成清理后重新打开应用。');
+                    let head;
+                    try { head = await readHead(this.root); }
+                    catch (error) { if (!await incompleteBootstrap(this.root)) throw error; }
                     // The first import must be complete. A failed legacy DB read
                     // cannot be mistaken for a new, empty installation.
                     if (!head) {
-                        for await (const _ of this.root.keys()) throw problem('本地清单缺失但仍有数据文件，请恢复清单后重试。', 'CORRUPT_RECORD');
+                        if (!await incompleteBootstrap(this.root)) throw problem('本地清单缺失但仍有数据文件，请恢复清单后重试。', 'CORRUPT_RECORD');
                         await this.cache.initialize();
                         if (await this.cacheMarker()) throw problem('本地文件已移除，不能用旧缓存替代已提交的数据。请恢复本地文件或备份。', 'CORRUPT_RECORD');
                         const rows = await this.cacheRows();
                         this.tables = tablesFrom(rows);
                         const workspaceId = uid();
+                        await writeText(this.root, BOOTSTRAP, JSON.stringify({ format: FORMAT, version: VERSION, initializing: true }));
                         const snapshot = await writePart(this.root, 'snapshot', 0, {
                             format: FORMAT, version: VERSION, workspaceId, sequence: 0, rows
                         });
@@ -258,6 +338,9 @@
                         try { await this.cache.initialize(); } catch (_) { this.cache.close(); }
                         await this.refresh(head);
                     }
+                    // No application writes or cache frontier may be exposed while
+                    // a bootstrap intent could still authorize a legacy reimport.
+                    await removeIfPresent(this.root, BOOTSTRAP);
                     await this.project();
                 });
                 activeDriver = this;
@@ -346,6 +429,7 @@
             async _transaction(stores, mode, description, work) {
                 return locked(async () => {
                     if (this.closed) throw problem('本地文件连接已关闭，请重新打开应用。');
+                    if (await recoveryBlocked(this.root)) throw problem('本地数据正在清理，请重新打开应用。');
                     const previousCache = this.cacheToken;
                     await this.refresh();
                     if (previousCache !== this.head.token) this.cacheToken = null;
@@ -388,13 +472,52 @@
                 return locked(async () => {
                     const workspaceId = uid();
                     const snapshot = await writePart(this.root, 'snapshot', 0, { format: FORMAT, version: VERSION, workspaceId, sequence: 0, rows: rowsOf(empty()) });
-                    await publishHead(this.root, { format: FORMAT, version: VERSION, workspaceId, sequence: 0, snapshot, tail: [] });
+                    await publishHead(this.root, { format: FORMAT, version: VERSION, workspaceId, sequence: 0, snapshot, tail: [], resetToken: this.recoveryResetToken || null });
+                    storageStatus.resetCommitted = true;
                     this.close();
                     // External histories remain recoverable. Private files are removed
                     // only after the new empty frontier prevents stale-cache imports.
-                    if (this.backend === 'opfs-json') {
-                        for await (const name of this.root.keys()) if (name !== 'head.json' && name !== snapshot.name) await this.root.removeEntry(name);
+                    const cleanupErrors = [];
+                    try {
+                        for await (const name of this.root.keys()) {
+                            if (name === 'head.json' || name === snapshot.name) continue;
+                            if (this.backend !== 'opfs-json' && name !== BOOTSTRAP && name !== RESET_BARRIER) continue;
+                            try { await this.root.removeEntry(name); }
+                            catch (error) { cleanupErrors.push({ name, message: error.message }); }
+                        }
+                    } catch (error) { cleanupErrors.push({ message: error.message }); }
+                    return { committed: true, cleanupErrors };
+                });
+            }
+            async prepareRecoveryReset() {
+                return locked(async () => {
+                    if (!this.root) throw problem('无法访问本地文件，不能安全清理。');
+                    if ((await exchangeBinding())?.directory) throw problem('请先恢复同步目录和本地数据，再清理本机。');
+                    const model = global.FolderSyncModel;
+                    const check = rows => {
+                        for (const row of rows) if (row?.logicalKey === model.STATE_KEY) {
+                            const state = row.envelope?.data;
+                            model.assertState(state);
+                            if (state.enabled || state.pending.length) throw problem('无法确认同步记录已落盘，请先恢复本地数据再清理。');
+                        }
+                    };
+                    // The cache alone may lag a committed file transaction. Inspect
+                    // retained history too; unreadable sync evidence fails closed.
+                    try {
+                        if (!this.cache.db) await this.cache.initialize();
+                        check((await this.cacheRows()).system);
+                    } finally { this.cache.close(); }
+                    for await (const name of this.root.keys()) {
+                        if (!/^(snapshot|ops)-/.test(name)) continue;
+                        const part = JSON.parse(await readText(this.root, name));
+                        if (part.format !== FORMAT || part.version !== VERSION) throw problem('无法验证本地同步历史。');
+                        if (name.startsWith('snapshot-')) check(part.rows.system);
+                        else check(part.changes.filter(change => change.store === 'system' && change.type === 'put').map(change => change.row));
                     }
+                    this.recoveryResetToken = uid();
+                    await writeText(this.root, RESET_BARRIER, JSON.stringify({ token: this.recoveryResetToken }));
+                    recoveryDriver = this;
+                    return { enabled: false, pending: 0 };
                 });
             }
         };
@@ -402,12 +525,28 @@
     global.FileJournal = Object.freeze({
         driverClass, directoryName: DIRECTORY, bindingDatabase: BINDING_DB,
         status: () => ({ ...storageStatus }),
-        async resetBarrier(active) { await global.AppData.ready; return activeDriver.resetBarrier(active); },
-        async resetLocal() { if (activeDriver) await activeDriver.resetLocal(); },
+        async resetBarrier(active) {
+            if (storageStatus.resetCommitted) return { enabled: false, pending: 0 };
+            if (!active && recoveryDriver) {
+                await locked(() => removeIfPresent(recoveryDriver.root, RESET_BARRIER));
+                recoveryDriver = null;
+                return { enabled: false, pending: 0 };
+            }
+            try { await global.AppData.ready; }
+            catch (error) {
+                if (!active) return { enabled: false, pending: 0 };
+                if (!attemptedDriver) throw error;
+                return attemptedDriver.prepareRecoveryReset();
+            }
+            return activeDriver.resetBarrier(active);
+        },
+        async resetLocal() {
+            const driver = recoveryDriver || activeDriver;
+            if (!driver) throw problem('本地文件尚未建立清理屏障，无法安全清理。');
+            return driver.resetLocal();
+        },
         async isLocalDirectory(handle) {
-            const local = activeDriver?.directoryHandle;
-            if (!local) return false;
-            return await local.isSameEntry(handle) || await local.resolve(handle) !== null || await handle.resolve(local) !== null;
+            return overlaps(activeDriver?.directoryHandle || await binding(), handle);
         }
     });
 })(typeof window !== 'undefined' ? window : globalThis);

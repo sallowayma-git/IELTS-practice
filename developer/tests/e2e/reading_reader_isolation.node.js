@@ -6,7 +6,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');

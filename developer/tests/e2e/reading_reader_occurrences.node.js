@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 import { loadReadingAsset as readingAsset } from '../js/helpers/readingVocabBlockBaseline.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -65,7 +65,7 @@ async function ready(page, protocol = 'http') {
         await window.AppLazyLoader.ensureGroup('reading-tools');
     });
     await page.waitForFunction(() => !!window.ReadingVocabReader);
-    assert.equal(await page.evaluate(() => AppData.status().backend), 'indexeddb-v2');
+    assert.match(await page.evaluate(() => AppData.status().backend), protocol === 'file' ? /^(opfs|directory)-json$/ : /^opfs-json$/);
     await page.evaluate(() => {
         // Observe the production mutation boundary; do not replace its implementation.
         window.__occurrenceReceipts = [];

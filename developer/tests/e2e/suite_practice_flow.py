@@ -31,7 +31,7 @@ INDEX_URL = f"{INDEX_PATH.as_uri()}?test_env=1"
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 
 try:
-    from playwright.async_api import (  # type: ignore[import-untyped]
+    from local_file_storage_fixture import (  # type: ignore[import-untyped]
         Browser,
         ConsoleMessage,
         Error as PlaywrightError,

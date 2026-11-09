@@ -21,7 +21,7 @@ TARGET_UNIFIED_EXAM_ID = "p2-medium-243"
 TARGET_MANUAL_PDF_EXAM_ID = "p2-high-26"
 
 try:
-    from playwright.async_api import (
+    from local_file_storage_fixture import (
         Browser,
         ConsoleMessage,
         Error as PlaywrightError,

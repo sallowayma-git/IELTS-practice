@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 import { reviewScenarios, exerciseReviewScenario, assertReviewScenario } from './operationReviewCases.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');

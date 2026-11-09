@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 
 const root = path.resolve(process.env.DIAGNOSTIC_RUNTIME_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..'));
 const reports = path.resolve(process.env.DIAGNOSTIC_REPORT_DIR || path.join(root, 'developer/tests/e2e/reports'));

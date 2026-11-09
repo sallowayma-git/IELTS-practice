@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
+import { prepareLocalFileStorage, authorizeLocalFileStorage } from '../e2e/localFileStorageFixture.js';
 const root = process.env.READING_RELEASE_ROOT
     ? path.resolve(process.env.READING_RELEASE_ROOT)
     : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -17,12 +18,11 @@ test('built release: file URLs require local storage; HTTP setup and sync permis
         response.writeHead(200, { 'Content-Type': type }); fs.createReadStream(target).pipe(response);
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-    const executablePath = ['C:/Program Files/Google/Chrome/Application/chrome.exe',
-        'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(fs.existsSync);
-    const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
+    const browser = await chromium.launch({ headless: true, args: ['--enable-experimental-web-platform-features'] });
     try {
         for (const base of [pathToFileURL(path.join(root, 'index.html')).href, 'http://127.0.0.1:' + server.address().port + '/']) {
             const context = await browser.newContext();
+            await prepareLocalFileStorage(context, { automatic: false });
             const page = await context.newPage(); page.on('dialog', dialog => dialog.accept());
             if (base.startsWith('http')) await page.addInitScript(() => {
                 // Only the chooser is substituted; permission, IDB, FileSystem APIs and bundles are production code.
@@ -34,11 +34,17 @@ test('built release: file URLs require local storage; HTTP setup and sync permis
                 await page.getByRole('dialog', { name: '连接本地数据目录' }).waitFor();
                 assert.equal(await page.evaluate(() => FileJournal.status().backend), 'needs-directory');
                 assert.equal(await page.evaluate(() => AppData.status().state), 'initializing');
-                await context.close();
-                continue;
+                await authorizeLocalFileStorage(page);
             }
             await page.waitForFunction(() => window.AppData && window.app?.isInitialized);
             await page.evaluate(() => AppData.ready);
+            assert.equal(await page.evaluate(() => AppData.status().backend), base.startsWith('file:') ? 'directory-json' : 'opfs-json');
+            await page.evaluate(() => AppData.practice.completeAttempt({ operationId: 'local-release-save', record: {
+                id: 'local-release-save', type: 'reading', examId: 'local-release', totalQuestions: 1, correctAnswers: 1
+            } }));
+            await page.reload(); await authorizeLocalFileStorage(page);
+            await page.waitForFunction(() => window.app?.isInitialized);
+            assert(await page.evaluate(() => AppData.practice.get('local-release-save')));
             await page.locator('#license-modal.show .lm-btn').click();
             await page.waitForFunction(() => !document.getElementById('license-modal').classList.contains('show'));
             await page.waitForFunction(() => !FolderSyncService.getStatus().initializing);

@@ -77,7 +77,7 @@ HOST_HTML = """<!doctype html>
 </html>"""
 
 try:
-    from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError, async_playwright  # type: ignore[import-untyped]
+    from local_file_storage_fixture import Page, TimeoutError as PlaywrightTimeoutError, async_playwright  # type: ignore[import-untyped]
 except ModuleNotFoundError:
     venv_dir = (REPO_ROOT / ".venv").resolve()
     venv_python = REPO_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")

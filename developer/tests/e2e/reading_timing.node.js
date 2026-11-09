@@ -5,7 +5,7 @@ import https from 'node:https';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium } from './localFileStorageFixture.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const reports = path.join(root, 'developer/tests/e2e/reports');
@@ -218,17 +218,21 @@ try {
         // Hold the initial storage fault until retry so duplicate INIT messages
         // cannot hide it. Repeat on reload to exercise retry with restored drafts.
         await context.addInitScript(() => {
-            const originalPut = IDBObjectStore.prototype.put;
+            const create = FileSystemFileHandle.prototype.createWritable;
             window.__timingAcquisitionWrites = 0;
             window.__timingAcquisitionBlocked = true;
-            IDBObjectStore.prototype.put = function (value, ...args) {
-                if (this.name === 'documents' && value.logicalKey === 'recovery.readingTiming') {
-                    window.__timingAcquisitionWrites++;
-                    if (window.__timingAcquisitionBlocked) {
-                        throw new DOMException('Simulated initial timing write failure', 'QuotaExceededError');
+            FileSystemFileHandle.prototype.createWritable = async function (...args) {
+                const writer = await create.apply(this, args);
+                if (!this.name.startsWith('ops-')) return writer;
+                const write = writer.write.bind(writer);
+                writer.write = async value => {
+                    if (JSON.parse(value).changes.some(change => change.row?.logicalKey === 'recovery.readingTiming')) {
+                        window.__timingAcquisitionWrites++;
+                        if (window.__timingAcquisitionBlocked) throw new DOMException('Simulated initial timing write failure', 'QuotaExceededError');
                     }
-                }
-                return originalPut.call(this, value, ...args);
+                    return write(value);
+                };
+                return writer;
             };
         });
         const [reading] = await Promise.all([page.waitForEvent('popup'), page.evaluate(() => window.app.openExam('p1-high-01'))]);
@@ -315,19 +319,25 @@ try {
         await assertResumedTimingAdvances(reading);
         await select(reading, first);
         await reading.evaluate(() => {
-            window.__timingOriginalPut = IDBObjectStore.prototype.put;
-            IDBObjectStore.prototype.put = function (value, ...args) {
-                if (this.name === 'documents' && value.logicalKey === 'recovery.readingTiming') {
-                    throw new DOMException('Simulated full storage', 'QuotaExceededError');
-                }
-                return window.__timingOriginalPut.call(this, value, ...args);
+            window.__timingOriginalPut = FileSystemFileHandle.prototype.createWritable;
+            FileSystemFileHandle.prototype.createWritable = async function (...args) {
+                const writer = await window.__timingOriginalPut.apply(this, args);
+                if (!this.name.startsWith('ops-')) return writer;
+                const write = writer.write.bind(writer);
+                writer.write = async value => {
+                    if (JSON.parse(value).changes.some(change => change.row?.logicalKey === 'recovery.readingTiming')) {
+                        throw new DOMException('Simulated full storage', 'QuotaExceededError');
+                    }
+                    return write(value);
+                };
+                return writer;
             };
         });
         await reading.locator('.q-item[data-question-id="q1"]').click();
         await reading.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getReadingTimingState()?.error?.includes('计时保存失败'));
         await reading.screenshot({ path: path.join(reports, `issue153-${mode}-save-failure.png`) });
         await reading.evaluate(() => {
-            IDBObjectStore.prototype.put = window.__timingOriginalPut;
+            FileSystemFileHandle.prototype.createWritable = window.__timingOriginalPut;
             delete window.__timingOriginalPut;
         });
         await reading.evaluate(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.retryReadingTiming());

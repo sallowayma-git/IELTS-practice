@@ -148,6 +148,9 @@
         return { directory: selected, spaceId: workspace.spaceId, name: selected.name, existing: false };
     }
     async function workspace(binding) {
+        if (global.FileJournal && await global.FileJournal.isLocalDirectory(binding.directory)) {
+            throw new Error('本地数据目录与同步交换目录必须分开，请选择另一个专用目录。');
+        }
         assertWorkspace(await readJson(binding.directory, 'workspace.json'), binding.spaceId);
         const version = await binding.directory.getDirectoryHandle('sync-v1', { create: true });
         const space = await version.getDirectoryHandle(binding.spaceId, { create: true });

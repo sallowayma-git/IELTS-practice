@@ -140,8 +140,8 @@ async function run() {
   const startTime = Date.now();
   let passed = false;
 
-  const { firefox } = await import('playwright');
-  const browser = await firefox.launch({
+  const { chromium } = await import('./localFileStorageFixture.js');
+  const browser = await chromium.launch({
     headless: true,
   });
 

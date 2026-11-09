@@ -816,12 +816,13 @@
             if (this.ready) return this.ready;
             this.state = 'initializing';
             const Driver = global.FileJournal ? global.FileJournal.driverClass(IndexedDBDriver) : IndexedDBDriver;
-            this.ready = new Driver(this.indexedDB, {
+            const pendingDriver = new Driver(this.indexedDB, {
                 mutationTimeoutMs: this.indexedDBMutationTimeoutMs, requestTimeoutMs: this.indexedDBRequestTimeoutMs
-            }).initialize().then((driver) => {
+            });
+            this.ready = pendingDriver.initialize().then((driver) => {
                 this.driver = driver; this.backend = driver.backend || 'indexeddb-v2'; this.state = 'ready'; this._initializeCommitChannel(); return this;
-            }).catch((error) => { this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
-                throw error instanceof AppDataError ? error : new AppDataError(error.code || 'BACKEND_UNAVAILABLE', global.FileJournal ? 'Local JSON storage is unavailable: ' + error.message : 'IndexedDB is required for AppData v2', { cause: error && error.message }); });
+            }).catch((error) => { pendingDriver.close(); this.state = 'failed'; this.failure = error; this.driver = null; this.backend = null;
+                throw new AppDataError('BACKEND_UNAVAILABLE', global.FileJournal ? 'Local JSON storage is unavailable: ' + error.message : 'IndexedDB is required for AppData v2', { cause: error?.message, originalName: error?.name, originalCode: error?.code }); });
             return this.ready;
         }
         close() {
@@ -831,13 +832,15 @@
             if (this.state !== 'failed') this.state = 'closed';
         }
         _assertReady() {
-            if (this.state === 'failed') throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 backend failed', { cause: this.failure && this.failure.message });
+            if (this.state === 'failed') throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 backend failed', {
+                cause: this.failure?.message, originalName: this.failure?.name, originalCode: this.failure?.code
+            });
             if (this.state !== 'ready' || !this.driver) throw new AppDataError('BACKEND_UNAVAILABLE', 'AppData v2 is not initialized');
         }
         _latch(error) {
             if (error && (error.name === 'QuotaExceededError' || error.code === 22)) return new AppDataError('QUOTA_EXCEEDED', 'Local save failed: storage quota exceeded', { cause: error.message });
             this.state = 'failed'; this.failure = error; if (this.driver) this.driver.close(); this.driver = null; this.backend = null; this._closeCommitChannel();
-            return new AppDataError(error?.code || 'BACKEND_UNAVAILABLE', 'Local data backend failed; reload is required', { cause: error && error.message });
+            return new AppDataError('BACKEND_UNAVAILABLE', 'Local data backend failed; reload is required', { cause: error?.message, originalName: error?.name, originalCode: error?.code });
         }
         onCommitted(listener) {
             if (typeof listener !== 'function') throw validation('Committed listener must be a function');
