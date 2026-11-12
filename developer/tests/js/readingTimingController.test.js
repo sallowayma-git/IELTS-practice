@@ -15,6 +15,7 @@ function harness(options = {}) {
     const saves = [];
     const retryTimers = [];
     let nextTimerId = 1;
+    const events = new Map();
     const context = { sessionId: 'session-a', parentAttemptId: 'suite-a', sequenceIndex: 0,
         examId: 'p1', libraryConfigurationId: null, editable: true, running: true, timerInteractionRevision: 0,
         dataset: { questionOrder: ['q1', 'q2'], questionGroups: [{ questionIds: ['q1', 'q2'] }] },
@@ -33,24 +34,27 @@ function harness(options = {}) {
             const index = retryTimers.findIndex(timer => timer.id === id);
             if (index >= 0) retryTimers.splice(index, 1);
         },
-        addEventListener() {},
+        addEventListener(type, callback) { events.set(type, callback); },
         AppData: { recovery: {
             async acquireReadingTiming(snapshot, previous) {
                 acquisitions.push({ snapshot: plain(snapshot), previous: plain(previous) });
                 await options.acquire?.(snapshot, previous, acquisitions.length);
                 return row(snapshot);
             },
+            async getReadingTiming() {
+                return options.get?.();
+            },
             async saveReadingTiming(snapshot) {
                 saves.push(plain(snapshot));
                 await options.save?.(snapshot, saves.length);
-                return row(snapshot);
+                return options.savedRow ? options.savedRow(row(snapshot)) : row(snapshot);
             }
         } } };
     sandbox.window = sandbox;
     vm.createContext(sandbox);
     sources.forEach(source => vm.runInContext(source, sandbox));
     const controller = new sandbox.ReadingTimingController(() => ({ ...context }));
-    return { controller, context, acquisitions, saves, retryTimers,
+    return { controller, context, acquisitions, saves, retryTimers, events,
         get pauseRestores() { return pauseRestores; },
         advance(ms) { clock += ms; controller.refresh(); },
         async runNextRetry() {
@@ -76,6 +80,152 @@ function harness(options = {}) {
         }
     };
 }
+
+function deferred() {
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    return { promise, resolve };
+}
+
+test('submission owns timing through a held real save return even if the caller still reports editable', async () => {
+    const h = harness();
+    await h.controller.activate();
+    h.controller.select('q1');
+    h.advance(1000);
+    const held = deferred();
+    const release = deferred();
+    const save = h.controller.save.bind(h.controller);
+    h.controller.save = async (...args) => {
+        const result = await save(...args);
+        if (args[0]?.meter.value.frozen) { held.resolve(); await release.promise; }
+        return result;
+    };
+    const owner = {};
+    const freezing = h.controller.freezeAll([], owner);
+    await held.promise;
+    const accepted = plain(h.controller.snapshot());
+    h.controller.select('q2');
+    h.advance(2000);
+    h.setRunning(false);
+    h.controller.stop();
+    await h.controller.activate();
+    assert.deepEqual(plain(h.controller.snapshot()), accepted);
+    release.resolve();
+    const frozen = await freezing;
+    assert.deepEqual(plain(frozen[0].snapshot), accepted);
+    assert.deepEqual(plain(frozen[0].snapshot), plain(h.controller.active.acknowledged));
+    assert.equal(Object.isFrozen(frozen[0].snapshot.units), true);
+    assert.throws(() => { frozen[0].snapshot.frozen = false; }, TypeError);
+    h.controller.select('q2');
+    assert.equal(h.controller.snapshot().frozen, true, 'handoff keeps ownership until an explicit definite-failure transition');
+    assert.equal(h.controller.releaseSubmission({}), false);
+    assert.equal(h.controller.releaseSubmission(owner), true);
+    h.setRunning(true);
+    h.controller.select('q2');
+    h.advance(1000);
+    assert.equal(h.controller.snapshot().frozen, false);
+    assert.equal(h.controller.snapshot().totalMs, accepted.totalMs + 1000);
+});
+
+test('freeze awaits initial acquisition and includes restored inactive children in required order', async () => {
+    const acquire = deferred();
+    const h = harness({ acquire: (_snapshot, _previous, count) => count === 1 ? acquire.promise : undefined });
+    const first = h.draft({ paused: false });
+    const activating = h.controller.activate(first);
+    const required = [
+        { context: { ...h.context }, draft: first },
+        { context: { ...h.context, examId: 'p2', sequenceIndex: 1 }, draft: h.draft({ examId: 'p2', sequenceIndex: 1 }) }
+    ];
+    const freezing = h.controller.freezeAll(required);
+    h.advance(3000);
+    acquire.resolve();
+    const snapshots = await freezing;
+    await activating;
+    assert.equal(h.controller.active, null, 'late activation must not regain timing eligibility');
+    assert.deepEqual(plain(snapshots.map(item => [item.snapshot.examId, item.snapshot.totalMs, item.snapshot.frozen])),
+        [['p1', 2000, true], ['p2', 2000, true]]);
+    assert.equal(h.acquisitions.length, 2);
+    assert.equal(h.pauseRestores, 0, 'inactive restored pause cannot alter an accepted submission');
+    for (const value of snapshots) assert.deepEqual(plain(value.snapshot), h.saves.find(item => item.attemptId === value.snapshot.attemptId));
+});
+
+test('a failed freeze drains sibling saves before editing or retry can resume', async () => {
+    const held = deferred();
+    const release = deferred();
+    const h = harness({ async save(snapshot) {
+        if (!snapshot.frozen) return;
+        if (snapshot.examId === 'p1') throw new Error('Storage temporarily full');
+        held.resolve();
+        await release.promise;
+    } });
+    await h.controller.activate();
+    const firstContext = { ...h.context };
+    await h.move('p2', 1);
+    const pending = h.controller.freezeAll([{ context: firstContext }, { context: { ...h.context } }]);
+    const rejected = assert.rejects(pending, /Storage temporarily full/);
+    await held.promise;
+    h.controller.select('q2');
+    h.advance(1000);
+    assert.ok(h.controller.submission, 'a rejected sibling must not release a still-pending save');
+    assert.equal(h.controller.snapshot().frozen, true);
+    release.resolve();
+    await rejected;
+    assert.equal(h.controller.submission, null);
+    h.controller.select('q2');
+    assert.equal(h.controller.snapshot().frozen, false);
+});
+
+test('submission snapshots and late checkpoint failures stay bound to their original attempt', async () => {
+    const held = deferred();
+    const release = deferred();
+    const h = harness({ async save(snapshot) {
+        if (snapshot.parentAttemptId === 'suite-a' && snapshot.frozen) {
+            held.resolve();
+            await release.promise;
+            throw new Error('Old attempt storage failure');
+        }
+    } });
+    await h.controller.activate();
+    const freezing = h.controller.freezeAll();
+    const rejected = assert.rejects(freezing, { code: 'TIMING_SUBMISSION_STALE' });
+    await held.promise;
+    Object.assign(h.context, { sessionId: 'session-b', parentAttemptId: 'suite-b' });
+    await h.controller.activate();
+    h.advance(1000);
+    const current = plain(h.controller.snapshot('p1'));
+    release.resolve();
+    await rejected;
+    assert.equal(h.controller.error, '');
+    assert.equal(h.controller.active.meter.value.parentAttemptId, 'suite-b');
+    assert.deepEqual(plain(h.controller.snapshot('p1')), current);
+    const frozen = await h.controller.freezeAll();
+    assert.equal(frozen.length, 1);
+    assert.equal(frozen[0].snapshot.parentAttemptId, 'suite-b');
+});
+
+test('a stale pageshow lookup cannot revoke ownership of a later active passage', async () => {
+    const lookup = deferred();
+    const h = harness({ get: () => lookup.promise });
+    await h.controller.activate();
+    const showing = h.events.get('pageshow')({ persisted: true });
+    await h.move('p2', 1);
+    lookup.resolve(null);
+    await showing;
+    assert.equal(h.controller.active.owned, true);
+});
+
+test('lost writers and mismatched acknowledgements cannot produce a submission snapshot', async () => {
+    const lost = harness();
+    await lost.controller.activate();
+    lost.controller.active.owned = false;
+    await assert.rejects(lost.controller.freezeAll(), { code: 'TIMING_STALE_WRITER' });
+    lost.controller.select('q1');
+    assert.equal(lost.controller.snapshot().frozen, true);
+
+    const mismatch = harness({ savedRow(row) { row.snapshot.revision++; return row; } });
+    await mismatch.controller.activate();
+    await assert.rejects(mismatch.controller.freezeAll(), { code: 'TIMING_STALE_WRITER' });
+});
 
 test('revisiting a paused suite child preserves a later resume on another child', async () => {
     const h = harness();
