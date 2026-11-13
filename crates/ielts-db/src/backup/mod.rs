@@ -1184,6 +1184,26 @@ const NULLABLE_COLUMN_ADDITIONS: &[(&str, &str, i64)] = &[
     ("practice_assets", "question_kinds_json", 34),
 ];
 
+// Pre-0036 backups use the original review table. Apply the same conversion as 0036,
+// before schema validation and insertion, keeping modern snapshots strictly checked.
+fn review_table_for_restore(table: &BackupTable, schema: i64) -> DbResult<std::borrow::Cow<'_, BackupTable>> {
+    const OLD: &[&str] = &["item_id", "ease", "interval_days", "repetitions", "due_at", "last_reviewed_at", "lapses"];
+    if schema >= 36 || table.name != "vocabulary_review_state"
+        || !table.columns.iter().map(String::as_str).eq(OLD.iter().copied()) {
+        return Ok(std::borrow::Cow::Borrowed(table));
+    }
+    let mut upgraded = table.clone();
+    upgraded.columns = ["item_id", "ease_factor", "interval_days", "repetitions", "intra_cycles",
+        "correct_count", "lapses", "due_at", "last_reviewed_at"].map(String::from).to_vec();
+    upgraded.rows = table.rows.iter().map(|row| {
+        if row.len() != OLD.len() { return Err(DbError::Validation("invalid legacy vocabulary review row".into())); }
+        Ok(vec![row[0].clone(), if matches!(row[5], BackupSqlValue::Null) {BackupSqlValue::Null} else {row[1].clone()},
+            row[2].clone(), row[3].clone(), BackupSqlValue::Integer(0), BackupSqlValue::Integer(0),
+            row[6].clone(), row[4].clone(), row[5].clone()])
+    }).collect::<DbResult<_>>()?;
+    Ok(std::borrow::Cow::Owned(upgraded))
+}
+
 fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResult<()> {
     let target_version = current_version(conn)?;
     if target_version < package.manifest.database_schema_version as i64 {
@@ -1196,6 +1216,7 @@ fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResul
         if DROPPED_TABLES.contains(&table.name.as_str()) {
             continue;
         }
+        let table = review_table_for_restore(table, package.manifest.database_schema_version as i64)?;
         let target_columns = table_columns(conn, &table.name)?;
         // Some migrations add only a nullable column. Historical snapshots
         // cannot invent it; INSERT with the old columns leaves NULL. Keep every
@@ -1277,7 +1298,7 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
             // written; skip any that are absent rather than panicking.
             continue;
         };
-        let table = *table;
+        let table = review_table_for_restore(table, package.manifest.database_schema_version as i64)?;
         let columns = table
             .columns
             .iter()

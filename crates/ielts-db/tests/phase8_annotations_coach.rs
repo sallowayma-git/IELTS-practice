@@ -252,7 +252,14 @@ fn dictionary_and_vocab_review() {
         },
     )
     .unwrap();
-    assert!(reviewed.review.unwrap().repetitions >= 1);
+    let first = reviewed.review.unwrap();
+    assert_eq!(first.repetitions, 0);
+    assert_eq!(first.due_at, None);
+    let second = review_vocab(&conn, &ReviewVocabCommand { item_id: item.id.clone(), grade: 2 })
+        .unwrap().review.unwrap();
+    assert_eq!(second.repetitions, 1);
+    assert_eq!(second.interval_days, 6.0);
+    assert!(second.due_at.is_some());
     assert_eq!(list_vocab(&conn, 20, 0).unwrap().len(), 1);
 }
 

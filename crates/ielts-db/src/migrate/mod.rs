@@ -234,6 +234,12 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0035_soul.sql"),
                 rebuilds: None,
             },
+            Migration {
+                version: 36,
+                name: "vocabulary_sm2_state",
+                sql: include_str!("../../migrations/0036_vocabulary_sm2_state.sql"),
+                rebuilds: Some("vocabulary_review_state"),
+            },
         ]
     })
 }
@@ -465,6 +471,39 @@ mod tests {
             apply(&mut conn, migration).unwrap();
         }
         conn
+    }
+
+    #[test]
+    fn vocabulary_v35_upgrade_preserves_rows_and_delete_protection() {
+        use rusqlite::types::Value;
+        fn rows(conn: &Connection, sql: &str) -> Vec<Vec<Value>> {
+            let mut stmt = conn.prepare(sql).unwrap();
+            let width = stmt.column_count();
+            stmt.query_map([], |row| (0..width).map(|col| row.get(col)).collect())
+                .unwrap().collect::<rusqlite::Result<_>>().unwrap()
+        }
+        let mut conn = history_at(35);
+        conn.execute_batch("INSERT INTO vocabulary_items(id,term,normalized_term,created_at,updated_at)
+            VALUES ('new','New','new','created','updated'),('reviewed','Reviewed','reviewed','created','updated');
+            INSERT INTO vocabulary_review_state VALUES ('new',2.9,0,0,'2026-11-12T00:00:00Z',NULL,0),
+                ('reviewed',2.7,8,3,'2026-11-20T00:00:00Z','2026-11-12T00:00:00Z',2);").unwrap();
+        let words = rows(&conn, "SELECT * FROM vocabulary_items ORDER BY id");
+        let expected = rows(&conn, "SELECT item_id, CASE WHEN last_reviewed_at IS NULL THEN NULL ELSE ease END,
+            interval_days,repetitions,0,0,lapses,due_at,last_reviewed_at FROM vocabulary_review_state ORDER BY item_id");
+        let trigger: String = conn.query_row("SELECT sql FROM sqlite_master WHERE name='trg_delete_gate_vocabulary_review_state'",
+            [], |row| row.get(0)).unwrap();
+        assert_eq!(migrate(&mut conn).unwrap(), vec![36]);
+        assert_eq!(rows(&conn,"SELECT * FROM vocabulary_review_state ORDER BY item_id"), expected);
+        assert_eq!(rows(&conn,"SELECT * FROM vocabulary_items ORDER BY id"), words);
+        assert_eq!(conn.query_row("SELECT sql FROM sqlite_master WHERE name='trg_delete_gate_vocabulary_review_state'",
+            [], |row| row.get::<_,String>(0)).unwrap(), trigger);
+        assert!(conn.execute("DELETE FROM vocabulary_items WHERE id='new'",[]).is_err());
+        assert!(conn.execute("DELETE FROM vocabulary_review_state WHERE item_id='new'",[]).is_err());
+        assert!(conn.query_row("PRAGMA foreign_keys", [], |row| row.get::<_,bool>(0)).unwrap());
+        assert_eq!(foreign_key_violations(&conn,"vocabulary_review_state").unwrap(),0);
+        assert!(crate::vocab::delete_vocab(&conn,"new").unwrap());
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM vocabulary_review_state WHERE item_id='new'",[], |r| r.get::<_,i64>(0)).unwrap(),0);
+        verify_idempotent(&mut conn).unwrap();
     }
 
     fn local_history(version: i64) -> Connection {
