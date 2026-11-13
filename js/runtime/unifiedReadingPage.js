@@ -109,6 +109,7 @@
         ready: false,
         submitted: false,
         submissionStatus: 'draft',
+        submissionPhase: 'draft',
         submissionId: '',
         submissionAckTimer: null,
         pendingSubmissionPresentation: null,
@@ -176,6 +177,11 @@
     let diagnosticBinding = null;
     let handshakeDeadline = null;
     let pendingSubmission = null; // Business-owned snapshot; never given to diagnostics.
+    let submissionPreparation = null;
+    const freezeSubmissionValue = value => {
+        Object.values(value).forEach(child => { if (child && typeof child === 'object') freezeSubmissionValue(child); });
+        return Object.freeze(value);
+    };
     try { diagnosticTransport = global.AppDiagnosticChannel?.createChild({
         reporter: global.AppDiagnostics, store: global.AppDiagnosticStore
     }); } catch (_) { }
@@ -252,7 +258,7 @@
             examId: state.examId, libraryConfigurationId: state.libraryConfigurationId,
             dataset: state.dataset, running: interaction.timerRunning && !state.timerLocked,
             timerInteractionRevision: interaction.timerInteractionRevision,
-            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted && !isSubmissionUnconfirmed()
+            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted && !isSubmissionEditingLocked()
                 && state.submissionStatus === 'draft' && !state.suite.activating,
             restorePause: () => setTimerRunning(false)
         };
@@ -461,10 +467,10 @@
         document.body.classList.toggle('timer-locked-mode', locked);
         getPracticeFormControls().forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
-                control.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
+                control.disabled = locked || state.readOnly || isSubmissionEditingLocked();
             }
         });
-        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
+        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly || isSubmissionEditingLocked();
         syncOptionsClearAnswersAction();
         document.querySelectorAll('#reading-note-drawer [data-note-outline-add], #reading-note-drawer [data-note-outline-toggle], #reading-note-drawer [data-note-outline-title], #reading-note-drawer [data-note-outline-delete], #reading-note-drawer [data-note-drag-handle], #reading-note-drawer [data-note-delete]').forEach((control) => {
             if ('disabled' in control) control.disabled = locked;
@@ -473,6 +479,7 @@
     }
 
     function handleTimerExpired(preferences) {
+        if (isSubmissionEditingLocked()) return;
         if (state.timerExpiryHandled || state.submitted || state.readOnly || state.reviewMode || state.memorizeMode) {
             return;
         }
@@ -480,7 +487,7 @@
         const action = preferences && preferences.expiryAction ? preferences.expiryAction : 'warn';
         if (action === 'auto-submit') {
             global.setTimeout(() => {
-                if (!state.submitted && !state.readOnly) {
+                if (!state.submitted && !state.readOnly && !isSubmissionEditingLocked()) {
                     handleSubmit();
                 }
             }, 0);
@@ -621,6 +628,7 @@
     }
 
     function setTimerRunning(nextRunning) {
+        if (isSubmissionEditingLocked()) return;
         const nowMs = Date.now();
         syncActiveSuiteTimer(Boolean(nextRunning), nowMs);
         interaction.timerRunning = !!nextRunning;
@@ -636,6 +644,7 @@
     }
 
     function handleCountdownExpired() {
+        if (isSubmissionEditingLocked()) return;
         setTimerRunning(false);
         if (typeof handleSubmit === 'function' && !state.submitted) {
             handleSubmit().catch(function () {});
@@ -647,6 +656,7 @@
         const timer = document.getElementById('timer');
         if (timer) {
             timer.addEventListener('click', event => {
+                if (isSubmissionEditingLocked()) return;
                 if (event.isTrusted) interaction.timerInteractionRevision++;
                 setTimerRunning(!interaction.timerRunning);
             });
@@ -1689,6 +1699,7 @@
     }
 
     function mergeSuiteDraftPayload(data = {}) {
+        if (isSubmissionEditingLocked()) return;
         if (!state.suite?.inline) {
             return;
         }
@@ -1773,6 +1784,7 @@
     }
 
     function updateActiveSlotFromCurrentDom(reason = 'snapshot') {
+        if (isSubmissionEditingLocked()) return null;
         if (!state.suite?.inline || state.suite.activating) {
             return null;
         }
@@ -1857,6 +1869,8 @@
     }
 
     async function ensureSuiteDatasets(rawSequence = []) {
+        const sessionId = state.sessionId;
+        const suiteSessionId = state.suiteSessionId;
         const sequence = normalizeSuiteSequence(rawSequence);
         if (!sequence.length) {
             return false;
@@ -1866,6 +1880,7 @@
         state.suite.sequence = sequence;
         await Promise.all(sequence.map(async (entry) => {
             const loaded = await loadDatasetByEntry(entry);
+            if (isSubmissionEditingLocked() || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return;
             const existing = getSuiteSlot(entry.examId);
             const inheritedDraft = state.simulationCtx?.draft
                 && state.simulationCtx.examId === entry.examId
@@ -1974,6 +1989,7 @@
     }
 
     async function activateSuiteSlot(examId, options = {}) {
+        if (submissionPreparation) return false;
         if (!state.suite?.inline) {
             return false;
         }
@@ -1990,7 +2006,7 @@
         }
         state.suite.activating = true;
         state.suite.activeExamId = targetExamId;
-        state.suite.activeStartedAtMs = interaction.timerRunning ? Date.now() : null;
+        state.suite.activeStartedAtMs = !isSubmissionEditingLocked() && interaction.timerRunning ? Date.now() : null;
         state.examId = targetExamId;
         state.dataKey = slot.dataKey || targetExamId;
         state.dataset = slot.dataset;
@@ -2003,7 +2019,7 @@
         renderDataset(slot.dataset);
         refreshDynamicQuestionEnhancements();
         clearCurrentAnswers();
-        applyDraftToDom(slot.draft || buildEmptyDraft());
+        applyDraftToDom(slot.draft || buildEmptyDraft(), { presentationOnly: true });
         syncSimulationCtxForActiveSlot();
         syncInlineSuiteIdentity();
         state.simulationMode = true;
@@ -2025,7 +2041,8 @@
             syncSimulationDraftSnapshot('activate');
         }
         if (state.sessionReadySent) await activateReadingTiming(slot.draft);
-        if (!options.silent) {
+        if (!isCurrentSuiteActivation(targetExamId, activationGeneration) || submissionPreparation) return false;
+        if (!options.silent && !isSubmissionEditingLocked()) {
             postMessage('SIMULATION_ACTIVE_EXAM_CHANGE', {
                 examId: targetExamId,
                 currentIndex: state.suite.currentIndex,
@@ -2579,7 +2596,7 @@
 
     function canEditReadingNotes() {
         if (state.timerLocked) return false;
-        if (isSubmissionUnconfirmed()) return false;
+        if (isSubmissionEditingLocked()) return false;
         const activePracticeCanEdit = Boolean(
             !state.readOnly
             && !state.memorizeMode
@@ -3999,6 +4016,7 @@
     }
 
     function navigateToPart(partKey, options = {}) {
+        if (submissionPreparation) return;
         const targetPartKey = PART_ORDER.includes(partKey) ? partKey : '';
         if (!targetPartKey) return;
         const questionId = options.questionId || '';
@@ -4707,7 +4725,7 @@
         }
         item.dataset.dragBound = '1';
         item.addEventListener('dragstart', (event) => {
-            if (isSubmissionUnconfirmed()) {
+            if (isSubmissionEditingLocked()) {
                 event.preventDefault();
                 return;
             }
@@ -4751,7 +4769,7 @@
             item.dataset.answerLabel = normalizedLabel;
             item.setAttribute('draggable', 'true');
             item.addEventListener('click', () => {
-                if (isSubmissionUnconfirmed()) return;
+                if (isSubmissionEditingLocked()) return;
                 clearDropzone(dropzone);
                 updateNavStatuses();
             });
@@ -4894,7 +4912,7 @@
                 item.classList.remove('option-consumed');
                 // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
                 // 不允许重新启用选项，否则可绕过锁定继续作答
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionEditingLocked());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
                 item.classList.toggle('drag-item-locked', interactionLocked);
             }
@@ -4988,7 +5006,7 @@
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
-            if (isSubmissionUnconfirmed()) {
+            if (isSubmissionEditingLocked()) {
                 event.preventDefault();
                 return;
             }
@@ -6329,7 +6347,7 @@
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
         // Pending confirmation locks answer editing without presenting saved results.
         const answerRoot = getPracticeAnswerRoot();
-        if (answerRoot) answerRoot.inert = isSubmissionUnconfirmed();
+        if (answerRoot) answerRoot.inert = isSubmissionEditingLocked();
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
                 dom.submitBtn.dataset.defaultLabel = dom.submitBtn.title || 'Submit';
@@ -6364,7 +6382,7 @@
                     control.disabled = false;
                     return;
                 }
-                control.disabled = state.readOnly || state.timerLocked || isSubmissionUnconfirmed();
+                control.disabled = state.readOnly || state.timerLocked || isSubmissionEditingLocked();
             }
         });
         renderNotesDrawer();
@@ -6374,7 +6392,7 @@
     }
 
     function disableDragInteractions() {
-        const locked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
+        const locked = Boolean(state.readOnly || state.timerLocked || isSubmissionEditingLocked());
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
             // 如果选项已被使用（option-consumed），始终保持不可拖拽
@@ -6392,6 +6410,7 @@
     function enterSubmittedReadOnlyState(reason = 'submit') {
         clearSubmissionAckTimer();
         state.submissionStatus = 'submitted';
+        state.submissionPhase = 'committed';
         state.submitted = true;
         setReadOnlyMode(true, reason);
         disableDragInteractions();
@@ -6431,6 +6450,7 @@
         }
         clearSubmissionAckTimer();
         state.submissionStatus = 'draft';
+        state.submissionPhase = ownsPendingSubmission(pendingSubmission) ? 'unconfirmed' : 'draft';
         state.submitted = false;
         syncPrimaryActionButtons();
         return true;
@@ -6453,8 +6473,9 @@
             && submission.generation === state.windowSessionGeneration);
     }
 
-    function isSubmissionUnconfirmed() {
-        return ownsPendingSubmission(pendingSubmission) && state.submissionStatus !== 'submitted';
+    function isSubmissionEditingLocked() {
+        return Boolean(submissionPreparation)
+            || (ownsPendingSubmission(pendingSubmission) && state.submissionStatus !== 'submitted');
     }
 
     function settleSubmissionRetry(operation) {
@@ -6472,6 +6493,7 @@
     function dispatchPendingSubmission(submission) {
         if (!ownsPendingSubmission(submission) || state.submissionStatus === 'submitted') return false;
         state.submissionStatus = 'submitting';
+        state.submissionPhase = 'handoff';
         state.pendingSubmissionPresentation = submission.presentation;
         setReadOnlyMode(state.readOnly, state.readOnlyReason);
         disableDragInteractions();
@@ -6503,7 +6525,8 @@
         });
     }
 
-    function beginSubmission(messageType, payload, presentation = null) {
+    function beginSubmission(messageType, payload, presentation = null, timingOwner = null) {
+        if (submissionPreparation && submissionPreparation !== timingOwner) return false;
         if (state.submissionStatus === 'submitting' || state.submissionStatus === 'submitted') {
             return false;
         }
@@ -6517,7 +6540,8 @@
             generation: state.windowSessionGeneration, type: messageType,
             finalSuiteSubmission: Boolean(state.simulationMode && state.simulationCtx?.isLast && state.suiteSessionId),
             operationId: `practice-complete:${state.examId}:${state.sessionId || 'session'}:${state.submissionId}`,
-            payload: JSON.parse(JSON.stringify(payload || {})), presentation };
+            payload: freezeSubmissionValue(JSON.parse(JSON.stringify(payload || {}))), presentation, timingOwner };
+        submissionPreparation = null;
         return dispatchPendingSubmission(pendingSubmission);
     }
 
@@ -6725,7 +6749,8 @@
                         reviewMode: state.reviewMode,
                         timerLocked: state.timerLocked,
                         submissionStatus: state.submissionStatus,
-                        submissionEditingLocked: isSubmissionUnconfirmed(),
+                        submissionPhase: state.submissionPhase,
+                        submissionEditingLocked: isSubmissionEditingLocked(),
                         submissionId: state.submissionId,
                         parentOrigin: state.parentOrigin,
                         parentOriginIsOpaque: state.parentOriginIsOpaque,
@@ -6805,7 +6830,7 @@
     function canClearDraftAnswers() {
         return Boolean(
             state.submissionStatus === 'draft'
-            && !isSubmissionUnconfirmed()
+            && !isSubmissionEditingLocked()
             && !state.readOnly
             && !state.submitted
             && !state.reviewMode
@@ -6861,12 +6886,12 @@
             }
         };
 
-        if (isSubmissionUnconfirmed()) {
+        if (isSubmissionEditingLocked()) {
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 dom.submitBtn.setAttribute('type', 'button');
-                setSubmitLabel(state.submissionStatus === 'submitting' ? '正在确认保存' : '确认上次提交');
-                dom.submitBtn.disabled = state.submissionStatus === 'submitting';
+                setSubmitLabel(submissionPreparation ? '正在保存作答' : (state.submissionStatus === 'submitting' ? '正在确认保存' : '确认上次提交'));
+                dom.submitBtn.disabled = Boolean(submissionPreparation) || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) dom.resetBtn.style.display = 'none';
             return;
@@ -7000,12 +7025,15 @@
     }
 
     function resetToAnsweringPresentation() {
+        if (isSubmissionEditingLocked()) return;
+        readingTimingController?.releaseSubmission(pendingSubmission?.timingOwner);
         settleSubmissionRetry('unconfirmed');
         pendingSubmission = null;
         clearSubmissionAckTimer();
         state.lastResults = null;
         state.submitted = false;
         state.submissionStatus = 'draft';
+        state.submissionPhase = 'draft';
         state.submissionId = '';
         state.pendingSubmissionPresentation = null;
         state.submittedRecordId = '';
@@ -7610,7 +7638,8 @@
 
     function canSyncReadingDraft() {
         return Boolean(
-            !state.simulationMode
+            !isSubmissionEditingLocked()
+            && !state.simulationMode
             && !state.reviewMode
             && !state.readOnly
             && !state.timerLocked
@@ -7687,6 +7716,7 @@
     }
 
     function syncSimulationDraftSnapshot(reason = 'periodic') {
+        if (isSubmissionEditingLocked()) return;
         if (state.timerLocked) return;
         const isSuiteReviewAnnotation = Boolean(
             state.suiteReviewMode
@@ -7723,7 +7753,8 @@
 
     function refreshSimulationDraftSyncLifecycle() {
         const shouldSync = Boolean(
-            state.simulationMode
+            !isSubmissionEditingLocked()
+            && state.simulationMode
             && state.simulationContextReady
             && !state.readOnly
             && state.suiteSessionId
@@ -7741,7 +7772,8 @@
         syncSimulationDraftSnapshot('activate');
     }
 
-    function applyDraftToDom(draft) {
+    function applyDraftToDom(draft, options = {}) {
+        if (isSubmissionEditingLocked() && !options.presentationOnly) return;
         if (!draft || typeof draft !== 'object') {
             return;
         }
@@ -7951,7 +7983,7 @@
             if (item.dataset.consumed || item.classList.contains('option-consumed')) {
                 delete item.dataset.consumed;
                 item.classList.remove('option-consumed');
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionEditingLocked());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
             }
         });
@@ -7980,6 +8012,7 @@
     }
 
     function dispatchSimulationNavigate(direction, submissionSnapshot = null, options = {}) {
+        if (submissionPreparation || (isSubmissionEditingLocked() && !state.suite?.inline)) return;
         if (!state.simulationMode || !state.simulationCtx || state.readOnly) {
             return;
         }
@@ -8042,7 +8075,7 @@
             handleExitClick();
             return;
         }
-        if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
+        if (state.readOnly || state.submissionStatus !== 'draft' || submissionPreparation || state.suite.activating) {
             return;
         }
         if (ownsPendingSubmission(pendingSubmission)) {
@@ -8051,30 +8084,74 @@
             dispatchPendingSubmission(pendingSubmission);
             return;
         }
-        state.timingSubmitPending = true;
+        // Accept answers, annotations and elapsed time in one synchronous turn.
+        // Only acknowledged timing is attached after the asynchronous barrier.
+        flushActiveNoteFromEditor();
+        const acceptedDraft = freezeSubmissionValue(JSON.parse(JSON.stringify(state.suite?.inline
+            ? buildInlineSuiteSubmissionSnapshot()
+            : buildSubmissionSnapshot())));
+        const submissionSnapshot = { ...acceptedDraft,
+            ...(acceptedDraft.suiteEntries ? { suiteEntries: acceptedDraft.suiteEntries.map(entry => ({ ...entry })) } : {}) };
+        if (state.simulationMode) syncSimulationDraftSnapshot('submit');
+        else syncReadingDraftSnapshot('submit');
+        const activeSlot = state.suite?.inline ? getActiveSuiteSlot() : null;
+        const results = freezeSubmissionValue(JSON.parse(JSON.stringify(activeSlot?.lastResults || submissionSnapshot.results)));
+        const highlightSnapshot = state.suite?.inline
+            ? JSON.parse(JSON.stringify(activeSlot?.draft?.highlights || []))
+            : submissionSnapshot.highlights;
+        const identity = [state.sessionId, state.suiteSessionId, state.examId, state.libraryConfigurationId,
+            state.parentWindow, state.windowSessionToken, state.windowSessionGeneration];
+        const preparation = { isCurrent: () => submissionPreparation === preparation
+            && identity.every((value, index) => value === [state.sessionId, state.suiteSessionId, state.examId,
+                state.libraryConfigurationId, state.parentWindow, state.windowSessionToken, state.windowSessionGeneration][index]) };
+        submissionPreparation = preparation;
+        state.submissionPhase = 'freezing';
+        setReadOnlyMode(state.readOnly, state.readOnlyReason);
+        disableDragInteractions();
         try {
             const passages = state.suite?.inline ? state.suite.sequence.map((entry, sequenceIndex) => {
                 const slot = getSuiteSlot(entry.examId);
                 return { context: { ...readingTimingContext(), examId: entry.examId, sequenceIndex,
                     dataset: slot?.dataset }, draft: slot?.draft };
-            }) : [];
-            await readingTimingController?.freezeAll(passages);
+            }) : [{ context: readingTimingContext(), draft: collectCurrentDraft() }];
+            if (!readingTimingController && global.ReadingTimingController) {
+                readingTimingController = new global.ReadingTimingController(readingTimingContext);
+            }
+            const frozen = await readingTimingController?.freezeAll(passages, preparation);
+            if (!preparation.isCurrent()) return;
+            if (readingTimingController) {
+                const snapshots = new Map(frozen.map(value => [value.key, value.snapshot]));
+                passages.forEach((passage, index) => {
+                    const snapshot = snapshots.get(readingTimingController.key(passage.context));
+                    if (!snapshot) throw new Error('Required Reading timing snapshot is missing');
+                    if (state.suite?.inline) submissionSnapshot.suiteEntries[index].readingTiming = snapshot;
+                    else submissionSnapshot.readingTiming = snapshot;
+                });
+            }
+            state.submissionPhase = 'persisted';
         } catch (error) {
-            readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', error);
+            if (!preparation.isCurrent()) return;
+            submissionPreparation = null;
+            readingTimingController?.releaseSubmission(preparation);
+            state.submissionPhase = 'failed';
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', error, 'not-committed');
             global.alert?.('计时保存失败，请稍后重试提交。作答仍然保留。');
             return;
-        } finally { state.timingSubmitPending = false; }
-        const submissionSnapshot = state.suite?.inline
-            ? buildInlineSuiteSubmissionSnapshot()
-            : buildSubmissionSnapshot();
-        if (state.simulationMode) {
-            syncSimulationDraftSnapshot('submit');
+        } finally {
+            if (!preparation.isCurrent()) {
+                if (submissionPreparation === preparation) submissionPreparation = null;
+                readingTimingController?.releaseSubmission(preparation);
+                // Failed or canceled preparation has drained its saves. Restore
+                // the current registration without unlocking a newer submission.
+                if (!isSubmissionEditingLocked()) {
+                    setReadOnlyMode(state.readOnly, state.readOnlyReason);
+                    disableDragInteractions();
+                    refreshReadingDraftSyncLifecycle();
+                    activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : collectCurrentDraft()).catch(() => {});
+                }
+            }
         }
-        const activeSlot = state.suite?.inline ? getActiveSuiteSlot() : null;
-        const results = activeSlot?.lastResults || submissionSnapshot.results;
-        const highlightSnapshot = state.suite?.inline
-            ? (Array.isArray(activeSlot?.draft?.highlights) ? activeSlot.draft.highlights : [])
-            : (Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : []);
+        freezeSubmissionValue(submissionSnapshot);
         const postedResults = submissionSnapshot.results || results;
         if (activeSlot) {
             activeSlot.lastResults = results;
@@ -8100,9 +8177,7 @@
                 practiceMode: state.suiteSessionId ? 'suite' : 'single',
                 renderMode: 'unified-reading',
                 dataKey: state.dataKey,
-                markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
-                    ? global.getPracticeMarkedQuestions()
-                    : normalizeMarkedQuestions(submissionSnapshot.markedQuestions)
+                markedQuestions: normalizeMarkedQuestions(submissionSnapshot.markedQuestions)
             },
             answers: submissionSnapshot.answers || {},
             highlights: Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : [],
@@ -8117,10 +8192,11 @@
         } : {}, postedResults), {
             results,
             highlights: highlightSnapshot
-        });
+        }, preparation);
     }
 
     function handleReset() {
+        if (isSubmissionEditingLocked()) return;
         if (state.memorizeMode) {
             requestNormalPracticeRestart('memorize-start-test');
             return;
@@ -8216,6 +8292,9 @@
     }
 
     async function initializeInlineSimulationSuite(data = {}, options = {}) {
+        if (isSubmissionEditingLocked()) return false;
+        const sessionId = state.sessionId;
+        const suiteSessionId = state.suiteSessionId;
         const sequence = Array.isArray(data && data.suiteSequence) ? data.suiteSequence : [];
         if (!sequence.length) {
             return false;
@@ -8227,6 +8306,7 @@
             return false;
         }
         await ensureSuiteDatasets(sequence);
+        if (isSubmissionEditingLocked() || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return false;
         captureInlineSuiteDraftBeforeReinit('reinit');
         mergeSuiteDraftPayload(data || {});
         const targetExamId = resolveSuiteTargetExamId(data || {}, options);
@@ -8284,6 +8364,14 @@
                 && normalizeWindowSessionToken(data.windowSessionToken) === state.windowSessionToken) {
                 return;
             }
+            // Same-attempt initialization/checkpoints cannot replace an accepted
+            // draft. A new host registration invalidates any pre-handoff work.
+            if (isSubmissionEditingLocked() && data.sessionId === state.sessionId
+                && normalizeWindowSessionToken(data.windowSessionToken) === state.windowSessionToken) return;
+            if (submissionPreparation) {
+                submissionPreparation = null;
+                state.submissionPhase = 'draft';
+            }
             if (pendingSubmission && normalizeWindowSessionToken(data.windowSessionToken) !== state.windowSessionToken) {
                 settleSubmissionRetry('unconfirmed');
                 pendingSubmission = { ...pendingSubmission, token: normalizeWindowSessionToken(data.windowSessionToken),
@@ -8295,6 +8383,8 @@
                 state.examId = incomingExamId;
             }
             if (data.sessionId && state.sessionId && String(data.sessionId) !== String(state.sessionId)) {
+                readingTimingController?.releaseSubmission(pendingSubmission?.timingOwner);
+                submissionPreparation = null;
                 settleSubmissionRetry('unconfirmed');
                 pendingSubmission = null;
                 clearSubmissionAckTimer();
@@ -8418,6 +8508,7 @@
         if (!isTrustedHostMessage(event, payload, data)) {
             return;
         }
+        if (isSubmissionEditingLocked() && ['REPLAY_PRACTICE_RECORD', 'REVIEW_CONTEXT', 'SUITE_NAVIGATE'].includes(type)) return;
         if (type === 'REPLAY_PRACTICE_RECORD') {
             const replaySignature = buildReplaySignature(data || {});
             if (replaySignature && replaySignature === state.lastReplaySignature) {
@@ -8444,11 +8535,16 @@
                 restoreDraftSubmissionState(String(data.submissionId || ''));
                 settleSubmissionRetry(operation);
                 if (operation === 'not-committed') {
+                    readingTimingController?.releaseSubmission(submission.timingOwner);
                     pendingSubmission = null;
                     state.submissionId = '';
                     state.pendingSubmissionPresentation = null;
+                    state.submissionPhase = 'failed';
                     setReadOnlyMode(false);
                     disableDragInteractions();
+                    // Pending read-only navigation may have changed the visible
+                    // passage while timing remained attached to the submitted one.
+                    activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : collectCurrentDraft()).catch(() => {});
                 }
                 reportSubmissionFailure(Object.assign(new Error('Host could not confirm submission'), { name: 'AppDataError', code: data.errorCode }),
                     'PRACTICE_SAVE_FAILED', operation, submission);
@@ -8491,6 +8587,7 @@
             return;
         }
         if (type === 'SIMULATION_CONTEXT') {
+            if (isSubmissionEditingLocked()) return;
             if (!shouldAcceptWindowSessionMessage(data, sourceWindow)) {
                 return;
             }
@@ -8668,6 +8765,7 @@
 
     function attachPracticeTimerBridge() {
         global.addEventListener(PRACTICE_TIMER_EVENT, (event) => {
+            if (isSubmissionEditingLocked()) return;
             const detail = event && event.detail && typeof event.detail === 'object'
                 ? event.detail
                 : null;
