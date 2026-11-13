@@ -5,14 +5,14 @@
             suite: session?.id, session: session?.id, submission: session?._finalizeSubmissionId, operation
         }); } catch (_) { }
     }
-    function suiteFailure(error, session, action = 'submit', operation) {
+    function suiteFailure(error, session, action = 'submit', operation, retry) {
         if (session && typeof session === 'object') suiteFailures.set(session, error);
         try { global.AppOperationDiagnostics?.failure({ code: action === 'save-recovery'
             ? 'RECOVERY_SAVE_FAILED' : 'PRACTICE_SAVE_FAILED', module: 'suite', action, error,
             correlation: { suite: session?.id, session: session?.id,
                 submission: session?._finalizeSubmissionId, operation }
-        }, action === 'submit' && operation && typeof global.AppData?.practice?.getCommitState === 'function'
-            ? () => global.AppData.practice.getCommitState(operation) : undefined); } catch (_) { }
+        }, retry || (action === 'submit' && operation && typeof global.AppData?.practice?.getCommitState === 'function'
+            ? () => global.AppData.practice.getCommitState(operation) : undefined)); } catch (_) { }
     }
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
@@ -206,6 +206,15 @@
                 window.showMessage && window.showMessage('The unfinished suite changed. Please review it again before abandoning it.', 'warning');
                 return false;
             }
+            if (session.status === 'finalizing' && typeof global.AppData?.practice?.getSuiteCommitState === 'function') {
+                const state = await global.AppData.practice.getSuiteCommitState(session.id, `practice-suite:${session.id}:finalize`);
+                if (state.operation !== 'not-committed') {
+                    if (state.operation === 'committed') return this._finalizeSuiteRecordWithGate(session, { fromRecovery: true });
+                    window.showMessage && window.showMessage('保存结果仍未确认，请先恢复并核对提交。作答已保留。', 'warning');
+                    return false;
+                }
+                session._discardRequiresNonCommit = true;
+            }
             return this._abortSuiteSession(session, { reason: 'user_discard' });
         },
 
@@ -387,7 +396,7 @@
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
                 return false;
             }
-            if (['finalizing', 'completed'].includes(session.status) && data?.submissionId
+            if (['finalizing', 'completed'].includes(session.status) && session._finalizeSubmissionId && data?.submissionId
                 && String(data.submissionId) !== session._finalizeSubmissionId) {
                 // Only the original snapshot owns this finalization/receipt. A
                 // different ID cannot certify new answers without a new attempt.
@@ -634,7 +643,6 @@
                     session.status = 'finalizing';
                     session.currentIndex = sequence.length;
                     session.activeExamId = null;
-                    if (!await this._commitSuiteRecovery(session, { reason: 'finalize-resume' })) return false;
                     return this._finalizeSuiteRecordWithGate(session, { fromRecovery: true });
                 }
                 if (typeof this.openExam !== 'function') return false;
@@ -787,7 +795,7 @@
             if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
                 return false;
             }
-            if (['finalizing', 'completed'].includes(session.status) && data?.submissionId
+            if (['finalizing', 'completed'].includes(session.status) && session._finalizeSubmissionId && data?.submissionId
                 && String(data.submissionId) !== session._finalizeSubmissionId) {
                 return withSubmitOutcome(true, false, 'suite_submission_conflict');
             }
@@ -1926,6 +1934,8 @@
                     revision: session.revision,
                     draftRevision: Math.max(0, Number(session.draftRevision) || 0),
                     finalizeOperationId: session.finalizeOperationId || null,
+                    finalizeSubmissionId: session._finalizeSubmissionId || null,
+                    finalizeRecoveryVersion: session.finalizeRecoveryVersion || null,
                     finalizeRecord: session.finalizeRecord
                         ? this._cloneSuitePlainObject(session.finalizeRecord)
                         : null
@@ -2015,7 +2025,8 @@
             }
             try {
                 const receipt = await recovery.discardActiveSession(String(session.id), {
-                    operationId: `suite-recovery:${String(session.id)}:discard`
+                    operationId: `suite-recovery:${String(session.id)}:discard`,
+                    ...(session._discardRequiresNonCommit ? { requireUncommitted: true } : {})
                 });
                 if (!receipt || receipt.committed !== true) {
                     throw new Error('Suite recovery discard was not confirmed');
@@ -2186,6 +2197,8 @@
                     revision: Math.max(0, Number(snapshot.revision) || 0),
                     draftRevision: Math.max(0, Number(snapshot.draftRevision) || 0),
                     finalizeOperationId: snapshot.finalizeOperationId || (snapshot.finalizeRecord ? expectedOperationId : null),
+                    _finalizeSubmissionId: snapshot.finalizeSubmissionId || snapshot.finalizeRecord?.submissionId || null,
+                    finalizeRecoveryVersion: snapshot.finalizeRecoveryVersion || null,
                     finalizeRecord: snapshot.finalizeRecord && typeof snapshot.finalizeRecord === 'object'
                         ? this._cloneSuitePlainObject(snapshot.finalizeRecord)
                         : null,
@@ -2362,6 +2375,8 @@
             const payload = {
                     suiteSessionId: session.id,
                     flowMode: session.flowMode || 'simulation',
+                    finalization: session.status === 'finalizing' || session.status === 'completed'
+                        ? { operationId: session.finalizeOperationId, submissionId: session._finalizeSubmissionId || null } : null,
                     examId,
                     sessionId: windowInfo && windowInfo.expectedSessionId ? windowInfo.expectedSessionId : null,
                     windowSessionToken: windowInfo && windowInfo.windowSessionToken ? windowInfo.windowSessionToken : null,
@@ -2557,7 +2572,7 @@
 
         _handleSuiteSessionReady(examId) {
             const session = this.currentSuiteSession;
-            if (!session || (session.status !== 'active' && session.status !== 'initializing') || !examId) {
+            if (!session || !['active', 'initializing', 'finalizing', 'completed'].includes(session.status) || !examId) {
                 return false;
             }
             if (session.flowMode !== 'simulation' && session.flowMode !== 'stationary') {
@@ -2622,6 +2637,10 @@
             const indexAligned = Number.isInteger(session.currentIndex) && session.currentIndex === idx;
             if (activeExamId && activeExamId !== String(examId) && !indexAligned) {
                 return false;
+            }
+            if (session.status === 'finalizing' || session.status === 'completed') {
+                session.windowRef = targetWindow;
+                return this._sendSimulationContext(session, examId, targetWindow);
             }
             session.currentIndex = idx;
             session.activeExamId = examId;
@@ -3094,6 +3113,25 @@
             if (!session || !Array.isArray(session.sequence) || !session.sequence.length) {
                 return false;
             }
+            if (session.status === 'completed') return true;
+            if (session.finalizeRecord && typeof global.AppData?.practice?.recoverSuiteFinalization === 'function') {
+                return this._recoverSuiteFinalization(session, options);
+            }
+            if (session.status === 'finalizing' && typeof global.AppData?.practice?.getSuiteCommitState === 'function') {
+                try {
+                    const state = await global.AppData.practice.getSuiteCommitState(session.id, `practice-suite:${session.id}:finalize`);
+                    if (state.operation === 'committed') {
+                        session.status = 'completed';
+                        await this._finishSuiteFinalization(session, options);
+                        return true;
+                    }
+                    if (state.operation !== 'not-committed') throw new Error('Original completion is unconfirmed');
+                } catch (error) {
+                    suiteFailure(error, session, 'submit', `practice-suite:${session.id}:finalize`);
+                    window.showMessage && window.showMessage('保存结果仍未确认，恢复数据已保留，请稍后再次确认。', 'warning');
+                    return false;
+                }
+            }
 
             const sequenceIds = session.sequence
                 .map((entry) => entry && String(entry.examId || '').trim())
@@ -3269,14 +3307,20 @@
                     : builtRecord;
                 const record = persistedRecord;
                 record.operationId = expectedOperationId;
+                if (session._finalizeSubmissionId) record.submissionId = session._finalizeSubmissionId;
                 session.finalizeRecord = this._cloneSuitePlainObject(record);
+                session._finalizeRecordPending = true;
                 if (!await this._commitSuiteRecovery(session, { reason: 'finalize-record' })) return false;
+                session._finalizeRecordPending = false;
 
                 await this._saveSuitePracticeRecord(record);
                 committed = true;
                 session.status = 'completed';
             } catch (error) {
-                suiteFailure(error, session, 'submit', `practice-suite:${String(session.id)}:finalize`);
+                suiteFailure(error, session, 'submit', `practice-suite:${String(session.id)}:finalize`, async () => {
+                    const saved = await this._finalizeSuiteRecordWithGate(session, { fromRecovery: true });
+                    return { verified: saved, operation: saved ? 'committed' : session._finalizeOutcome || 'unconfirmed' };
+                });
                 console.error('[SuitePractice] 保存套题记录失败:', error);
                 try {
                     window.showMessage && window.showMessage('套题提交尚未确认保存，请保留练习页面并查看诊断详情。', 'error');
@@ -3288,7 +3332,67 @@
                 await this._commitSuiteRecovery(session, { notify: false, reason: 'finalize-error' });
             }
 
-            if (committed) {
+            if (committed) await this._finishSuiteFinalization(session, options);
+            return committed;
+        },
+
+        async _recoverSuiteFinalization(session, options = {}) {
+            const operationId = session.finalizeOperationId || `practice-suite:${session.id}:finalize`;
+            try {
+                let recovered;
+                if (session._finalizeRecordPending) {
+                    // The record can exist in memory even when its checkpoint failed.
+                    // Reconcile before retrying that same snapshot; the recovery write
+                    // also fences a competing completion inside its transaction.
+                    recovered = await global.AppData.practice.getSuiteCommitState(session.id, operationId);
+                    session._finalizeOutcome = recovered.operation;
+                    if (recovered.operation === 'not-committed') {
+                        session._finalizeRecordPending = !await this._commitSuiteRecovery(session, { reason: 'finalize-record' });
+                    }
+                }
+                // A competing checkpoint or completion may have won the write fence.
+                // Durable recovery reconciles it and validates the winning snapshot.
+                if (!recovered || recovered.operation === 'not-committed') {
+                    recovered = await global.AppData.practice.recoverSuiteFinalization({ sessionId: session.id, operationId,
+                        submissionId: session._finalizeSubmissionId || null });
+                }
+                session._finalizeOutcome = recovered.operation;
+                if (recovered.operation === 'unconfirmed') {
+                    throw Object.assign(new Error('The original completion is still unconfirmed'), { code: 'SUITE_COMMIT_UNCONFIRMED' });
+                }
+                if (recovered.operation === 'not-committed') {
+                    if (!recovered.prepared) throw new Error('Recovery snapshot was not durably established');
+                    const restored = this._restoreSessionFromStorage(recovered.session);
+                    if (!restored) throw new Error('Replacement recovery snapshot failed validation');
+                    for (const field of ['finalizeRecord', 'finalizeOperationId', 'finalizeRecoveryVersion',
+                        'results', 'draftsByExam', 'revision', 'lastUpdate', '_finalizeSubmissionId']) {
+                        session[field] = restored[field];
+                    }
+                    session._finalizeRecordPending = false;
+                    this._mirrorSuiteRecoverySnapshot(recovered.session, true);
+                    await this._saveSuitePracticeRecord(recovered.record);
+                }
+                session._finalizeOutcome = 'committed';
+                session.status = 'completed';
+                await this._finishSuiteFinalization(session, options);
+                return true;
+            } catch (error) {
+                session._finalizeOutcome = global.AppData?.getOperationFailureState?.(error) || 'unconfirmed';
+                suiteFailure(error, session, 'submit', operationId, async () => {
+                    const committed = await this._finalizeSuiteRecordWithGate(session, { fromRecovery: true });
+                    return { verified: committed, operation: committed ? 'committed' : session._finalizeOutcome || 'unconfirmed' };
+                });
+                const message = session._finalizeOutcome === 'not-committed'
+                    ? '套题尚未保存，作答已保留。请关闭其他正在编辑此套题的页面后，使用“恢复并确认提交”重试；若仍有冲突，请查看诊断详情。'
+                    : '套题保存结果仍未确认，作答已保留。请使用“恢复并确认提交”核对原记录。';
+                window.showMessage && window.showMessage(message, 'warning');
+                return false;
+            }
+        },
+
+        async _finishSuiteFinalization(session, options = {}) {
+            if (!session._completionPresented) {
+                session._completionPresented = true;
                 await this._runSuitePostCommitStep('同步套题练习记录', () => this._updatePracticeRecordsState());
                 await this._runSuitePostCommitStep('刷新套题总览', () => {
                     this.refreshOverviewData && this.refreshOverviewData();
@@ -3298,10 +3402,9 @@
                 });
             }
 
-            if (committed && !options.deferTeardown) {
+            if (!options.deferTeardown) {
                 await this._runSuitePostCommitStep('清理套题会话窗口', () => this._teardownSuiteSession(session));
             }
-            return committed;
         },
 
         async _fetchSuiteExamIndex(options = {}) {

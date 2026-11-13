@@ -467,6 +467,43 @@
         tx.objectStore(SYSTEM_STORE).put({ logicalKey: ENTITY_REVISION_LOGICAL_KEY, envelope: canonicalizeJson(envelope) });
     }
 
+    // Read the receipt, all record layers and deletion history in one transaction.
+    // A missing journal entry alone is never evidence of non-commit.
+    function readPracticeCommit(tx, recordId, opId, done, fail) {
+        const requests = [
+            tx.objectStore(SYSTEM_STORE).get('system.operationJournal'),
+            tx.objectStore(SYSTEM_STORE).get(ENTITY_REVISION_LOGICAL_KEY),
+            ...ENTITY_STORES.map(store => tx.objectStore(store).get(recordId))
+        ];
+        let remaining = requests.length;
+        for (const request of requests) {
+            request.onerror = () => fail(request.error || new Error('Commit reconciliation read failed'));
+            request.onsuccess = () => {
+                if (--remaining) return;
+                try {
+                    const journalRow = requests[0].result;
+                    if (journalRow && !validateEnvelope(lookupEntry('system.operationJournal'), journalRow.envelope)) {
+                        throw corruption('Invalid operation journal');
+                    }
+                    const journal = readJournal(journalRow);
+                    const revisions = readEntityRevisionState(requests[1].result || null);
+                    const rows = requests.slice(2).map(request => request.result || null);
+                    rows.forEach((row, i) => { if (row) validateEntityRow(ENTITY_STORES[i], row); });
+                    const layers = Object.fromEntries(ENTITY_STORES.map((store, i) => [store, rows[i] ? [clone(rows[i].data)] : []]));
+                    const detail = layers.practiceDetails[0];
+                    const sameOperation = detail?.operationId === opId
+                        || rows.filter(Boolean).every(row => row.operationId === opId);
+                    const committed = rows.every(Boolean) && sameOperation;
+                    const absent = rows.every((row, i) => !row
+                        && trackedEntityRevision(revisions, ENTITY_STORES[i], recordId, row) === 0);
+                    done({ verified: true, operation: committed ? 'committed'
+                        : absent && !journal[opId] ? 'not-committed' : 'unconfirmed',
+                    operationId: opId, recordId, layers });
+                } catch (error) { fail(error); }
+            };
+        }
+    }
+
     class IndexedDBDriver {
         constructor(indexedDBApi, options) {
             this.indexedDB = indexedDBApi;
@@ -590,6 +627,10 @@
                 request.onsuccess = () => done(request.result || []);
                 request.onerror = () => fail(request.error || new Error('Entity list failed'));
             }, false, true);
+        }
+        readPracticeCommit(recordId, opId) {
+            return this._transaction([SYSTEM_STORE, ...ENTITY_STORES], 'readonly', 'reconcile practice commit',
+                (tx, done, fail) => readPracticeCommit(tx, recordId, opId, done, fail));
         }
         atomic(spec) {
             return this._transaction(spec.stores, 'readwrite', `mutation ${spec.operationId}`, (tx, done, fail) => {
@@ -850,11 +891,24 @@
             }, warnings);
             return { operationId: opId, changes: prepared, pending: [], warnings, fingerprint, stores: Array.from(new Set([SYSTEM_STORE].concat(prepared.map((item) => storeFor(item.logicalKey))))) };
         }
+        async getPracticeCommitState(recordId, opId) {
+            this._assertReady();
+            if (!String(recordId || '').trim()) throw validation('Commit reconciliation requires recordId');
+            return this.driver.readPracticeCommit(String(recordId), operationId(opId));
+        }
         async mutate(changes, options = {}) {
             this._assertReady(); const spec = this._documentSpec(changes, options);
+            const guard = options.uncommittedPractice;
+            if (guard) {
+                if (!String(guard.recordId || '').trim()) throw validation('Commit fence requires recordId');
+                operationId(guard.operationId);
+                spec.fingerprint = checksum({ fingerprint: spec.fingerprint, uncommittedPractice: guard });
+                spec.stores = Array.from(new Set([...spec.stores, ...ENTITY_STORES]));
+            }
             try {
                 const receipt = await this.driver.atomic(Object.assign(spec, { apply: (tx, journalRow, journal, done, fail) => {
                     const replay = journalResult(journal, spec); if (replay) { done(replay); return; }
+                    const applyChanges = () => {
                     const reads = spec.changes.map((change) => ({ change, request: tx.objectStore(storeFor(change.logicalKey)).get(change.logicalKey) }));
                     let remaining = reads.length;
                     const finish = () => {
@@ -879,6 +933,15 @@
                     };
                     if (!remaining) { finish(); return; }
                     for (const item of reads) { item.request.onerror = () => fail(item.request.error || new Error('Mutation read failed')); item.request.onsuccess = () => { remaining -= 1; if (!remaining) { try { finish(); } catch (error) { fail(error); } } }; }
+                    };
+                    if (!guard) { applyChanges(); return; }
+                    readPracticeCommit(tx, String(guard.recordId), guard.operationId, state => {
+                        if (state.operation !== 'not-committed') {
+                            fail(new AppDataError('CONFLICT', 'Practice completion changed during recovery'));
+                        } else {
+                            try { applyChanges(); } catch (error) { fail(error); }
+                        }
+                    }, fail);
                 } }));
                 const targets = spec.changes.filter((change) => change.entry.owner !== 'backups' && (change.entry.classification === 'authoritative' || change.entry.classification === 'preference')).map((change) => ({ logicalKey: change.logicalKey, state: change.state, owner: change.entry.owner, classification: change.entry.classification }));
                 this._notifyCommitted(targets, receipt); return receipt;

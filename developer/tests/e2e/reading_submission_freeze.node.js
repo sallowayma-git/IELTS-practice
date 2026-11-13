@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const baseline = process.env.READING_FREEZE_EXPECT_BASELINE === '1';
+const selectedScenarios = process.env.READING_FREEZE_SCENARIOS?.split(',');
 const report = { revision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
     buildId: JSON.parse(fs.readFileSync(path.join(root, 'assets/generated/diagnostics/build-manifest.json'), 'utf8')).buildId,
     baseline, mode: 'file', storage: 'real IndexedDB', cases: [] };
@@ -115,13 +116,14 @@ async function registrationCancellation(scenario) {
     } finally { await context.close(); }
 }
 try {
-    if (!baseline) {
+    if (!baseline && !selectedScenarios) {
         for (const scenario of ['same-attempt-registration', 'replacement-attempt-registration']) {
             await registrationCancellation(scenario);
         }
     }
-    for (const scenario of baseline ? ['control', 'question-click']
-        : ['control', 'question-click', 'interactions', 'restored-inactive', 'pre-handoff-failure', 'unknown-ack']) {
+    for (const scenario of selectedScenarios || (baseline ? ['control', 'question-click']
+        : ['control', 'question-click', 'interactions', 'restored-inactive', 'pre-handoff-failure', 'unknown-ack',
+            'legacy-host-reload', 'legacy-page-reload', 'legacy-page-ack-loss'])) {
         const context = await browser.newContext({ viewport: { width: 1365, height: 1000 } });
         await context.addInitScript(() => {
             window.__IELTS_READING_PAGE_TEST_HOOKS__ = true;
@@ -131,13 +133,14 @@ try {
             window.__heldAcknowledgements = [];
             window.__holdAcknowledgements = false;
             window.addEventListener('message', event => {
-                if (window.__holdAcknowledgements && event.data?.type === 'PRACTICE_SUBMIT_ACK') {
+                if (window.__holdAcknowledgements && ['PRACTICE_SUBMIT_ACK', 'SUITE_RECOVERY_OUTCOME'].includes(event.data?.type)) {
                     window.__heldAcknowledgements.push(event.data);
                     event.stopImmediatePropagation();
                 }
             }, true);
         });
         try {
+            let recoveryStartedAt;
             const host = await context.newPage();
             await host.goto(`${pathToFileURL(path.join(root, 'index.html'))}?test_env=1`);
             await host.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
@@ -180,6 +183,28 @@ try {
                 assert.equal(acquired, 1, 'only the active passage is acquired after reload');
             }
             const input = page.locator('#question-groups input[type="text"]').first();
+            if (scenario.startsWith('legacy-')) await host.evaluate(() => {
+                const commit = window.app._commitSuiteRecovery;
+                const save = window.app._saveSuitePracticeRecord;
+                window.app._saveSuitePracticeRecord = function(record) {
+                    return save.call(this, this.currentSuiteSession?.finalizeRecord || record);
+                };
+                let seeded = false;
+                window.app._commitSuiteRecovery = async function(session, options = {}) {
+                    if (!seeded && options.reason === 'finalize-record') {
+                        seeded = true;
+                        // Persist the old race's unfrozen/advanced final snapshot.
+                        // The real seal rejects it; no storage guard is bypassed.
+                        const timing = session.finalizeRecord.suiteEntries[2].readingTiming;
+                        timing.frozen = false;
+                        timing.revision += 3;
+                        timing.unallocatedMs += 5;
+                        timing.totalMs += 5;
+                        session.results[2].readingTiming = structuredClone(timing);
+                    }
+                    return commit.call(this, session, options);
+                };
+            });
             assert.equal(await input.count(), 1, 'the production fixture must exercise a real text answer');
             if (await input.count()) await input.fill('synthetic answer');
             if (scenario === 'unknown-ack') await page.evaluate(() => {
@@ -257,6 +282,81 @@ try {
                 assert.deepEqual(await page.evaluate(`${hooks}.collectCurrentDraft().readingTiming`), acceptedTiming);
             }
             await page.evaluate(() => window.__freezeGate.release());
+            if (scenario.startsWith('legacy-')) {
+                await page.waitForFunction(() => {
+                    const state = window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
+                    return state.submissionId && state.submissionStatus === 'draft';
+                });
+                const retained = await host.evaluate(async () => {
+                    const session = await AppData.recovery.getActiveSession(window.app.currentSuiteSession.id);
+                    return { id: session.id, operationId: session.finalizeOperationId, submissionId: session.finalizeSubmissionId,
+                        answers: session.finalizeRecord.answers, count: (await AppData.practice.list()).length };
+                });
+                assert.equal(retained.count, 0);
+                assert.ok(retained.submissionId);
+                if (scenario === 'legacy-host-reload') {
+                    await host.reload();
+                    await host.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
+                    await host.evaluate(() => { void window.startSuitePractice(); });
+                    await host.locator('[data-suite-recovery-choice="continue"]').filter({ hasText: '恢复并确认提交' }).click();
+                } else {
+                    await page.reload();
+                    await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__?.getTestState().sessionReadySent
+                        && !window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().suiteActivating);
+                    assert.equal(await page.evaluate(`${hooks}.getTestState().submissionEditingLocked`), true);
+                    assert.deepEqual(await page.evaluate(`${hooks}.collectCurrentDraft().answers`), acceptedAnswers);
+                    assert.equal(await page.evaluate(`${hooks}.getReadingTimingState()?.entries.length || 0`), 0,
+                        'a reloaded finalizing page must not acquire a new timing writer');
+                    if (scenario === 'legacy-page-ack-loss') await page.evaluate(() => { window.__holdAcknowledgements = true; });
+                    recoveryStartedAt = Date.now();
+                    await page.locator('#submit-btn').click();
+                    if (scenario === 'legacy-page-ack-loss') {
+                        await page.waitForFunction(() => window.__heldAcknowledgements.length > 0);
+                        const committed = await host.evaluate(async id => AppData.practice.get(id), retained.id);
+                        assert.ok(committed);
+                        await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submissionStatus === 'draft');
+                        assert.equal(await page.evaluate(`${hooks}.getTestState().submissionEditingLocked`), true);
+                        const dismiss = page.getByRole('button', { name: '关闭提示（不代表已保存）', exact: true });
+                        if (await dismiss.count()) await dismiss.click();
+                        await page.evaluate(() => { window.__holdAcknowledgements = false; });
+                        await page.locator('#submit-btn').click();
+                        await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submitted);
+                        assert.deepEqual(await host.evaluate(async id => AppData.practice.get(id), retained.id), committed);
+                        await page.evaluate(async () => {
+                            const late = structuredClone(window.__heldAcknowledgements[0]);
+                            late.data.operation = 'not-committed';
+                            await window.__IELTS_UNIFIED_READING_PAGE_TEST__.handleIncoming({ source: window.opener, origin: 'null', data: late });
+                        });
+                        assert.equal(await page.evaluate(`${hooks}.getTestState().submissionStatus`), 'submitted');
+                    }
+                    await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submitted);
+                    const cleanup = await host.evaluate(async id => ({
+                        scheduled: Boolean(window.app.currentSuiteSession?.submitReceiptTeardownTimer),
+                        retained: Boolean(await AppData.recovery.getActiveSession(id)),
+                        guarded: Boolean(window.app.currentSuiteSession?.windowRef?.__IELTS_SUITE_PARENT_GUARD__)
+                    }), retained.id);
+                    assert.equal(cleanup.scheduled, true, 'successful page recovery schedules post-commit cleanup');
+                    assert.equal(cleanup.retained, true, 'recovery remains available during the receipt replay window');
+                    assert.equal(cleanup.guarded, false, 'committed recovery releases the page close guard');
+                }
+                await host.evaluate(async id => {
+                    for (let attempt = 0; attempt < 100; attempt++) {
+                        if (await AppData.practice.get(id)) return;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    try { await AppData.practice.recoverSuiteFinalization({ sessionId: id, operationId: `practice-suite:${id}:finalize` }); }
+                    catch (error) { throw new Error(`Recovery did not finish: ${error.code}: ${error.message}`); }
+                    throw new Error('Recovery did not finish');
+                }, retained.id);
+                const recovered = await host.evaluate(async id => AppData.practice.get(id), retained.id);
+                assert.ok(recovered, JSON.stringify(await host.evaluate(async expectedId => ({
+                    expectedId, records: (await AppData.practice.list()).map(record => ({ id: record.id, sessionId: record.sessionId, operationId: record.operationId })),
+                    recovery: (await AppData.recovery.listActiveSessions()).map(session => ({ id: session.id, status: session.status }))
+                }), retained.id)));
+                assert.equal(recovered.operationId, retained.operationId);
+                assert.equal(recovered.submissionId, retained.submissionId);
+                assert.deepEqual(recovered.answers, retained.answers);
+            }
             if (scenario === 'unknown-ack') {
                 await page.waitForFunction(() => window.__heldAcknowledgements.length > 0);
                 const submissionId = await page.evaluate(`${hooks}.getTestState().submissionId`);
@@ -270,7 +370,7 @@ try {
                 await page.locator('#submit-btn').click();
                 assert.equal(await page.evaluate(`${hooks}.getTestState().submissionId`), submissionId);
             }
-            await page.waitForFunction(() => {
+            if (!page.isClosed()) await page.waitForFunction(() => {
                 const s = window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState();
                 return s.submitted || (s.submissionId && s.submissionStatus === 'draft');
             });
@@ -296,6 +396,24 @@ try {
                 }
                 assert.deepEqual(result.suite.suiteEntries[2].answers, acceptedAnswers);
                 report.cases.push({ scenario, outcome: 'passed', completedRecords: 1, frozenPersistedSnapshots: 3 });
+            }
+            if (scenario === 'legacy-page-reload') {
+                await host.waitForFunction(() => window.app.currentSuiteSession === null, null, { timeout: 40000, polling: 100 });
+                assert.ok(Date.now() - recoveryStartedAt >= 30000, 'cleanup preserves the full 30-second receipt replay window');
+                assert.equal(await host.evaluate(async id => (await AppData.recovery.getActiveSession(id)) === null, result.suite.id), true);
+                assert.equal(await host.evaluate(() => AppData.recovery.windowSession.get('simulation') === null), true);
+                await page.close();
+                await host.reload();
+                await host.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
+                const afterReload = await host.evaluate(async id => {
+                    await window.AppEntry.ensureSessionSuiteReady();
+                    return { candidate: await window.app.getSuiteRecoveryCandidate(),
+                        record: await AppData.practice.get(id), count: (await AppData.practice.list()).length };
+                }, result.suite.id);
+                assert.equal(afterReload.candidate, null, 'completed recovery does not reappear after host reload');
+                assert.equal(afterReload.count, 1);
+                assert.deepEqual(afterReload.record, result.suite);
+                report.cases.at(-1).cleanupAfterReplayWindow = true;
             }
             console.log(`${scenario}: ${report.cases.at(-1).outcome}`);
         } finally { await context.close(); }

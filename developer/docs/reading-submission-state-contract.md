@@ -83,6 +83,9 @@ the existing atomic practice transaction and immutable completed records.
 
 ## Recovery handoff to #294
 
+The implemented recovery transitions, atomic fences and legacy receipt handling
+are documented in [Reading suite finalization recovery](reading-suite-finalization-recovery.md).
+
 The phase field is local lifecycle information, not a new durable commit oracle.
 The durable sources remain the host's attempt/session and finalization state,
 original submission/operation identity, retained drafts, timing journal, and
