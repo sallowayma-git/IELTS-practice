@@ -1,4 +1,4 @@
-globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":"sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
+globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":"sha256:3b6d116f05a9cc3d05be5f6d8163708d2ef23a6f1b1fed9f86f19f500e09386b","mappingPath":"assets/generated/diagnostics/build-manifest.json","readingResources":["assets/generated/reading-exams/p1-high-01.js","assets/generated/reading-exams/p1-high-05.js","assets/generated/reading-exams/p1-high-101.js","assets/generated/reading-exams/p1-high-105.js","assets/generated/reading-exams/p1-high-110.js","assets/generated/reading-exams/p1-high-118.js","assets/generated/reading-exams/p1-high-171.js","assets/generated/reading-exams/p1-high-194.js","assets/generated/reading-exams/p1-high-200.js","assets/generated/reading-exams/p1-high-211.js","assets/generated/reading-exams/p1-high-216.js","assets/generated/reading-exams/p1-high-227.js","assets/generated/reading-exams/p1-high-229.js","assets/generated/reading-exams/p1-high-230.js","assets/generated/reading-exams/p1-high-231.js","assets/generated/reading-exams/p1-high-24.js","assets/generated/reading-exams/p1-high-240.js","assets/generated/reading-exams/p1-high-27.js","assets/generated/reading-exams/p1-high-31.js","assets/generated/reading-exams/p1-high-79.js","assets/generated/reading-exams/p1-high-82.js","assets/generated/reading-exams/p1-high-90.js","assets/generated/reading-exams/p1-high-92.js","assets/generated/reading-exams/p1-low-02.js","assets/generated/reading-exams/p1-low-106.js","assets/generated/reading-exams/p1-low-107.js","assets/generated/reading-exams/p1-low-108.js","assets/generated/reading-exams/p1-low-109.js","assets/generated/reading-exams/p1-low-11.js","assets/generated/reading-exams/p1-low-111.js","assets/generated/reading-exams/p1-low-112.js","assets/generated/reading-exams/p1-low-113.js","assets/generated/reading-exams/p1-low-114.js","assets/generated/reading-exams/p1-low-116.js","assets/generated/reading-exams/p1-low-127.js","assets/generated/reading-exams/p1-low-13.js","assets/generated/reading-exams/p1-low-138.js","assets/generated/reading-exams/p1-low-149.js","assets/generated/reading-exams/p1-low-160.js","assets/generated/reading-exams/p1-low-223.js","assets/generated/reading-exams/p1-low-30.js","assets/generated/reading-exams/p1-low-34.js","assets/generated/reading-exams/p1-low-35.js","assets/generated/reading-exams/p1-low-40.js","assets/generated/reading-exams/p1-low-45.js","assets/generated/reading-exams/p1-low-46.js","assets/generated/reading-exams/p1-low-47.js","assets/generated/reading-exams/p1-low-48.js","assets/generated/reading-exams/p1-low-52.js","assets/generated/reading-exams/p1-low-53.js","assets/generated/reading-exams/p1-low-61.js","assets/generated/reading-exams/p1-low-67.js","assets/generated/reading-exams/p1-low-68.js","assets/generated/reading-exams/p1-low-69.js","assets/generated/reading-exams/p1-low-70.js","assets/generated/reading-exams/p1-low-72.js","assets/generated/reading-exams/p1-low-80.js","assets/generated/reading-exams/p1-low-81.js","assets/generated/reading-exams/p1-low-84.js","assets/generated/reading-exams/p1-low-99.js","assets/generated/reading-exams/p1-medium-115.js","assets/generated/reading-exams/p1-medium-117.js","assets/generated/reading-exams/p1-medium-119.js","assets/generated/reading-exams/p1-medium-182.js","assets/generated/reading-exams/p1-medium-20.js","assets/generated/reading-exams/p1-medium-246.js","assets/generated/reading-exams/p1-medium-247.js","assets/generated/reading-exams/p1-medium-249.js","assets/generated/reading-exams/p1-medium-251.js","assets/generated/reading-exams/p1-medium-29.js","assets/generated/reading-exams/p1-medium-33.js","assets/generated/reading-exams/p1-medium-57.js","assets/generated/reading-exams/p1-medium-60.js","assets/generated/reading-exams/p1-medium-63.js","assets/generated/reading-exams/p2-high-09.js","assets/generated/reading-exams/p2-high-120.js","assets/generated/reading-exams/p2-high-123.js","assets/generated/reading-exams/p2-high-124.js","assets/generated/reading-exams/p2-high-128.js","assets/generated/reading-exams/p2-high-130.js","assets/generated/reading-exams/p2-high-131.js","assets/generated/reading-exams/p2-high-133.js","assets/generated/reading-exams/p2-high-134.js","assets/generated/reading-exams/p2-high-136.js","assets/generated/reading-exams/p2-high-137.js","assets/generated/reading-exams/p2-high-139.js","assets/generated/reading-exams/p2-high-14.js","assets/generated/reading-exams/p2-high-141.js","assets/generated/reading-exams/p2-high-145.js","assets/generated/reading-exams/p2-high-16.js","assets/generated/reading-exams/p2-high-17.js","assets/generated/reading-exams/p2-high-19.js","assets/generated/reading-exams/p2-high-201.js","assets/generated/reading-exams/p2-high-21.js","assets/generated/reading-exams/p2-high-225.js","assets/generated/reading-exams/p2-high-23.js","assets/generated/reading-exams/p2-high-232.js","assets/generated/reading-exams/p2-high-233.js","assets/generated/reading-exams/p2-high-234.js","assets/generated/reading-exams/p2-high-235.js","assets/generated/reading-exams/p2-high-236.js","assets/generated/reading-exams/p2-high-239.js","assets/generated/reading-exams/p2-high-25.js","assets/generated/reading-exams/p2-high-250.js","assets/generated/reading-exams/p2-high-91.js","assets/generated/reading-exams/p2-low-06.js","assets/generated/reading-exams/p2-low-08.js","assets/generated/reading-exams/p2-low-102.js","assets/generated/reading-exams/p2-low-103.js","assets/generated/reading-exams/p2-low-104.js","assets/generated/reading-exams/p2-low-122.js","assets/generated/reading-exams/p2-low-125.js","assets/generated/reading-exams/p2-low-132.js","assets/generated/reading-exams/p2-low-135.js","assets/generated/reading-exams/p2-low-140.js","assets/generated/reading-exams/p2-low-142.js","assets/generated/reading-exams/p2-low-143.js","assets/generated/reading-exams/p2-low-147.js","assets/generated/reading-exams/p2-low-148.js","assets/generated/reading-exams/p2-low-222.js","assets/generated/reading-exams/p2-low-240.js","assets/generated/reading-exams/p2-low-242.js","assets/generated/reading-exams/p2-low-37.js","assets/generated/reading-exams/p2-low-39.js","assets/generated/reading-exams/p2-low-41.js","assets/generated/reading-exams/p2-low-49.js","assets/generated/reading-exams/p2-low-50.js","assets/generated/reading-exams/p2-low-51.js","assets/generated/reading-exams/p2-low-62.js","assets/generated/reading-exams/p2-low-64.js","assets/generated/reading-exams/p2-low-65.js","assets/generated/reading-exams/p2-low-73.js","assets/generated/reading-exams/p2-low-75.js","assets/generated/reading-exams/p2-low-77.js","assets/generated/reading-exams/p2-low-87.js","assets/generated/reading-exams/p2-low-94.js","assets/generated/reading-exams/p2-low-96.js","assets/generated/reading-exams/p2-medium-10.js","assets/generated/reading-exams/p2-medium-121.js","assets/generated/reading-exams/p2-medium-126.js","assets/generated/reading-exams/p2-medium-129.js","assets/generated/reading-exams/p2-medium-144.js","assets/generated/reading-exams/p2-medium-146.js","assets/generated/reading-exams/p2-medium-209.js","assets/generated/reading-exams/p2-medium-213.js","assets/generated/reading-exams/p2-medium-217.js","assets/generated/reading-exams/p2-medium-243.js","assets/generated/reading-exams/p2-medium-245.js","assets/generated/reading-exams/p2-medium-248.js","assets/generated/reading-exams/p2-medium-58.js","assets/generated/reading-exams/p2-medium-86.js","assets/generated/reading-exams/p2-medium-93.js","assets/generated/reading-exams/p3-high-03.js","assets/generated/reading-exams/p3-high-04.js","assets/generated/reading-exams/p3-high-15.js","assets/generated/reading-exams/p3-high-150.js","assets/generated/reading-exams/p3-high-156.js","assets/generated/reading-exams/p3-high-157.js","assets/generated/reading-exams/p3-high-159.js","assets/generated/reading-exams/p3-high-161.js","assets/generated/reading-exams/p3-high-164.js","assets/generated/reading-exams/p3-high-167.js","assets/generated/reading-exams/p3-high-170.js","assets/generated/reading-exams/p3-high-173.js","assets/generated/reading-exams/p3-high-174.js","assets/generated/reading-exams/p3-high-178.js","assets/generated/reading-exams/p3-high-180.js","assets/generated/reading-exams/p3-high-181.js","assets/generated/reading-exams/p3-high-184.js","assets/generated/reading-exams/p3-high-189.js","assets/generated/reading-exams/p3-high-192.js","assets/generated/reading-exams/p3-high-204.js","assets/generated/reading-exams/p3-high-206.js","assets/generated/reading-exams/p3-high-212.js","assets/generated/reading-exams/p3-high-218.js","assets/generated/reading-exams/p3-high-221.js","assets/generated/reading-exams/p3-high-228.js","assets/generated/reading-exams/p3-high-229.js","assets/generated/reading-exams/p3-high-32.js","assets/generated/reading-exams/p3-high-89.js","assets/generated/reading-exams/p3-low-07.js","assets/generated/reading-exams/p3-low-078.js","assets/generated/reading-exams/p3-low-100.js","assets/generated/reading-exams/p3-low-12.js","assets/generated/reading-exams/p3-low-151.js","assets/generated/reading-exams/p3-low-153.js","assets/generated/reading-exams/p3-low-158.js","assets/generated/reading-exams/p3-low-163.js","assets/generated/reading-exams/p3-low-165.js","assets/generated/reading-exams/p3-low-166.js","assets/generated/reading-exams/p3-low-172.js","assets/generated/reading-exams/p3-low-175.js","assets/generated/reading-exams/p3-low-186.js","assets/generated/reading-exams/p3-low-187.js","assets/generated/reading-exams/p3-low-190.js","assets/generated/reading-exams/p3-low-198.js","assets/generated/reading-exams/p3-low-219.js","assets/generated/reading-exams/p3-low-240.js","assets/generated/reading-exams/p3-low-28.js","assets/generated/reading-exams/p3-low-36.js","assets/generated/reading-exams/p3-low-38.js","assets/generated/reading-exams/p3-low-42.js","assets/generated/reading-exams/p3-low-43.js","assets/generated/reading-exams/p3-low-44.js","assets/generated/reading-exams/p3-low-54.js","assets/generated/reading-exams/p3-low-55.js","assets/generated/reading-exams/p3-low-56.js","assets/generated/reading-exams/p3-low-59.js","assets/generated/reading-exams/p3-low-71.js","assets/generated/reading-exams/p3-low-74.js","assets/generated/reading-exams/p3-low-76.js","assets/generated/reading-exams/p3-low-78.js","assets/generated/reading-exams/p3-low-83.js","assets/generated/reading-exams/p3-low-85.js","assets/generated/reading-exams/p3-low-88.js","assets/generated/reading-exams/p3-low-95.js","assets/generated/reading-exams/p3-low-97.js","assets/generated/reading-exams/p3-low-98.js","assets/generated/reading-exams/p3-low-999.js","assets/generated/reading-exams/p3-medium-152.js","assets/generated/reading-exams/p3-medium-154.js","assets/generated/reading-exams/p3-medium-155.js","assets/generated/reading-exams/p3-medium-162.js","assets/generated/reading-exams/p3-medium-168.js","assets/generated/reading-exams/p3-medium-169.js","assets/generated/reading-exams/p3-medium-176.js","assets/generated/reading-exams/p3-medium-177.js","assets/generated/reading-exams/p3-medium-179.js","assets/generated/reading-exams/p3-medium-18.js","assets/generated/reading-exams/p3-medium-183.js","assets/generated/reading-exams/p3-medium-185.js","assets/generated/reading-exams/p3-medium-188.js","assets/generated/reading-exams/p3-medium-191.js","assets/generated/reading-exams/p3-medium-197.js","assets/generated/reading-exams/p3-medium-22.js","assets/generated/reading-exams/p3-medium-241.js","assets/generated/reading-exams/p3-medium-244.js","assets/generated/reading-exams/p3-medium-248.js","assets/generated/reading-exams/p3-medium-66.js","assets/generated/reading-explanations/p1-high-01.js","assets/generated/reading-explanations/p1-high-05.js","assets/generated/reading-explanations/p1-high-101.js","assets/generated/reading-explanations/p1-high-105.js","assets/generated/reading-explanations/p1-high-110.js","assets/generated/reading-explanations/p1-high-118.js","assets/generated/reading-explanations/p1-high-171.js","assets/generated/reading-explanations/p1-high-194.js","assets/generated/reading-explanations/p1-high-200.js","assets/generated/reading-explanations/p1-high-211.js","assets/generated/reading-explanations/p1-high-216.js","assets/generated/reading-explanations/p1-high-227.js","assets/generated/reading-explanations/p1-high-229.js","assets/generated/reading-explanations/p1-high-230.js","assets/generated/reading-explanations/p1-high-231.js","assets/generated/reading-explanations/p1-high-24.js","assets/generated/reading-explanations/p1-high-240.js","assets/generated/reading-explanations/p1-high-27.js","assets/generated/reading-explanations/p1-high-31.js","assets/generated/reading-explanations/p1-high-79.js","assets/generated/reading-explanations/p1-high-82.js","assets/generated/reading-explanations/p1-high-90.js","assets/generated/reading-explanations/p1-high-92.js","assets/generated/reading-explanations/p1-low-02.js","assets/generated/reading-explanations/p1-low-106.js","assets/generated/reading-explanations/p1-low-107.js","assets/generated/reading-explanations/p1-low-108.js","assets/generated/reading-explanations/p1-low-109.js","assets/generated/reading-explanations/p1-low-11.js","assets/generated/reading-explanations/p1-low-111.js","assets/generated/reading-explanations/p1-low-112.js","assets/generated/reading-explanations/p1-low-113.js","assets/generated/reading-explanations/p1-low-114.js","assets/generated/reading-explanations/p1-low-116.js","assets/generated/reading-explanations/p1-low-127.js","assets/generated/reading-explanations/p1-low-13.js","assets/generated/reading-explanations/p1-low-138.js","assets/generated/reading-explanations/p1-low-149.js","assets/generated/reading-explanations/p1-low-160.js","assets/generated/reading-explanations/p1-low-223.js","assets/generated/reading-explanations/p1-low-30.js","assets/generated/reading-explanations/p1-low-34.js","assets/generated/reading-explanations/p1-low-35.js","assets/generated/reading-explanations/p1-low-40.js","assets/generated/reading-explanations/p1-low-45.js","assets/generated/reading-explanations/p1-low-46.js","assets/generated/reading-explanations/p1-low-47.js","assets/generated/reading-explanations/p1-low-48.js","assets/generated/reading-explanations/p1-low-52.js","assets/generated/reading-explanations/p1-low-53.js","assets/generated/reading-explanations/p1-low-61.js","assets/generated/reading-explanations/p1-low-67.js","assets/generated/reading-explanations/p1-low-68.js","assets/generated/reading-explanations/p1-low-69.js","assets/generated/reading-explanations/p1-low-70.js","assets/generated/reading-explanations/p1-low-72.js","assets/generated/reading-explanations/p1-low-80.js","assets/generated/reading-explanations/p1-low-81.js","assets/generated/reading-explanations/p1-low-84.js","assets/generated/reading-explanations/p1-low-99.js","assets/generated/reading-explanations/p1-medium-115.js","assets/generated/reading-explanations/p1-medium-117.js","assets/generated/reading-explanations/p1-medium-119.js","assets/generated/reading-explanations/p1-medium-182.js","assets/generated/reading-explanations/p1-medium-20.js","assets/generated/reading-explanations/p1-medium-246.js","assets/generated/reading-explanations/p1-medium-247.js","assets/generated/reading-explanations/p1-medium-249.js","assets/generated/reading-explanations/p1-medium-251.js","assets/generated/reading-explanations/p1-medium-29.js","assets/generated/reading-explanations/p1-medium-33.js","assets/generated/reading-explanations/p1-medium-57.js","assets/generated/reading-explanations/p1-medium-60.js","assets/generated/reading-explanations/p1-medium-63.js","assets/generated/reading-explanations/p2-high-09.js","assets/generated/reading-explanations/p2-high-120.js","assets/generated/reading-explanations/p2-high-123.js","assets/generated/reading-explanations/p2-high-124.js","assets/generated/reading-explanations/p2-high-128.js","assets/generated/reading-explanations/p2-high-130.js","assets/generated/reading-explanations/p2-high-131.js","assets/generated/reading-explanations/p2-high-133.js","assets/generated/reading-explanations/p2-high-134.js","assets/generated/reading-explanations/p2-high-136.js","assets/generated/reading-explanations/p2-high-137.js","assets/generated/reading-explanations/p2-high-139.js","assets/generated/reading-explanations/p2-high-14.js","assets/generated/reading-explanations/p2-high-141.js","assets/generated/reading-explanations/p2-high-145.js","assets/generated/reading-explanations/p2-high-16.js","assets/generated/reading-explanations/p2-high-17.js","assets/generated/reading-explanations/p2-high-19.js","assets/generated/reading-explanations/p2-high-201.js","assets/generated/reading-explanations/p2-high-21.js","assets/generated/reading-explanations/p2-high-225.js","assets/generated/reading-explanations/p2-high-23.js","assets/generated/reading-explanations/p2-high-232.js","assets/generated/reading-explanations/p2-high-233.js","assets/generated/reading-explanations/p2-high-234.js","assets/generated/reading-explanations/p2-high-235.js","assets/generated/reading-explanations/p2-high-236.js","assets/generated/reading-explanations/p2-high-239.js","assets/generated/reading-explanations/p2-high-25.js","assets/generated/reading-explanations/p2-high-250.js","assets/generated/reading-explanations/p2-high-91.js","assets/generated/reading-explanations/p2-low-06.js","assets/generated/reading-explanations/p2-low-08.js","assets/generated/reading-explanations/p2-low-102.js","assets/generated/reading-explanations/p2-low-103.js","assets/generated/reading-explanations/p2-low-104.js","assets/generated/reading-explanations/p2-low-122.js","assets/generated/reading-explanations/p2-low-125.js","assets/generated/reading-explanations/p2-low-132.js","assets/generated/reading-explanations/p2-low-135.js","assets/generated/reading-explanations/p2-low-140.js","assets/generated/reading-explanations/p2-low-142.js","assets/generated/reading-explanations/p2-low-143.js","assets/generated/reading-explanations/p2-low-147.js","assets/generated/reading-explanations/p2-low-148.js","assets/generated/reading-explanations/p2-low-222.js","assets/generated/reading-explanations/p2-low-240.js","assets/generated/reading-explanations/p2-low-242.js","assets/generated/reading-explanations/p2-low-37.js","assets/generated/reading-explanations/p2-low-39.js","assets/generated/reading-explanations/p2-low-41.js","assets/generated/reading-explanations/p2-low-49.js","assets/generated/reading-explanations/p2-low-50.js","assets/generated/reading-explanations/p2-low-51.js","assets/generated/reading-explanations/p2-low-62.js","assets/generated/reading-explanations/p2-low-64.js","assets/generated/reading-explanations/p2-low-65.js","assets/generated/reading-explanations/p2-low-73.js","assets/generated/reading-explanations/p2-low-75.js","assets/generated/reading-explanations/p2-low-77.js","assets/generated/reading-explanations/p2-low-87.js","assets/generated/reading-explanations/p2-low-94.js","assets/generated/reading-explanations/p2-low-96.js","assets/generated/reading-explanations/p2-medium-10.js","assets/generated/reading-explanations/p2-medium-121.js","assets/generated/reading-explanations/p2-medium-126.js","assets/generated/reading-explanations/p2-medium-129.js","assets/generated/reading-explanations/p2-medium-144.js","assets/generated/reading-explanations/p2-medium-146.js","assets/generated/reading-explanations/p2-medium-209.js","assets/generated/reading-explanations/p2-medium-213.js","assets/generated/reading-explanations/p2-medium-217.js","assets/generated/reading-explanations/p2-medium-243.js","assets/generated/reading-explanations/p2-medium-245.js","assets/generated/reading-explanations/p2-medium-248.js","assets/generated/reading-explanations/p2-medium-58.js","assets/generated/reading-explanations/p2-medium-86.js","assets/generated/reading-explanations/p2-medium-93.js","assets/generated/reading-explanations/p3-high-03.js","assets/generated/reading-explanations/p3-high-04.js","assets/generated/reading-explanations/p3-high-15.js","assets/generated/reading-explanations/p3-high-150.js","assets/generated/reading-explanations/p3-high-156.js","assets/generated/reading-explanations/p3-high-157.js","assets/generated/reading-explanations/p3-high-159.js","assets/generated/reading-explanations/p3-high-161.js","assets/generated/reading-explanations/p3-high-164.js","assets/generated/reading-explanations/p3-high-167.js","assets/generated/reading-explanations/p3-high-170.js","assets/generated/reading-explanations/p3-high-173.js","assets/generated/reading-explanations/p3-high-174.js","assets/generated/reading-explanations/p3-high-178.js","assets/generated/reading-explanations/p3-high-180.js","assets/generated/reading-explanations/p3-high-181.js","assets/generated/reading-explanations/p3-high-184.js","assets/generated/reading-explanations/p3-high-189.js","assets/generated/reading-explanations/p3-high-192.js","assets/generated/reading-explanations/p3-high-204.js","assets/generated/reading-explanations/p3-high-206.js","assets/generated/reading-explanations/p3-high-212.js","assets/generated/reading-explanations/p3-high-218.js","assets/generated/reading-explanations/p3-high-221.js","assets/generated/reading-explanations/p3-high-228.js","assets/generated/reading-explanations/p3-high-229.js","assets/generated/reading-explanations/p3-high-32.js","assets/generated/reading-explanations/p3-high-89.js","assets/generated/reading-explanations/p3-low-07.js","assets/generated/reading-explanations/p3-low-078.js","assets/generated/reading-explanations/p3-low-100.js","assets/generated/reading-explanations/p3-low-12.js","assets/generated/reading-explanations/p3-low-151.js","assets/generated/reading-explanations/p3-low-153.js","assets/generated/reading-explanations/p3-low-158.js","assets/generated/reading-explanations/p3-low-163.js","assets/generated/reading-explanations/p3-low-165.js","assets/generated/reading-explanations/p3-low-166.js","assets/generated/reading-explanations/p3-low-172.js","assets/generated/reading-explanations/p3-low-175.js","assets/generated/reading-explanations/p3-low-186.js","assets/generated/reading-explanations/p3-low-187.js","assets/generated/reading-explanations/p3-low-190.js","assets/generated/reading-explanations/p3-low-198.js","assets/generated/reading-explanations/p3-low-219.js","assets/generated/reading-explanations/p3-low-28.js","assets/generated/reading-explanations/p3-low-36.js","assets/generated/reading-explanations/p3-low-38.js","assets/generated/reading-explanations/p3-low-42.js","assets/generated/reading-explanations/p3-low-43.js","assets/generated/reading-explanations/p3-low-44.js","assets/generated/reading-explanations/p3-low-54.js","assets/generated/reading-explanations/p3-low-55.js","assets/generated/reading-explanations/p3-low-56.js","assets/generated/reading-explanations/p3-low-59.js","assets/generated/reading-explanations/p3-low-71.js","assets/generated/reading-explanations/p3-low-74.js","assets/generated/reading-explanations/p3-low-76.js","assets/generated/reading-explanations/p3-low-78.js","assets/generated/reading-explanations/p3-low-83.js","assets/generated/reading-explanations/p3-low-85.js","assets/generated/reading-explanations/p3-low-88.js","assets/generated/reading-explanations/p3-low-95.js","assets/generated/reading-explanations/p3-low-97.js","assets/generated/reading-explanations/p3-low-98.js","assets/generated/reading-explanations/p3-low-999.js","assets/generated/reading-explanations/p3-medium-152.js","assets/generated/reading-explanations/p3-medium-154.js","assets/generated/reading-explanations/p3-medium-155.js","assets/generated/reading-explanations/p3-medium-162.js","assets/generated/reading-explanations/p3-medium-168.js","assets/generated/reading-explanations/p3-medium-169.js","assets/generated/reading-explanations/p3-medium-176.js","assets/generated/reading-explanations/p3-medium-177.js","assets/generated/reading-explanations/p3-medium-179.js","assets/generated/reading-explanations/p3-medium-18.js","assets/generated/reading-explanations/p3-medium-183.js","assets/generated/reading-explanations/p3-medium-185.js","assets/generated/reading-explanations/p3-medium-188.js","assets/generated/reading-explanations/p3-medium-191.js","assets/generated/reading-explanations/p3-medium-197.js","assets/generated/reading-explanations/p3-medium-22.js","assets/generated/reading-explanations/p3-medium-241.js","assets/generated/reading-explanations/p3-medium-244.js","assets/generated/reading-explanations/p3-medium-248.js","assets/generated/reading-explanations/p3-medium-66.js"]});
 /* Generated by scripts/build-bundles.mjs. Do not edit by hand. */
 
 /* ===== js/diagnostics/diagnosticContract.js ===== */
@@ -15190,6 +15190,12 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     if (!timing) return;
     const now = () => global.performance.now();
     const token = () => global.crypto?.randomUUID?.() || `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const clone = value => JSON.parse(JSON.stringify(value));
+    const immutable = value => {
+        Object.values(value).forEach(child => { if (child && typeof child === 'object') immutable(child); });
+        return Object.freeze(value);
+    };
+    const failure = (code, message) => Object.assign(new Error(message), { code });
     const ACQUISITION_RETRY_BASE_MS = 1000;
     const ACQUISITION_RETRY_MAX_MS = 30000;
     const NON_RETRYABLE_ACQUISITION_ERRORS = new Set([
@@ -15213,6 +15219,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             this.failedActivation = null;
             this.active = null;
             this.generation = 0;
+            this.submission = null;
             this.error = '';
             this.retryTimer = null;
             this.retryAttempt = 0;
@@ -15225,12 +15232,20 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             }, 1000);
         }
         key(ctx) { return JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId, ctx.examId, ctx.sequenceIndex ?? null]); }
+        attemptKey(ctx) { return JSON.stringify([ctx.parentAttemptId || ctx.sessionId, ctx.libraryConfigurationId]); }
+        locked(ctx = this.context()) { return this.submission?.attemptKey === this.attemptKey(ctx); }
+        releaseSubmission(owner) {
+            if (this.submission?.owner !== owner) return false;
+            this.submission = null;
+            return true;
+        }
         eligible() {
             const ctx = this.context();
-            return Boolean(ctx.editable && ctx.running && document.visibilityState === 'visible'
+            return Boolean(!this.locked(ctx) && ctx.editable && ctx.running && document.visibilityState === 'visible'
                 && document.hasFocus() && this.active?.owned && this.active.key === this.key(ctx));
         }
         refresh() {
+            if (this.locked()) return;
             this.active?.meter.eligibility(this.eligible(), now());
             if (this.active && !this.active.meter.value.frozen && this.active.meter.value.paused !== !this.context().running) {
                 this.active.meter.value.paused = !this.context().running;
@@ -15239,6 +15254,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             this.render();
         }
         stop() {
+            if (this.locked()) return;
             if (this.active) {
                 this.active.meter.eligibility(false, now());
                 this.save(this.active).catch(() => {});
@@ -15301,13 +15317,14 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             if (previous) initial.partial('recovery-tail');
             if (this.failedActivation?.key === key) initial.partial('save-failed');
             const row = await global.AppData.recovery.acquireReadingTiming(initial.snapshot(), previous);
-            const entry = { key, meter: new timing.Meter(ctx.dataset, identity, row.snapshot), owned: true,
+            const entry = { key, context: { ...ctx }, meter: new timing.Meter(ctx.dataset, identity, row.snapshot), owned: true,
                 savedAt: Date.parse(row.updatedAt), savedClock: now(), acknowledged: row.snapshot, pending: null, saving: null };
             this.entries.set(key, entry);
             return entry;
         }
         async activate(draft = null, options = {}) {
             const ctx = this.context();
+            if (this.locked(ctx)) return;
             if (!ctx.sessionId || !ctx.examId || !ctx.dataset || !ctx.editable
                 || !Object.prototype.hasOwnProperty.call(ctx, 'libraryConfigurationId')
                 || ctx.libraryConfigurationId === undefined) {
@@ -15333,7 +15350,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             try {
                 const entry = await this.loadEntry(ctx, draft);
                 const current = this.context();
-                if (generation !== this.generation || this.key(current) !== key || !current.editable) return;
+                if (generation !== this.generation || this.key(current) !== key || !current.editable || this.locked(current)) return;
                 this.active = entry;
                 // Retain the first activation's timer revision through failures,
                 // retries and repeated INITs. Later learner actions supersede the
@@ -15358,7 +15375,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         }
         async retry() {
             const ctx = this.context();
-            if (!ctx.editable) return;
+            if (!ctx.editable || this.locked(ctx)) return;
             const key = this.key(ctx);
             if (this.active?.key === key) return this.save();
             if (this.failedActivation?.key === key) {
@@ -15369,13 +15386,15 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         }
         snapshot(examId = null) {
             const entry = examId
-                ? [...this.entries.values()].find(item => item.meter.value.examId === examId)
+                ? [...this.entries.values()].find(item => item.meter.value.examId === examId
+                    && this.attemptKey(item.context) === this.attemptKey(this.context()))
                 : (this.active?.key === this.key(this.context()) ? this.active : null);
-            return entry ? entry.meter.snapshot(now()) : null;
+            return entry ? entry.meter.snapshot(this.locked(entry.context) ? undefined : now()) : null;
         }
-        async save(entry = this.active) {
+        async save(entry = this.active, submission = null) {
+            if (entry && this.locked(entry.context) && this.submission !== submission) return entry.saving;
             if (!entry?.owned) return;
-            const snapshot = entry.meter.snapshot(now());
+            const snapshot = entry.meter.snapshot(submission ? undefined : now());
             if (entry.acknowledged?.revision === snapshot.revision && !entry.pending) return;
             entry.pending = snapshot;
             if (entry.saving) return entry.saving;
@@ -15385,17 +15404,19 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                     entry.pending = null;
                     try {
                         const row = await global.AppData.recovery.saveReadingTiming(next);
-                        entry.acknowledged = row.snapshot;
+                        entry.acknowledged = clone(row.snapshot);
                         entry.savedAt = Date.parse(row.updatedAt);
                         entry.savedClock = now();
-                        if (entry === this.active) this.error = '';
+                        if (entry === this.active && this.key(this.context()) === entry.key) this.error = '';
                     } catch (error) {
                         entry.meter.partial('save-failed');
                         if (['TIMING_STALE_WRITER', 'TIMING_FINALIZED'].includes(error.code)) {
                             entry.owned = false;
                             entry.meter.eligibility(false, now());
                         }
-                        this.error = entry.owned ? '计时保存失败，未保存的尾段可能丢失；可重试保存。' : '计时已由另一窗口接管或提交。';
+                        if (this.attemptKey(entry.context) === this.attemptKey(this.context())) {
+                            this.error = entry.owned ? '计时保存失败，未保存的尾段可能丢失；可重试保存。' : '计时已由另一窗口接管或提交。';
+                        }
                         throw error;
                     } finally { this.render(); }
                 }
@@ -15403,7 +15424,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             return entry.saving;
         }
         select(questionId) {
-            if (!this.active || !this.context().editable) return;
+            if (!this.active?.owned || this.active.key !== this.key(this.context()) || !this.context().editable || this.locked()) return;
             // A fresh learner action after a failed submission explicitly resumes
             // answering. A retry without editing retains the same frozen snapshot.
             if (this.active.meter.value.frozen) this.active.meter.thaw(now());
@@ -15412,16 +15433,65 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             this.save(this.active).catch(() => {});
             this.render();
         }
-        async freezeAll(passages = []) {
-            for (const entry of this.entries.values()) entry.meter.freeze(now());
-            // A restored inline suite may submit without revisiting its inactive
-            // children. Recover and seal their own committed totals as well.
-            for (const passage of passages) {
-                const entry = await this.loadEntry(passage.context, passage.draft);
-                entry.meter.freeze(now());
+        async freezeAll(passages = [], owner = {}) {
+            if (this.submission) throw failure('TIMING_SUBMISSION_PENDING', 'Reading submission already owns timing');
+            const ctx = this.context();
+            const required = passages.length ? passages : [{ context: ctx, draft: this.failedActivation?.draft }];
+            const submission = { owner, attemptKey: this.attemptKey(ctx), key: this.key(ctx), entries: [] };
+            this.submission = submission;
+            this.generation++; // Pending activation may load an entry, but cannot make it editable.
+            this.clearAcquisitionRetry();
+            const assertCurrent = () => {
+                if (this.submission !== submission || this.key(this.context()) !== submission.key
+                    || (owner.isCurrent && !owner.isCurrent())) {
+                    throw failure('TIMING_SUBMISSION_STALE', 'Reading submission ownership changed');
+                }
+            };
+            try {
+                const keys = new Set();
+                for (const passage of required) {
+                    const source = passage.context;
+                    if (!source.sessionId || !source.examId || !source.dataset
+                        || source.libraryConfigurationId === undefined
+                        || this.attemptKey(source) !== submission.attemptKey || keys.has(this.key(source))) {
+                        throw failure('VALIDATION', 'Invalid required Reading passage');
+                    }
+                    keys.add(this.key(source));
+                }
+                // Stop all already acquired children synchronously, before any await.
+                for (const key of keys) {
+                    const entry = this.entries.get(key);
+                    if (entry) { entry.meter.freeze(now()); submission.entries.push(entry); }
+                }
+                for (const passage of required) {
+                    assertCurrent();
+                    const entry = await this.loadEntry(passage.context, passage.draft);
+                    assertCurrent();
+                    if (!entry.owned) throw failure('TIMING_STALE_WRITER', 'Reading timing ownership lost');
+                    entry.meter.freeze(now());
+                    if (!submission.entries.includes(entry)) submission.entries.push(entry);
+                }
+                // Drain every write before releasing a failed barrier. A slow sibling
+                // save must never arrive after the learner is allowed to edit again.
+                const results = await Promise.allSettled(submission.entries.map(entry => this.save(entry, submission)));
+                assertCurrent();
+                const rejected = results.find(result => result.status === 'rejected');
+                if (rejected) throw rejected.reason;
+                return immutable(required.map(passage => {
+                    const entry = this.entries.get(this.key(passage.context));
+                    const snapshot = entry.meter.snapshot();
+                    if (!entry.owned || !snapshot.frozen || snapshot.writer !== this.writer
+                        || !timing.sameSource(snapshot, entry.context)
+                        || JSON.stringify(snapshot) !== JSON.stringify(entry.acknowledged)) {
+                        throw failure('TIMING_STALE_WRITER', 'Frozen Reading timing was not acknowledged');
+                    }
+                    return { key: entry.key, snapshot: clone(entry.acknowledged) };
+                }));
+            } catch (error) {
+                await Promise.allSettled(submission.entries.map(entry => entry.saving));
+                this.releaseSubmission(owner);
+                throw error;
             }
-            this.render();
-            await Promise.all([...this.entries.values()].map(entry => this.save(entry)));
         }
         attach() {
             const gesture = event => {
@@ -15456,8 +15526,11 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             document.addEventListener('freeze', () => this.stop());
             global.addEventListener('pageshow', async event => {
                 if (event.persisted && this.active) {
-                    const row = await global.AppData.recovery.getReadingTiming(this.active.meter.value.attemptId).catch(() => null);
-                    if (!row || row.recordId || row.snapshot.writer !== this.writer) this.active.owned = false;
+                    const entry = this.active;
+                    const generation = this.generation;
+                    const row = await global.AppData.recovery.getReadingTiming(entry.meter.value.attemptId).catch(() => null);
+                    if (generation !== this.generation || entry !== this.active || this.key(this.context()) !== entry.key) return;
+                    if (!row || row.recordId || row.snapshot.writer !== this.writer) entry.owned = false;
                 }
                 this.refresh();
             });
@@ -15583,6 +15656,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         ready: false,
         submitted: false,
         submissionStatus: 'draft',
+        submissionPhase: 'draft',
         submissionId: '',
         submissionAckTimer: null,
         pendingSubmissionPresentation: null,
@@ -15650,6 +15724,11 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     let diagnosticBinding = null;
     let handshakeDeadline = null;
     let pendingSubmission = null; // Business-owned snapshot; never given to diagnostics.
+    let submissionPreparation = null;
+    const freezeSubmissionValue = value => {
+        Object.values(value).forEach(child => { if (child && typeof child === 'object') freezeSubmissionValue(child); });
+        return Object.freeze(value);
+    };
     try { diagnosticTransport = global.AppDiagnosticChannel?.createChild({
         reporter: global.AppDiagnostics, store: global.AppDiagnosticStore
     }); } catch (_) { }
@@ -15726,7 +15805,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             examId: state.examId, libraryConfigurationId: state.libraryConfigurationId,
             dataset: state.dataset, running: interaction.timerRunning && !state.timerLocked,
             timerInteractionRevision: interaction.timerInteractionRevision,
-            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted && !isSubmissionUnconfirmed()
+            editable: !state.reviewMode && !state.memorizeMode && !state.readOnly && !state.submitted && !isSubmissionEditingLocked()
                 && state.submissionStatus === 'draft' && !state.suite.activating,
             restorePause: () => setTimerRunning(false)
         };
@@ -15935,10 +16014,10 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         document.body.classList.toggle('timer-locked-mode', locked);
         getPracticeFormControls().forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
-                control.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
+                control.disabled = locked || state.readOnly || isSubmissionEditingLocked();
             }
         });
-        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly || isSubmissionUnconfirmed();
+        if (dom.resetBtn) dom.resetBtn.disabled = locked || state.readOnly || isSubmissionEditingLocked();
         syncOptionsClearAnswersAction();
         document.querySelectorAll('#reading-note-drawer [data-note-outline-add], #reading-note-drawer [data-note-outline-toggle], #reading-note-drawer [data-note-outline-title], #reading-note-drawer [data-note-outline-delete], #reading-note-drawer [data-note-drag-handle], #reading-note-drawer [data-note-delete]').forEach((control) => {
             if ('disabled' in control) control.disabled = locked;
@@ -15947,6 +16026,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function handleTimerExpired(preferences) {
+        if (isSubmissionEditingLocked()) return;
         if (state.timerExpiryHandled || state.submitted || state.readOnly || state.reviewMode || state.memorizeMode) {
             return;
         }
@@ -15954,7 +16034,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         const action = preferences && preferences.expiryAction ? preferences.expiryAction : 'warn';
         if (action === 'auto-submit') {
             global.setTimeout(() => {
-                if (!state.submitted && !state.readOnly) {
+                if (!state.submitted && !state.readOnly && !isSubmissionEditingLocked()) {
                     handleSubmit();
                 }
             }, 0);
@@ -16095,6 +16175,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function setTimerRunning(nextRunning) {
+        if (isSubmissionEditingLocked()) return;
         const nowMs = Date.now();
         syncActiveSuiteTimer(Boolean(nextRunning), nowMs);
         interaction.timerRunning = !!nextRunning;
@@ -16110,6 +16191,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function handleCountdownExpired() {
+        if (isSubmissionEditingLocked()) return;
         setTimerRunning(false);
         if (typeof handleSubmit === 'function' && !state.submitted) {
             handleSubmit().catch(function () {});
@@ -16121,6 +16203,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         const timer = document.getElementById('timer');
         if (timer) {
             timer.addEventListener('click', event => {
+                if (isSubmissionEditingLocked()) return;
                 if (event.isTrusted) interaction.timerInteractionRevision++;
                 setTimerRunning(!interaction.timerRunning);
             });
@@ -17163,6 +17246,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function mergeSuiteDraftPayload(data = {}) {
+        if (isSubmissionEditingLocked()) return;
         if (!state.suite?.inline) {
             return;
         }
@@ -17247,6 +17331,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function updateActiveSlotFromCurrentDom(reason = 'snapshot') {
+        if (isSubmissionEditingLocked()) return null;
         if (!state.suite?.inline || state.suite.activating) {
             return null;
         }
@@ -17331,6 +17416,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     async function ensureSuiteDatasets(rawSequence = []) {
+        const sessionId = state.sessionId;
+        const suiteSessionId = state.suiteSessionId;
         const sequence = normalizeSuiteSequence(rawSequence);
         if (!sequence.length) {
             return false;
@@ -17340,6 +17427,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         state.suite.sequence = sequence;
         await Promise.all(sequence.map(async (entry) => {
             const loaded = await loadDatasetByEntry(entry);
+            if (isSubmissionEditingLocked() || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return;
             const existing = getSuiteSlot(entry.examId);
             const inheritedDraft = state.simulationCtx?.draft
                 && state.simulationCtx.examId === entry.examId
@@ -17448,6 +17536,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     async function activateSuiteSlot(examId, options = {}) {
+        if (submissionPreparation) return false;
         if (!state.suite?.inline) {
             return false;
         }
@@ -17464,7 +17553,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         }
         state.suite.activating = true;
         state.suite.activeExamId = targetExamId;
-        state.suite.activeStartedAtMs = interaction.timerRunning ? Date.now() : null;
+        state.suite.activeStartedAtMs = !isSubmissionEditingLocked() && interaction.timerRunning ? Date.now() : null;
         state.examId = targetExamId;
         state.dataKey = slot.dataKey || targetExamId;
         state.dataset = slot.dataset;
@@ -17477,7 +17566,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         renderDataset(slot.dataset);
         refreshDynamicQuestionEnhancements();
         clearCurrentAnswers();
-        applyDraftToDom(slot.draft || buildEmptyDraft());
+        applyDraftToDom(slot.draft || buildEmptyDraft(), { presentationOnly: true });
         syncSimulationCtxForActiveSlot();
         syncInlineSuiteIdentity();
         state.simulationMode = true;
@@ -17499,7 +17588,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             syncSimulationDraftSnapshot('activate');
         }
         if (state.sessionReadySent) await activateReadingTiming(slot.draft);
-        if (!options.silent) {
+        if (!isCurrentSuiteActivation(targetExamId, activationGeneration) || submissionPreparation) return false;
+        if (!options.silent && !isSubmissionEditingLocked()) {
             postMessage('SIMULATION_ACTIVE_EXAM_CHANGE', {
                 examId: targetExamId,
                 currentIndex: state.suite.currentIndex,
@@ -18053,7 +18143,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
 
     function canEditReadingNotes() {
         if (state.timerLocked) return false;
-        if (isSubmissionUnconfirmed()) return false;
+        if (isSubmissionEditingLocked()) return false;
         const activePracticeCanEdit = Boolean(
             !state.readOnly
             && !state.memorizeMode
@@ -19473,6 +19563,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function navigateToPart(partKey, options = {}) {
+        if (submissionPreparation) return;
         const targetPartKey = PART_ORDER.includes(partKey) ? partKey : '';
         if (!targetPartKey) return;
         const questionId = options.questionId || '';
@@ -20181,7 +20272,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         }
         item.dataset.dragBound = '1';
         item.addEventListener('dragstart', (event) => {
-            if (isSubmissionUnconfirmed()) {
+            if (isSubmissionEditingLocked()) {
                 event.preventDefault();
                 return;
             }
@@ -20225,7 +20316,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             item.dataset.answerLabel = normalizedLabel;
             item.setAttribute('draggable', 'true');
             item.addEventListener('click', () => {
-                if (isSubmissionUnconfirmed()) return;
+                if (isSubmissionEditingLocked()) return;
                 clearDropzone(dropzone);
                 updateNavStatuses();
             });
@@ -20368,7 +20459,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 item.classList.remove('option-consumed');
                 // 恢复可用性时需保留当前交互锁：计时器锁定或只读状态下
                 // 不允许重新启用选项，否则可绕过锁定继续作答
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionEditingLocked());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
                 item.classList.toggle('drag-item-locked', interactionLocked);
             }
@@ -20462,7 +20553,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             target?.classList?.remove('drag-over');
         });
         document.addEventListener('drop', (event) => {
-            if (isSubmissionUnconfirmed()) {
+            if (isSubmissionEditingLocked()) {
                 event.preventDefault();
                 return;
             }
@@ -21803,7 +21894,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
         // Pending confirmation locks answer editing without presenting saved results.
         const answerRoot = getPracticeAnswerRoot();
-        if (answerRoot) answerRoot.inert = isSubmissionUnconfirmed();
+        if (answerRoot) answerRoot.inert = isSubmissionEditingLocked();
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
                 dom.submitBtn.dataset.defaultLabel = dom.submitBtn.title || 'Submit';
@@ -21838,7 +21929,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                     control.disabled = false;
                     return;
                 }
-                control.disabled = state.readOnly || state.timerLocked || isSubmissionUnconfirmed();
+                control.disabled = state.readOnly || state.timerLocked || isSubmissionEditingLocked();
             }
         });
         renderNotesDrawer();
@@ -21848,7 +21939,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function disableDragInteractions() {
-        const locked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
+        const locked = Boolean(state.readOnly || state.timerLocked || isSubmissionEditingLocked());
         document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
             if (!(item instanceof HTMLElement)) return;
             // 如果选项已被使用（option-consumed），始终保持不可拖拽
@@ -21866,6 +21957,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     function enterSubmittedReadOnlyState(reason = 'submit') {
         clearSubmissionAckTimer();
         state.submissionStatus = 'submitted';
+        state.submissionPhase = 'committed';
         state.submitted = true;
         setReadOnlyMode(true, reason);
         disableDragInteractions();
@@ -21905,6 +21997,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         }
         clearSubmissionAckTimer();
         state.submissionStatus = 'draft';
+        state.submissionPhase = ownsPendingSubmission(pendingSubmission) ? 'unconfirmed' : 'draft';
         state.submitted = false;
         syncPrimaryActionButtons();
         return true;
@@ -21927,8 +22020,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             && submission.generation === state.windowSessionGeneration);
     }
 
-    function isSubmissionUnconfirmed() {
-        return ownsPendingSubmission(pendingSubmission) && state.submissionStatus !== 'submitted';
+    function isSubmissionEditingLocked() {
+        return Boolean(submissionPreparation)
+            || (ownsPendingSubmission(pendingSubmission) && state.submissionStatus !== 'submitted');
     }
 
     function settleSubmissionRetry(operation) {
@@ -21946,6 +22040,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     function dispatchPendingSubmission(submission) {
         if (!ownsPendingSubmission(submission) || state.submissionStatus === 'submitted') return false;
         state.submissionStatus = 'submitting';
+        state.submissionPhase = 'handoff';
         state.pendingSubmissionPresentation = submission.presentation;
         setReadOnlyMode(state.readOnly, state.readOnlyReason);
         disableDragInteractions();
@@ -21977,7 +22072,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         });
     }
 
-    function beginSubmission(messageType, payload, presentation = null) {
+    function beginSubmission(messageType, payload, presentation = null, timingOwner = null) {
+        if (submissionPreparation && submissionPreparation !== timingOwner) return false;
         if (state.submissionStatus === 'submitting' || state.submissionStatus === 'submitted') {
             return false;
         }
@@ -21991,7 +22087,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             generation: state.windowSessionGeneration, type: messageType,
             finalSuiteSubmission: Boolean(state.simulationMode && state.simulationCtx?.isLast && state.suiteSessionId),
             operationId: `practice-complete:${state.examId}:${state.sessionId || 'session'}:${state.submissionId}`,
-            payload: JSON.parse(JSON.stringify(payload || {})), presentation };
+            payload: freezeSubmissionValue(JSON.parse(JSON.stringify(payload || {}))), presentation, timingOwner };
+        submissionPreparation = null;
         return dispatchPendingSubmission(pendingSubmission);
     }
 
@@ -22199,7 +22296,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                         reviewMode: state.reviewMode,
                         timerLocked: state.timerLocked,
                         submissionStatus: state.submissionStatus,
-                        submissionEditingLocked: isSubmissionUnconfirmed(),
+                        submissionPhase: state.submissionPhase,
+                        submissionEditingLocked: isSubmissionEditingLocked(),
                         submissionId: state.submissionId,
                         parentOrigin: state.parentOrigin,
                         parentOriginIsOpaque: state.parentOriginIsOpaque,
@@ -22279,7 +22377,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     function canClearDraftAnswers() {
         return Boolean(
             state.submissionStatus === 'draft'
-            && !isSubmissionUnconfirmed()
+            && !isSubmissionEditingLocked()
             && !state.readOnly
             && !state.submitted
             && !state.reviewMode
@@ -22335,12 +22433,12 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             }
         };
 
-        if (isSubmissionUnconfirmed()) {
+        if (isSubmissionEditingLocked()) {
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 dom.submitBtn.setAttribute('type', 'button');
-                setSubmitLabel(state.submissionStatus === 'submitting' ? '正在确认保存' : '确认上次提交');
-                dom.submitBtn.disabled = state.submissionStatus === 'submitting';
+                setSubmitLabel(submissionPreparation ? '正在保存作答' : (state.submissionStatus === 'submitting' ? '正在确认保存' : '确认上次提交'));
+                dom.submitBtn.disabled = Boolean(submissionPreparation) || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) dom.resetBtn.style.display = 'none';
             return;
@@ -22474,12 +22572,15 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function resetToAnsweringPresentation() {
+        if (isSubmissionEditingLocked()) return;
+        readingTimingController?.releaseSubmission(pendingSubmission?.timingOwner);
         settleSubmissionRetry('unconfirmed');
         pendingSubmission = null;
         clearSubmissionAckTimer();
         state.lastResults = null;
         state.submitted = false;
         state.submissionStatus = 'draft';
+        state.submissionPhase = 'draft';
         state.submissionId = '';
         state.pendingSubmissionPresentation = null;
         state.submittedRecordId = '';
@@ -23084,7 +23185,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
 
     function canSyncReadingDraft() {
         return Boolean(
-            !state.simulationMode
+            !isSubmissionEditingLocked()
+            && !state.simulationMode
             && !state.reviewMode
             && !state.readOnly
             && !state.timerLocked
@@ -23161,6 +23263,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function syncSimulationDraftSnapshot(reason = 'periodic') {
+        if (isSubmissionEditingLocked()) return;
         if (state.timerLocked) return;
         const isSuiteReviewAnnotation = Boolean(
             state.suiteReviewMode
@@ -23197,7 +23300,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
 
     function refreshSimulationDraftSyncLifecycle() {
         const shouldSync = Boolean(
-            state.simulationMode
+            !isSubmissionEditingLocked()
+            && state.simulationMode
             && state.simulationContextReady
             && !state.readOnly
             && state.suiteSessionId
@@ -23215,7 +23319,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         syncSimulationDraftSnapshot('activate');
     }
 
-    function applyDraftToDom(draft) {
+    function applyDraftToDom(draft, options = {}) {
+        if (isSubmissionEditingLocked() && !options.presentationOnly) return;
         if (!draft || typeof draft !== 'object') {
             return;
         }
@@ -23425,7 +23530,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             if (item.dataset.consumed || item.classList.contains('option-consumed')) {
                 delete item.dataset.consumed;
                 item.classList.remove('option-consumed');
-                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionUnconfirmed());
+                const interactionLocked = Boolean(state.readOnly || state.timerLocked || isSubmissionEditingLocked());
                 item.setAttribute('draggable', interactionLocked ? 'false' : 'true');
             }
         });
@@ -23454,6 +23559,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     function dispatchSimulationNavigate(direction, submissionSnapshot = null, options = {}) {
+        if (submissionPreparation || (isSubmissionEditingLocked() && !state.suite?.inline)) return;
         if (!state.simulationMode || !state.simulationCtx || state.readOnly) {
             return;
         }
@@ -23516,7 +23622,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             handleExitClick();
             return;
         }
-        if (state.readOnly || state.submissionStatus !== 'draft' || state.timingSubmitPending) {
+        if (state.readOnly || state.submissionStatus !== 'draft' || submissionPreparation || state.suite.activating) {
             return;
         }
         if (ownsPendingSubmission(pendingSubmission)) {
@@ -23525,30 +23631,74 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             dispatchPendingSubmission(pendingSubmission);
             return;
         }
-        state.timingSubmitPending = true;
+        // Accept answers, annotations and elapsed time in one synchronous turn.
+        // Only acknowledged timing is attached after the asynchronous barrier.
+        flushActiveNoteFromEditor();
+        const acceptedDraft = freezeSubmissionValue(JSON.parse(JSON.stringify(state.suite?.inline
+            ? buildInlineSuiteSubmissionSnapshot()
+            : buildSubmissionSnapshot())));
+        const submissionSnapshot = { ...acceptedDraft,
+            ...(acceptedDraft.suiteEntries ? { suiteEntries: acceptedDraft.suiteEntries.map(entry => ({ ...entry })) } : {}) };
+        if (state.simulationMode) syncSimulationDraftSnapshot('submit');
+        else syncReadingDraftSnapshot('submit');
+        const activeSlot = state.suite?.inline ? getActiveSuiteSlot() : null;
+        const results = freezeSubmissionValue(JSON.parse(JSON.stringify(activeSlot?.lastResults || submissionSnapshot.results)));
+        const highlightSnapshot = state.suite?.inline
+            ? JSON.parse(JSON.stringify(activeSlot?.draft?.highlights || []))
+            : submissionSnapshot.highlights;
+        const identity = [state.sessionId, state.suiteSessionId, state.examId, state.libraryConfigurationId,
+            state.parentWindow, state.windowSessionToken, state.windowSessionGeneration];
+        const preparation = { isCurrent: () => submissionPreparation === preparation
+            && identity.every((value, index) => value === [state.sessionId, state.suiteSessionId, state.examId,
+                state.libraryConfigurationId, state.parentWindow, state.windowSessionToken, state.windowSessionGeneration][index]) };
+        submissionPreparation = preparation;
+        state.submissionPhase = 'freezing';
+        setReadOnlyMode(state.readOnly, state.readOnlyReason);
+        disableDragInteractions();
         try {
             const passages = state.suite?.inline ? state.suite.sequence.map((entry, sequenceIndex) => {
                 const slot = getSuiteSlot(entry.examId);
                 return { context: { ...readingTimingContext(), examId: entry.examId, sequenceIndex,
                     dataset: slot?.dataset }, draft: slot?.draft };
-            }) : [];
-            await readingTimingController?.freezeAll(passages);
+            }) : [{ context: readingTimingContext(), draft: collectCurrentDraft() }];
+            if (!readingTimingController && global.ReadingTimingController) {
+                readingTimingController = new global.ReadingTimingController(readingTimingContext);
+            }
+            const frozen = await readingTimingController?.freezeAll(passages, preparation);
+            if (!preparation.isCurrent()) return;
+            if (readingTimingController) {
+                const snapshots = new Map(frozen.map(value => [value.key, value.snapshot]));
+                passages.forEach((passage, index) => {
+                    const snapshot = snapshots.get(readingTimingController.key(passage.context));
+                    if (!snapshot) throw new Error('Required Reading timing snapshot is missing');
+                    if (state.suite?.inline) submissionSnapshot.suiteEntries[index].readingTiming = snapshot;
+                    else submissionSnapshot.readingTiming = snapshot;
+                });
+            }
+            state.submissionPhase = 'persisted';
         } catch (error) {
-            readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', error);
+            if (!preparation.isCurrent()) return;
+            submissionPreparation = null;
+            readingTimingController?.releaseSubmission(preparation);
+            state.submissionPhase = 'failed';
+            readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', error, 'not-committed');
             global.alert?.('计时保存失败，请稍后重试提交。作答仍然保留。');
             return;
-        } finally { state.timingSubmitPending = false; }
-        const submissionSnapshot = state.suite?.inline
-            ? buildInlineSuiteSubmissionSnapshot()
-            : buildSubmissionSnapshot();
-        if (state.simulationMode) {
-            syncSimulationDraftSnapshot('submit');
+        } finally {
+            if (!preparation.isCurrent()) {
+                if (submissionPreparation === preparation) submissionPreparation = null;
+                readingTimingController?.releaseSubmission(preparation);
+                // Failed or canceled preparation has drained its saves. Restore
+                // the current registration without unlocking a newer submission.
+                if (!isSubmissionEditingLocked()) {
+                    setReadOnlyMode(state.readOnly, state.readOnlyReason);
+                    disableDragInteractions();
+                    refreshReadingDraftSyncLifecycle();
+                    activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : collectCurrentDraft()).catch(() => {});
+                }
+            }
         }
-        const activeSlot = state.suite?.inline ? getActiveSuiteSlot() : null;
-        const results = activeSlot?.lastResults || submissionSnapshot.results;
-        const highlightSnapshot = state.suite?.inline
-            ? (Array.isArray(activeSlot?.draft?.highlights) ? activeSlot.draft.highlights : [])
-            : (Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : []);
+        freezeSubmissionValue(submissionSnapshot);
         const postedResults = submissionSnapshot.results || results;
         if (activeSlot) {
             activeSlot.lastResults = results;
@@ -23574,9 +23724,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 practiceMode: state.suiteSessionId ? 'suite' : 'single',
                 renderMode: 'unified-reading',
                 dataKey: state.dataKey,
-                markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
-                    ? global.getPracticeMarkedQuestions()
-                    : normalizeMarkedQuestions(submissionSnapshot.markedQuestions)
+                markedQuestions: normalizeMarkedQuestions(submissionSnapshot.markedQuestions)
             },
             answers: submissionSnapshot.answers || {},
             highlights: Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : [],
@@ -23591,10 +23739,11 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         } : {}, postedResults), {
             results,
             highlights: highlightSnapshot
-        });
+        }, preparation);
     }
 
     function handleReset() {
+        if (isSubmissionEditingLocked()) return;
         if (state.memorizeMode) {
             requestNormalPracticeRestart('memorize-start-test');
             return;
@@ -23690,6 +23839,9 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
     }
 
     async function initializeInlineSimulationSuite(data = {}, options = {}) {
+        if (isSubmissionEditingLocked()) return false;
+        const sessionId = state.sessionId;
+        const suiteSessionId = state.suiteSessionId;
         const sequence = Array.isArray(data && data.suiteSequence) ? data.suiteSequence : [];
         if (!sequence.length) {
             return false;
@@ -23701,6 +23853,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             return false;
         }
         await ensureSuiteDatasets(sequence);
+        if (isSubmissionEditingLocked() || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return false;
         captureInlineSuiteDraftBeforeReinit('reinit');
         mergeSuiteDraftPayload(data || {});
         const targetExamId = resolveSuiteTargetExamId(data || {}, options);
@@ -23758,6 +23911,14 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 && normalizeWindowSessionToken(data.windowSessionToken) === state.windowSessionToken) {
                 return;
             }
+            // Same-attempt initialization/checkpoints cannot replace an accepted
+            // draft. A new host registration invalidates any pre-handoff work.
+            if (isSubmissionEditingLocked() && data.sessionId === state.sessionId
+                && normalizeWindowSessionToken(data.windowSessionToken) === state.windowSessionToken) return;
+            if (submissionPreparation) {
+                submissionPreparation = null;
+                state.submissionPhase = 'draft';
+            }
             if (pendingSubmission && normalizeWindowSessionToken(data.windowSessionToken) !== state.windowSessionToken) {
                 settleSubmissionRetry('unconfirmed');
                 pendingSubmission = { ...pendingSubmission, token: normalizeWindowSessionToken(data.windowSessionToken),
@@ -23769,6 +23930,8 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 state.examId = incomingExamId;
             }
             if (data.sessionId && state.sessionId && String(data.sessionId) !== String(state.sessionId)) {
+                readingTimingController?.releaseSubmission(pendingSubmission?.timingOwner);
+                submissionPreparation = null;
                 settleSubmissionRetry('unconfirmed');
                 pendingSubmission = null;
                 clearSubmissionAckTimer();
@@ -23892,6 +24055,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
         if (!isTrustedHostMessage(event, payload, data)) {
             return;
         }
+        if (isSubmissionEditingLocked() && ['REPLAY_PRACTICE_RECORD', 'REVIEW_CONTEXT', 'SUITE_NAVIGATE'].includes(type)) return;
         if (type === 'REPLAY_PRACTICE_RECORD') {
             const replaySignature = buildReplaySignature(data || {});
             if (replaySignature && replaySignature === state.lastReplaySignature) {
@@ -23918,11 +24082,16 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
                 restoreDraftSubmissionState(String(data.submissionId || ''));
                 settleSubmissionRetry(operation);
                 if (operation === 'not-committed') {
+                    readingTimingController?.releaseSubmission(submission.timingOwner);
                     pendingSubmission = null;
                     state.submissionId = '';
                     state.pendingSubmissionPresentation = null;
+                    state.submissionPhase = 'failed';
                     setReadOnlyMode(false);
                     disableDragInteractions();
+                    // Pending read-only navigation may have changed the visible
+                    // passage while timing remained attached to the submitted one.
+                    activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : collectCurrentDraft()).catch(() => {});
                 }
                 reportSubmissionFailure(Object.assign(new Error('Host could not confirm submission'), { name: 'AppDataError', code: data.errorCode }),
                     'PRACTICE_SAVE_FAILED', operation, submission);
@@ -23965,6 +24134,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
             return;
         }
         if (type === 'SIMULATION_CONTEXT') {
+            if (isSubmissionEditingLocked()) return;
             if (!shouldAcceptWindowSessionMessage(data, sourceWindow)) {
                 return;
             }
@@ -24142,6 +24312,7 @@ globalThis.AppDiagnosticBuild = Object.freeze({"appVersion":"0.6.3.2","buildId":
 
     function attachPracticeTimerBridge() {
         global.addEventListener(PRACTICE_TIMER_EVENT, (event) => {
+            if (isSubmissionEditingLocked()) return;
             const detail = event && event.detail && typeof event.detail === 'object'
                 ? event.detail
                 : null;
