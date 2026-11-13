@@ -5,6 +5,7 @@ import http from 'node:http';
 import { chromium } from 'playwright';
 
 const fixture = JSON.parse(fs.readFileSync(new URL('../fixtures/suite-finalizing-pre-fix.json', import.meta.url), 'utf8'));
+const legacyFixture = JSON.parse(fs.readFileSync(new URL('../fixtures/suite-finalizing-no-timing.json', import.meta.url), 'utf8'));
 let browser;
 const server = http.createServer((_, response) => response.end('<!doctype html><title>Suite recovery</title>'));
 before(async () => {
@@ -42,7 +43,7 @@ async function load(page) {
         };
     });
 }
-async function seeded() {
+async function seeded(source = fixture) {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto(`http://127.0.0.1:${server.address().port}`);
@@ -58,8 +59,219 @@ async function seeded() {
         await AppData.practice.completeAttempt({ operationId: 'unrelated-completion', record: {
             id: 'unrelated', examId: 'other', type: 'reading', answers: { q1: 'keep' }, totalQuestions: 1, correctAnswers: 1
         } });
-    }, structuredClone(fixture));
+    }, structuredClone(source));
     return { context, page };
+}
+
+async function failFinalizationCheckpoint(page) {
+    return page.evaluate(async () => {
+        const sessions = await kernel.read('recovery.activeSessions');
+        const timing = await kernel.read('recovery.readingTiming');
+        const session = sessions.find(item => item.id === command.sessionId);
+        session.finalizeRecord = null;
+        session.finalizeOperationId = null;
+        session.finalizeSubmissionId = 'original-submit';
+        for (const row of timing) {
+            row.snapshot.frozen = true;
+            session.results.find(entry => entry.examId === row.snapshot.examId).readingTiming = structuredClone(row.snapshot);
+            session.draftsByExam[row.snapshot.examId].readingTiming = structuredClone(row.snapshot);
+        }
+        await kernel.mutate([{ logicalKey: 'recovery.activeSessions', data: sessions },
+            { logicalKey: 'recovery.readingTiming', data: timing }], { operationId: 'seed-before-finalize' });
+        window.app = await makeApp();
+        app.currentSuiteSession.results = app.currentSuiteSession.sequence.map(source => {
+            source.exam.category = source.category;
+            return app._normalizeSuiteResult(source.exam, {
+                ...session.results.find(entry => entry.examId === source.examId), ...session.draftsByExam[source.examId]
+            });
+        });
+        const put = IDBObjectStore.prototype.put;
+        let failures = 0;
+        IDBObjectStore.prototype.put = function(value, ...args) {
+            if (!failures && value.logicalKey === 'recovery.activeSessions'
+                && value.envelope.data.some(item => item.id === command.sessionId && item.finalizeRecord)) {
+                failures++;
+                throw new DOMException('Synthetic finalize-record failure', 'QuotaExceededError');
+            }
+            return put.call(this, value, ...args);
+        };
+        let first;
+        try { first = await app._finalizeSuiteRecordWithGate(app.currentSuiteSession); }
+        finally { IDBObjectStore.prototype.put = put; }
+        const durable = await AppData.recovery.getActiveSession(command.sessionId);
+        return { first, failures, durableStatus: durable.status, durableRecord: durable.finalizeRecord,
+            durableOperationId: durable.finalizeOperationId, retained: app.currentSuiteSession.finalizeRecord,
+            operation: (await AppData.practice.getSuiteCommitState(command.sessionId, command.operationId)).operation };
+    });
+}
+
+test('a failed finalize-record checkpoint retries the retained snapshot and completes once', async () => {
+    const { page, context } = await seeded();
+    try {
+        const failed = await failFinalizationCheckpoint(page);
+        assert.equal(failed.failures, 1); assert.equal(failed.first, false);
+        assert.equal(failed.durableStatus, 'finalizing'); assert.equal(failed.durableRecord, null);
+        assert.equal(failed.durableOperationId, null); assert.equal(failed.operation, 'not-committed');
+        assert.ok(failed.retained); assert.equal(failed.retained.submissionId, 'original-submit');
+        const result = await page.evaluate(async () => {
+            const before = await capture();
+            const session = app.currentSuiteSession;
+            const retries = await Promise.all([app._finalizeSuiteRecordWithGate(session), app._finalizeSuiteRecordWithGate(session)]);
+            const durable = await AppData.recovery.getActiveSession(session.id);
+            const saved = await AppData.practice.get(session.id);
+            const first = JSON.stringify(await kernel.readPracticeSnapshot([session.id], { withMeta: true }));
+            const repeated = await app._finalizeSuiteRecordWithGate(session);
+            const after = await capture();
+            return { retries, repeated, saved, durableRecord: durable.finalizeRecord,
+                immutable: first === JSON.stringify(await kernel.readPracticeSnapshot([session.id], { withMeta: true })),
+                draftsPreserved: JSON.stringify(before.drafts) === JSON.stringify(after.drafts),
+                unrelatedPreserved: JSON.stringify(before.sessions.data.find(item => item.id === 'unrelated-session'))
+                    === JSON.stringify(after.sessions.data.find(item => item.id === 'unrelated-session')),
+                records: (await AppData.practice.list()).length };
+        });
+        assert.deepEqual(result.retries, [true, true]); assert.equal(result.repeated, true);
+        assert.equal(result.immutable, true); assert.equal(result.records, 2);
+        assert.equal(result.draftsPreserved, true); assert.equal(result.unrelatedPreserved, true);
+        for (const field of ['id', 'sessionId', 'operationId', 'submissionId', 'duration', 'startTime', 'endTime']) {
+            assert.equal(result.saved[field], failed.retained[field]);
+        }
+        assert.deepEqual(result.saved.answers, failed.retained.answers);
+        assert.equal(result.durableRecord.operationId, failed.retained.operationId);
+        assert.equal(result.durableRecord.submissionId, failed.retained.submissionId);
+        for (const [index, entry] of result.saved.suiteEntries.entries()) {
+            assert.deepEqual(entry.readingTiming, result.durableRecord.suiteEntries[index].readingTiming);
+            for (const field of ['answers', 'answerComparison', 'scoreInfo', 'highlights', 'notes', 'noteOutlines', 'noteText', 'markedQuestions']) {
+                assert.deepEqual(entry[field], failed.retained.suiteEntries[index][field]);
+            }
+        }
+    } finally { await context.close(); }
+});
+
+for (const outcome of ['unconfirmed', 'committed']) {
+    test(`failed snapshot retry reconciles ${outcome} completion without rewriting recovery`, async () => {
+        const { page, context } = await seeded();
+        try {
+            await failFinalizationCheckpoint(page);
+            const result = await page.evaluate(async outcome => {
+                if (outcome === 'committed') {
+                    await AppData.practice.finalizeSuite({ record: app.currentSuiteSession.finalizeRecord, operationId: command.operationId });
+                } else await kernel.journalNoop({ operationId: command.operationId });
+                const before = JSON.stringify(await capture());
+                const retried = await app._finalizeSuiteRecordWithGate(app.currentSuiteSession);
+                return { retried, unchanged: before === JSON.stringify(await capture()) };
+            }, outcome);
+            assert.deepEqual(result, { retried: outcome === 'committed', unchanged: true });
+        } finally { await context.close(); }
+    });
+}
+
+for (const interference of ['checkpoint', 'completion']) {
+    test(`failed snapshot retry respects a competing ${interference} at the write fence`, async () => {
+        const { page, context } = await seeded();
+        try {
+            await failFinalizationCheckpoint(page);
+            const result = await page.evaluate(async interference => {
+                const mutate = TestKernel.prototype.mutate;
+                let interfered = false;
+                let winner;
+                TestKernel.prototype.mutate = async function(changes, options = {}) {
+                    if (!interfered && options.operationId?.startsWith('suite-recovery:')) {
+                        interfered = true;
+                        if (interference === 'checkpoint') {
+                            await mutate.call(this, changes, { ...options, operationId: 'competing-checkpoint' });
+                            await recover();
+                        } else {
+                            await AppData.practice.finalizeSuite({ record: app.currentSuiteSession.finalizeRecord, operationId: command.operationId });
+                        }
+                        winner = JSON.stringify(await AppData.recovery.getActiveSession(command.sessionId));
+                    }
+                    return mutate.call(this, changes, options);
+                };
+                let retried;
+                try { retried = await app._finalizeSuiteRecordWithGate(app.currentSuiteSession); }
+                finally { TestKernel.prototype.mutate = mutate; }
+                return { retried, interfered, preserved: winner === JSON.stringify(await AppData.recovery.getActiveSession(command.sessionId)),
+                    operation: (await recover()).operation, count: (await AppData.practice.list()).length };
+            }, interference);
+            assert.deepEqual(result, { retried: true, interfered: true, preserved: true, operation: 'committed', count: 2 });
+        } finally { await context.close(); }
+    });
+}
+
+test('persisted legacy finalization without timing survives host reload and preserves its original completion', async () => {
+    const { page, context } = await seeded(legacyFixture);
+    try {
+        await page.reload(); await load(page);
+        const result = await page.evaluate(async () => {
+            const before = await capture();
+            const app = await makeApp();
+            const committed = await app.resumeSuitePractice(command.sessionId);
+            const saved = await AppData.practice.get(command.sessionId);
+            const first = JSON.stringify(await kernel.readPracticeSnapshot([command.sessionId], { withMeta: true }));
+            const other = await makeApp();
+            const repeated = await other.resumeSuitePractice(command.sessionId);
+            const after = await capture();
+            return { committed, repeated, saved,
+                immutable: first === JSON.stringify(await kernel.readPracticeSnapshot([command.sessionId], { withMeta: true })),
+                timingRows: after.timing.data, draftsPreserved: JSON.stringify(before.drafts) === JSON.stringify(after.drafts),
+                records: (await AppData.practice.list()).length };
+        });
+        assert.equal(result.committed, true); assert.equal(result.repeated, true);
+        assert.equal(result.immutable, true); assert.equal(result.records, 2); assert.equal(result.draftsPreserved, true);
+        assert.deepEqual(result.timingRows, []);
+        assert.equal(result.saved.id, legacyFixture.session.id);
+        assert.equal(result.saved.operationId, legacyFixture.session.finalizeOperationId);
+        assert.equal(result.saved.submissionId ?? null, null);
+        assert.equal(result.saved.duration, legacyFixture.session.finalizeRecord.duration);
+        assert.deepEqual(result.saved.answers, legacyFixture.session.finalizeRecord.answers);
+        for (const [index, entry] of result.saved.suiteEntries.entries()) {
+            assert.equal(entry.readingTiming ?? null, null);
+            for (const field of ['answers', 'answerComparison', 'scoreInfo', 'highlights', 'notes', 'noteOutlines', 'noteText', 'markedQuestions']) {
+                assert.deepEqual(entry[field], legacyFixture.session.finalizeRecord.suiteEntries[index][field]);
+            }
+        }
+    } finally { await context.close(); }
+});
+
+test('mixed legacy passages repair present timing and leave absent timing absent', async () => {
+    const mixed = structuredClone(fixture);
+    const examId = mixed.session.sequence[0].examId;
+    mixed.session.finalizeRecord.suiteEntries[0].readingTiming = null;
+    mixed.session.results[0].readingTiming = null;
+    delete mixed.session.draftsByExam[examId].readingTiming;
+    mixed.timingRows.shift();
+    const { page, context } = await seeded(mixed);
+    try {
+        const result = await page.evaluate(async () => {
+            const app = await makeApp();
+            const committed = await app.resumeSuitePractice(command.sessionId);
+            return { committed, saved: await AppData.practice.get(command.sessionId), timing: await kernel.read('recovery.readingTiming') };
+        });
+        assert.equal(result.committed, true);
+        assert.equal(result.saved.suiteEntries[0].readingTiming ?? null, null);
+        assert.equal(result.timing.length, 2);
+        assert.ok(result.timing.every(row => row.recordId === fixture.session.id && row.snapshot.frozen));
+    } finally { await context.close(); }
+});
+
+for (const scenario of ['entry', 'result', 'draft', 'durable-row']) {
+    test(`legacy recovery does not treat present invalid timing as absent: ${scenario}`, async () => {
+        const invalid = structuredClone(legacyFixture);
+        if (scenario === 'entry') invalid.session.finalizeRecord.suiteEntries[0].readingTiming = false;
+        if (scenario === 'result') invalid.session.results[0].readingTiming = {};
+        if (scenario === 'draft') invalid.session.draftsByExam.p1.readingTiming = '';
+        if (scenario === 'durable-row') invalid.timingRows = [structuredClone(fixture.timingRows[0])];
+        const { page, context } = await seeded(invalid);
+        try {
+            const result = await page.evaluate(async () => {
+                const before = JSON.stringify(await capture());
+                let code;
+                try { await recover(); } catch (error) { code = error.code; }
+                return { code, unchanged: before === JSON.stringify(await capture()) };
+            });
+            assert.equal(result.code, 'VALIDATION'); assert.equal(result.unchanged, true);
+        } finally { await context.close(); }
+    });
 }
 
 test('persisted pre-fix suite recovers after host reload with one immutable completion', async () => {
@@ -124,7 +336,8 @@ test('replacement fences late saves, acquisitions and checkpoints; concurrent re
     } finally { await context.close(); }
 });
 
-for (const scenario of ['writer', 'finalized', 'source', 'answers', 'annotations', 'coverage', 'revision', 'score']) {
+for (const scenario of ['writer', 'finalized', 'source', 'answers', 'annotations', 'coverage', 'revision', 'score',
+    'invalid-result-timing', 'invalid-draft-timing', 'missing-timing-row']) {
     test(`invalid recovery remains rejected and preserves durable data: ${scenario}`, async () => {
         const { page, context } = await seeded();
         try {
@@ -141,6 +354,9 @@ for (const scenario of ['writer', 'finalized', 'source', 'answers', 'annotations
                     if (scenario === 'coverage') sessions[0].results.pop();
                     if (scenario === 'revision') timing[2].snapshot.revision = 99;
                     if (scenario === 'score') sessions[0].finalizeRecord.scoreInfo.accuracy = 'invalid';
+                    if (scenario === 'invalid-result-timing') sessions[0].results[2].readingTiming = false;
+                    if (scenario === 'invalid-draft-timing') sessions[0].draftsByExam.p3.readingTiming = '';
+                    if (scenario === 'missing-timing-row') timing.pop();
                     await kernel.mutate([{ logicalKey: 'recovery.activeSessions', data: sessions },
                         { logicalKey: 'recovery.readingTiming', data: timing }], { operationId: `setup-${scenario}` });
                 }

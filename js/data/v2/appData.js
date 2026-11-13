@@ -1798,8 +1798,18 @@
                 total += result.scoreInfo.total;
                 Object.entries(result.answers).forEach(([key, value]) => { answers[`${source.examId}::${key}`] = value; });
                 Object.entries(result.answerComparison).forEach(([key, value]) => { comparison[`${source.examId}::${key}`] = value; });
+                const retainedTiming = [entry.readingTiming, result.readingTiming, draft?.readingTiming];
+                if (retainedTiming.every(value => value == null)) {
+                    // Legacy passages may predate Reading timing. A live row still
+                    // proves timing existed, so missing snapshots cannot bypass it.
+                    if (timing.items.some(row => row.snapshot?.parentAttemptId === id
+                        && (row.snapshot.examId === source.examId || row.snapshot.sequenceIndex === i))) {
+                        reject('Retained passage timing is missing');
+                    }
+                    continue;
+                }
                 const accepted = requireReadingTiming(entry.readingTiming);
-                const candidates = [accepted, result.readingTiming, draft?.readingTiming].filter(Boolean).map(requireReadingTiming);
+                const candidates = retainedTiming.filter(value => value != null).map(requireReadingTiming);
                 if (seen.has(accepted.attemptId) || accepted.parentAttemptId !== id || accepted.sequenceIndex !== i
                     || accepted.examId !== source.examId) reject('Invalid retained passage identity');
                 seen.add(accepted.attemptId);

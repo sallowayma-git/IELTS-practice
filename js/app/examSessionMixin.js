@@ -3307,11 +3307,19 @@
                                 || (suite._finalizeSubmissionId && data.submissionId !== suite._finalizeSubmissionId)) break;
                             const committed = await this._finalizeSuiteRecordWithGate(suite, { fromRecovery: true, deferTeardown: true });
                             if (!this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) break;
+                            if (committed) this._releaseSuiteCloseGuardAfterCommit(suite, sourceWindow || expectedWindow);
                             this._postExamMessage(examId, sourceWindow || expectedWindow, 'SUITE_RECOVERY_OUTCOME', {
                                 suiteSessionId: suite.id, operationId: suite.finalizeOperationId,
                                 submissionId: suite._finalizeSubmissionId || null,
                                 operation: committed ? 'committed' : suite._finalizeOutcome || 'unconfirmed'
                             });
+                            if (committed) {
+                                try {
+                                    this._scheduleSuiteSubmitTeardown(suite);
+                                } catch (teardownError) {
+                                    console.warn('[SuitePractice] 套题已提交，但延迟清理调度失败:', teardownError);
+                                }
+                            }
                             break;
                         }
                         await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow, {

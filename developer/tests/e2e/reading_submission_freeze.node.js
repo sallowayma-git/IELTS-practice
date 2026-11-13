@@ -140,6 +140,7 @@ try {
             }, true);
         });
         try {
+            let recoveryStartedAt;
             const host = await context.newPage();
             await host.goto(`${pathToFileURL(path.join(root, 'index.html'))}?test_env=1`);
             await host.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
@@ -307,6 +308,7 @@ try {
                     assert.equal(await page.evaluate(`${hooks}.getReadingTimingState()?.entries.length || 0`), 0,
                         'a reloaded finalizing page must not acquire a new timing writer');
                     if (scenario === 'legacy-page-ack-loss') await page.evaluate(() => { window.__holdAcknowledgements = true; });
+                    recoveryStartedAt = Date.now();
                     await page.locator('#submit-btn').click();
                     if (scenario === 'legacy-page-ack-loss') {
                         await page.waitForFunction(() => window.__heldAcknowledgements.length > 0);
@@ -328,6 +330,14 @@ try {
                         assert.equal(await page.evaluate(`${hooks}.getTestState().submissionStatus`), 'submitted');
                     }
                     await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submitted);
+                    const cleanup = await host.evaluate(async id => ({
+                        scheduled: Boolean(window.app.currentSuiteSession?.submitReceiptTeardownTimer),
+                        retained: Boolean(await AppData.recovery.getActiveSession(id)),
+                        guarded: Boolean(window.app.currentSuiteSession?.windowRef?.__IELTS_SUITE_PARENT_GUARD__)
+                    }), retained.id);
+                    assert.equal(cleanup.scheduled, true, 'successful page recovery schedules post-commit cleanup');
+                    assert.equal(cleanup.retained, true, 'recovery remains available during the receipt replay window');
+                    assert.equal(cleanup.guarded, false, 'committed recovery releases the page close guard');
                 }
                 await host.evaluate(async id => {
                     for (let attempt = 0; attempt < 100; attempt++) {
@@ -386,6 +396,24 @@ try {
                 }
                 assert.deepEqual(result.suite.suiteEntries[2].answers, acceptedAnswers);
                 report.cases.push({ scenario, outcome: 'passed', completedRecords: 1, frozenPersistedSnapshots: 3 });
+            }
+            if (scenario === 'legacy-page-reload') {
+                await host.waitForFunction(() => window.app.currentSuiteSession === null, null, { timeout: 40000, polling: 100 });
+                assert.ok(Date.now() - recoveryStartedAt >= 30000, 'cleanup preserves the full 30-second receipt replay window');
+                assert.equal(await host.evaluate(async id => (await AppData.recovery.getActiveSession(id)) === null, result.suite.id), true);
+                assert.equal(await host.evaluate(() => AppData.recovery.windowSession.get('simulation') === null), true);
+                await page.close();
+                await host.reload();
+                await host.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });
+                const afterReload = await host.evaluate(async id => {
+                    await window.AppEntry.ensureSessionSuiteReady();
+                    return { candidate: await window.app.getSuiteRecoveryCandidate(),
+                        record: await AppData.practice.get(id), count: (await AppData.practice.list()).length };
+                }, result.suite.id);
+                assert.equal(afterReload.candidate, null, 'completed recovery does not reappear after host reload');
+                assert.equal(afterReload.count, 1);
+                assert.deepEqual(afterReload.record, result.suite);
+                report.cases.at(-1).cleanupAfterReplayWindow = true;
             }
             console.log(`${scenario}: ${report.cases.at(-1).outcome}`);
         } finally { await context.close(); }

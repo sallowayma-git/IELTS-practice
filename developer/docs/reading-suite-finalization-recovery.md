@@ -34,6 +34,12 @@ record or repeat review scheduling. Historical/imported suite projection writes
 retain their existing interface; the new live-submission behavior is scoped to
 the canonical suite finalization operation.
 
+If the initial `finalize-record` checkpoint fails, the open host retains the
+original record and marks its checkpoint pending. A confirmation reconciles the
+original operation first, then retries that same checkpoint only after definite
+non-commit. The checkpoint transaction retains the existing completion and
+revision fences. Committed or unconfirmed outcomes do not rewrite recovery.
+
 ## Replacement snapshot and concurrency
 
 `AppData.practice.recoverSuiteFinalization()` consumes the durable
@@ -47,6 +53,13 @@ the canonical suite finalization operation.
 - The original timing writer, revision consistency and monotonic timing coverage
   and totals. A persisted snapshot newer than every retained submission snapshot
   is rejected. Missing or finalized live timing rows are rejected.
+
+Legacy passages without timing remain supported when the record, result and
+draft all omit timing or contain null, and no live timing row belongs to that
+suite passage. Such passages retain their answers, scores and annotations
+without inventing timing. Passages with timing still require all timing checks;
+invalid values, inconsistent copies and missing live rows are rejected. A suite
+may contain both timed and untimed legacy passages.
 
 The replacement uses the latest compatible retained timing, freezes it without
 adding elapsed wall time, and advances its revision. One transaction replaces
@@ -88,6 +101,12 @@ does not submit newly edited answers. Failure and timeout keep the view locked
 and the recovery action available. Only a matching committed response enters
 the submitted state.
 
+Successful practice-page recovery releases the suite close guard before its
+response and schedules the normal 30-second receipt replay window. Once that
+window expires, teardown discards the active-session recovery and window mirror,
+so host reload does not offer the completed suite as unfinished. Repeated
+confirmation during the window reuses the committed result and renews cleanup.
+
 New snapshots persist `finalizeSubmissionId`. Pre-fix snapshots omitted it: a
 still-open page may supply its original receipt ID when reconfirming; host-only
 or reloaded-page recovery leaves a missing ID absent. It never manufactures a
@@ -105,6 +124,9 @@ reasons without changing the recovery state machine.
   synthetic three-passage fixture with answers, highlights, notes and an unfrozen
   third-passage revision ahead of its durable checkpoint. It intentionally has
   no submission receipt ID, matching the old format.
+- `developer/tests/fixtures/suite-finalizing-no-timing.json` retains the same
+  synthetic answers and annotations in the supported legacy format without
+  passage timing snapshots or live timing rows.
 - `developer/tests/js/suiteFinalizationRecovery.test.js` uses real IndexedDB.
   It covers host reload, duplicate/concurrent confirmation, original identities,
   writer takeover, finalized/source/revision/content conflicts, unknown/deleted
@@ -112,12 +134,17 @@ reasons without changing the recovery state machine.
   before replacement, and a committed transaction whose return was lost.
   Comparisons verify unchanged unrelated data and immutable completed layers,
   annotations and review plans after reconciliation.
+  Additional regressions cover a one-shot `finalize-record` write failure,
+  reconciliation before checkpoint retry, untimed and mixed legacy passages,
+  and rejection of corrupt present timing.
 - `developer/tests/e2e/reading_submission_freeze.node.js` runs production
   bundles and real file entrypoints. Its recovery scenarios durably seed the
   old unfrozen/advanced snapshot shape before letting the normal seal reject it,
   then use the visible host or practice-page action after reload. They assert
   the original record/operation/submission identities, retained answers and
-  exactly one completed record with matching frozen timing rows.
+  exactly one completed record with matching frozen timing rows. Page recovery
+  also verifies the receipt window, delayed cleanup and absence of a recovery
+  candidate after closing the practice page and reloading the host.
 
 Run the normal JavaScript/Python/integration checks, regenerate bundles, then
 run `node scripts/build-bundles.mjs --check` and

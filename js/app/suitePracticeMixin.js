@@ -3309,7 +3309,9 @@
                 record.operationId = expectedOperationId;
                 if (session._finalizeSubmissionId) record.submissionId = session._finalizeSubmissionId;
                 session.finalizeRecord = this._cloneSuitePlainObject(record);
+                session._finalizeRecordPending = true;
                 if (!await this._commitSuiteRecovery(session, { reason: 'finalize-record' })) return false;
+                session._finalizeRecordPending = false;
 
                 await this._saveSuitePracticeRecord(record);
                 committed = true;
@@ -3337,8 +3339,23 @@
         async _recoverSuiteFinalization(session, options = {}) {
             const operationId = session.finalizeOperationId || `practice-suite:${session.id}:finalize`;
             try {
-                const recovered = await global.AppData.practice.recoverSuiteFinalization({ sessionId: session.id, operationId,
-                    submissionId: session._finalizeSubmissionId || null });
+                let recovered;
+                if (session._finalizeRecordPending) {
+                    // The record can exist in memory even when its checkpoint failed.
+                    // Reconcile before retrying that same snapshot; the recovery write
+                    // also fences a competing completion inside its transaction.
+                    recovered = await global.AppData.practice.getSuiteCommitState(session.id, operationId);
+                    session._finalizeOutcome = recovered.operation;
+                    if (recovered.operation === 'not-committed') {
+                        session._finalizeRecordPending = !await this._commitSuiteRecovery(session, { reason: 'finalize-record' });
+                    }
+                }
+                // A competing checkpoint or completion may have won the write fence.
+                // Durable recovery reconciles it and validates the winning snapshot.
+                if (!recovered || recovered.operation === 'not-committed') {
+                    recovered = await global.AppData.practice.recoverSuiteFinalization({ sessionId: session.id, operationId,
+                        submissionId: session._finalizeSubmissionId || null });
+                }
                 session._finalizeOutcome = recovered.operation;
                 if (recovered.operation === 'unconfirmed') {
                     throw Object.assign(new Error('The original completion is still unconfirmed'), { code: 'SUITE_COMMIT_UNCONFIRMED' });
@@ -3351,6 +3368,7 @@
                         'results', 'draftsByExam', 'revision', 'lastUpdate', '_finalizeSubmissionId']) {
                         session[field] = restored[field];
                     }
+                    session._finalizeRecordPending = false;
                     this._mirrorSuiteRecoverySnapshot(recovered.session, true);
                     await this._saveSuitePracticeRecord(recovered.record);
                 }
