@@ -8134,10 +8134,6 @@
             submissionPreparation = null;
             readingTimingController?.releaseSubmission(preparation);
             state.submissionPhase = 'failed';
-            setReadOnlyMode(false);
-            disableDragInteractions();
-            refreshReadingDraftSyncLifecycle();
-            activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : collectCurrentDraft()).catch(() => {});
             readingFailure('RECOVERY_SAVE_FAILED', 'save-draft', error, 'not-committed');
             global.alert?.('计时保存失败，请稍后重试提交。作答仍然保留。');
             return;
@@ -8145,6 +8141,14 @@
             if (!preparation.isCurrent()) {
                 if (submissionPreparation === preparation) submissionPreparation = null;
                 readingTimingController?.releaseSubmission(preparation);
+                // Failed or canceled preparation has drained its saves. Restore
+                // the current registration without unlocking a newer submission.
+                if (!isSubmissionEditingLocked()) {
+                    setReadOnlyMode(state.readOnly, state.readOnlyReason);
+                    disableDragInteractions();
+                    refreshReadingDraftSyncLifecycle();
+                    activateReadingTiming(state.suite?.inline ? getActiveSuiteSlot()?.draft : collectCurrentDraft()).catch(() => {});
+                }
             }
         }
         freezeSubmissionValue(submissionSnapshot);

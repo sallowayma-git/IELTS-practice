@@ -19,7 +19,107 @@ async function ready(page) {
         && !window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().suiteActivating
         && window.__IELTS_UNIFIED_READING_PAGE_TEST__.collectCurrentDraft()?.readingTiming);
 }
+async function registrationCancellation(scenario) {
+    const context = await browser.newContext({ viewport: { width: 1365, height: 1000 } });
+    await context.addInitScript(() => { window.__IELTS_READING_PAGE_TEST_HOOKS__ = true; });
+    try {
+        const host = await context.newPage();
+        await host.goto(pathToFileURL(path.join(root, 'developer/tests/e2e/fixtures/index.html')).href);
+        await host.setContent('<iframe name="practice" style="width: 1300px; height: 950px"></iframe>');
+        await host.evaluate(url => {
+            const frame = document.querySelector('iframe');
+            window.__registration = { examId: 'p3-high-15', sessionId: 'original-attempt',
+                windowSessionToken: 'original-token', windowSessionGeneration: 1,
+                libraryConfigurationId: null, practiceMode: 'single', parentOrigin: 'null' };
+            window.__completions = [];
+            window.__send = (type, data = {}) => frame.contentWindow.postMessage({ type, source: 'exam_host',
+                data: { ...window.__registration, ...data, messageIssuedAtMs: Date.now() } }, '*');
+            window.addEventListener('message', event => {
+                if (event.source !== frame.contentWindow) return;
+                if (event.data?.type === 'REQUEST_INIT') window.__send('INIT_SESSION');
+                if (event.data?.type === 'PRACTICE_COMPLETE') window.__completions.push(event.data.data);
+            });
+            frame.src = url;
+        }, `${pathToFileURL(path.join(root, 'assets/generated/reading-exams/reading-practice-unified.html'))}?examId=p3-high-15&dataKey=p3-high-15&test_env=1`);
+        const page = host.frame({ name: 'practice' });
+        await ready(page);
+        const input = page.locator('#question-groups input[type="text"]').first();
+        await input.fill('retained before registration');
+        const acceptedAnswers = await page.evaluate(`${hooks}.collectCurrentDraft().answers`);
+        await page.evaluate(() => {
+            const original = ReadingTimingController.prototype.save;
+            window.__registrationGate = { armed: true, held: false, release: null };
+            ReadingTimingController.prototype.save = async function (...args) {
+                const entry = args[0] || this.active;
+                const hold = window.__registrationGate.armed && entry?.meter.value.frozen;
+                if (hold) window.__registrationGate.armed = false;
+                const result = await original.apply(this, args);
+                if (hold) await new Promise(resolve => {
+                    window.__registrationGate.release = resolve;
+                    window.__registrationGate.held = true;
+                });
+                return result;
+            };
+            window.__canceledSubmit = window.__IELTS_UNIFIED_READING_PAGE_TEST__.handleSubmit();
+        });
+        await page.waitForFunction(() => window.__registrationGate.held);
+        assert.equal(await input.isDisabled(), true);
+        assert.equal(await page.locator('#question-groups').evaluate(root => root.inert), true);
+        const sessionId = scenario === 'same-attempt-registration' ? 'original-attempt' : 'replacement-attempt';
+        await host.evaluate(sessionId => {
+            Object.assign(window.__registration, { sessionId, windowSessionToken: 'new-registration-token',
+                windowSessionGeneration: 2 });
+            window.__send('INIT_SESSION');
+        }, sessionId);
+        await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().windowSessionToken === 'new-registration-token');
+        await page.evaluate(async () => {
+            window.__registrationGate.release();
+            await window.__canceledSubmit;
+        });
+        const state = await page.evaluate(`${hooks}.getTestState()`);
+        assert.equal(state.sessionId, sessionId);
+        assert.equal(state.submissionPhase, 'draft');
+        assert.equal(state.submissionEditingLocked, false);
+        assert.equal(await input.isDisabled(), false, `${scenario}: canceled preparation restores input editability`);
+        assert.equal(await page.locator('#question-groups').evaluate(root => root.inert), false);
+        assert.equal(await page.locator('#submit-btn').isDisabled(), false);
+        assert.deepEqual(await page.evaluate(`${hooks}.collectCurrentDraft().answers`), acceptedAnswers);
+        assert.equal(await host.evaluate(() => window.__completions.length), 0);
+        await page.waitForFunction(sessionId => {
+            const timing = window.__IELTS_UNIFIED_READING_PAGE_TEST__.getReadingTimingState();
+            return timing.context.editable && timing.active?.includes(sessionId);
+        }, sessionId);
+        await input.fill('edited after registration');
+        const editedAnswers = await page.evaluate(`${hooks}.collectCurrentDraft().answers`);
+        assert.notDeepEqual(editedAnswers, acceptedAnswers);
+        assert.equal(await page.evaluate(`${hooks}.collectCurrentDraft().readingTiming.frozen`), false);
+        await page.locator('#submit-btn').click();
+        await host.waitForFunction(() => window.__completions.length === 1);
+        const completion = await host.evaluate(() => window.__completions[0]);
+        assert.equal(completion.sessionId, sessionId);
+        assert.equal(completion.windowSessionToken, 'new-registration-token');
+        assert.deepEqual(completion.answers, editedAnswers);
+        assert.ok(completion.readingTiming.attemptId.includes(sessionId));
+        assert.equal(completion.readingTiming.frozen, true);
+        const persisted = await page.evaluate(async attemptId => AppData.recovery.getReadingTiming(attemptId), completion.readingTiming.attemptId);
+        assert.deepEqual(completion.readingTiming, persisted.snapshot);
+        // This fixture exercises the real host message protocol and timing store;
+        // the suite cases below cover the host's completed-record transaction.
+        await host.evaluate(completion => window.__send('PRACTICE_SUBMIT_ACK', {
+            examId: completion.examId, sessionId: completion.sessionId, submissionId: completion.submissionId
+        }), completion);
+        await page.waitForFunction(() => window.__IELTS_UNIFIED_READING_PAGE_TEST__.getTestState().submitted);
+        assert.equal(await host.evaluate(() => window.__completions.length), 1);
+        report.cases.push({ scenario, outcome: 'passed', completionMessages: 1, frozenPersistedSnapshots: 1 });
+        console.log(`${scenario}: passed`);
+    } finally { await context.close(); }
+}
 try {
+    if (!baseline) {
+        for (const scenario of ['same-attempt-registration', 'replacement-attempt-registration']) {
+            await registrationCancellation(scenario);
+        }
+    }
     for (const scenario of baseline ? ['control', 'question-click']
         : ['control', 'question-click', 'interactions', 'restored-inactive', 'pre-handoff-failure', 'unknown-ack']) {
         const context = await browser.newContext({ viewport: { width: 1365, height: 1000 } });

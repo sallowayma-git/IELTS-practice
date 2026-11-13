@@ -61,6 +61,11 @@ function setupTimingBarrier() {
         window.setInterval = () => null;
         window.document.visibilityState = 'visible';
         window.document.hasFocus = () => true;
+        const query = window.document.querySelectorAll.bind(window.document);
+        const input = query('input[type="radio"][name="q1"]')[0];
+        Object.setPrototypeOf(input, window.HTMLInputElement.prototype);
+        input.closest = () => null;
+        window.document.querySelectorAll = selector => selector === 'input, textarea, select' ? [input] : query(selector);
         const row = snapshot => ({ snapshot: JSON.parse(JSON.stringify(snapshot)), updatedAt: new Date().toISOString() });
         window.AppData.recovery.acquireReadingTiming = async snapshot => row(snapshot);
         window.AppData.recovery.saveReadingTiming = async snapshot => {
@@ -97,22 +102,63 @@ test('the real page/controller barrier keeps the accepted draft separate from la
     } finally { h.release(); h.hooks.stopReadingDraftSync(); h.hooks.restoreDraftSubmissionState(); }
 });
 
-test('a delayed page freeze cannot hand off an obsolete registration or unlock its replacement', async () => {
+for (const sessionId of ['PRIVATE_SESSION', 'replacement']) test(`a trusted INIT restores editable controls and timing after canceling preparation: ${sessionId}`, async () => {
     const h = setupTimingBarrier();
     try {
         const submit = h.hooks.handleSubmit();
         await h.saved;
-        h.hooks.setTestState({ sessionId: 'replacement', windowSessionToken: 'replacement-token', windowSessionGeneration: 2 });
+        const input = h.document.querySelectorAll('input[type="radio"][name="q1"]')[0];
+        assert.equal(input.disabled, true);
+        assert.equal(h.document.inert, true);
+        await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+            source: 'exam_host', type: 'INIT_SESSION', data: { examId: 'reading-p1', sessionId,
+                parentOrigin: 'http://localhost', libraryConfigurationId: null,
+                windowSessionToken: 'replacement-token', windowSessionGeneration: 2 }
+        } });
         h.release();
         await submit;
+        await new Promise(setImmediate);
         assert.equal(h.calls.filter(message => message.type === 'PRACTICE_COMPLETE').length, 0);
+        assert.equal(h.hooks.getTestState().submissionPhase, 'draft');
+        assert.equal(h.hooks.getTestState().submissionEditingLocked, false);
+        assert.equal(input.disabled, false);
+        assert.equal(h.document.inert, false);
+        assert.equal(h.hooks.getReadingTimingState().context.editable, true);
+        assert.ok(h.hooks.getReadingTimingState().active.includes(sessionId));
+        assert.equal(input.value, 'A');
+        input.value = 'B';
         await h.hooks.handleSubmit();
         const messages = h.calls.filter(message => message.type === 'PRACTICE_COMPLETE');
         assert.equal(messages.length, 1);
-        assert.equal(messages[0].data.sessionId, 'replacement');
-        assert.ok(messages[0].data.readingTiming.attemptId.includes('replacement'));
+        assert.equal(messages[0].data.sessionId, sessionId);
+        assert.equal(messages[0].data.answers.q1, 'B');
+        assert.ok(messages[0].data.readingTiming.attemptId.includes(sessionId));
         assert.equal(h.hooks.getTestState().submissionEditingLocked, true);
         assert.equal(h.hooks.getTestState().submissionPhase, 'handoff');
+    } finally { h.release(); h.hooks.stopReadingDraftSync(); h.hooks.restoreDraftSubmissionState(); }
+});
+
+test('a canceled preparation cannot unlock a newer submission after trusted re-registration', async () => {
+    const h = setupTimingBarrier();
+    try {
+        const submit = h.hooks.handleSubmit();
+        await h.saved;
+        await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+            source: 'exam_host', type: 'INIT_SESSION', data: { examId: 'reading-p1', sessionId: 'replacement',
+                parentOrigin: 'http://localhost', libraryConfigurationId: null,
+                windowSessionToken: 'replacement-token', windowSessionGeneration: 2 }
+        } });
+        assert.equal(h.hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'B' } }), true);
+        const submissionId = h.hooks.getTestState().submissionId;
+        h.release();
+        await submit;
+        assert.equal(h.calls.filter(message => message.type === 'PRACTICE_COMPLETE').length, 1);
+        assert.equal(h.hooks.getTestState().submissionId, submissionId);
+        assert.equal(h.hooks.getTestState().submissionPhase, 'handoff');
+        assert.equal(h.hooks.getTestState().submissionEditingLocked, true);
+        assert.equal(h.document.querySelectorAll('input[type="radio"][name="q1"]')[0].disabled, true);
+        assert.equal(h.document.inert, true);
+        assert.equal(h.hooks.getReadingTimingState().context.editable, false);
     } finally { h.release(); h.hooks.stopReadingDraftSync(); h.hooks.restoreDraftSubmissionState(); }
 });
 
