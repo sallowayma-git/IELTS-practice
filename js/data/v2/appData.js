@@ -1214,7 +1214,8 @@
     function rememberOperationFailure(error, attempted, receipt) {
         if (!error || (typeof error !== 'object' && typeof error !== 'function')) return;
         try {
-            const operation = receipt?.committed === true ? 'committed' : !attempted ? 'not-committed'
+            const operation = error.code === 'SUITE_COMMIT_UNCONFIRMED' ? 'unconfirmed'
+                : receipt?.committed === true ? 'committed' : !attempted ? 'not-committed'
                 : error instanceof AppDataError && error.details?.reason !== 'timeout' ? 'not-committed' : 'unconfirmed';
             operationFailures.set(error, operation);
         } catch (_) { /* Unknown is safer than changing the business failure. */ }
@@ -1224,7 +1225,17 @@
             ? operationFailures.get(error) || 'unconfirmed' : 'unconfirmed';
     }
 
+    async function suiteCommitState(recordId, operationId) {
+        await ready;
+        const state = await kernel.getPracticeCommitState(recordId, operationId);
+        const record = state.operation === 'committed'
+            ? await joinedPractice(recordId, 'full', state.layers) : null;
+        return { verified: true, operation: state.operation, operationId, record };
+    }
+
     const practice = Object.freeze({
+        async getSuiteCommitState(recordId, operationId) { return suiteCommitState(recordId, operationId); },
+        async recoverSuiteFinalization(command) { return recoverSuiteFinalization(command); },
         async list(options = {}) {
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
@@ -1297,7 +1308,20 @@
                 children.delete(recordId);
                 attempted = true;
                 receipt = await retryMergeConflict(command, async () => {
+                    if (mutation.operationId === `practice-suite:${recordId}:finalize`) {
+                        const state = await suiteCommitState(recordId, mutation.operationId);
+                        if (state.operation === 'committed') {
+                            return { committed: true, operationId: mutation.operationId, reconciled: true };
+                        }
+                        if (state.operation !== 'not-committed') {
+                            throw new AppDataError('SUITE_COMMIT_UNCONFIRMED', 'The original suite outcome requires reconciliation');
+                        }
+                    }
                     const existing = await practiceLayersForUpsert(recordId);
+                    if (mutation.operationId === `practice-suite:${recordId}:finalize`
+                        && Object.values(existing).some(Boolean)) {
+                        throw new AppDataError('CONFLICT', 'Suite completion appeared after reconciliation');
+                    }
                     const deletes = Array.from(children).flatMap((id) => ['practiceSummaries', 'practiceDetails', 'practiceAnnotations'].map((store) => ({ type: 'delete', store, recordId: id })));
                     return kernel.mutateEntities(deletes.concat(practiceUpserts(recordId, layers, existing)),
                         { ...mutation, documentChanges: [await reviewPlanChange(layers, input, existing, Array.from(children)), ...await sealReadingTiming(input, recordId, existing.detail?.data, children)] });
@@ -1631,8 +1655,23 @@
             receipt = await enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
                 const current = await readCollectionMeta(key);
                 const index = current.items.findIndex((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
+                const previous = index >= 0 ? current.items[index] : null;
+                const suite = kind === 'activeSession' && item.schema === 'suite-session-v2';
+                if (suite && previous && (Number(item.revision) <= Number(previous.revision)
+                    || (previous.finalizeRecord && (item.status !== 'finalizing'
+                        || ['finalizeRecord', 'results', 'draftsByExam', 'sequence', 'finalizeOperationId',
+                            'finalizeSubmissionId', 'finalizeRecoveryVersion'].some(field =>
+                            checksum(previous[field] ?? null) !== checksum(item[field] ?? null)))))) {
+                    // A late checkpoint must not replace an accepted or repaired submission.
+                    if (checksum({ ...item, updatedAt: null }) !== checksum({ ...previous, updatedAt: null })) {
+                        throw new AppDataError('CONFLICT', 'Suite recovery has advanced');
+                    }
+                }
                 if (index >= 0) current.items[index] = item; else current.items.push(item);
-                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], mutation);
+                return kernel.mutate([{ logicalKey: key, data: current.items, expectedRevision: current.revision }], {
+                    ...mutation,
+                    ...(suite ? { uncommittedPractice: { recordId: id, operationId: `practice-suite:${id}:finalize` } } : {})
+                });
             }));
             const committedItem = (await kernel.read(key))
                 .find((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) === id);
@@ -1649,8 +1688,13 @@
         const mutation = optionsMutationOptions(options, `recovery-${kind}-discard`, { id: String(id) });
         return enqueueRecoveryMutation(key, () => retryMergeConflict(options, async () => {
             const current = await readCollectionMeta(key);
+            const previous = current.items.find(entry => idOf(entry, ['id', 'sessionId', 'recordId']) === String(id));
             const next = current.items.filter((entry) => idOf(entry, ['id', 'sessionId', 'recordId']) !== String(id));
-            return kernel.mutate([{ logicalKey: key, data: next, expectedRevision: current.revision }], mutation);
+            return kernel.mutate([{ logicalKey: key, data: next, expectedRevision: current.revision }], {
+                ...mutation,
+                ...(options.requireUncommitted && previous?.schema === 'suite-session-v2'
+                    ? { uncommittedPractice: { recordId: String(id), operationId: `practice-suite:${id}:finalize` } } : {})
+            });
         }));
     }
     async function clearRecovery(kind, options = {}) {
@@ -1689,6 +1733,157 @@
             throw new AppDataError('VALIDATION', 'Reading timing totals, coverage or mapping regressed');
         }
     }
+    async function recoverSuiteFinalization(command) {
+        let outcome = 'unconfirmed';
+        const id = String(command?.sessionId || '');
+        const opId = String(command?.operationId || '');
+        try {
+            await ready;
+            if (!id || opId !== `practice-suite:${id}:finalize`) {
+                throw new AppDataError('VALIDATION', 'Original suite finalization identity is required');
+            }
+            const state = await suiteCommitState(id, opId);
+            outcome = state.operation;
+            if (outcome !== 'not-committed') return state;
+            const sessions = await readCollectionMeta(RECOVERY_KEYS.activeSession);
+            const session = sessions.items.find(item => item.id === id);
+            const reject = message => { throw new AppDataError('VALIDATION', message); };
+            if (!session || session.status !== 'finalizing' || session.schema !== 'suite-session-v2' || Number(session.version) !== 2
+                || session.finalizeOperationId !== opId) reject('A durable finalizing suite is required');
+            const record = clone(session.finalizeRecord);
+            const sequence = asArray(session.sequence);
+            const results = asArray(session.results);
+            const entries = asArray(record?.suiteEntries);
+            if (!record || record.id !== id || record.sessionId !== id || record.operationId !== opId
+                || record.metadata?.suiteSessionId !== id || !record.suiteMode || !sequence.length
+                || sequence.length !== results.length || sequence.length !== entries.length
+                || new Set(sequence.map(entry => entry.examId)).size !== sequence.length
+                || new Set(results.map(entry => entry.examId)).size !== results.length) {
+                reject('Invalid suite recovery identity or coverage');
+            }
+            if (session.finalizeSubmissionId && record.submissionId
+                && session.finalizeSubmissionId !== record.submissionId) reject('Submission identity mismatch');
+            if (command.submissionId && session.finalizeSubmissionId && command.submissionId !== session.finalizeSubmissionId) {
+                reject('Original submission identity changed');
+            }
+            const timing = await readCollectionMeta(RECOVERY_KEYS.readingTiming);
+            const seen = new Set();
+            const answers = {};
+            const comparison = {};
+            let correct = 0;
+            let total = 0;
+            for (let i = 0; i < sequence.length; i++) {
+                const source = sequence[i];
+                const entry = entries[i];
+                const result = results.find(item => item.examId === source.examId);
+                const draft = session.draftsByExam?.[source.examId];
+                if (!result || entry.examId !== source.examId || !result.answers || !result.answerComparison
+                    || checksum(entry.answers) !== checksum(result.answers)
+                    || checksum(entry.answerComparison) !== checksum(result.answerComparison)
+                    || checksum(entry.scoreInfo) !== checksum(result.scoreInfo)
+                    || entry.duration !== result.duration
+                    || (draft?.answers && checksum(draft.answers) !== checksum(result.answers))) {
+                    reject('Retained suite answers or score disagree');
+                }
+                for (const field of ['highlights', 'notes', 'noteOutlines', 'noteText', 'markedQuestions']) {
+                    const retained = draft?.[field] ?? result[field] ?? result.rawData?.[field];
+                    if (retained !== undefined && checksum(entry[field]) !== checksum(retained)) {
+                        reject('Retained suite annotations disagree');
+                    }
+                }
+                if (!Number.isSafeInteger(result.scoreInfo?.total) || result.scoreInfo.total <= 0
+                    || !Number.isSafeInteger(result.scoreInfo.correct) || result.scoreInfo.correct < 0
+                    || result.scoreInfo.correct > result.scoreInfo.total) reject('Invalid retained score');
+                correct += result.scoreInfo.correct;
+                total += result.scoreInfo.total;
+                Object.entries(result.answers).forEach(([key, value]) => { answers[`${source.examId}::${key}`] = value; });
+                Object.entries(result.answerComparison).forEach(([key, value]) => { comparison[`${source.examId}::${key}`] = value; });
+                const accepted = requireReadingTiming(entry.readingTiming);
+                const candidates = [accepted, result.readingTiming, draft?.readingTiming].filter(Boolean).map(requireReadingTiming);
+                if (seen.has(accepted.attemptId) || accepted.parentAttemptId !== id || accepted.sequenceIndex !== i
+                    || accepted.examId !== source.examId) reject('Invalid retained passage identity');
+                seen.add(accepted.attemptId);
+                const provenance = [source.exam, source, entry.metadata, result.metadata, record.metadata]
+                    .filter(value => hasOwn(value, 'libraryConfigurationId'));
+                if (!provenance.length || provenance.some(value => value.libraryConfigurationId !== accepted.libraryConfigurationId)) {
+                    reject('Retained passage source mismatch');
+                }
+                const row = timing.items.find(item => item.id === accepted.attemptId);
+                if (!row || row.recordId || (row.finalizationOperationId && row.finalizationOperationId !== opId)) {
+                    throw new AppDataError('TIMING_FINALIZED', 'Timing is missing or belongs to another completion');
+                }
+                const saved = requireReadingTiming(row.snapshot);
+                for (const value of [saved, ...candidates]) {
+                    if (value.attemptId !== accepted.attemptId || value.parentAttemptId !== id || value.sequenceIndex !== i
+                        || !global.ReadingTiming.sameSource(value, accepted)) reject('Timing source or attempt mismatch');
+                    if (value.writer !== accepted.writer) throw new AppDataError('TIMING_STALE_WRITER', 'Another writer owns the retained timing');
+                }
+                candidates.sort((a, b) => a.revision - b.revision);
+                const latest = candidates[candidates.length - 1];
+                if (saved.revision > latest.revision) throw new AppDataError('TIMING_STALE_REVISION', 'Timing advanced after the accepted submission');
+                for (const value of [saved, ...candidates]) {
+                    if (value.revision === latest.revision && checksum(value) !== checksum(latest)) {
+                        reject('Conflicting retained timing revision');
+                    }
+                    validateTimingAdvance(value, latest);
+                }
+                if (session.finalizeRecoveryVersion === 1) {
+                    if (row.finalizationOperationId !== opId || !accepted.frozen || checksum(saved) !== checksum(accepted)
+                        || checksum(latest) !== checksum(accepted)) {
+                        reject('Repaired finalization fence changed');
+                    }
+                    continue;
+                }
+                const frozen = { ...clone(latest), frozen: true, revision: latest.revision + 1 };
+                requireReadingTiming(frozen);
+                row.snapshot = frozen;
+                row.finalizationOperationId = opId;
+                row.updatedAt = nowIso();
+                entry.readingTiming = clone(frozen);
+                result.readingTiming = clone(frozen);
+                if (draft) draft.readingTiming = clone(frozen);
+            }
+            if (record.correctAnswers !== correct || record.totalQuestions !== total
+                || record.scoreInfo?.correct !== correct || record.scoreInfo?.total !== total
+                || !Number.isFinite(record.scoreInfo?.accuracy)
+                || Math.abs(record.scoreInfo.accuracy - correct / total) > 1e-9
+                || record.scoreInfo.percentage !== Math.round(correct / total * 100)
+                || checksum(record.answers) !== checksum(answers) || checksum(record.answerComparison) !== checksum(comparison)) {
+                reject('Retained aggregate does not match its passages');
+            }
+            if (session.finalizeRecoveryVersion !== 1) {
+                // Older snapshots omitted the receipt ID. A retransmission can
+                // supply it; host-only recovery never invents a substitute ID.
+                session.finalizeSubmissionId = session.finalizeSubmissionId || command.submissionId || null;
+                if (session.finalizeSubmissionId) record.submissionId = session.finalizeSubmissionId;
+                session.finalizeRecord = record;
+                session.finalizeRecoveryVersion = 1;
+                session.revision = (Number(session.revision) || 0) + 1;
+                session.lastUpdate = Date.now();
+                session.updatedAt = nowIso();
+                // Both documents and the absence of the original completion are
+                // checked inside one transaction. A late commit or writer wins
+                // by invalidating this fence, never by losing its data.
+                await kernel.mutate([
+                    { logicalKey: RECOVERY_KEYS.activeSession, data: sessions.items, expectedRevision: sessions.revision },
+                    { logicalKey: RECOVERY_KEYS.readingTiming, data: timing.items, expectedRevision: timing.revision }
+                ], { operationId: `suite-repair:${id}:${session.revision}`,
+                    uncommittedPractice: { recordId: id, operationId: opId } });
+            }
+            return { verified: true, operation: 'not-committed', operationId: opId,
+                prepared: true, session: clone(session), record: clone(session.finalizeRecord) };
+        } catch (error) {
+            if (id && opId === `practice-suite:${id}:finalize`) {
+                try {
+                    const latest = await suiteCommitState(id, opId);
+                    if (latest.operation === 'committed') return latest;
+                    outcome = latest.operation;
+                } catch (_) { outcome = 'unconfirmed'; }
+            }
+            operationFailures.set(error, outcome);
+            throw error;
+        }
+    }
     async function mutateReadingTiming(value, acquire, savedSnapshot = null) {
         await ready;
         const snapshot = requireReadingTiming(value);
@@ -1701,7 +1896,9 @@
             const current = await readCollectionMeta(key);
             const index = current.items.findIndex(item => item.id === snapshot.attemptId);
             const previous = index >= 0 ? current.items[index] : null;
-            if (previous?.recordId) throw new AppDataError('TIMING_FINALIZED', 'Reading timing is already submitted');
+            if (previous?.recordId || previous?.finalizationOperationId) {
+                throw new AppDataError('TIMING_FINALIZED', 'Reading timing is sealed for submission');
+            }
             if (previous && !global.ReadingTiming.sameSource(previous.snapshot, snapshot)) {
                 throw new AppDataError('VALIDATION', 'Reading timing source mismatch');
             }

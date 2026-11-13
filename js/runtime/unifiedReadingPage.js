@@ -177,6 +177,7 @@
     let diagnosticBinding = null;
     let handshakeDeadline = null;
     let pendingSubmission = null; // Business-owned snapshot; never given to diagnostics.
+    let restoredFinalization = null;
     let submissionPreparation = null;
     const freezeSubmissionValue = value => {
         Object.values(value).forEach(child => { if (child && typeof child === 'object') freezeSubmissionValue(child); });
@@ -264,6 +265,7 @@
         };
     }
     async function activateReadingTiming(draft = null) {
+        if (restoredFinalization) return;
         if (!global.ReadingTimingController) return;
         if (!readingTimingController) readingTimingController = new global.ReadingTimingController(readingTimingContext);
         await readingTimingController.activate(draft);
@@ -1698,8 +1700,8 @@
         return merged;
     }
 
-    function mergeSuiteDraftPayload(data = {}) {
-        if (isSubmissionEditingLocked()) return;
+    function mergeSuiteDraftPayload(data = {}, recoveryOwner = null) {
+        if (isSubmissionEditingLocked() && (!recoveryOwner || restoredFinalization !== recoveryOwner)) return;
         if (!state.suite?.inline) {
             return;
         }
@@ -1868,7 +1870,7 @@
         }
     }
 
-    async function ensureSuiteDatasets(rawSequence = []) {
+    async function ensureSuiteDatasets(rawSequence = [], recoveryOwner = null) {
         const sessionId = state.sessionId;
         const suiteSessionId = state.suiteSessionId;
         const sequence = normalizeSuiteSequence(rawSequence);
@@ -1880,7 +1882,8 @@
         state.suite.sequence = sequence;
         await Promise.all(sequence.map(async (entry) => {
             const loaded = await loadDatasetByEntry(entry);
-            if (isSubmissionEditingLocked() || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return;
+            if ((isSubmissionEditingLocked() && (!recoveryOwner || restoredFinalization !== recoveryOwner))
+                || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return;
             const existing = getSuiteSlot(entry.examId);
             const inheritedDraft = state.simulationCtx?.draft
                 && state.simulationCtx.examId === entry.examId
@@ -6474,7 +6477,7 @@
     }
 
     function isSubmissionEditingLocked() {
-        return Boolean(submissionPreparation)
+        return Boolean(restoredFinalization && state.submissionStatus !== 'submitted') || Boolean(submissionPreparation)
             || (ownsPendingSubmission(pendingSubmission) && state.submissionStatus !== 'submitted');
     }
 
@@ -6523,6 +6526,23 @@
             submission.settle = resolve;
             if (!dispatchPendingSubmission(submission)) settleSubmissionRetry('unconfirmed');
         });
+    }
+
+    function confirmRestoredFinalization() {
+        if (!restoredFinalization || state.submissionStatus === 'submitting' || state.submitted) return;
+        const owner = restoredFinalization;
+        state.submissionStatus = 'submitting';
+        syncPrimaryActionButtons();
+        postMessage('SIMULATION_SUBMIT', { recoverFinalization: true, suiteSessionId: state.suiteSessionId,
+            submissionId: owner.submissionId, operationId: owner.operationId });
+        clearSubmissionAckTimer();
+        state.submissionAckTimer = setTimeout(() => {
+            if (restoredFinalization !== owner || state.submitted) return;
+            state.submissionStatus = 'draft';
+            state.submissionPhase = 'unconfirmed';
+            syncPrimaryActionButtons();
+            readingFailure('PRACTICE_CHANNEL_TIMEOUT', 'submit', new Error('Recovery acknowledgement timed out'), 'unconfirmed');
+        }, submissionAckTimeoutMs);
     }
 
     function beginSubmission(messageType, payload, presentation = null, timingOwner = null) {
@@ -6890,7 +6910,7 @@
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 dom.submitBtn.setAttribute('type', 'button');
-                setSubmitLabel(submissionPreparation ? '正在保存作答' : (state.submissionStatus === 'submitting' ? '正在确认保存' : '确认上次提交'));
+                setSubmitLabel(submissionPreparation ? '正在保存作答' : (state.submissionStatus === 'submitting' ? '正在确认保存' : restoredFinalization ? '恢复并确认提交' : '确认上次提交'));
                 dom.submitBtn.disabled = Boolean(submissionPreparation) || state.submissionStatus === 'submitting';
             }
             if (dom.resetBtn) dom.resetBtn.style.display = 'none';
@@ -7029,6 +7049,7 @@
         readingTimingController?.releaseSubmission(pendingSubmission?.timingOwner);
         settleSubmissionRetry('unconfirmed');
         pendingSubmission = null;
+        restoredFinalization = null;
         clearSubmissionAckTimer();
         state.lastResults = null;
         state.submitted = false;
@@ -7458,6 +7479,7 @@
     function restartInitHandshake() {
         settleSubmissionRetry('unconfirmed');
         pendingSubmission = null;
+        restoredFinalization = null;
         clearSubmissionAckTimer();
         state.submissionStatus = 'draft';
         state.submissionId = '';
@@ -8075,6 +8097,7 @@
             handleExitClick();
             return;
         }
+        if (restoredFinalization) { confirmRestoredFinalization(); return; }
         if (state.readOnly || state.submissionStatus !== 'draft' || submissionPreparation || state.suite.activating) {
             return;
         }
@@ -8292,7 +8315,8 @@
     }
 
     async function initializeInlineSimulationSuite(data = {}, options = {}) {
-        if (isSubmissionEditingLocked()) return false;
+        const recoveryOwner = data.finalization?.operationId === restoredFinalization?.operationId ? restoredFinalization : null;
+        if (isSubmissionEditingLocked() && !recoveryOwner) return false;
         const sessionId = state.sessionId;
         const suiteSessionId = state.suiteSessionId;
         const sequence = Array.isArray(data && data.suiteSequence) ? data.suiteSequence : [];
@@ -8305,10 +8329,11 @@
         if (flowMode && flowMode !== 'simulation') {
             return false;
         }
-        await ensureSuiteDatasets(sequence);
-        if (isSubmissionEditingLocked() || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return false;
+        await ensureSuiteDatasets(sequence, recoveryOwner);
+        if ((isSubmissionEditingLocked() && (!recoveryOwner || restoredFinalization !== recoveryOwner))
+            || state.sessionId !== sessionId || state.suiteSessionId !== suiteSessionId) return false;
         captureInlineSuiteDraftBeforeReinit('reinit');
-        mergeSuiteDraftPayload(data || {});
+        mergeSuiteDraftPayload(data || {}, recoveryOwner);
         const targetExamId = resolveSuiteTargetExamId(data || {}, options);
         if (!targetExamId) {
             return false;
@@ -8401,6 +8426,9 @@
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
+            restoredFinalization = data.finalization?.operationId === `practice-suite:${state.suiteSessionId}:finalize`
+                ? { ...data.finalization } : null;
+            if (restoredFinalization) state.submissionPhase = 'unconfirmed';
             connectReadingDiagnostics(data);
             applyPracticeMode(data.practiceMode || data.mode || '');
             const initTimerAnchorMs = Number(data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs);
@@ -8584,6 +8612,23 @@
             }
             readingStep('suite-navigation', 'started');
             global.location.href = data.url;
+            return;
+        }
+        if (type === 'SUITE_RECOVERY_OUTCOME') {
+            if (!restoredFinalization || state.submissionStatus === 'submitted' || !shouldAcceptWindowSessionMessage(data, sourceWindow)
+                || data.suiteSessionId !== state.suiteSessionId || data.operationId !== restoredFinalization.operationId
+                || data.submissionId !== restoredFinalization.submissionId) return;
+            clearSubmissionAckTimer();
+            if (data.operation === 'committed') {
+                enterSubmittedReadOnlyState('simulation-final-submit');
+                readingStep('storage-confirmed', 'succeeded');
+            } else {
+                state.submissionStatus = 'draft';
+                state.submissionPhase = 'unconfirmed';
+                syncPrimaryActionButtons();
+                readingFailure('PRACTICE_SAVE_FAILED', 'submit', new Error('Suite recovery remains pending'),
+                    data.operation === 'not-committed' ? 'not-committed' : 'unconfirmed');
+            }
             return;
         }
         if (type === 'SIMULATION_CONTEXT') {

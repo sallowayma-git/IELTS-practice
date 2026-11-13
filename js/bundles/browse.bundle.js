@@ -12223,6 +12223,20 @@ class VirtualScroller {
                         if (windowInfo && windowInfo.reviewMode) {
                             break;
                         }
+                        if (data?.recoverFinalization === true) {
+                            const suite = this.currentSuiteSession;
+                            if (!suite || suite.id !== data.suiteSessionId || !suite.finalizeRecord
+                                || !['finalizing', 'completed'].includes(suite.status)
+                                || (suite._finalizeSubmissionId && data.submissionId !== suite._finalizeSubmissionId)) break;
+                            const committed = await this._finalizeSuiteRecordWithGate(suite, { fromRecovery: true, deferTeardown: true });
+                            if (!this._isExamSessionRegistrationCurrent(examId, expectedRegistration)) break;
+                            this._postExamMessage(examId, sourceWindow || expectedWindow, 'SUITE_RECOVERY_OUTCOME', {
+                                suiteSessionId: suite.id, operationId: suite.finalizeOperationId,
+                                submissionId: suite._finalizeSubmissionId || null,
+                                operation: committed ? 'committed' : suite._finalizeOutcome || 'unconfirmed'
+                            });
+                            break;
+                        }
                         await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow, {
                             expectedRegistration: routedExamId === examId ? expectedRegistration : null
                         });
@@ -14370,6 +14384,13 @@ class VirtualScroller {
                     return null;
                 }
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
+                const suite = this.currentSuiteSession;
+                if (suite && initPayload.suiteSessionId === suite.id && suite.finalizeRecord
+                    && ['finalizing', 'completed'].includes(suite.status)) {
+                    initPayload.finalization = { operationId: suite.finalizeOperationId,
+                        submissionId: suite._finalizeSubmissionId || null };
+                    initPayload.draftsByExam = this._cloneReadingDraftValue(suite.draftsByExam || {});
+                }
                 this._postExamMessage(examId, targetWindow, 'INIT_SESSION', initPayload);
                 this._postExamMessage(examId, targetWindow, 'init_exam_session', initPayload);
                 return initPayload;
