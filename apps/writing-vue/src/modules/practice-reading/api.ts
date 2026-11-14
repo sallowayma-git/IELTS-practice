@@ -58,6 +58,10 @@ export const readingCoachApi = {
     return queryCoach(READING_ACTIVITY, payload, sessionId, options)
   },
 
+  async forgetPreference(threadId: string, preferenceKey: string) {
+    return practiceCoach.forgetPreference(threadId, preferenceKey)
+  },
+
   async recordFeedback(coachMessageId: string, feedbackKind: CoachFeedbackKind) {
     return recordCoachFeedback(coachMessageId, feedbackKind)
   },

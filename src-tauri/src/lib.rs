@@ -301,6 +301,7 @@ pub fn run() {
             commands::enrichment::coach_ensure_thread,
             commands::enrichment::coach_list_messages,
             commands::enrichment::coach_run,
+            commands::enrichment::coach_forget_preference,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_feedback,
             #[cfg(feature = "learning-observation-v1")]

@@ -207,4 +207,12 @@ pub trait CoachStore: Send + Sync {
         &self,
         thread_id: &str,
     ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError>;
+
+    /// Persist a long-term teaching preference the learner stated explicitly
+    /// and clear the thread's frozen profile so the next turn re-freezes with it.
+    fn remember_teaching_preference(
+        &self,
+        thread_id: &str,
+        text: &str,
+    ) -> Result<ielts_db::RememberedPreference, ApplicationError>;
 }

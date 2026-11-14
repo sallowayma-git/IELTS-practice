@@ -20,6 +20,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::coach::RememberedPreference;
 use crate::cognitive_read::{observation_snapshot, observations_by_ids};
 use crate::sqlite::{DbError, DbResult};
 
@@ -596,6 +597,68 @@ pub fn delete_explicit_preference(conn: &Connection, command: &ExplicitPreferenc
         )?)
     })?;
     Ok(removed > 0)
+}
+
+/// The coach noticed a long-term teaching preference the learner stated
+/// explicitly. It becomes a global explicit preference and the thread's frozen
+/// learner profile is cleared so the next turn re-freezes with it. Both writes
+/// commit together: a preference without the cleared profile would not reach
+/// the thread, and a cleared profile without the preference would lose it.
+pub fn remember_teaching_preference(
+    conn: &Connection,
+    thread_id: &str,
+    text: &str,
+) -> DbResult<RememberedPreference> {
+    let text = text.trim();
+    require_text(text, "text")?;
+    let digest = hex::encode(Sha256::digest(text.as_bytes()));
+    let key = format!("coach.teaching.{}", &digest[..12]);
+    let tx = conn.unchecked_transaction()?;
+    upsert_explicit_preference(
+        &tx,
+        &ExplicitPreferenceUpsert {
+            user_id: "local".into(),
+            preference_key: key.clone(),
+            scope: "global".into(),
+            value: json!(text),
+            source: "user".into(),
+        },
+    )?;
+    tx.execute(
+        "UPDATE coach_threads SET learner_profile_json=NULL WHERE id=?1",
+        [thread_id],
+    )?;
+    tx.commit()?;
+    Ok(RememberedPreference {
+        key,
+        scope: "global".into(),
+        text: text.into(),
+    })
+}
+
+/// Undo one remembered teaching preference and clear the thread's frozen
+/// learner profile so the next turn stops using it. Returns whether a row was
+/// actually removed; an unknown thread simply clears nothing.
+pub fn forget_coach_preference(
+    conn: &Connection,
+    thread_id: &str,
+    preference_key: &str,
+) -> DbResult<bool> {
+    let tx = conn.unchecked_transaction()?;
+    let removed = delete_explicit_preference(
+        &tx,
+        &ExplicitPreferenceDelete {
+            user_id: "local".into(),
+            preference_key: preference_key.into(),
+            scope: "global".into(),
+        },
+    )?;
+    tx.execute(
+        "UPDATE coach_threads SET learner_profile_json=NULL WHERE id=?1",
+        [thread_id],
+    )?;
+    tx.commit()?;
+    Ok(removed)
 }
 
 pub fn memory_context_preview(
@@ -1788,7 +1851,139 @@ impl From<serde_json::Error> for DbError {
 
 #[cfg(test)]
 mod tests {
-    use super::require_safe_statement;
+    use super::*;
+    use crate::coach::{ensure_coach_thread, EnsureCoachThreadCommand};
+    use crate::migrate::migrate;
+
+    fn open() -> (tempfile::TempDir, Connection) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = Connection::open(dir.path().join("memory.db")).unwrap();
+        migrate(&mut conn).unwrap();
+        (dir, conn)
+    }
+
+    fn thread(conn: &Connection, id: &str) -> String {
+        ensure_coach_thread(
+            conn,
+            &EnsureCoachThreadCommand {
+                thread_id: Some(id.into()),
+                attempt_id: None,
+                asset_id: None,
+                kind: "chat".into(),
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn freeze(conn: &Connection, thread_id: &str) {
+        conn.execute(
+            "UPDATE coach_threads SET learner_profile_json='{}' WHERE id=?1",
+            [thread_id],
+        )
+        .unwrap();
+    }
+
+    fn profile_is_frozen(conn: &Connection, thread_id: &str) -> bool {
+        conn.query_row(
+            "SELECT learner_profile_json IS NOT NULL FROM coach_threads WHERE id=?1",
+            [thread_id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn stored_rows(conn: &Connection, key: &str) -> i64 {
+        conn.query_row(
+            "SELECT COUNT(*) FROM explicit_user_preferences
+             WHERE user_id='local' AND preference_key=?1 AND scope='global' AND status='active'",
+            [key],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_remembered_preference_is_global_hashed_and_clears_the_frozen_profile() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+        freeze(&conn, &thread_id);
+
+        let remembered = remember_teaching_preference(&conn, &thread_id, "  先给我看例句  ").unwrap();
+
+        assert_eq!(remembered.scope, "global");
+        assert_eq!(remembered.text, "先给我看例句");
+        assert!(remembered.key.starts_with("coach.teaching."));
+        let hash = &remembered.key["coach.teaching.".len()..];
+        assert_eq!(hash.len(), 12);
+        assert!(hash.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
+        assert_eq!(stored_rows(&conn, &remembered.key), 1);
+        assert!(!profile_is_frozen(&conn, &thread_id));
+        let (value, source): (String, String) = conn
+            .query_row(
+                "SELECT value_json,source FROM explicit_user_preferences WHERE preference_key=?1",
+                [&remembered.key],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&value).unwrap(), json!("先给我看例句"));
+        assert_eq!(source, "user");
+    }
+
+    #[test]
+    fn the_same_text_twice_stays_one_row() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+        let first = remember_teaching_preference(&conn, &thread_id, "Explain in Chinese first.").unwrap();
+        let second = remember_teaching_preference(&conn, &thread_id, "Explain in Chinese first.").unwrap();
+        assert_eq!(first, second);
+        assert_eq!(stored_rows(&conn, &first.key), 1);
+    }
+
+    #[test]
+    fn a_teaching_preference_uses_the_full_120_character_budget() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+
+        let at_limit = "例".repeat(120);
+        let remembered = remember_teaching_preference(&conn, &thread_id, &at_limit).unwrap();
+        assert_eq!(stored_rows(&conn, &remembered.key), 1);
+        assert_eq!(remembered.text, at_limit);
+
+        assert!(remember_teaching_preference(&conn, &thread_id, &"例".repeat(121)).is_err());
+    }
+
+    #[test]
+    fn forgetting_removes_the_row_and_clears_the_frozen_profile() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+        let remembered = remember_teaching_preference(&conn, &thread_id, "Explain in Chinese first.").unwrap();
+        freeze(&conn, &thread_id);
+
+        assert!(forget_coach_preference(&conn, &thread_id, &remembered.key).unwrap());
+        assert_eq!(stored_rows(&conn, &remembered.key), 0);
+        assert!(!profile_is_frozen(&conn, &thread_id));
+
+        // Already gone: nothing to remove, still no error.
+        assert!(!forget_coach_preference(&conn, &thread_id, &remembered.key).unwrap());
+    }
+
+    #[test]
+    fn an_unknown_thread_does_not_create_rows() {
+        let (_dir, conn) = open();
+
+        // The preference row itself is global, not thread-owned; the thread
+        // update is a no-op. Nothing invents a coach thread.
+        let remembered = remember_teaching_preference(&conn, "coach-missing", "Explain in Chinese first.").unwrap();
+        assert_eq!(stored_rows(&conn, &remembered.key), 1);
+        let threads: i64 = conn
+            .query_row("SELECT COUNT(*) FROM coach_threads", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(threads, 0);
+        // Forgetting still removes the global row; the missing thread is a no-op.
+        assert!(forget_coach_preference(&conn, "coach-missing", &remembered.key).unwrap());
+        assert_eq!(stored_rows(&conn, &remembered.key), 0);
+    }
 
     #[test]
     fn the_memory_write_refuses_unsafe_statements() {

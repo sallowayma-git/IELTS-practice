@@ -109,6 +109,10 @@
         <div v-if="coachResponse" class="reading-coach-msg assistant coach-response" data-reading-coach-answer>
           {{ coachResponse.answer || coachResponse.message || '教练已返回结果。' }}
         </div>
+        <div v-if="coachRemembered" class="reading-coach-remembered" data-reading-coach-remembered>
+          <span>已记住：{{ coachRemembered.text }}</span>
+          <button class="btn-text" type="button" data-reading-coach-forget @click="$emit('forget-remembered')">撤销</button>
+        </div>
       </div>
       <div id="reading-coach-actions" class="reading-coach-panel__actions" data-reading-coach-actions>
         <button
@@ -188,6 +192,7 @@ const props = defineProps({
   selectedContext: { type: Object, default: null },
   coachTranscript: { type: Array, default: () => [] },
   coachResponse: { type: Object, default: null },
+  coachRemembered: { type: Object, default: null },
   coachQuickActions: { type: Array, default: () => [] },
   coachSelectionActions: { type: Array, default: () => [] },
   coachFollowUps: { type: Array, default: () => [] },
@@ -206,6 +211,7 @@ defineEmits([
   'follow-up',
   'feedback',
   'reask',
+  'forget-remembered',
   'update:coach-query',
   'refresh-selected-context',
   'ask'
@@ -224,3 +230,29 @@ function isFeedbackLocked(messageId) {
   return Boolean(state && state.status !== 'failed')
 }
 </script>
+
+<style scoped>
+.reading-coach-remembered {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--soft-line);
+  border-radius: 3px;
+  background: var(--intro-bg);
+  color: var(--muted-ink);
+  font-size: 12px;
+}
+
+.reading-coach-remembered span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reading-coach-remembered .btn-text {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+</style>

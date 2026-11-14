@@ -286,7 +286,10 @@ fn explicit_preference_write_path_validates_with_friendly_codes() {
     assert_eq!(refused.code, "memory.preference_rejected");
     assert!(refused.message.contains("不能保存"));
     let too_long = service
-        .put_explicit_preference(&note("user_note.long", &"字".repeat(61)))
+        .put_explicit_preference(&note(
+            "user_note.long",
+            &"字".repeat(ielts_domain::MAX_PREFERENCE_TEXT_CHARS + 1),
+        ))
         .unwrap_err();
     assert_eq!(too_long.code, "memory.preference_too_long");
 

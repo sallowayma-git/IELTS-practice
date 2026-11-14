@@ -100,11 +100,21 @@ pub struct RunCoachCommand {
     pub question_context: Option<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RememberedPreference {
+    pub key: String,
+    pub scope: String,
+    pub text: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoachRunResult {
     pub user_message: CoachMessage,
     pub assistant_message: CoachMessage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remembered: Option<RememberedPreference>,
 }
 
 fn default_true() -> bool {
@@ -357,6 +367,7 @@ pub fn find_completed_review(conn: &Connection, thread_id: &str) -> DbResult<Opt
         Some(row) => Ok(Some(CoachRunResult {
             user_message: message_from_row(row, 0)?,
             assistant_message: message_from_row(row, 8)?,
+            remembered: None,
         })),
         None => Ok(None),
     }

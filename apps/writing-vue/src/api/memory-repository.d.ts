@@ -119,7 +119,7 @@ export interface PromoteMemoryCandidateCommand {
 export interface PutExplicitPreferenceCommand {
   preferenceKey: string
   scope?: string
-  /** A short string (<= 60 chars), boolean or number; `user_note.*` keys take a string. */
+  /** A short string (<= 120 chars), boolean or number; `user_note.*` keys take a string. */
   value: string | boolean | number
 }
 

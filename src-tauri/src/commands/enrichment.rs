@@ -9,7 +9,8 @@ use crate::ai::load_runtime;
 use crate::app::application_store::ApplicationStore;
 use crate::app::state::{AppDb, AppVault};
 use ielts_db::{
-    delete_annotation, delete_vocab, ensure_coach_thread, import_dictionary, list_annotations,
+    delete_annotation, delete_vocab, ensure_coach_thread, forget_coach_preference,
+    import_dictionary, list_annotations,
     list_coach_messages, list_vocab, lookup_term_with_bundled, revalidate_annotations,
     review_vocab, upsert_annotation, upsert_vocab, AnnotationRecord, BundledDictionary,
     CoachMessage, CoachRunResult, CoachThread, DictionaryEntry, EnsureCoachThreadCommand,
@@ -234,5 +235,17 @@ pub async fn coach_run(
     match result {
         Ok(result) => Ok(CommandResponse::success(result)),
         Err(error) => Ok(CommandResponse::failure(map_application_error(error))),
+    }
+}
+
+#[tauri::command]
+pub fn coach_forget_preference(
+    db: State<'_, AppDb>,
+    thread_id: String,
+    preference_key: String,
+) -> CommandResponse<bool> {
+    match db.with_conn(|conn| forget_coach_preference(conn, &thread_id, &preference_key)) {
+        Ok(v) => CommandResponse::success(v),
+        Err(e) => CommandResponse::failure(map_err(e)),
     }
 }

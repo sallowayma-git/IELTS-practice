@@ -147,6 +147,16 @@ impl CoachStore for ApplicationStore<'_> {
             .with_conn(|conn| ielts_db::freeze_coach_learner_profile(conn, thread_id))
             .map_err(enrichment_error)
     }
+
+    fn remember_teaching_preference(
+        &self,
+        thread_id: &str,
+        text: &str,
+    ) -> Result<ielts_db::RememberedPreference, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::remember_teaching_preference(conn, thread_id, text))
+            .map_err(enrichment_error)
+    }
 }
 
 impl CoachFeedbackStore for ApplicationStore<'_> {

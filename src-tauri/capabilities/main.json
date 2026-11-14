@@ -47,6 +47,7 @@
     "allow-check-for-updates",
     "allow-clear-history",
     "allow-coach-ensure-thread",
+    "allow-coach-forget-preference",
     "allow-coach-list-feedback",
     "allow-coach-list-messages",
     "allow-coach-record-feedback",

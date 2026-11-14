@@ -304,6 +304,11 @@ export const practiceCoach = {
       })
       throw error
     }
+  },
+
+  async forgetPreference(threadId, preferenceKey) {
+    const response = await invokeCommand('coach_forget_preference', { threadId, preferenceKey })
+    return unwrapCommandResponse(response, 'coach_forget_preference')
   }
 }
 

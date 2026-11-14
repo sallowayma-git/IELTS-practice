@@ -67,6 +67,13 @@ impl CoachStore for Store {
     fn learner_profile(&self, thread: &str) -> Result<LearnerProfileSnapshot, ApplicationError> {
         freeze_coach_learner_profile(&self.0.lock().unwrap(), thread).map_err(app_error)
     }
+    fn remember_teaching_preference(
+        &self,
+        thread: &str,
+        text: &str,
+    ) -> Result<RememberedPreference, ApplicationError> {
+        remember_teaching_preference(&self.0.lock().unwrap(), thread, text).map_err(app_error)
+    }
 }
 
 struct Provider {

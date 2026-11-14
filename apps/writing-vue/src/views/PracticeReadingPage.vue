@@ -249,6 +249,7 @@
       :selected-context="selectedContext"
       :coach-transcript="coachTranscript"
       :coach-response="coachResponse"
+      :coach-remembered="coachRemembered"
       :coach-quick-actions="coachQuickActions"
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
@@ -264,6 +265,7 @@
       @follow-up="askCoachFollowUp"
       @feedback="submitCoachFeedback($event.messageId, $event.kind)"
       @reask="reaskCoachMessage"
+      @forget-remembered="forgetRememberedPreference"
       @update:coach-query="coachQuery = $event"
       @refresh-selected-context="refreshSelectedContext"
       @ask="askCoach"
@@ -624,6 +626,7 @@ const {
   coachLoading,
   coachError,
   coachResponse,
+  coachRemembered,
   selectedContext,
   readingCoachOpen,
   llmReviewStatus,
@@ -646,7 +649,8 @@ const {
   submitCoachFeedback,
   runCoachQuickAction,
   runCoachSelectionAction,
-  runAutomaticReviewCoach
+  runAutomaticReviewCoach,
+  forgetRememberedPreference
 } = useReadingCoach({
   submissionSource: () => submission.value,
   setSubmission: (nextSubmission) => {

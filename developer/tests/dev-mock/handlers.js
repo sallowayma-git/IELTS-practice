@@ -658,6 +658,7 @@ export function createHandlers(state, host) {
     },
     coach_list_messages: () => [],
     coach_run: () => ({ status: 'completed', messages: [] }),
+    coach_forget_preference: () => true,
     journal_get_daily: ({ query = {} }) => clone(ownOf(notebook.journals, query.journalDate) || {
       id: `journal-${query.journalDate}`, userId: 'local', journalDate: query.journalDate, version: 1, status: 'published',
       facts: { journalDate: query.journalDate, timeSpentMs: 0, writingEvalSummary: { completed: 0, degraded: 0, averageBand: null }, skillDeltas: [], memoryChanges: ZERO_MEMORY_CHANGES, coachFeedbackCount: 0, coachReaskCount: 0, sourceHash: 'mock', todayObservationIds: [], memoryEvents: [] },

@@ -92,6 +92,15 @@ function asRecord(value: unknown): AnyRecord | null {
   return value && typeof value === 'object' ? (value as AnyRecord) : null
 }
 
+/** A preference the coach chose to remember for this turn; absent or malformed reads as none. */
+function readRememberedPreference(response: unknown): { key: string; scope: string; text: string } | null {
+  const remembered = asRecord(asRecord(response)?.remembered)
+  const key = String(remembered?.key || '').trim()
+  const text = String(remembered?.text || '').trim()
+  if (!key || !text) return null
+  return { key, scope: String(remembered?.scope || '').trim(), text }
+}
+
 function errorField(error: unknown, key: 'code' | 'message'): string {
   const record = asRecord(error)
   return record ? String(record[key] || '').trim() : ''
@@ -210,6 +219,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   const coachLoading = ref(false)
   const coachError = ref('')
   const coachResponse = ref<any>(null)
+  const coachRemembered = ref<{ key: string; scope: string; text: string } | null>(null)
   const selectedContext = ref<AnyRecord | null>(null)
   const coachStreamMessage = ref('')
   const readingCoachOpen = ref(false)
@@ -576,6 +586,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachLoading.value = true
     coachError.value = ''
     coachResponse.value = null
+    coachRemembered.value = null
     coachStreamMessage.value = '教练已连接...'
     try {
       const requestPayload = buildCoachPayload(normalizedQuery, queryOptions)
@@ -589,6 +600,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         return response
       }
       applyCoachResponse(response)
+      coachRemembered.value = readRememberedPreference(response)
       const reaskParentId = String(queryOptions.reaskParentId || '').trim()
       const newUserMessageId = String(asRecord(asRecord(response)?.userMessage)?.id || '').trim()
       if (reaskParentId && newUserMessageId) {
@@ -614,6 +626,19 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         coachLoading.value = false
         coachStreamMessage.value = ''
       }
+    }
+  }
+
+  async function forgetRememberedPreference() {
+    const remembered = coachRemembered.value
+    const threadId = String(coachThreadId.value || '').trim()
+    if (!remembered || !threadId) return
+    try {
+      await readingCoachApi.forgetPreference(threadId, remembered.key)
+      coachRemembered.value = null
+    } catch (forgetFailure) {
+      console.warn('撤销教练记忆失败:', forgetFailure)
+      coachError.value = '撤销失败，请稍后重试'
     }
   }
 
@@ -822,6 +847,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachLoading,
     coachError,
     coachResponse,
+    coachRemembered,
     selectedContext,
     coachStreamMessage,
     readingCoachOpen,
@@ -846,6 +872,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     runCoachQuickAction,
     runCoachSelectionAction,
     runAutomaticReviewCoach,
+    forgetRememberedPreference,
     isCurrentSubmission,
     buildCoachPayload
   }
