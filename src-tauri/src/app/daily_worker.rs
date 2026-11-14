@@ -291,6 +291,30 @@ fn execute(app: &tauri::AppHandle, job: &BackgroundJob, worker: &str) -> DbResul
     run_daily_journal(&db, job, worker).map(|_| ())
 }
 
+/// The local calendar day the stale sweep last ran under. Derived from the same
+/// instant the sweep is given, so the guard and the age cutoff agree.
+fn stale_archive_day_key<Tz: chrono::TimeZone>(now: &DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    now.format("%Y-%m-%d").to_string()
+}
+
+/// One attempt at the daily stale-memory archive. `Ok(None)` means today already
+/// ran; the database keeps that guard, so it survives a restart.
+fn archive_stale_if_due<Tz: chrono::TimeZone>(
+    db: &AppDb,
+    now: &DateTime<Tz>,
+) -> DbResult<Option<ielts_domain::StaleArchiveReport>>
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let now_utc = now.with_timezone(&chrono::Utc).to_rfc3339();
+    db.with_conn(|conn| {
+        ielts_db::archive_stale_once_per_day(conn, &now_utc, &stale_archive_day_key(now))
+    })
+}
+
 /// Age-based cleanup of operational traces (class D). Raw data is never pruned
 /// here; see `ielts_db::safety`.
 fn prune_operational(db: &AppDb) {
@@ -313,6 +337,7 @@ pub(crate) fn start(app: tauri::AppHandle) -> tauri::async_runtime::JoinHandle<(
         let mut last_lease_recovery: Option<Instant> = None;
         let mut last_weekly_check: Option<Instant> = None;
         let mut last_operational_prune: Option<Instant> = None;
+        let mut last_stale_archive_day: Option<String> = None;
         loop {
             let db = app.state::<AppDb>();
             let now = chrono::Utc::now().to_rfc3339();
@@ -349,6 +374,16 @@ pub(crate) fn start(app: tauri::AppHandle) -> tauri::async_runtime::JoinHandle<(
                     if last_operational_prune.is_none_or(|last| last.elapsed() >= OPERATIONAL_PRUNE_INTERVAL) {
                         last_operational_prune = Some(Instant::now());
                         prune_operational(&db);
+                    }
+                    // Archive stale memory at most once per local day. A failure
+                    // leaves the day unset, so the next idle tick retries.
+                    let local_now = chrono::Local::now();
+                    let today = stale_archive_day_key(&local_now);
+                    if last_stale_archive_day.as_deref() != Some(today.as_str()) {
+                        match archive_stale_if_due(&db, &local_now) {
+                            Ok(_) => last_stale_archive_day = Some(today),
+                            Err(error) => tracing::warn!(%error, "stale memory archive failed"),
+                        }
                     }
                     // Idle: the weekly pass gets its turn, outside any job lease.
                     if last_weekly_check.is_none_or(|last| last.elapsed() >= WEEKLY_CHECK_INTERVAL) {
@@ -776,5 +811,52 @@ mod tests {
         let next = WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7));
         record_weekly_failure(&db, &next, &error, &chrono::Utc::now().to_rfc3339()).unwrap();
         assert_eq!(db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", "2026-W42")).unwrap(), 1);
+    }
+
+    /// W3-5: one daily call archives aged memory; the same local day is a no-op.
+    #[test]
+    fn the_worker_archives_stale_memory_once_a_day() {
+        let (_dir, db) = test_db("stale-archive.db");
+        db.with_conn(|conn| {
+            for (id, namespace) in [("mem-old", "strategy"), ("mem-pref", "preference")] {
+                conn.execute(
+                    "INSERT INTO memory_items (
+                        id, user_id, namespace, scope, memory_type, canonical_key, normalized_label,
+                        content, status, source_class, confidence, importance, source_trust,
+                        sensitivity, improvement_state, version, created_by, content_hash,
+                        created_at, updated_at
+                     ) VALUES (?1,'local',?2,'consolidated','procedural',?3,?4,?5,'active',
+                               'consolidated',0.7,0.5,0.7,'normal','baseline',1,'test',?6,
+                               '2020-01-01T00:00:00+00:00','2020-01-01T00:00:00+00:00')",
+                    rusqlite::params![
+                        id,
+                        namespace,
+                        format!("key-{id}"),
+                        format!("label-{id}"),
+                        format!("content-{id}"),
+                        format!("hash-{id}"),
+                    ],
+                )?;
+            }
+            Ok(())
+        }).unwrap();
+
+        let now = at(8, "2026-10-02T00:00:00+08:00");
+        let report = archive_stale_if_due(&db, &now).unwrap().expect("the first daily call sweeps");
+        assert!(report.archived_count >= 1, "{report:?}");
+
+        let status = |id: &str| {
+            db.with_conn(|conn| {
+                let status = conn.query_row(
+                    "SELECT status FROM memory_items WHERE id=?1",
+                    [id],
+                    |row| row.get::<_, String>(0),
+                )?;
+                Ok(status)
+            }).unwrap()
+        };
+        assert_eq!(status("mem-old"), "archived", "an aged row is archived, not deleted");
+        assert!(archive_stale_if_due(&db, &now).unwrap().is_none(), "the same day is a no-op");
+        assert_eq!(status("mem-pref"), "active", "preference is never auto-archived");
     }
 }
