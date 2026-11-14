@@ -377,6 +377,94 @@ fn outcome_link_retry_does_not_create_untrusted_rows() {
     assert_eq!(count, 0);
 }
 
+fn freeze_profile(conn: &rusqlite::Connection, thread_id: &str) {
+    conn.execute(
+        "UPDATE coach_threads SET learner_profile_json='{}' WHERE id=?1",
+        [thread_id],
+    )
+    .unwrap();
+}
+
+fn frozen_profile(conn: &rusqlite::Connection, thread_id: &str) -> Option<String> {
+    conn.query_row(
+        "SELECT learner_profile_json FROM coach_threads WHERE id=?1",
+        [thread_id],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
+#[test]
+fn negative_feedback_clears_the_thread_frozen_profile() {
+    let (_dir, conn) = open_db();
+    for kind in [
+        CoachFeedbackKind::TooLong,
+        CoachFeedbackKind::ThumbsDown,
+        CoachFeedbackKind::StyleCorrection,
+    ] {
+        freeze_profile(&conn, "thread-1");
+        assert!(frozen_profile(&conn, "thread-1").is_some());
+        record_coach_feedback(&conn, &feedback_command("cmsg-parent", kind)).unwrap();
+        assert_eq!(
+            frozen_profile(&conn, "thread-1"),
+            None,
+            "{kind:?} must invalidate the frozen profile"
+        );
+    }
+}
+
+#[test]
+fn thumbs_up_keeps_the_thread_frozen_profile() {
+    let (_dir, conn) = open_db();
+    freeze_profile(&conn, "thread-1");
+    record_coach_feedback(&conn, &feedback_command("cmsg-parent", CoachFeedbackKind::ThumbsUp))
+        .unwrap();
+    assert_eq!(frozen_profile(&conn, "thread-1").as_deref(), Some("{}"));
+}
+
+#[test]
+fn negative_feedback_only_clears_its_own_thread_profile() {
+    let (_dir, conn) = open_db();
+    conn.execute(
+        "INSERT INTO coach_threads (id, status, created_at, updated_at)
+         VALUES ('thread-2', 'active', '2026-08-16T00:00:00Z', '2026-08-16T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO coach_messages (id, thread_id, role, content, status, created_at, sequence)
+         VALUES ('cmsg-other', 'thread-2', 'assistant', 'body', 'completed', '2026-08-16T00:00:01Z', 1)",
+        [],
+    )
+    .unwrap();
+    freeze_profile(&conn, "thread-1");
+    freeze_profile(&conn, "thread-2");
+    record_coach_feedback(&conn, &feedback_command("cmsg-parent", CoachFeedbackKind::TooLong))
+        .unwrap();
+    assert_eq!(frozen_profile(&conn, "thread-1"), None);
+    assert_eq!(frozen_profile(&conn, "thread-2").as_deref(), Some("{}"));
+}
+
+#[test]
+fn negative_feedback_replay_succeeds_and_leaves_profile_null() {
+    let (_dir, conn) = open_db();
+    freeze_profile(&conn, "thread-1");
+    let command = feedback_command("cmsg-parent", CoachFeedbackKind::TooLong);
+    let first = record_coach_feedback(&conn, &command).unwrap();
+    assert_eq!(frozen_profile(&conn, "thread-1"), None);
+    let replay = record_coach_feedback(&conn, &command).unwrap();
+    assert_eq!(replay, first);
+    assert_eq!(frozen_profile(&conn, "thread-1"), None);
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM coach_feedback WHERE coach_message_id = 'cmsg-parent'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 1);
+}
+
 fn real_thread(conn: &rusqlite::Connection, attempt: Option<String>) -> String {
     ensure_coach_thread(
         conn,
