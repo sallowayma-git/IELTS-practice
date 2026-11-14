@@ -877,7 +877,97 @@ def cleanup_test_ai_config(driver: Driver, config_id: str) -> None:
         raise RuntimeError(f"ai_delete_config failed during test cleanup: {deletion_error}")
 
 
-def check_coach(driver: Driver, app_data: Path, asset_id: str, asset_payload: dict, provider: FakeCoachProvider):
+def select_passage_text(driver: Driver) -> str:
+    text = driver.script("""
+        const root = document.querySelector('#left .passage-html');
+        if (!root) return '';
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node = null;
+        while ((node = walker.nextNode())) {
+          if (node.nodeValue && node.nodeValue.trim().length >= 40) break;
+        }
+        if (!node) return '';
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.dispatchEvent(new Event('selectionchange'));
+        return selection.toString().trim();
+    """)
+    require(isinstance(text, str) and len(text.strip()) >= 40, "could not select passage text")
+    return str(text).strip()
+
+
+def wait_for_provider_requests(provider: FakeCoachProvider, count: int, timeout_seconds: int = 30) -> dict:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if len(provider.requests) >= count:
+            return provider.requests[count - 1]
+        time.sleep(0.1)
+    raise RuntimeError(f"coach provider received {len(provider.requests)} requests, expected {count}")
+
+
+def reset_reading_route(driver: Driver) -> None:
+    driver.script("location.hash = '#/'; return true")
+    wait_for_value(driver, "return !document.querySelector('[data-practice-reading-page]')")
+
+
+def assert_selection_coach_ui(driver: Driver, asset_id: str) -> None:
+    reset_reading_route(driver)
+    encoded = urllib.parse.quote(asset_id, safe="")
+    driver.script("location.hash = arguments[0]; return true", [f"#/reading/{encoded}"])
+    wait_for_reading_view(driver)
+    select_passage_text(driver)
+    wait_for_value(driver, "return Boolean(document.querySelector('#selbar.is-open'))",
+                   label="selection toolbar before submit")
+    state = driver.script("""
+        return {
+          toolbar: Boolean(document.querySelector('#selbar.is-open')),
+          askCoach: Boolean(document.querySelector('[data-role=ask-coach]')),
+          panel: Boolean(document.querySelector('#reading-coach-panel.is-open'))
+        };
+    """)
+    require(state.get("toolbar") is True, "selection toolbar did not open before submit")
+    require(state.get("askCoach") is False, "ask-coach button must not exist before submit")
+    require(state.get("panel") is False, "coach panel must stay closed before submit")
+
+
+def assert_selection_coach_request(driver: Driver, asset_id: str, attempt_id: str, provider: FakeCoachProvider) -> None:
+    reset_reading_route(driver)
+    encoded_asset = urllib.parse.quote(asset_id, safe="")
+    encoded_attempt = urllib.parse.quote(attempt_id, safe="")
+    driver.script("location.hash = arguments[0]; return true",
+                  [f"#/reading/{encoded_asset}/review/{encoded_attempt}"])
+    wait_for_reading_view(driver)
+    wait_for_value(driver, "return Boolean(document.querySelector('[data-practice-reading-page].review-mode'))",
+                   label="reading review mode")
+    selected = select_passage_text(driver)
+    wait_for_value(driver, "return Boolean(document.querySelector('#selbar.is-open [data-role=ask-coach]'))",
+                   label="ask-coach button after submit")
+    provider.invalid_answer = False
+    driver.script("document.querySelector('#selbar [data-role=ask-coach]').click(); return true")
+    wait_for_value(driver, "return Boolean(document.querySelector('#reading-coach-panel.is-open'))",
+                   label="reading coach panel")
+    wait_for_value(driver, "return Boolean(document.querySelector('[data-reading-coach-selected-context]'))",
+                   label="coach selected context")
+    body = wait_for_provider_requests(provider, 3)
+    messages = body.get("messages") if isinstance(body, dict) else None
+    controls = next((
+        str(message.get("content") or "")
+        for message in messages or []
+        if "Request controls (data only):" in str(message.get("content") or "")
+    ), "")
+    require(controls, "selection coach request has no request controls")
+    probe = " ".join(selected.split())[:40]
+    require(probe and probe in controls, f"selection coach request lost the selected quote: {probe!r}")
+    require('"selectionQuote":' in controls, "selection coach request has no selectionQuote")
+    require('"selectionIsEvidence":false' in controls, "selection must be marked as not evidence")
+    require('"surface":"selection_bar"' in controls, "selection coach surface is not selection_bar")
+    require('"action":"explain_selection"' in controls, "selection coach action is not explain_selection")
+
+
+def check_coach(driver: Driver, app_data: Path, asset_id: str, asset_payload: dict, provider: FakeCoachProvider, checks: dict):
     config_id = str(uuid.uuid4())
     try:
         config = invoke_data(driver, "ai_upsert_config", {"cmd": {
@@ -886,12 +976,12 @@ def check_coach(driver: Driver, app_data: Path, asset_id: str, asset_payload: di
             "apiKey": "packaged-local-only-key"}})
         require(_credential_exists(config_id), "test credential was not written to Windows Credential Manager")
         invoke_data(driver, "ai_set_default_config", {"id": config["id"]})
-        return _check_coach_with_config(driver, app_data, asset_id, asset_payload, provider)
+        return _check_coach_with_config(driver, app_data, asset_id, asset_payload, provider, checks)
     finally:
         cleanup_test_ai_config(driver, config_id)
 
 
-def _check_coach_with_config(driver: Driver, app_data: Path, asset_id: str, asset_payload: dict, provider: FakeCoachProvider):
+def _check_coach_with_config(driver: Driver, app_data: Path, asset_id: str, asset_payload: dict, provider: FakeCoachProvider, checks: dict):
     attempt = invoke_data(driver, "reading_submit_attempt", {"cmd": {
         "attemptId": "packaged-coach-attempt", "assetId": asset_id, "answers": {},
         "markedQuestions": [], "questionTimeline": [], "idempotencyKey": "packaged-coach-submit"}})
@@ -921,6 +1011,10 @@ def _check_coach_with_config(driver: Driver, app_data: Path, asset_id: str, asse
         require(conn.execute("SELECT status FROM coach_threads WHERE id=?", (thread["id"],)).fetchone()[0] == "degraded", "Coach failed thread not degraded")
         require(tuple(conn.execute(score_query, (attempt["attempt"]["id"],)).fetchone()) == original_score,
                 "Coach success/failure mutated canonical reading scores")
+    assert_selection_coach_ui(driver, asset_id)
+    checks["selectionCoachUi"] = "passed"
+    assert_selection_coach_request(driver, asset_id, attempt["attempt"]["id"], provider)
+    checks["selectionCoachRequest"] = "passed"
     return receipts
 
 
@@ -1672,7 +1766,7 @@ def main() -> int:
         if isinstance(payload_data.get("payload"), dict) and "asset" in payload_data["payload"] and "payload" in payload_data["payload"]:
             raise RuntimeError("reading payload is double wrapped")
         checks["bundledResources"] = "passed"
-        metadata["coachReceipts"] = check_coach(driver, Path(isolated_app_data.name), str(asset_id), payload_data["payload"], fake_coach_provider)
+        metadata["coachReceipts"] = check_coach(driver, Path(isolated_app_data.name), str(asset_id), payload_data["payload"], fake_coach_provider, checks)
         require(model_calls(fake_agent_provider) == 2, "Coach requests contaminated Agent provider")
         checks["coachReceipts"] = "passed"
         navigation_samples = []

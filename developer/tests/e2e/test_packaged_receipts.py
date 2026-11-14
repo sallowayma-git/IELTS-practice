@@ -121,7 +121,7 @@ class PackagedReceiptTests(unittest.TestCase):
              patch.object(flow, "cleanup_test_ai_config") as cleanup, \
              patch.object(flow, "_credential_exists", return_value=True):
             with self.assertRaisesRegex(RuntimeError, "receipt failed"):
-                flow.check_coach(None, self.root, "asset", {}, SimpleNamespace(base_url="http://127.0.0.1:1/v1"))
+                flow.check_coach(None, self.root, "asset", {}, SimpleNamespace(base_url="http://127.0.0.1:1/v1"), {})
             config_id = calls[0][1]["cmd"]["id"]
             uuid.UUID(config_id)
             self.assertNotEqual(config_id, "packaged-coach-e2e")
