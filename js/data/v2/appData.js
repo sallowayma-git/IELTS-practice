@@ -1820,17 +1820,19 @@
                 }
                 const row = timing.items.find(item => item.id === accepted.attemptId);
                 if (!row || row.recordId || (row.finalizationOperationId && row.finalizationOperationId !== opId)) {
-                    throw new AppDataError('TIMING_FINALIZED', 'Timing is missing or belongs to another completion');
+                    throw new AppDataError('TIMING_FINALIZED', 'Timing is missing or belongs to another completion', {
+                        timingReason: row ? 'finalized-row-conflict' : 'missing-row'
+                    });
                 }
                 const saved = requireReadingTiming(row.snapshot);
                 for (const value of [saved, ...candidates]) {
                     if (value.attemptId !== accepted.attemptId || value.parentAttemptId !== id || value.sequenceIndex !== i
                         || !global.ReadingTiming.sameSource(value, accepted)) reject('Timing source or attempt mismatch');
-                    if (value.writer !== accepted.writer) throw new AppDataError('TIMING_STALE_WRITER', 'Another writer owns the retained timing');
+                    if (value.writer !== accepted.writer) throw new AppDataError('TIMING_STALE_WRITER', 'Another writer owns the retained timing', { timingReason: 'writer-mismatch' });
                 }
                 candidates.sort((a, b) => a.revision - b.revision);
                 const latest = candidates[candidates.length - 1];
-                if (saved.revision > latest.revision) throw new AppDataError('TIMING_STALE_REVISION', 'Timing advanced after the accepted submission');
+                if (saved.revision > latest.revision) throw new AppDataError('TIMING_STALE_REVISION', 'Timing advanced after the accepted submission', { timingReason: 'stale-revision' });
                 for (const value of [saved, ...candidates]) {
                     if (value.revision === latest.revision && checksum(value) !== checksum(latest)) {
                         reject('Conflicting retained timing revision');
@@ -1907,7 +1909,7 @@
             const index = current.items.findIndex(item => item.id === snapshot.attemptId);
             const previous = index >= 0 ? current.items[index] : null;
             if (previous?.recordId || previous?.finalizationOperationId) {
-                throw new AppDataError('TIMING_FINALIZED', 'Reading timing is sealed for submission');
+                throw new AppDataError('TIMING_FINALIZED', 'Reading timing is sealed for submission', { timingReason: 'finalized-row-conflict' });
             }
             if (previous && !global.ReadingTiming.sameSource(previous.snapshot, snapshot)) {
                 throw new AppDataError('VALIDATION', 'Reading timing source mismatch');
@@ -1919,7 +1921,7 @@
                 // Only the current writer's newer cumulative snapshot may advance it.
                 if (saved?.writer === next.writer && saved.revision >= next.revision) {
                     if (saved.revision === next.revision && checksum(saved) !== checksum(next)) {
-                        throw new AppDataError('VALIDATION', 'Conflicting Reading timing draft revision');
+                        throw new AppDataError('VALIDATION', 'Conflicting Reading timing draft revision', { timingReason: 'snapshot-mismatch' });
                     }
                     validateTimingAdvance(next, saved);
                     next = clone(saved);
@@ -1929,12 +1931,14 @@
                 if (!next.partialReasons.includes('recovery-tail')) next.partialReasons.push('recovery-tail');
             } else if (!acquire) {
                 if (!previous || previous.snapshot.writer !== snapshot.writer) {
-                    throw new AppDataError('TIMING_STALE_WRITER', 'Reading timing writer has changed');
+                    throw new AppDataError('TIMING_STALE_WRITER', 'Reading timing writer has changed', {
+                        timingReason: previous ? 'writer-mismatch' : 'missing-row'
+                    });
                 }
                 const before = requireReadingTiming(previous.snapshot);
-                if (snapshot.revision < before.revision) throw new AppDataError('TIMING_STALE_REVISION', 'Stale Reading timing snapshot');
+                if (snapshot.revision < before.revision) throw new AppDataError('TIMING_STALE_REVISION', 'Stale Reading timing snapshot', { timingReason: 'stale-revision' });
                 if (snapshot.revision === before.revision) {
-                    if (checksum(snapshot) !== checksum(before)) throw new AppDataError('VALIDATION', 'Conflicting Reading timing revision');
+                    if (checksum(snapshot) !== checksum(before)) throw new AppDataError('VALIDATION', 'Conflicting Reading timing revision', { timingReason: 'snapshot-mismatch' });
                     return clone(previous);
                 }
                 validateTimingAdvance(before, snapshot);
@@ -1952,7 +1956,7 @@
         const savedValues = [existing, ...asArray(existing?.suiteEntries)].map(value => global.ReadingTiming?.extract(value)).filter(Boolean);
         for (const saved of savedValues) {
             if (!values.some(value => checksum(value) === checksum(saved))) {
-                throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable');
+                throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable', { timingReason: 'finalized-row-conflict' });
             }
         }
         if (!values.length) return [];
@@ -1964,12 +1968,17 @@
             // Imported/historical records have no live writer to seal.
             if (!item) continue;
             if (item.recordId === recordId) {
-                if (checksum(item.snapshot) !== checksum(value)) throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable');
+                if (checksum(item.snapshot) !== checksum(value)) throw new AppDataError('TIMING_FINALIZED', 'Submitted Reading timing is immutable', { timingReason: 'finalized-row-conflict' });
                 continue;
             }
-            if ((item.recordId && !consumedChildren.has(item.recordId)) || item.snapshot.writer !== value.writer || !value.frozen
-                || checksum(item.snapshot) !== checksum(value)) {
-                throw new AppDataError('TIMING_STALE_WRITER', 'Submitted Reading timing does not match its saved writer');
+            // Report the first failed invariant in this order, retaining the
+            // legacy public code and the historical missing-row bypass above.
+            const timingReason = item.recordId && !consumedChildren.has(item.recordId) ? 'finalized-row-conflict'
+                : item.snapshot.writer !== value.writer ? 'writer-mismatch'
+                : !value.frozen ? 'not-frozen'
+                : checksum(item.snapshot) !== checksum(value) ? 'snapshot-mismatch' : null;
+            if (timingReason) {
+                throw new AppDataError('TIMING_STALE_WRITER', 'Submitted Reading timing does not match its saved writer', { timingReason });
             }
             item.recordId = recordId;
             item.updatedAt = nowIso();

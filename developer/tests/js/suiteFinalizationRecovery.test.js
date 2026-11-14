@@ -361,11 +361,13 @@ for (const scenario of ['writer', 'finalized', 'source', 'answers', 'annotations
                         { logicalKey: 'recovery.readingTiming', data: timing }], { operationId: `setup-${scenario}` });
                 }
                 const before = JSON.stringify(await capture());
-                let code;
-                try { await recover(); } catch (error) { code = error.code; }
-                return { code, unchanged: before === JSON.stringify(await capture()) };
+                let code, timingReason;
+                try { await recover(); } catch (error) { code = error.code; timingReason = error.details?.timingReason; }
+                return { code, timingReason, unchanged: before === JSON.stringify(await capture()) };
             }, scenario);
             assert.ok(result.code); assert.equal(result.unchanged, true);
+            assert.equal(result.timingReason, { writer: 'writer-mismatch', finalized: 'finalized-row-conflict',
+                revision: 'stale-revision', 'missing-timing-row': 'missing-row' }[scenario]);
         } finally { await context.close(); }
     });
 }

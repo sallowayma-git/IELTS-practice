@@ -294,6 +294,25 @@ try {
                 });
                 assert.equal(retained.count, 0);
                 assert.ok(retained.submissionId);
+                const diagnostic = await host.evaluate(async () => {
+                    const failure = AppDiagnostics.snapshot().events.find(event => event.module === 'suite'
+                        && event.action === 'submit' && event.timingReason === 'not-frozen');
+                    const output = await AppDiagnosticExport.exportJSON({ eventId: failure?.eventId });
+                    return { failure, exported: output.report.events.find(event => event.eventId === failure?.eventId) };
+                });
+                assert.ok(diagnostic.failure, 'the real pre-fix snapshot must identify the unfrozen invariant');
+                assert.equal(diagnostic.failure.causeCode, 'TIMING_STALE_WRITER');
+                assert.equal(diagnostic.failure.persistence.operation, 'not-committed');
+                assert.equal(diagnostic.failure.retry.available, true, 'the supported suite recovery closure is available');
+                assert.equal(diagnostic.exported.timingReason, 'not-frozen');
+                assert.ok(diagnostic.failure.breadcrumbs.some(crumb => crumb.action === 'save-recovery' && crumb.outcome === 'succeeded'));
+                assert.ok(!diagnostic.failure.breadcrumbs.some(crumb => crumb.action === 'storage-confirmed'
+                    && crumb.correlation.operation === diagnostic.failure.correlation.operation && crumb.outcome === 'succeeded'));
+                const childFailure = await page.evaluate(() => AppDiagnostics.snapshot().events.find(event => event.code === 'PRACTICE_SAVE_FAILED'));
+                assert.ok(childFailure); assert.notEqual(childFailure.windowId, diagnostic.failure.windowId);
+                for (const key of ['scopeId', 'suite', 'submission', 'operation']) {
+                    assert.equal(childFailure.correlation[key], diagnostic.failure.correlation[key], `shared ${key} alias`);
+                }
                 if (scenario === 'legacy-host-reload') {
                     await host.reload();
                     await host.waitForFunction(() => window.app?.isInitialized === true, null, { timeout: 60000 });

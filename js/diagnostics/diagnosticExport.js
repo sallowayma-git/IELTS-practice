@@ -269,6 +269,7 @@
             const events = chosen ? [chosen, ...report.events.filter((event) => event !== chosen)] : report.events;
             for (const event of events.slice(0, 12)) {
                 const line = event.eventId + ' ' + event.code + ' / ' + event.causeCode + ' ' + event.module + '/' + event.action
+                    + (event.timingReason ? '; timing: ' + event.timingReason : '')
                     + '; operation: ' + event.persistence.operation + '; diagnostics: ' + event.persistence.diagnostics
                     + '; resource: ' + event.resource.path + ':' + event.resource.line + ':' + event.resource.column;
                 if (contract.utf8Bytes(lines.join('\n') + '\n' + line) > LIMITS.summaryBytes - 100) break;
