@@ -1,6 +1,7 @@
 //! The learner profile a coach thread is frozen with: selection, freezing,
 //! recall counting and trace provenance, against real SQLite.
 use ielts_db::*;
+use ielts_domain::Activity;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 
@@ -9,6 +10,10 @@ fn open() -> (tempfile::TempDir, Connection) {
     let mut conn = open_connection(&DbOpenOptions::create(dir.path().join("profile.db"))).unwrap();
     migrate(&mut conn).unwrap();
     (dir, conn)
+}
+
+fn reading() -> CoachScene {
+    CoachScene { activity: Activity::Reading }
 }
 
 fn thread(conn: &Connection, id: &str) -> String {
@@ -32,7 +37,25 @@ fn memory(conn: &Connection, id: &str, content: &str, status: &str, source: &str
 }
 
 fn learned(conn: &Connection, id: &str, content: &str, importance: f64) {
-    memory(conn, id, content, "active", "inferred", importance, "activity:reading", "normal");
+    learned_in(conn, id, content, importance, "activity:reading");
+}
+
+fn learned_in(conn: &Connection, id: &str, content: &str, importance: f64, scope: &str) {
+    memory(conn, id, content, "active", "inferred", importance, scope, "normal");
+}
+
+fn preference(conn: &Connection, key: &str, scope: &str, value: Value) {
+    upsert_explicit_preference(
+        conn,
+        &ielts_domain::ExplicitPreferenceUpsert {
+            user_id: "local".into(),
+            preference_key: key.into(),
+            scope: scope.into(),
+            value,
+            source: "user".into(),
+        },
+    )
+    .unwrap();
 }
 
 fn skill(conn: &Connection, key: &str, mastery: f64, assets: i64) {
@@ -51,7 +74,7 @@ fn recall_count(conn: &Connection, id: &str) -> i64 {
 #[test]
 fn an_empty_store_selects_an_empty_profile() {
     let (_dir, conn) = open();
-    let snapshot = select_learner_profile(&conn).unwrap();
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
     assert!(snapshot.is_empty());
     assert_eq!(serde_json::to_string(&snapshot).unwrap(), "{}");
 }
@@ -65,7 +88,7 @@ fn weak_skills_are_lowest_mastery_first_and_need_two_articles() {
     skill(&conn, "reading.matching_headings", 0.90, 5); // not weak
     skill(&conn, "reading.yng", 0.30, 4);
     skill(&conn, "reading.short_answer", 0.35, 2); // fourth weak skill: over the cap
-    let snapshot = select_learner_profile(&conn).unwrap();
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
     let keys: Vec<&str> = snapshot.weak_skills.iter().map(|s| s.skill_key.as_str()).collect();
     assert_eq!(keys, vec!["reading.tfng.false_vs_not_given", "reading.yng", "reading.short_answer"]);
     assert_eq!(snapshot.weak_skills[0].label, "False versus Not Given");
@@ -115,7 +138,7 @@ fn memories_are_active_normal_reading_and_guarded() {
     )
     .unwrap();
 
-    let snapshot = select_learner_profile(&conn).unwrap();
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
     let memories: Vec<&str> = snapshot.memories.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(memories, vec!["mem-a", "mem-b"], "importance order; guard, status, sensitivity and scope filters");
     let preferences: Vec<(&str, &str)> = snapshot.preferences.iter().map(|p| (p.id.as_str(), p.statement.as_str())).collect();
@@ -132,14 +155,14 @@ fn caps_bound_every_list_and_the_whole_profile() {
     for i in 0..20 {
         learned(&conn, &format!("mem-{i:02}"), &format!("{} learned habit {i}", "word ".repeat(55)), 1.0 - i as f64 / 100.0);
     }
-    let snapshot = select_learner_profile(&conn).unwrap();
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
     assert!(snapshot.memories.len() <= PROFILE_MAX_MEMORIES);
     assert!(!snapshot.memories.is_empty());
     let tokens = ielts_domain::estimate_tokens(&serde_json::to_string(&snapshot).unwrap());
     assert!(tokens <= PROFILE_TOKEN_BUDGET, "{tokens}");
     // Deterministic: the most important memories survive, in order.
     assert_eq!(snapshot.memories[0].id, "mem-00");
-    assert_eq!(snapshot, select_learner_profile(&conn).unwrap());
+    assert_eq!(snapshot, select_learner_profile(&conn, &reading()).unwrap());
 }
 
 #[test]
@@ -212,4 +235,58 @@ fn the_trace_records_the_frozen_memory_ids() {
         .query_row("SELECT memory_ids_used_json FROM coach_strategy_assignments_v0 WHERE coach_message_id=?1", [&message.id], |row| row.get(0))
         .unwrap();
     assert_eq!(serde_json::from_str::<Value>(&used).unwrap(), json!(["mem-a", "mem-b"]));
+}
+
+/// The serialized shape of a reading profile must not drift: the prompt prefix
+/// is byte-frozen on the thread row.
+#[test]
+fn a_reading_profile_serializes_byte_identically() {
+    let (_dir, conn) = open();
+    learned(&conn, "mem-a", "Misses qualifiers such as 'only' in TFNG statements.", 0.9);
+    learned(&conn, "mem-b", "Rushes the last passage when time is short.", 0.5);
+    memory(&conn, "mem-said", "Prefers explanations in English.", "active", "user_explicit", 0.1, "activity:reading", "normal");
+    preference(&conn, "coach.tone", "global", json!("brief"));
+    preference(&conn, "soul.nickname", "global", json!("小明"));
+    skill(&conn, "reading.tfng", 0.3, 2);
+    skill(&conn, "reading.yng", 0.2, 3);
+
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
+    let memory_ids: Vec<&str> = snapshot.memories.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(memory_ids, vec!["mem-a", "mem-b"]);
+    assert_eq!(snapshot.memory_ids(), vec!["mem-said", "mem-a", "mem-b"]);
+    assert_eq!(
+        serde_json::to_string(&snapshot).unwrap(),
+        r#"{"preferences":[{"id":"preference:global:coach.tone","statement":"coach.tone: brief"},{"id":"mem-said","statement":"Prefers explanations in English."}],"memories":[{"id":"mem-a","statement":"Misses qualifiers such as 'only' in TFNG statements."},{"id":"mem-b","statement":"Rushes the last passage when time is short."}],"weakSkills":[{"skillKey":"reading.yng","label":"Yes / No / Not Given","mastery":0.2,"distinctArticles":3},{"skillKey":"reading.tfng","label":"True / False / Not Given","mastery":0.3,"distinctArticles":2}],"soul":["nickname: 小明"]}"#
+    );
+}
+
+#[test]
+fn a_writing_memory_does_not_enter_a_reading_scene() {
+    let (_dir, conn) = open();
+    learned_in(&conn, "mem-reading", "Checks the question stem first.", 0.9, "activity:reading");
+    learned_in(&conn, "mem-writing", "Plans an essay outline.", 1.0, "activity:writing");
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
+    let ids: Vec<&str> = snapshot.memories.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, vec!["mem-reading"]);
+}
+
+#[test]
+fn a_global_learned_memory_follows_the_scene_memories() {
+    let (_dir, conn) = open();
+    learned(&conn, "mem-module", "Checks the question stem first.", 0.9);
+    learned_in(&conn, "mem-global", "Studies best before noon.", 0.1, "global");
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
+    let ids: Vec<&str> = snapshot.memories.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, vec!["mem-module", "mem-global"]);
+}
+
+#[test]
+fn global_memories_are_capped_at_the_two_most_important() {
+    let (_dir, conn) = open();
+    learned_in(&conn, "mem-g-low", "Studies late at night.", 0.1, "global");
+    learned_in(&conn, "mem-g-high", "Studies best before noon.", 0.9, "global");
+    learned_in(&conn, "mem-g-mid", "Reviews notes on Sundays.", 0.5, "global");
+    let snapshot = select_learner_profile(&conn, &reading()).unwrap();
+    let ids: Vec<&str> = snapshot.memories.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, vec!["mem-g-high", "mem-g-mid"]);
 }

@@ -8,13 +8,12 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use ielts_domain::{estimate_tokens, is_safe_for_prompt};
+use ielts_domain::{estimate_tokens, is_safe_for_prompt, Activity, MemoryScope};
 
 use crate::soul::soul_profile;
 use crate::sqlite::{DbError, DbResult};
 
 const PROFILE_USER_ID: &str = "local";
-const READING_SCOPE: &str = "activity:reading";
 /// Soul settings shown to the coach, in prompt order.
 const SOUL_LABELS: [(&str, &str); 5] = [
     ("soul.nickname", "nickname"),
@@ -28,6 +27,9 @@ pub const PROFILE_MAX_SOUL_LINES: usize = 6;
 /// Per-list caps, then one total cap over the serialized snapshot.
 pub const PROFILE_MAX_PREFERENCES: usize = 5;
 pub const PROFILE_MAX_MEMORIES: usize = 8;
+const PROFILE_MAX_GLOBAL_MEMORIES: usize = 2;
+/// The rest of the total memory cap belongs to the scene's own scope.
+const PROFILE_MAX_MODULE_MEMORIES: usize = PROFILE_MAX_MEMORIES - PROFILE_MAX_GLOBAL_MEMORIES;
 pub const PROFILE_MAX_WEAK_SKILLS: usize = 3;
 pub const PROFILE_TOKEN_BUDGET: u32 = 800;
 /// A statement longer than this is skipped, never cut mid-sentence.
@@ -36,6 +38,12 @@ const MAX_STATEMENT_CHARS: usize = 300;
 pub const WEAK_SKILL_MASTERY_CEILING: f64 = 0.6;
 /// ...and only with evidence from at least this many distinct articles.
 pub const WEAK_SKILL_MIN_DISTINCT_ASSETS: i64 = 2;
+
+/// The practice scene a profile is selected for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CoachScene {
+    pub activity: Activity,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,18 +97,25 @@ impl LearnerProfileSnapshot {
         estimate_tokens(&serde_json::to_string(self).unwrap_or_default())
     }
 
-    /// Deterministic shrink to the budget: learned memories go first, then
-    /// weak skills, then explicit preferences — each from its tail.
-    fn fit(mut self, budget: u32) -> Self {
-        while self.tokens() > budget {
-            if self.memories.pop().is_none()
-                && self.weak_skills.pop().is_none()
-                && self.preferences.pop().is_none()
-            {
-                break;
-            }
-        }
+    /// Deterministic shrink to the budget. `memories` is `[module..., global...]`
+    /// with `module_memories` leading scene-scoped entries; while over budget it
+    /// drops, each from its tail: (a) module memories, (b) weak skills,
+    /// (c) explicit preferences, (d) global memories last.
+    fn fit(mut self, budget: u32, module_memories: usize) -> Self {
+        let mut module = module_memories.min(self.memories.len());
+        while self.tokens() > budget && self.shrink_one(&mut module) {}
         self
+    }
+
+    fn shrink_one(&mut self, module: &mut usize) -> bool {
+        if *module > 0 {
+            *module -= 1;
+            self.memories.remove(*module);
+            return true;
+        }
+        self.weak_skills.pop().is_some()
+            || self.preferences.pop().is_some()
+            || self.memories.pop().is_some()
     }
 }
 
@@ -113,15 +128,20 @@ fn accept(statement: String) -> Option<String> {
 }
 
 /// Pure selection from current store state (no writes).
-pub fn select_learner_profile(conn: &Connection) -> DbResult<LearnerProfileSnapshot> {
-    let mut preferences = explicit_preference_rows(conn)?;
-    preferences.extend(memory_rows(conn, true)?);
+pub fn select_learner_profile(
+    conn: &Connection,
+    scene: &CoachScene,
+) -> DbResult<LearnerProfileSnapshot> {
+    let scope = MemoryScope::Activity { key: scene.activity }.storage_key();
+    let mut preferences = explicit_preference_rows(conn, scope)?;
+    preferences.extend(memory_rows(conn, scope, true, PROFILE_MAX_PREFERENCES)?);
     preferences.truncate(PROFILE_MAX_PREFERENCES);
-    let mut memories = memory_rows(conn, false)?;
-    memories.truncate(PROFILE_MAX_MEMORIES);
-    let weak_skills = weak_skill_rows(conn)?;
+    let mut memories = memory_rows(conn, scope, false, PROFILE_MAX_MODULE_MEMORIES)?;
+    let module_memories = memories.len();
+    memories.extend(memory_rows(conn, MemoryScope::Global.storage_key(), false, PROFILE_MAX_GLOBAL_MEMORIES)?);
+    let weak_skills = weak_skill_rows(conn, scene.activity)?;
     let mut snapshot = LearnerProfileSnapshot { preferences, memories, weak_skills, soul: Vec::new() }
-        .fit(PROFILE_TOKEN_BUDGET);
+        .fit(PROFILE_TOKEN_BUDGET, module_memories);
     // Added after fit(): soul lines are a separate small list and never shrink memories.
     snapshot.soul = soul_lines(conn)?;
     Ok(snapshot)
@@ -145,13 +165,13 @@ fn soul_text(value: &Value) -> Option<String> {
     }
 }
 
-fn explicit_preference_rows(conn: &Connection) -> DbResult<Vec<ProfileStatement>> {
+fn explicit_preference_rows(conn: &Connection, scope: &str) -> DbResult<Vec<ProfileStatement>> {
     let mut statement = conn.prepare(
         "SELECT preference_key,scope,value_json FROM explicit_user_preferences
          WHERE user_id=?1 AND status='active' AND scope IN ('global',?2)
          ORDER BY preference_key,scope",
     )?;
-    let rows = statement.query_map(params![PROFILE_USER_ID, READING_SCOPE], |row| {
+    let rows = statement.query_map(params![PROFILE_USER_ID, scope], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
     let mut out = Vec::new();
@@ -174,9 +194,15 @@ fn explicit_preference_rows(conn: &Connection) -> DbResult<Vec<ProfileStatement>
     Ok(out)
 }
 
-/// Active, non-archived, normal-sensitivity reading memories. `explicit`
-/// selects the user-stated ones (preferences) or the learned ones.
-fn memory_rows(conn: &Connection, explicit: bool) -> DbResult<Vec<ProfileStatement>> {
+/// Active, non-archived, normal-sensitivity memories in one scope. `explicit`
+/// selects the user-stated ones (preferences) or the learned ones; at most
+/// `limit` survive the prompt-safety filter.
+fn memory_rows(
+    conn: &Connection,
+    scope: &str,
+    explicit: bool,
+    limit: usize,
+) -> DbResult<Vec<ProfileStatement>> {
     let now = chrono::Utc::now().to_rfc3339();
     let mut statement = conn.prepare(
         "SELECT id,content FROM memory_items
@@ -186,7 +212,7 @@ fn memory_rows(conn: &Connection, explicit: bool) -> DbResult<Vec<ProfileStateme
          ORDER BY importance DESC,confidence DESC,
                   COALESCE(last_observed_at,updated_at) DESC,id",
     )?;
-    let rows = statement.query_map(params![PROFILE_USER_ID, READING_SCOPE, explicit, now], |row| {
+    let rows = statement.query_map(params![PROFILE_USER_ID, scope, explicit, now], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
     let mut out = Vec::new();
@@ -194,22 +220,35 @@ fn memory_rows(conn: &Connection, explicit: bool) -> DbResult<Vec<ProfileStateme
         let (id, content) = row?;
         if let Some(statement) = accept(content) {
             out.push(ProfileStatement { id, statement });
+            if out.len() == limit {
+                break;
+            }
         }
     }
     Ok(out)
 }
 
+/// The `skill_catalog.activity` spelling of an activity (`reading`, ...).
+fn activity_name(activity: Activity) -> &'static str {
+    MemoryScope::Activity { key: activity }.storage_key().trim_start_matches("activity:")
+}
+
 /// Lowest mastery first. No claim without evidence from enough articles.
-fn weak_skill_rows(conn: &Connection) -> DbResult<Vec<WeakSkill>> {
+fn weak_skill_rows(conn: &Connection, activity: Activity) -> DbResult<Vec<WeakSkill>> {
     let mut statement = conn.prepare(
         "SELECT s.skill_key,c.label,s.mastery_mean,s.distinct_asset_count
          FROM learner_skill_state s
-         JOIN skill_catalog c ON c.skill_key=s.skill_key AND c.activity='reading' AND c.active=1
-         WHERE s.user_id=?1 AND s.mastery_mean<?2 AND s.distinct_asset_count>=?3
+         JOIN skill_catalog c ON c.skill_key=s.skill_key AND c.activity=?2 AND c.active=1
+         WHERE s.user_id=?1 AND s.mastery_mean<?3 AND s.distinct_asset_count>=?4
          ORDER BY s.mastery_mean ASC,s.skill_key ASC",
     )?;
     let rows = statement.query_map(
-        params![PROFILE_USER_ID, WEAK_SKILL_MASTERY_CEILING, WEAK_SKILL_MIN_DISTINCT_ASSETS],
+        params![
+            PROFILE_USER_ID,
+            activity_name(activity),
+            WEAK_SKILL_MASTERY_CEILING,
+            WEAK_SKILL_MIN_DISTINCT_ASSETS
+        ],
         |row| {
             Ok(WeakSkill {
                 skill_key: row.get(0)?,
@@ -253,7 +292,8 @@ pub fn freeze_coach_learner_profile(
     if let Some(raw) = stored {
         return Ok(serde_json::from_str(&raw)?);
     }
-    let snapshot = select_learner_profile(&tx)?;
+    let snapshot =
+        select_learner_profile(&tx, &CoachScene { activity: Activity::Reading })?;
     tx.execute(
         "UPDATE coach_threads SET learner_profile_json=?1 WHERE id=?2 AND learner_profile_json IS NULL",
         params![serde_json::to_string(&snapshot)?, thread_id],
@@ -302,11 +342,61 @@ mod tests {
             weak_skills: vec![],
             soul: vec![],
         };
-        let fitted = snapshot.clone().fit(PROFILE_TOKEN_BUDGET);
+        let fitted = snapshot.clone().fit(PROFILE_TOKEN_BUDGET, 8);
         assert!(fitted.tokens() <= PROFILE_TOKEN_BUDGET);
         assert_eq!(fitted.preferences, snapshot.preferences, "preferences survive while memories remain");
         assert_eq!(fitted.memories[..], snapshot.memories[..fitted.memories.len()]);
         assert!(fitted.memories.len() < 8);
+    }
+
+    #[test]
+    fn fit_drops_module_memories_then_skills_then_preferences_and_globals_last() {
+        let long = "x".repeat(280);
+        let skill = |i: usize| WeakSkill {
+            skill_key: format!("reading.s{i}"),
+            label: long.clone(),
+            mastery: 0.2,
+            distinct_articles: 2,
+        };
+        let base = LearnerProfileSnapshot {
+            preferences: (0..2).map(|i| statement(&format!("preference:global:k{i}"), &long)).collect(),
+            memories: (0..2)
+                .map(|i| statement(&format!("mem-m{i}"), &long))
+                .chain((0..2).map(|i| statement(&format!("mem-g{i}"), &long)))
+                .collect(),
+            weak_skills: (0..2).map(skill).collect(),
+            soul: vec![],
+        };
+        let globals = base.memories[2..].to_vec();
+        let with = |memories: Vec<ProfileStatement>, weak: usize, preferences: usize| LearnerProfileSnapshot {
+            preferences: base.preferences[..preferences].to_vec(),
+            memories,
+            weak_skills: base.weak_skills[..weak].to_vec(),
+            soul: vec![],
+        };
+
+        let fitted = base.clone().fit(with(base.memories[1..].to_vec(), 2, 2).tokens(), 2);
+        assert_eq!(fitted.memories.len(), 3, "the tail module memory goes first");
+        assert_eq!(fitted.memories[0], base.memories[0]);
+
+        let fitted = base.clone().fit(with(globals.clone(), 2, 2).tokens(), 2);
+        assert_eq!(fitted.memories, globals, "then the remaining module memories");
+        assert_eq!(fitted.weak_skills, base.weak_skills);
+        assert_eq!(fitted.preferences, base.preferences);
+
+        let fitted = base.clone().fit(with(globals.clone(), 1, 2).tokens(), 2);
+        assert_eq!(fitted.weak_skills, base.weak_skills[..1], "weak skills go before preferences");
+        assert_eq!(fitted.preferences, base.preferences);
+        assert_eq!(fitted.memories, globals);
+
+        let fitted = base.clone().fit(with(globals.clone(), 0, 1).tokens(), 2);
+        assert_eq!(fitted.preferences, base.preferences[..1], "preferences go before global memories");
+        assert!(fitted.weak_skills.is_empty());
+        assert_eq!(fitted.memories, globals);
+
+        let fitted = base.clone().fit(with(globals.clone(), 0, 0).tokens(), 2);
+        assert_eq!(fitted.memories, globals, "global memories survive until the end");
+        assert!(fitted.preferences.is_empty() && fitted.weak_skills.is_empty());
     }
 
     #[test]
