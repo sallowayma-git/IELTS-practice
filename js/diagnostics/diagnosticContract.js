@@ -291,7 +291,7 @@
             : result.name === 'QuotaExceededError' ? 'QUOTA_EXCEEDED' : 'unknown';
         if (result.name === 'AppDataError') {
             const reason = field(wire ? value : field(value, 'details', context), 'timingReason', context);
-            if (typeof reason === 'string' && Object.prototype.hasOwnProperty.call(TIMING_REASONS, reason)
+            if (typeof reason === 'string' && reason.length <= 32 && Object.prototype.hasOwnProperty.call(TIMING_REASONS, reason)
                 && TIMING_REASONS[reason].includes(result.code)) result.timingReason = reason;
         }
         result.message = choice(message, Object.values(MESSAGES).concat('[redacted]'), '[redacted]');

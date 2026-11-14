@@ -165,6 +165,20 @@ test('old v1 events keep their fingerprints and malformed timing evidence is dis
     const checked = normalizer.normalize({ error: error({ code: 'TIMING_STALE_WRITER', details }) });
     assert.equal(reads, 0); assert.equal(checked.timingReason, undefined);
     assert.ok(checked.collection.issues.includes('accessor-skipped'));
+    const realm = vm.createContext({});
+    vm.runInContext(source, realm);
+    const oversizedLookups = vm.runInContext(`
+        let lookups = 0;
+        const original = Object.prototype.hasOwnProperty;
+        Object.prototype.hasOwnProperty = function (key) {
+            if (typeof key === 'string' && key.length > 32) lookups++;
+            return original.call(this, key);
+        };
+        AppDiagnosticContract.createNormalizer().normalize({ error: { name: 'AppDataError',
+            code: 'TIMING_STALE_WRITER', details: { timingReason: 'x'.repeat(100000) } } });
+        lookups;
+    `, realm);
+    assert.equal(oversizedLookups, 0, 'oversized reason strings never become property lookup keys');
 });
 
 test('timing evidence remains bounded alongside saturated stack, cause and breadcrumb budgets', () => {

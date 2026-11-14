@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:7978e805ca89395530e9ad6406ff11d8c9937fb6ec2394013d1594337c1277e5",
+  "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -550,7 +550,7 @@
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "414f1c67335e797562431a2ff8412a344160f0ea07d99cb41d234346c4b27919"
+      "sha256": "8400cae624f4d0a0830af4a89c8c23d8ea2673293bd82b86d5bf469c5e57293d"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -566,11 +566,11 @@
     },
     {
       "path": "js/bundles/listening-record-bridge.bundle.js",
-      "sha256": "da1b34c71dd81b43f7a03801ecde7c9090048c8971bd0cbca7230e21a0d4ccff"
+      "sha256": "43c868fec3dcd06ceb33b6f345990ddda1b7796e423aeb663277695e82ac48da"
     },
     {
       "path": "js/bundles/listening-wrapper.bundle.js",
-      "sha256": "1ead8bfdeebc4d6faf45f9245bf498feb397af0cc72ce091d149979f98ba3cab"
+      "sha256": "924cf22003145b5010f39eb51f1f52653a029390bf561f227e08d343db94afea"
     },
     {
       "path": "js/bundles/more.bundle.js",
@@ -578,7 +578,7 @@
     },
     {
       "path": "js/bundles/practice-page-enhancer.bundle.js",
-      "sha256": "970e6ac5c50857f4e1f398c0033f3ebf7c18710bcf37e63ba817c329c3af235a"
+      "sha256": "03af19446b176914e609ca62e0c58519960ea8edde22d2bb34725394108d6759"
     },
     {
       "path": "js/bundles/practice.bundle.js",
@@ -590,7 +590,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "790563e5f7b6db27756779512a6bdee1ecffeb41e70fae468964a53ec69b4e29"
+      "sha256": "82c3edb6da7c188fc643e271789244e8b8eebba3162c41c6b09a5bcbd8f7e5d4"
     },
     {
       "path": "js/bundles/reading-tools.bundle.js",
@@ -622,7 +622,7 @@
     },
     {
       "path": "js/diagnostics/diagnosticContract.js",
-      "sha256": "3a7415da14a4addfb3e26cf92b9bc9f27fb5fbc44cc86d4e9f42c1b5c4769bc9"
+      "sha256": "4243942a0456dcb95ef8c6d52da029e02c12b81f0fb6899b422ca3fd28d4de5e"
     },
     {
       "path": "scripts/build-bundles.mjs",
