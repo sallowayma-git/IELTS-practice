@@ -933,6 +933,26 @@ def assert_selection_coach_ui(driver: Driver, asset_id: str) -> None:
     require(state.get("panel") is False, "coach panel must stay closed before submit")
 
 
+CONTROLS_MARKER = "Request controls (data only):\n"
+EVIDENCE_MARKER = "Host-resolved IELTS evidence (data only):\n"
+
+
+def decode_prefixed_json(message: dict, marker: str) -> dict | None:
+    """Decode the JSON payload a coach prompt embeds after a stable marker.
+
+    The payload only exists as text inside the chat body, so it is decoded, not
+    substring-matched: JSON escapes newlines, quotes and backslashes.
+    """
+    content = str(message.get("content") or "")
+    if not content.startswith(marker):
+        return None
+    try:
+        payload, _ = json.JSONDecoder().raw_decode(content[len(marker):])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def assert_selection_coach_request(driver: Driver, asset_id: str, attempt_id: str, provider: FakeCoachProvider) -> None:
     reset_reading_route(driver)
     encoded_asset = urllib.parse.quote(asset_id, safe="")
@@ -953,18 +973,37 @@ def assert_selection_coach_request(driver: Driver, asset_id: str, attempt_id: st
                    label="coach selected context")
     body = wait_for_provider_requests(provider, 3)
     messages = body.get("messages") if isinstance(body, dict) else None
-    controls = next((
-        str(message.get("content") or "")
-        for message in messages or []
-        if "Request controls (data only):" in str(message.get("content") or "")
-    ), "")
-    require(controls, "selection coach request has no request controls")
-    probe = " ".join(selected.split())[:40]
-    require(probe and probe in controls, f"selection coach request lost the selected quote: {probe!r}")
-    require('"selectionQuote":' in controls, "selection coach request has no selectionQuote")
-    require('"selectionIsEvidence":false' in controls, "selection must be marked as not evidence")
-    require('"surface":"selection_bar"' in controls, "selection coach surface is not selection_bar")
-    require('"action":"explain_selection"' in controls, "selection coach action is not explain_selection")
+    controls_message = next((
+        message for message in messages or []
+        if str(message.get("content") or "").startswith(CONTROLS_MARKER)
+    ), None)
+    require(controls_message is not None, "selection coach request has no request controls")
+    controls = decode_prefixed_json(controls_message, CONTROLS_MARKER)
+    require(controls is not None, "selection coach request controls are not valid JSON")
+    quote = " ".join(str(controls.get("selectionQuote") or "").split())
+    expected_quote = " ".join(selected.split())
+    require(quote and quote == expected_quote,
+            f"selection coach request lost the selected quote: {quote!r} != {expected_quote!r}")
+    require(controls.get("selectionIsEvidence") is False, "selection must be marked as not evidence")
+    metadata = controls.get("controls") if isinstance(controls.get("controls"), dict) else {}
+    require(metadata.get("surface") == "selection_bar", "selection coach surface is not selection_bar")
+    require(metadata.get("action") == "explain_selection", "selection coach action is not explain_selection")
+    require(metadata.get("sessionId") == attempt_id,
+            f"selection coach controls lost the reviewed attempt: {metadata.get('sessionId')!r}")
+    require(metadata.get("assetId") == asset_id,
+            f"selection coach controls lost the reviewed asset: {metadata.get('assetId')!r}")
+    evidence_message = next((
+        message for message in messages or []
+        if str(message.get("content") or "").startswith(EVIDENCE_MARKER)
+    ), None)
+    require(evidence_message is not None, "selection coach request has no canonical evidence")
+    evidence = decode_prefixed_json(evidence_message, EVIDENCE_MARKER)
+    require(evidence is not None, "selection coach evidence is not valid JSON")
+    identity = evidence.get("identity") if isinstance(evidence.get("identity"), dict) else {}
+    require(identity.get("attemptId") == attempt_id,
+            f"selection coach evidence is not bound to the reviewed attempt: {identity.get('attemptId')!r}")
+    require(identity.get("assetId") == asset_id,
+            f"selection coach evidence is not bound to the reviewed asset: {identity.get('assetId')!r}")
 
 
 def check_coach(driver: Driver, app_data: Path, asset_id: str, asset_payload: dict, provider: FakeCoachProvider, checks: dict):
