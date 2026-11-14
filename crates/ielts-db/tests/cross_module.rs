@@ -1,4 +1,8 @@
-use ielts_db::{migrate, open_connection, promote_cross_module_memories, DbOpenOptions};
+use ielts_db::{
+    archive_memory, forget_memory, migrate, open_connection, promote_cross_module_memories,
+    DbOpenOptions,
+};
+use ielts_domain::{MemoryArchiveCommand, MemoryForgetCommand};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -61,12 +65,14 @@ struct GlobalRow {
     created_by: String,
     content_hash: String,
     updated_at: String,
+    last_observed_at: Option<String>,
+    version: i64,
 }
 
 fn active_global(conn: &Connection, canonical_key: &str) -> Option<GlobalRow> {
     conn.query_row(
         "SELECT id,namespace,memory_type,content,structured_json,source_class,confidence,
-                importance,source_trust,created_by,content_hash,updated_at
+                importance,source_trust,created_by,content_hash,updated_at,last_observed_at,version
          FROM memory_items
          WHERE user_id='local' AND scope='global' AND canonical_key=?1 AND status='active'",
         [canonical_key],
@@ -84,11 +90,31 @@ fn active_global(conn: &Connection, canonical_key: &str) -> Option<GlobalRow> {
                 created_by: row.get(9)?,
                 content_hash: row.get(10)?,
                 updated_at: row.get(11)?,
+                last_observed_at: row.get(12)?,
+                version: row.get(13)?,
             })
         },
     )
     .optional()
     .unwrap()
+}
+
+fn memory_status(conn: &Connection, memory_id: &str) -> String {
+    conn.query_row(
+        "SELECT status FROM memory_items WHERE id=?1",
+        [memory_id],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
+fn memory_version(conn: &Connection, memory_id: &str) -> u64 {
+    conn.query_row(
+        "SELECT version FROM memory_items WHERE id=?1",
+        [memory_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap() as u64
 }
 
 fn active_global_count(conn: &Connection) -> i64 {
@@ -313,13 +339,25 @@ fn a_rerun_is_idempotent_and_changed_source_content_refreshes_the_global_row() {
     assert_eq!(first.promoted, vec!["strategy.skim_stem"]);
     let original = active_global(&conn, "strategy.skim_stem").unwrap();
     assert_eq!(relation_count(&conn, &original.id), 2);
+    assert_eq!(original.last_observed_at.as_deref(), Some(NOW));
+    assert_eq!(original.version, 1);
+    assert_eq!(first.changes.len(), 1);
+    assert_eq!(first.changes[0].action, "ADD");
+    assert_eq!(first.changes[0].memory_id, original.id);
+    assert_eq!(first.changes[0].statement, original.content);
 
     let second = promote_cross_module_memories(&conn, "local", LATER).unwrap();
     assert!(second.promoted.is_empty() && second.updated.is_empty());
+    assert!(second.changes.is_empty(), "an unchanged rerun changes nothing");
     let unchanged = active_global(&conn, "strategy.skim_stem").unwrap();
     assert_eq!(unchanged.id, original.id);
     assert_eq!(unchanged.content, original.content);
+    // The pass observed it again even though the text is the same, so the stale
+    // sweep cannot archive a memory this run just confirmed. `updated_at` still
+    // records the last content change, and an unchanged row keeps its version.
     assert_eq!(unchanged.updated_at, original.updated_at);
+    assert_eq!(unchanged.last_observed_at.as_deref(), Some(LATER));
+    assert_eq!(unchanged.version, original.version);
     assert_eq!(active_global_count(&conn), 1);
     assert_eq!(relation_count(&conn, &original.id), 2);
 
@@ -339,6 +377,16 @@ fn a_rerun_is_idempotent_and_changed_source_content_refreshes_the_global_row() {
     );
     assert_ne!(refreshed.content_hash, original.content_hash);
     assert_eq!(refreshed.updated_at, LATEST);
+    assert_eq!(refreshed.last_observed_at.as_deref(), Some(LATEST));
+    assert_eq!(
+        refreshed.version,
+        original.version + 1,
+        "a content refresh must win the next optimistic-concurrency check"
+    );
+    assert_eq!(third.changes.len(), 1);
+    assert_eq!(third.changes[0].action, "REFINE");
+    assert_eq!(third.changes[0].memory_id, refreshed.id);
+    assert_eq!(third.changes[0].statement, refreshed.content);
     assert_eq!(active_global_count(&conn), 1);
     assert_eq!(relation_count(&conn, &original.id), 2);
 }
@@ -492,4 +540,200 @@ fn both_rules_can_promote_in_the_same_weekly_call() {
     assert_eq!(active_global_count(&conn), 2);
     assert!(active_global(&conn, "strategy.skim_stem").is_some());
     assert!(active_global(&conn, CHRONIC_KEY).is_some());
+}
+
+/// Five high-lapse terms from one asset fill the top-five selection; the single
+/// low-lapse term from the second asset never makes it. The gate must judge the
+/// selected terms, not the candidate list, or a one-asset story is promoted.
+#[test]
+fn chronic_vocabulary_whose_top_five_come_from_one_asset_is_not_promoted() {
+    let (_dir, conn) = open_db();
+    for (index, lapses) in [9, 8, 7, 6, 5].into_iter().enumerate() {
+        insert_vocabulary(
+            &conn,
+            &format!("vocab-a-{index}"),
+            &format!("term-a-{index}"),
+            &format!("term-a-{index}"),
+            "asset-A",
+            lapses,
+        );
+    }
+    insert_vocabulary(&conn, "vocab-b", "term-b", "term-b", "asset-B", 3);
+    insert_reading_outcome(&conn, "ev-a-wrong", "asset-A", false, None);
+    insert_reading_outcome(&conn, "ev-b-wrong", "asset-B", false, None);
+
+    let report = promote_cross_module_memories(&conn, "local", NOW).unwrap();
+
+    assert!(report.promoted.is_empty() && report.updated.is_empty());
+    assert!(report.changes.is_empty());
+    assert!(active_global(&conn, CHRONIC_KEY).is_none());
+    assert_eq!(active_global_count(&conn), 0);
+}
+
+/// The complement: when the selected five themselves span two assets, the
+/// promotion happens and structured_json records both.
+#[test]
+fn chronic_vocabulary_whose_top_five_span_two_assets_is_promoted() {
+    let (_dir, conn) = open_db();
+    for (id, term, asset, lapses) in [
+        ("vocab-a-1", "term-a-1", "asset-A", 9),
+        ("vocab-a-2", "term-a-2", "asset-A", 7),
+        ("vocab-a-3", "term-a-3", "asset-A", 5),
+        ("vocab-b-1", "term-b-1", "asset-B", 8),
+        ("vocab-b-2", "term-b-2", "asset-B", 6),
+    ] {
+        insert_vocabulary(&conn, id, term, term, asset, lapses);
+    }
+    insert_reading_outcome(&conn, "ev-a-wrong", "asset-A", false, None);
+    insert_reading_outcome(&conn, "ev-b-wrong", "asset-B", false, None);
+
+    let report = promote_cross_module_memories(&conn, "local", NOW).unwrap();
+
+    assert_eq!(report.promoted, vec![CHRONIC_KEY]);
+    let row = active_global(&conn, CHRONIC_KEY).expect("one chronic vocabulary memory");
+    let structured: Value =
+        serde_json::from_str(row.structured_json.as_deref().expect("structured terms")).unwrap();
+    assert_eq!(structured["assetCount"], 2);
+    assert_eq!(structured["terms"].as_array().unwrap().len(), 5);
+    assert_eq!(report.changes.len(), 1);
+    assert_eq!(report.changes[0].action, "ADD");
+    assert_eq!(report.changes[0].memory_id, row.id);
+}
+
+/// A promoted global memory the user archived ("inaccurate", "outdated", "not
+/// about me") is a decision, not a gap: the next weekly pass must not refresh or
+/// recreate it, even if the underlying activity memories still qualify.
+#[test]
+fn an_archived_promotion_is_not_refreshed_or_recreated() {
+    let (_dir, conn) = open_db();
+    insert_memory(
+        &conn,
+        "mem-read",
+        "activity:reading",
+        "strategy",
+        "procedural",
+        "strategy.skim_stem",
+        "Read the stem first.",
+    );
+    insert_memory(
+        &conn,
+        "mem-write",
+        "activity:writing",
+        "strategy",
+        "procedural",
+        "strategy.skim_stem",
+        "Plan before writing.",
+    );
+    promote_cross_module_memories(&conn, "local", NOW).unwrap();
+    let row = active_global(&conn, "strategy.skim_stem").unwrap();
+    archive_memory(
+        &conn,
+        &MemoryArchiveCommand {
+            memory_id: row.id.clone(),
+            expected_version: row.version as u64,
+            actor_type: "user".into(),
+            actor_id: Some("local".into()),
+            reason: "inaccurate".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(memory_status(&conn, &row.id), "archived");
+    let archived_version = memory_version(&conn, &row.id);
+
+    // New source content would have refreshed an active row; an archived one
+    // stays archived, byte for byte.
+    conn.execute(
+        "UPDATE memory_items SET content=?1 WHERE id='mem-write'",
+        ["Plan the whole essay first."],
+    )
+    .unwrap();
+    let rerun = promote_cross_module_memories(&conn, "local", LATER).unwrap();
+
+    assert!(rerun.promoted.is_empty() && rerun.updated.is_empty());
+    assert!(rerun.changes.is_empty());
+    assert!(active_global(&conn, "strategy.skim_stem").is_none());
+    assert_eq!(active_global_count(&conn), 0);
+    let content: String = conn
+        .query_row("SELECT content FROM memory_items WHERE id=?1", [&row.id], |r| r.get(0))
+        .unwrap();
+    assert_eq!(content, row.content);
+    assert_eq!(memory_version(&conn, &row.id), archived_version);
+}
+
+/// Forget redacts the canonical key, so the same-key lookup cannot see it. The
+/// supports_consolidation lineage from the still-active source memories keeps
+/// pointing at the stable (now deleted) id, and that is the durable trace.
+#[test]
+fn a_forgotten_promotion_is_not_recreated() {
+    let (_dir, conn) = open_db();
+    insert_memory(
+        &conn,
+        "mem-read",
+        "activity:reading",
+        "strategy",
+        "procedural",
+        "strategy.skim_stem",
+        "Read the stem first.",
+    );
+    insert_memory(
+        &conn,
+        "mem-write",
+        "activity:writing",
+        "strategy",
+        "procedural",
+        "strategy.skim_stem",
+        "Plan before writing.",
+    );
+    promote_cross_module_memories(&conn, "local", NOW).unwrap();
+    let row = active_global(&conn, "strategy.skim_stem").unwrap();
+    forget_memory(
+        &conn,
+        &MemoryForgetCommand {
+            memory_id: row.id.clone(),
+            expected_version: row.version as u64,
+            actor_type: "user".into(),
+            actor_id: Some("local".into()),
+            reason: "user requested forget".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(memory_status(&conn, &row.id), "deleted");
+
+    let rerun = promote_cross_module_memories(&conn, "local", LATER).unwrap();
+
+    assert!(rerun.promoted.is_empty() && rerun.updated.is_empty());
+    assert!(rerun.changes.is_empty());
+    assert!(active_global(&conn, "strategy.skim_stem").is_none());
+    assert_eq!(active_global_count(&conn), 0);
+    assert_eq!(memory_status(&conn, &row.id), "deleted");
+}
+
+/// Rule B has no memory-item sources, but archive keeps its canonical key, so
+/// the same-key non-active check is enough to honor the verdict.
+#[test]
+fn an_archived_chronic_vocabulary_promotion_is_not_recreated() {
+    let (_dir, conn) = open_db();
+    insert_vocabulary(&conn, "vocab-abandon", "abandon", "abandon", "asset-A", 5);
+    insert_vocabulary(&conn, "vocab-brittle", "brittle", "brittle", "asset-B", 4);
+    insert_reading_outcome(&conn, "ev-a-wrong", "asset-A", false, None);
+    insert_reading_outcome(&conn, "ev-b-wrong", "asset-B", false, None);
+    promote_cross_module_memories(&conn, "local", NOW).unwrap();
+    let row = active_global(&conn, CHRONIC_KEY).unwrap();
+    archive_memory(
+        &conn,
+        &MemoryArchiveCommand {
+            memory_id: row.id.clone(),
+            expected_version: row.version as u64,
+            actor_type: "user".into(),
+            actor_id: Some("local".into()),
+            reason: "not_about_me".into(),
+        },
+    )
+    .unwrap();
+
+    let rerun = promote_cross_module_memories(&conn, "local", LATER).unwrap();
+
+    assert!(rerun.promoted.is_empty() && rerun.updated.is_empty());
+    assert!(active_global(&conn, CHRONIC_KEY).is_none());
+    assert_eq!(active_global_count(&conn), 0);
 }

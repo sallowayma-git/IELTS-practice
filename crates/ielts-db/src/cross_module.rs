@@ -4,12 +4,13 @@
 //! Rule A promotes a canonical key that is active in at least two activity
 //! scopes into one `global` memory. Rule B promotes vocabulary that is both
 //! repeatedly forgotten and tied to wrong reading answers. Both rules are
-//! idempotent, and a full global scope skips a promotion instead of failing the
-//! weekly report.
+//! idempotent, a full global scope skips a promotion instead of failing the
+//! weekly report, and a memory the user archived or forgot is never refreshed
+//! or recreated.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ielts_domain::{is_safe_for_prompt, MAX_ACTIVE_MEMORY_PER_SCOPE};
+use ielts_domain::{is_safe_for_prompt, WeeklyMemoryChange, MAX_ACTIVE_MEMORY_PER_SCOPE};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -32,12 +33,16 @@ const CHRONIC_VOCAB_KEY: &str = "language.vocabulary.chronic_reading_misses";
 const CHRONIC_VOCAB_LABEL: &str = "chronic reading vocabulary misses";
 
 /// Canonical keys promoted (`new`), and existing global rows whose content was
-/// refreshed. A key is reported once per pass.
+/// refreshed. A key is reported once per pass. `changes` is the same work in
+/// the shape the weekly report stores, so a caller that writes both in one
+/// transaction can show the promotion instead of hiding it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrossModuleReport {
     pub promoted: Vec<String>,
     pub updated: Vec<String>,
+    #[serde(default)]
+    pub changes: Vec<WeeklyMemoryChange>,
 }
 
 /// Promote cross-module memories for one user. The caller owns the transaction
@@ -110,6 +115,7 @@ fn promote_cross_scope_memories(
             &candidate.content,
             None,
             false,
+            Some(&candidate.source_ids),
             report,
         )?
         else {
@@ -174,7 +180,8 @@ struct ChronicReadingTerm {
 }
 
 /// Rule B: vocabulary with repeated lapses whose source material also produced
-/// a wrong reading answer. At least two distinct source assets are required.
+/// a wrong reading answer. The terms actually written (at most five) must span
+/// at least two distinct source assets.
 fn promote_chronic_reading_vocabulary(
     conn: &Connection,
     user_id: &str,
@@ -206,12 +213,21 @@ fn promote_chronic_reading_vocabulary(
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let asset_count: BTreeSet<&str> = terms.iter().map(|term| term.asset_id.as_str()).collect();
-    if asset_count.len() < 2 {
-        return Ok(());
-    }
     let selected: Vec<&ChronicReadingTerm> = terms.iter().take(CHRONIC_VOCAB_MAX_TERMS).collect();
     if selected.is_empty() {
+        return Ok(());
+    }
+    // The gate judges what is actually written, not the unbounded candidate
+    // list: after `take`, the five terms may all come from one asset even when
+    // some other asset also had a chronic miss. Truncating first is the fix —
+    // checking the full list and then truncating let one asset's terms claim the
+    // whole promotion while structured_json honestly recorded one asset.
+    let asset_count = selected
+        .iter()
+        .map(|term| term.asset_id.as_str())
+        .collect::<BTreeSet<_>>()
+        .len();
+    if asset_count < 2 {
         return Ok(());
     }
     let listed = selected
@@ -227,11 +243,6 @@ fn promote_chronic_reading_vocabulary(
     if !is_safe_for_prompt(&content) {
         return Ok(());
     }
-    let asset_count = selected
-        .iter()
-        .map(|term| term.asset_id.as_str())
-        .collect::<BTreeSet<_>>()
-        .len();
     let structured = json!({
         "terms": selected
             .iter()
@@ -257,13 +268,15 @@ fn promote_chronic_reading_vocabulary(
         &content,
         Some(&structured),
         true,
+        None,
         report,
     )?;
     Ok(())
 }
 
 /// Insert the global memory, or refresh an existing active one. Returns the
-/// target id, or `None` when a new insert would exceed the scope cap.
+/// target id, or `None` when the user already archived/forgot this key or a new
+/// insert would exceed the scope cap.
 #[allow(clippy::too_many_arguments)]
 fn upsert_global_memory(
     conn: &Connection,
@@ -276,6 +289,7 @@ fn upsert_global_memory(
     content: &str,
     structured_json: Option<&str>,
     sync_structured: bool,
+    source_ids: Option<&[String]>,
     report: &mut CrossModuleReport,
 ) -> DbResult<Option<String>> {
     let existing = conn
@@ -296,10 +310,13 @@ fn upsert_global_memory(
     if let Some((id, stored_content, stored_structured)) = existing {
         let structured_changed = sync_structured && stored_structured.as_deref() != structured_json;
         if stored_content != content || structured_changed {
+            // Content changed: refresh it, confirm freshness, and bump the
+            // version the same way REFINE/REINFORCE/archive do, so a stale
+            // `expected_version` can never archive the row the pass just wrote.
             if sync_structured {
                 conn.execute(
                     "UPDATE memory_items
-                     SET content=?1,content_hash=?2,structured_json=?3,
+                     SET content=?1,content_hash=?2,structured_json=?3,version=version+1,
                          last_observed_at=?4,updated_at=?4
                      WHERE id=?5 AND status='active'",
                     params![content, hash_text(content), structured_json, now, id],
@@ -307,14 +324,35 @@ fn upsert_global_memory(
             } else {
                 conn.execute(
                     "UPDATE memory_items
-                     SET content=?1,content_hash=?2,last_observed_at=?3,updated_at=?3
+                     SET content=?1,content_hash=?2,version=version+1,
+                         last_observed_at=?3,updated_at=?3
                      WHERE id=?4 AND status='active'",
                     params![content, hash_text(content), now, id],
                 )?;
             }
             report.updated.push(canonical_key.to_owned());
+            report.changes.push(WeeklyMemoryChange {
+                action: "REFINE".into(),
+                memory_id: id.clone(),
+                statement: content.to_owned(),
+            });
+        } else {
+            // Unchanged: the pass still observed it now. Without this the stale
+            // sweep could archive a memory the weekly pass just confirmed.
+            // `updated_at` stays the last content change.
+            conn.execute(
+                "UPDATE memory_items SET last_observed_at=?1 WHERE id=?2 AND status='active'",
+                params![now, id],
+            )?;
         }
         return Ok(Some(id));
+    }
+
+    // No active row. The user may have archived ("inaccurate", "outdated", "not
+    // about me") or forgotten a memory this pass promoted earlier; that verdict
+    // is durable, so the content must not come back.
+    if promotion_was_rejected(conn, user_id, canonical_key, source_ids)? {
+        return Ok(None);
     }
 
     let active_count: i64 = conn.query_row(
@@ -354,7 +392,64 @@ fn upsert_global_memory(
         ],
     )?;
     report.promoted.push(canonical_key.to_owned());
+    report.changes.push(WeeklyMemoryChange {
+        action: "ADD".into(),
+        memory_id: id.clone(),
+        statement: content.to_owned(),
+    });
     Ok(Some(id))
+}
+
+/// Whether the user already took this promotion away. Two independent traces:
+///
+/// * any `global` row with the same canonical key that is no longer active —
+///   archive keeps the key, so this covers both archive verdicts;
+/// * for rule A, the `supports_consolidation` lineage from the activity memories
+///   that back the candidate. Forget redacts the key itself, but the edge keeps
+///   pointing at the stable id, whose status is then `deleted`.
+///
+/// Rejection feedback is checked as well as status because the verdict is the
+/// user's decision, not a side effect of the archive transition.
+fn promotion_was_rejected(
+    conn: &Connection,
+    user_id: &str,
+    canonical_key: &str,
+    source_ids: Option<&[String]>,
+) -> DbResult<bool> {
+    let revoked: bool = conn.query_row(
+        "SELECT EXISTS(
+           SELECT 1 FROM memory_items m
+            WHERE m.user_id=?1 AND m.scope='global' AND m.canonical_key=?2
+              AND (m.status <> 'active' OR EXISTS(
+                    SELECT 1 FROM memory_feedback f
+                     WHERE f.memory_id=m.id AND f.user_id=?1
+                       AND f.feedback_kind IN ('inaccurate','outdated','not_about_me'))))",
+        params![user_id, canonical_key],
+        |row| row.get(0),
+    )?;
+    if revoked {
+        return Ok(true);
+    }
+    let Some(source_ids) = source_ids.filter(|ids| !ids.is_empty()) else {
+        return Ok(false);
+    };
+    let sources = json!(source_ids).to_string();
+    let rejected_by_lineage: bool = conn.query_row(
+        "SELECT EXISTS(
+           SELECT 1
+             FROM memory_relations r
+             JOIN memory_items t ON t.id=r.target_memory_id
+            WHERE r.relation_kind='supports_consolidation'
+              AND r.source_memory_id IN (SELECT value FROM json_each(?2))
+              AND t.user_id=?1 AND t.scope='global'
+              AND (t.status <> 'active' OR EXISTS(
+                    SELECT 1 FROM memory_feedback f
+                     WHERE f.memory_id=t.id AND f.user_id=?1
+                       AND f.feedback_kind IN ('inaccurate','outdated','not_about_me'))))",
+        params![user_id, sources],
+        |row| row.get(0),
+    )?;
+    Ok(rejected_by_lineage)
 }
 
 /// Idempotent support edges: one row per contributing memory. The unique index

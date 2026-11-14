@@ -182,11 +182,14 @@ pub(crate) fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbR
     let journal_id = ensure_journal(db, &window.anchor_day())?;
     let now = chrono::Utc::now().to_rfc3339();
     let local = crate::app::clock::now();
-    let report = weekly_report_without_narrative(db, window, WeeklyReportState::FinalNoAi, local)?;
+    let mut report = weekly_report_without_narrative(db, window, WeeklyReportState::FinalNoAi, local)?;
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         let run = ielts_db::record_completed_weekly_run(&tx, "local", &journal_id, window, &now)?;
-        ielts_db::promote_cross_module_memories(&tx, "local", &now)?;
+        // Promotions only write memory_items/memory_relations, which the report
+        // already built does not read. Append them before storing it.
+        let cross_module = ielts_db::promote_cross_module_memories(&tx, "local", &now)?;
+        report.memory_changes.extend(cross_module.changes);
         ielts_db::put_weekly_report(&tx, "local", &run.id, &report, *local.offset(), &now)?;
         tx.commit()?;
         Ok(())
@@ -812,6 +815,91 @@ mod tests {
         let next = WeeklyWindow::new("2026-W42", window.end, window.end + chrono::Duration::days(7));
         record_weekly_failure(&db, &next, &error, &chrono::Utc::now().to_rfc3339()).unwrap();
         assert_eq!(db.with_conn(|conn| ielts_db::weekly_failed_attempt_count(conn, "local", "2026-W42")).unwrap(), 1);
+    }
+
+    /// W3-4 audit: the no-model path builds its report before promoting, and a
+    /// promotion only writes memory_items/memory_relations. The stored report
+    /// must still carry it.
+    #[test]
+    fn a_no_model_week_reports_the_cross_module_promotion_it_made() {
+        let (dir, db) = test_db("no-ai-promotion.db");
+        submit_reading_practice(&db, dir.path(), "promo-attempt", "2026-10-05T09:00:00Z");
+        db.with_conn(|conn| {
+            for (id, scope, content) in [
+                ("mem-read", "activity:reading", "Read the stem first."),
+                ("mem-write", "activity:writing", "Plan before writing."),
+            ] {
+                conn.execute(
+                    "INSERT INTO memory_items (
+                       id,user_id,namespace,scope,memory_type,canonical_key,normalized_label,
+                       content,status,source_class,confidence,importance,source_trust,sensitivity,
+                       improvement_state,first_observed_at,last_observed_at,version,created_by,
+                       content_hash,created_at,updated_at
+                     ) VALUES (?1,'local','strategy',?2,'procedural','strategy.skim_stem',
+                               'skim stem',?3,'active','inferred',0.7,0.5,0.7,'normal','baseline',
+                               '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',1,'test',?4,
+                               '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')",
+                    rusqlite::params![id, scope, content, format!("hash-{id}")],
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let window = due(&db, &at(8, SATURDAY)).unwrap();
+
+        record_weekly_without_ai(&db, &window).unwrap();
+
+        let promoted: String = db.with_conn(|conn| {
+            Ok(conn.query_row(
+                "SELECT id FROM memory_items
+                 WHERE scope='global' AND canonical_key='strategy.skim_stem' AND status='active'",
+                [],
+                |row| row.get(0),
+            )?)
+        }).unwrap();
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].state, WeeklyReportState::FinalNoAi);
+        assert_eq!(reports[0].memory_changes.len(), 1);
+        assert_eq!(reports[0].memory_changes[0].action, "ADD");
+        assert_eq!(reports[0].memory_changes[0].memory_id, promoted);
+        assert_eq!(
+            reports[0].memory_changes[0].statement,
+            "Read the stem first. / Plan before writing."
+        );
+    }
+
+    /// One real reading submission inside the fixed test window; the ledger row
+    /// is moved to `when` so it falls in that week.
+    fn submit_reading_practice(db: &AppDb, dir: &std::path::Path, attempt: &str, when: &str) {
+        let path = dir.join(format!("{attempt}.json"));
+        std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
+            "examId": "promo-asset", "meta": {"title": "Promo", "category": "P1"},
+            "questionCount": 1, "questionOrder": ["q1"], "answerKey": {"q1": "TRUE"},
+            "questionGroups": [{"kind": "tfng", "questionIds": ["q1"]}]
+        })).unwrap()).unwrap();
+        db.with_conn(|conn| {
+            let asset = ielts_db::import_asset_payload_file(conn, &path)?;
+            ielts_db::submit_reading_attempt(conn, &ielts_db::ReadingSubmitCommand {
+                attempt_id: attempt.into(),
+                asset_id: "promo-asset".into(),
+                asset_revision: Some(asset.schema_version),
+                asset_fingerprint: Some(asset.fingerprint),
+                answers: serde_json::json!({"q1": "FALSE"}),
+                marked_questions: vec![],
+                question_timeline: vec![],
+                duration_ms: Some(900),
+                title_snapshot: Some("Promo".into()),
+                idempotency_key: attempt.into(),
+            })?;
+            conn.execute(
+                "UPDATE learning_events SET occurred_at = ?1
+                  WHERE json_extract(payload_json, '$.attemptId') = ?2",
+                rusqlite::params![when, attempt],
+            )?;
+            Ok(())
+        })
+        .unwrap();
     }
 
     /// W3-5: one daily call archives aged memory; the same local day is a no-op.
