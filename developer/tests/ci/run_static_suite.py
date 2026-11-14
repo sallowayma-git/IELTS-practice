@@ -318,13 +318,13 @@ def main() -> int:
                 #   consolidation    — M8 memory lifecycle: user feedback and
                 #                      the stale sweep archive (never delete)
                 #                      and propagate to dependent supports.
-                #   context_snapshot — M5-08 snapshot identity: two identical
-                #                      renders must both persist, and one id
-                #                      must never be written twice.
+                #   writing_coach_context — W3-3b host-resolved writing
+                #                      evidence: completed attempt + evaluation,
+                #                      no cross-scene fallback.
                 "--test",
                 "consolidation",
                 "--test",
-                "context_snapshot",
+                "writing_coach_context",
                 # Startup recovery must survive duplicate windows and must
                 # not reset terminal retry budgets on every reboot.
                 "--test",
