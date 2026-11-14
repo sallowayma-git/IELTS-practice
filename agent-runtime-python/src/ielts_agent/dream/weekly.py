@@ -54,7 +54,6 @@ from .types import (
     CAPABILITY_LEARNING_WEEKLY_PACK,
     CAPABILITY_MODEL_INVOKE,
     CAPABILITY_VERSION_MODEL_INVOKE,
-    MEMORY_ACTIVITIES,
     MEMORY_NAMESPACES,
     NARRATIVE_TARGET_KINDS,
     REQUIRED_WEEKLY_DREAM_HOST_CAPABILITIES,
@@ -93,6 +92,12 @@ MAX_MUTATIONS = 8
 MAX_EVIDENCE_IDS = 8
 MAX_STATEMENT_CHARS = 300
 MAX_KEY_BYTES = 160
+
+# The weekly report only accepts activity-scoped mutations its pack can back
+# with evidence: the window carries reading and writing records. MEMORY_ACTIVITIES
+# is the generic four-value memory contract (listening/vocabulary included) and
+# stays wider than this weekly pass on purpose.
+WEEKLY_MUTATION_ACTIVITIES: frozenset[str] = frozenset({"reading", "writing"})
 
 
 class HostBridge(Protocol):
@@ -619,7 +624,7 @@ def _valid_identity(raw: dict[str, Any]) -> bool:
         and set(scope) == {"type", "key"}
         and scope["type"] == "activity"
         and isinstance(scope["key"], str)
-        and scope["key"] in MEMORY_ACTIVITIES
+        and scope["key"] in WEEKLY_MUTATION_ACTIVITIES
     )
 
 
@@ -728,6 +733,7 @@ __all__ = [
     "MIN_OBSERVATIONS",
     "MODEL_MAX_ATTEMPTS",
     "MODEL_RETRY_BACKOFF_SECONDS",
+    "WEEKLY_MUTATION_ACTIVITIES",
     "WeeklyDreamInput",
     "WeeklyDreamOrchestrator",
     "fallback_result",

@@ -182,6 +182,17 @@ class MemoryExtractorTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             MemoryCandidateInput.model_validate(raw)
 
+    def test_listening_activity_is_a_valid_four_value_scope(self) -> None:
+        # Every observation must match taskScope, so the positive four-value
+        # path moves the whole variant to listening — not just observations[0].
+        raw = candidate_input()
+        for observation in raw["observations"]:
+            observation["activity"] = "listening"
+        raw["taskScope"] = {"type": "activity", "key": "listening"}
+        bounded = MemoryCandidateInput.model_validate(raw)
+        self.assertEqual(bounded.task_scope.key, "listening")
+        self.assertTrue(all(item.activity == "listening" for item in bounded.observations))
+
 
 if __name__ == "__main__":
     unittest.main()

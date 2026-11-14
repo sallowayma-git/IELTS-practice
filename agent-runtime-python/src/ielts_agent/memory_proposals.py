@@ -51,6 +51,8 @@ class MemoryNamespace(StrEnum):
 class Activity(StrEnum):
     READING = "reading"
     WRITING = "writing"
+    LISTENING = "listening"
+    VOCABULARY = "vocabulary"
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,10 +68,21 @@ class ActivityScope:
 
 
 @dataclass(frozen=True, slots=True)
+class GlobalScope:
+    type: ClassVar[str] = "global"
+
+    def to_wire(self) -> dict[str, str]:
+        return {"type": self.type}
+
+    def as_dict(self) -> dict[str, str]:
+        return self.to_wire()
+
+
+@dataclass(frozen=True, slots=True)
 class AddProposal:
     namespace: MemoryNamespace
     canonical_key: str
-    scope: ActivityScope
+    scope: ActivityScope | GlobalScope
     statement: str
     evidence_observation_ids: tuple[str, ...]
     action: ClassVar[MemoryProposalAction] = MemoryProposalAction.ADD
@@ -144,7 +157,7 @@ class SupersedeProposal:
     target_memory_id: str
     namespace: MemoryNamespace
     canonical_key: str
-    scope: ActivityScope
+    scope: ActivityScope | GlobalScope
     proposed_statement: str
     evidence_observation_ids: tuple[str, ...]
     action: ClassVar[MemoryProposalAction] = MemoryProposalAction.SUPERSEDE
@@ -470,13 +483,34 @@ def _statement(value: Any, path: str) -> str:
     return statement
 
 
-def _scope(value: Any, path: str) -> ActivityScope:
+def _scope(value: Any, path: str) -> ActivityScope | GlobalScope:
     scope = _object(value, path)
-    _require_exact_fields(scope, frozenset({"type", "key"}), path)
+    if "type" not in scope:
+        raise MemoryProposalParseError(
+            "invalid_scope",
+            f"{path}.type",
+            "scope type must be 'activity' or 'global'",
+        )
     scope_type = _string(scope["type"], f"{path}.type")
+    if scope_type == "global":
+        if set(scope) != {"type"}:
+            raise MemoryProposalParseError(
+                "invalid_scope", path, "global scope accepts only 'type'"
+            )
+        return GlobalScope()
     if scope_type != "activity":
         raise MemoryProposalParseError(
-            "invalid_scope", f"{path}.type", "scope type must be 'activity'"
+            "invalid_scope",
+            f"{path}.type",
+            "scope type must be 'activity' or 'global'",
+        )
+    if "key" not in scope:
+        raise MemoryProposalParseError(
+            "invalid_scope", f"{path}.key", "activity scope requires a 'key'"
+        )
+    if set(scope) != {"type", "key"}:
+        raise MemoryProposalParseError(
+            "invalid_scope", path, "activity scope accepts only 'type' and 'key'"
         )
     activity_value = _string(scope["key"], f"{path}.key")
     try:
@@ -485,7 +519,7 @@ def _scope(value: Any, path: str) -> ActivityScope:
         raise MemoryProposalParseError(
             "invalid_scope",
             f"{path}.key",
-            "activity key must be 'reading' or 'writing'",
+            "activity key must be one of 'reading', 'writing', 'listening', 'vocabulary'",
         ) from error
     return ActivityScope(key=activity)
 

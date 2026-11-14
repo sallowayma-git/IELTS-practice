@@ -244,6 +244,8 @@ pub fn list_assets(
         let a = match act {
             Activity::Reading => "reading",
             Activity::Writing => "writing",
+            Activity::Listening => "listening",
+            Activity::Vocabulary => "vocabulary",
         };
         stmt.query_map(params![a], map_row)?
     } else {
@@ -492,11 +494,7 @@ fn practice_asset_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Practice
 }
 
 fn invalid_column_value(index: usize, value: &str, field: &str) -> rusqlite::Error {
-    rusqlite::Error::FromSqlConversionFailure(
-        index,
-        rusqlite::types::Type::Text,
-        format!("invalid {field}: {value}").into(),
-    )
+    crate::sqlite::invalid_column_value(index, value, field)
 }
 
 /// Load a reading payload JSON file and register it as a practice asset.

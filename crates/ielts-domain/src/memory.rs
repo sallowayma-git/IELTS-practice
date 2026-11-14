@@ -201,37 +201,113 @@ impl MemoryProposalDisposition {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum MemoryScope {
+    Global,
     Activity { key: Activity },
 }
 
+// Serde ignores `deny_unknown_fields` on internally tagged enums, so the
+// unknown-field contract is enforced by this explicit wire struct instead.
+impl<'de> Deserialize<'de> for MemoryScope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        /// Distinguishes a missing `key` field from an explicit JSON `null`.
+        /// `Option<Activity>` alone collapses both into `None`, which would
+        /// accept `{"type":"global","key":null}` that the Python runtime and
+        /// the JSON schema reject.
+        #[derive(Default)]
+        enum MaybeActivity {
+            #[default]
+            Absent,
+            Present(Option<Activity>),
+        }
+
+        impl<'de> Deserialize<'de> for MaybeActivity {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                Option::<Activity>::deserialize(deserializer).map(Self::Present)
+            }
+        }
+
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct WireScope {
+            #[serde(rename = "type")]
+            scope_type: WireScopeType,
+            #[serde(default)]
+            key: MaybeActivity,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "snake_case")]
+        enum WireScopeType {
+            Global,
+            Activity,
+        }
+
+        let wire = WireScope::deserialize(deserializer)?;
+        match (wire.scope_type, wire.key) {
+            (WireScopeType::Global, MaybeActivity::Absent) => Ok(Self::Global),
+            (WireScopeType::Global, MaybeActivity::Present(_)) => Err(serde::de::Error::custom(
+                "unknown field `key` for global scope",
+            )),
+            (WireScopeType::Activity, MaybeActivity::Present(Some(key))) => {
+                Ok(Self::Activity { key })
+            }
+            (WireScopeType::Activity, MaybeActivity::Present(None))
+            | (WireScopeType::Activity, MaybeActivity::Absent) => {
+                Err(serde::de::Error::missing_field("key"))
+            }
+        }
+    }
+}
+
 impl MemoryScope {
-    pub const fn activity(self) -> Activity {
+    pub const fn activity(self) -> Option<Activity> {
         match self {
-            Self::Activity { key } => key,
+            Self::Global => None,
+            Self::Activity { key } => Some(key),
         }
     }
 
     pub const fn storage_key(self) -> &'static str {
         match self {
+            Self::Global => "global",
             Self::Activity {
                 key: Activity::Reading,
             } => "activity:reading",
             Self::Activity {
                 key: Activity::Writing,
             } => "activity:writing",
+            Self::Activity {
+                key: Activity::Listening,
+            } => "activity:listening",
+            Self::Activity {
+                key: Activity::Vocabulary,
+            } => "activity:vocabulary",
         }
     }
 
     pub fn parse_storage_key(value: &str) -> Option<Self> {
         match value {
+            "global" => Some(Self::Global),
             "activity:reading" => Some(Self::Activity {
                 key: Activity::Reading,
             }),
             "activity:writing" => Some(Self::Activity {
                 key: Activity::Writing,
+            }),
+            "activity:listening" => Some(Self::Activity {
+                key: Activity::Listening,
+            }),
+            "activity:vocabulary" => Some(Self::Activity {
+                key: Activity::Vocabulary,
             }),
             _ => None,
         }
@@ -692,4 +768,99 @@ fn default_preference_source() -> String {
 
 fn default_context_limit() -> u32 {
     50
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn global_scope_serializes_as_tagged_unit_variant() {
+        let value = serde_json::to_value(MemoryScope::Global).unwrap();
+        assert_eq!(value, json!({ "type": "global" }));
+        let parsed: MemoryScope = serde_json::from_value(json!({ "type": "global" })).unwrap();
+        assert_eq!(parsed, MemoryScope::Global);
+        assert_eq!(parsed.activity(), None);
+    }
+
+    #[test]
+    fn global_scope_rejects_unknown_fields() {
+        let error = serde_json::from_value::<MemoryScope>(json!({
+            "type": "global", "key": "reading"
+        }))
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("unknown field `key`"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn scope_key_presence_and_null_are_distinguished() {
+        // JSON `null` is a present key, not an absent one: Python and the
+        // schema reject both malformed shapes, so Rust must too.
+        assert!(serde_json::from_value::<MemoryScope>(json!({
+            "type": "global", "key": null
+        }))
+        .is_err());
+        assert!(serde_json::from_value::<MemoryScope>(json!({
+            "type": "activity", "key": null
+        }))
+        .is_err());
+        assert!(serde_json::from_value::<MemoryScope>(json!({
+            "type": "activity"
+        }))
+        .is_err());
+
+        assert_eq!(
+            serde_json::from_value::<MemoryScope>(json!({ "type": "global" })).unwrap(),
+            MemoryScope::Global
+        );
+        assert_eq!(
+            serde_json::from_value::<MemoryScope>(json!({
+                "type": "activity", "key": "reading"
+            }))
+            .unwrap(),
+            MemoryScope::Activity {
+                key: Activity::Reading
+            }
+        );
+        assert_eq!(MemoryScope::Global.storage_key(), "global");
+    }
+
+    #[test]
+    fn activity_scopes_round_trip_through_storage_keys() {
+        for (activity, storage_key) in [
+            (Activity::Reading, "activity:reading"),
+            (Activity::Writing, "activity:writing"),
+            (Activity::Listening, "activity:listening"),
+            (Activity::Vocabulary, "activity:vocabulary"),
+        ] {
+            let scope = MemoryScope::Activity { key: activity };
+            assert_eq!(scope.storage_key(), storage_key);
+            assert_eq!(scope.activity(), Some(activity));
+            assert_eq!(MemoryScope::parse_storage_key(storage_key), Some(scope));
+        }
+        assert_eq!(
+            MemoryScope::parse_storage_key("global"),
+            Some(MemoryScope::Global)
+        );
+        assert_eq!(MemoryScope::parse_storage_key("activity:speaking"), None);
+        assert_eq!(MemoryScope::parse_storage_key("unknown"), None);
+    }
+
+    #[test]
+    fn activity_serde_names_are_stable() {
+        for (activity, name) in [
+            (Activity::Reading, "reading"),
+            (Activity::Writing, "writing"),
+            (Activity::Listening, "listening"),
+            (Activity::Vocabulary, "vocabulary"),
+        ] {
+            assert_eq!(serde_json::to_value(activity).unwrap(), json!(name));
+            let parsed: Activity = serde_json::from_value(json!(name)).unwrap();
+            assert_eq!(parsed, activity);
+        }
+    }
 }

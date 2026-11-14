@@ -553,8 +553,11 @@ fn get_open_reading_draft_for_identity(
         params![attempt_id],
         |row| {
             let activity = match row.get::<_, String>(1)?.as_str() {
+                "reading" => Activity::Reading,
                 "writing" => Activity::Writing,
-                _ => Activity::Reading,
+                "listening" => Activity::Listening,
+                "vocabulary" => Activity::Vocabulary,
+                value => return Err(crate::sqlite::invalid_column_value(1, value, "activity")),
             };
             let mode = match row.get::<_, String>(3)?.as_str() {
                 "suite" => AttemptMode::Suite,

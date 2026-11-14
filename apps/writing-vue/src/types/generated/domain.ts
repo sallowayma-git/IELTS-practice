@@ -5,7 +5,7 @@
  * Regenerate guidance: keep field names in camelCase matching serde rename_all.
  */
 
-export type Activity = 'reading' | 'writing';
+export type Activity = 'reading' | 'writing' | 'listening' | 'vocabulary';
 
 export type AttemptMode =
   | 'single'

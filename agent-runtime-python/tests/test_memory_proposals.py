@@ -13,6 +13,9 @@ from ielts_agent.memory_proposals import (
     MAX_MEMORY_KEY_BYTES,
     MAX_MEMORY_PROPOSALS,
     MAX_MEMORY_STATEMENT_BYTES,
+    Activity,
+    ActivityScope,
+    GlobalScope,
     MemoryProposalAction,
     MemoryProposalParseError,
     parse_memory_proposal_batch,
@@ -178,6 +181,57 @@ class MemoryProposalBoundaryTests(unittest.TestCase):
             json.dumps({"schema_version": 1, "proposals": []}),
             "schema_unknown_field",
         )
+
+    def test_all_activity_scopes_and_global_scope_round_trip(self) -> None:
+        for activity in ("reading", "writing", "listening", "vocabulary"):
+            with self.subTest(activity=activity):
+                payload = batch(
+                    [add_proposal(scope={"type": "activity", "key": activity})]
+                )
+                parsed = parse_memory_proposal_batch(payload)
+                self.assertEqual(
+                    parsed.proposals[0].scope, ActivityScope(key=Activity(activity))
+                )
+                self.assertEqual(parsed.to_wire(), json.loads(payload))
+
+        payload = batch([add_proposal(scope={"type": "global"})])
+        parsed = parse_memory_proposal_batch(payload)
+        self.assertEqual(parsed.proposals[0].scope, GlobalScope())
+        self.assertEqual(parsed.proposals[0].scope.to_wire(), {"type": "global"})
+        self.assertEqual(parsed.to_wire(), json.loads(payload))
+
+        supersede = {
+            "action": "SUPERSEDE",
+            "targetMemoryId": "mem-strategy-reading-1",
+            "namespace": "strategy",
+            "canonicalKey": "strategy.reading.replacement",
+            "scope": {"type": "global"},
+            "proposedStatement": "Replacement statement.",
+            "evidenceObservationIds": ["obs-reading-1"],
+        }
+        payload = batch([supersede])
+        parsed = parse_memory_proposal_batch(payload)
+        self.assertEqual(parsed.proposals[0].scope, GlobalScope())
+        self.assertEqual(parsed.to_wire(), json.loads(payload))
+
+    def test_invalid_scope_shapes_are_rejected(self) -> None:
+        for scope in (
+            {"type": "global", "key": "reading"},
+            {"type": "activity"},
+            {"type": "activity", "key": "speaking"},
+            {"type": "module", "key": "reading"},
+            {"type": "module"},
+        ):
+            with self.subTest(scope=scope):
+                self.assert_rejected(
+                    batch([add_proposal(scope=scope)]), "invalid_scope"
+                )
+        error = self.assert_rejected(
+            batch([add_proposal(scope={"type": "activity", "key": "speaking"})]),
+            "invalid_scope",
+        )
+        self.assertIn("listening", error.message)
+        self.assertIn("vocabulary", error.message)
 
     def test_malformed_duplicate_and_non_finite_json_are_rejected(self) -> None:
         for payload in (

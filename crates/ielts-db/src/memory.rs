@@ -2,13 +2,13 @@ use std::collections::BTreeMap;
 
 use ielts_domain::{
     is_user_note_key, validate_explicit_preference, ActiveMemorySummary, Activity,
-    ExplicitPreference, ExplicitPreferenceDelete, ExplicitPreferenceIssue, ExplicitPreferenceUpsert,
-    MemoryCandidateActiveSummary, MemoryCandidateInput, MemoryCandidateObservationSummary,
-    MemoryCandidatePreferenceSummary,
-    MemoryCandidateBatchReceipt, MemoryCandidatePersistenceInput, MemoryCandidateReceipt,
+    ExplicitPreference, ExplicitPreferenceDelete, ExplicitPreferenceIssue,
+    ExplicitPreferenceUpsert, MemoryArchiveCommand, MemoryCandidateActiveSummary,
+    MemoryCandidateBatchReceipt, MemoryCandidateInput, MemoryCandidateObservationSummary,
+    MemoryCandidatePersistenceInput, MemoryCandidatePreferenceSummary, MemoryCandidateReceipt,
     MemoryCatalog, MemoryCatalogEntry, MemoryCatalogQuery, MemoryConfidenceBand,
     MemoryContextEntry, MemoryContextPreview, MemoryContextQuery, MemoryContextSource,
-    MemoryArchiveCommand, MemoryForgetCommand, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
+    MemoryForgetCommand, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
     MemoryObservationEvidence, MemoryPromotionCommand, MemoryProposalDisposition, MemoryScope,
     MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, RefutedMemorySummary, MAX_ACTIVE_MEMORY_PER_SCOPE,
     MAX_EXPLICIT_PREFERENCES, MAX_MEMORY_CANDIDATE_OBSERVATIONS, MAX_MEMORY_CONTEXT_ITEMS,
@@ -36,38 +36,49 @@ pub fn prepare_memory_candidate_input(
             "maxCandidates must be between 1 and {MAX_MEMORY_PROPOSALS}"
         )));
     }
-    let namespaces = activity_observation_namespaces(activity)
-        .iter()
-        .map(|value| (*value).to_owned())
-        .collect();
-    let snapshot = observation_snapshot(
-        conn,
-        &ielts_domain::ObservationSnapshotQuery {
-            namespaces,
-            since,
-            limit: MAX_MEMORY_CANDIDATE_OBSERVATIONS,
-            ..Default::default()
-        },
-    )?;
-    let observations = snapshot
-        .observations
-        .into_iter()
-        .filter(|item| item.user_id == user_id)
-        .map(|item| {
-            let statement = item
-                .value_text
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| item.payload.to_string());
-            MemoryCandidateObservationSummary {
-                id: item.id,
-                namespace: memory_namespace_for_observation(&item.namespace),
-                activity,
-                normalized_label: format!("{} {}", item.observation_type, item.scope_key),
-                statement: truncate_utf8(statement, MAX_MEMORY_STATEMENT_BYTES),
-                canonical_key: None,
-            }
-        })
-        .collect();
+    let observation_namespaces = activity_observation_namespaces(activity);
+    let observations: Vec<MemoryCandidateObservationSummary> = if observation_namespaces.is_empty()
+    {
+        // This activity has no observation namespaces yet (W3-2/W3-3), so the
+        // correct candidate input is the empty set. `observation_snapshot`
+        // treats an empty namespace list as "no filter", so calling it here
+        // would read every reading/writing/coach observation and relabel it as
+        // this activity. Do not rely on that global semantic; choose no rows.
+        Vec::new()
+    } else {
+        let namespaces = observation_namespaces
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect();
+        let snapshot = observation_snapshot(
+            conn,
+            &ielts_domain::ObservationSnapshotQuery {
+                namespaces,
+                since,
+                limit: MAX_MEMORY_CANDIDATE_OBSERVATIONS,
+                ..Default::default()
+            },
+        )?;
+        snapshot
+            .observations
+            .into_iter()
+            .filter(|item| item.user_id == user_id)
+            .map(|item| {
+                let statement = item
+                    .value_text
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| item.payload.to_string());
+                MemoryCandidateObservationSummary {
+                    id: item.id,
+                    namespace: memory_namespace_for_observation(&item.namespace),
+                    activity,
+                    normalized_label: format!("{} {}", item.observation_type, item.scope_key),
+                    statement: truncate_utf8(statement, MAX_MEMORY_STATEMENT_BYTES),
+                    canonical_key: None,
+                }
+            })
+            .collect()
+    };
     let task_scope = MemoryScope::Activity { key: activity };
     let active_memory = load_active_memory(conn, user_id)?
         .into_iter()
@@ -121,6 +132,8 @@ fn activity_observation_namespaces(activity: Activity) -> &'static [&'static str
             "writing.evaluation.criterion_score",
             "writing.evaluation.degraded",
         ],
+        // No listening/vocabulary observation namespaces exist yet (W3-2/W3-3).
+        Activity::Listening | Activity::Vocabulary => &[],
     }
 }
 
@@ -407,14 +420,16 @@ pub fn promote_memory_candidate(
         .map_err(|error| DbError::Validation(format!("candidate proposal is invalid: {error}")))?;
     let new_evidence_ids = verify_new_lifecycle_evidence(&tx, &proposal, &candidate.evidence_snapshot)?;
     let now = chrono::Utc::now().to_rfc3339();
-    let (memory_id, memory_status, memory_version, before, after) = apply_proposal(
+    let (memory_id, memory_status, memory_version, before, after) =
+        apply_proposal(&tx, &proposal, &candidate, command, &now)?;
+    attach_evidence(
         &tx,
+        &memory_id,
         &proposal,
-        &candidate,
-        command,
+        &candidate.evidence_snapshot,
+        &new_evidence_ids,
         &now,
     )?;
-    attach_evidence(&tx, &memory_id, &proposal, &candidate.evidence_snapshot, &new_evidence_ids, &now)?;
     let changed = tx.execute(
         "UPDATE memory_candidates
          SET disposition='promoted',resolved_memory_id=?1,version=version+1,updated_at=?2
@@ -608,7 +623,11 @@ pub fn memory_context_preview(
     load_explicit_context(conn, &query.user_id, scope, &mut entries)?;
     load_active_context(conn, &query.user_id, scope, &mut entries)?;
     load_candidate_context(conn, &query.user_id, scope, &mut entries)?;
-    entries.sort_by(|left, right| left.priority.cmp(&right.priority).then(left.key.cmp(&right.key)));
+    entries.sort_by(|left, right| {
+        left.priority
+            .cmp(&right.priority)
+            .then(left.key.cmp(&right.key))
+    });
     let truncated = entries.len() > limit;
     entries.truncate(limit);
     Ok(MemoryContextPreview {
@@ -908,7 +927,13 @@ fn verify_snapshot_in_transaction(tx: &Transaction<'_>, snapshot: &MemoryValidat
             .query_row(
                 "SELECT user_id,status,version FROM memory_items WHERE id=?1",
                 [&memory.id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
             )
             .optional()?;
         if current != Some((memory.user_id.clone(), "active".into(), memory.version as i64)) {
@@ -1114,23 +1139,26 @@ fn load_pending_candidate(tx: &Transaction<'_>, id: &str) -> DbResult<PendingCan
     )
     .optional()?
     .ok_or_else(|| DbError::Validation("candidate not found".into()))
-    .and_then(|(user_id, source, proposal, evidence, target_version, version, disposition)| {
-        if disposition != "pending" {
-            return Err(DbError::Validation("candidate is not pending".into()));
-        }
-        Ok(PendingCandidate {
-            user_id,
-            source_class: MemorySourceClass::parse(&source)
-                .ok_or_else(|| DbError::Validation("invalid candidate source class".into()))?,
-            proposal_json: proposal
-                .ok_or_else(|| DbError::Validation("pending candidate has no proposal".into()))?,
-            evidence_snapshot: serde_json::from_str(&evidence).map_err(|error| {
-                DbError::Validation(format!("candidate evidence is invalid: {error}"))
-            })?,
-            expected_target_version: target_version.map(|value| value as u64),
-            version: version as u64,
-        })
-    })
+    .and_then(
+        |(user_id, source, proposal, evidence, target_version, version, disposition)| {
+            if disposition != "pending" {
+                return Err(DbError::Validation("candidate is not pending".into()));
+            }
+            Ok(PendingCandidate {
+                user_id,
+                source_class: MemorySourceClass::parse(&source)
+                    .ok_or_else(|| DbError::Validation("invalid candidate source class".into()))?,
+                proposal_json: proposal.ok_or_else(|| {
+                    DbError::Validation("pending candidate has no proposal".into())
+                })?,
+                evidence_snapshot: serde_json::from_str(&evidence).map_err(|error| {
+                    DbError::Validation(format!("candidate evidence is invalid: {error}"))
+                })?,
+                expected_target_version: target_version.map(|value| value as u64),
+                version: version as u64,
+            })
+        },
+    )
 }
 
 fn verify_candidate_evidence(tx: &Transaction<'_>, evidence: &[Value]) -> DbResult<()> {
@@ -1188,11 +1216,19 @@ fn verify_new_lifecycle_evidence(
     )?;
     let prior_times = statement.query_map([target_id], |row| row.get::<_, Option<String>>(0))?
         .collect::<Result<Vec<_>, _>>()?;
-    let latest = prior_times.into_iter().map(|value| {
-        let value = value.ok_or_else(|| DbError::Validation(
-            "previous lifecycle evidence is unavailable; rebuild the projection".into()))?;
-        evidence_observed_at(&value)
-    }).collect::<DbResult<Vec<_>>>()?.into_iter().max()
+    let latest = prior_times
+        .into_iter()
+        .map(|value| {
+            let value = value.ok_or_else(|| {
+                DbError::Validation(
+                    "previous lifecycle evidence is unavailable; rebuild the projection".into(),
+                )
+            })?;
+            evidence_observed_at(&value)
+        })
+        .collect::<DbResult<Vec<_>>>()?
+        .into_iter()
+        .max()
         .ok_or_else(|| DbError::Validation("target memory has no lifecycle evidence".into()))?;
 
     let mut new_evidence_ids = Vec::new();
@@ -1530,11 +1566,7 @@ fn load_explicit_context(
          ORDER BY preference_key,scope",
     )?;
     let rows = statement.query_map(params![user_id, scope], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-        ))
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
     for row in rows {
         let (key, value, pref_scope) = row?;
@@ -1562,7 +1594,11 @@ fn load_active_context(
          ORDER BY importance DESC,confidence DESC,updated_at DESC,id",
     )?;
     let rows = statement.query_map(params![user_id, scope], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
     })?;
     for row in rows {
         let (id, key, content) = row?;

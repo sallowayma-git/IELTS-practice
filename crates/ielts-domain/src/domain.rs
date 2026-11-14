@@ -15,6 +15,8 @@ use ts_rs::TS;
 pub enum Activity {
     Reading,
     Writing,
+    Listening,
+    Vocabulary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -202,6 +202,8 @@ fn activity_str(activity: Activity) -> &'static str {
     match activity {
         Activity::Reading => "reading",
         Activity::Writing => "writing",
+        Activity::Listening => "listening",
+        Activity::Vocabulary => "vocabulary",
     }
 }
 

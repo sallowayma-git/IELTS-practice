@@ -769,7 +769,9 @@ fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
     snapshot_tables_before_digests(schema_version)
         .iter()
         .copied()
-        .filter(|table| *table != "weekly_digests" || schema_version >= WEEKLY_DIGESTS_SCHEMA_VERSION)
+        .filter(|table| {
+            *table != "weekly_digests" || schema_version >= WEEKLY_DIGESTS_SCHEMA_VERSION
+        })
         .filter(|table| {
             !CONTEXT_SNAPSHOT_TABLES.contains(table)
                 || schema_version >= CONTEXT_SNAPSHOTS_SCHEMA_VERSION
@@ -785,10 +787,20 @@ fn is_weekly_snapshot_package(package: &BackupPackage) -> bool {
         && package.manifest.database_schema_version == 33
         && has("soul_revisions")
         && !CONTEXT_SNAPSHOT_TABLES.iter().any(|name| has(name))
-        && package.database.iter().any(|table| table.name == "practice_assets"
-            && table.columns.iter().any(|column| column == "question_kinds_json"))
-        && package.database.iter().any(|table| table.name == "coach_threads"
-            && !table.columns.iter().any(|column| column == "learner_profile_json"))
+        && package.database.iter().any(|table| {
+            table.name == "practice_assets"
+                && table
+                    .columns
+                    .iter()
+                    .any(|column| column == "question_kinds_json")
+        })
+        && package.database.iter().any(|table| {
+            table.name == "coach_threads"
+                && !table
+                    .columns
+                    .iter()
+                    .any(|column| column == "learner_profile_json")
+        })
 }
 
 fn snapshot_tables_for_package(package: &BackupPackage) -> Vec<&'static str> {
@@ -1012,7 +1024,11 @@ pub fn import_backup(
 /// Per-class record counts of the live database, for the restore preview.
 fn data_class_counts_in_db(conn: &Connection) -> DbResult<DataClassCounts> {
     let count = |table: &str| -> DbResult<u32> {
-        Ok(conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))?)
+        Ok(
+            conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })?,
+        )
     };
     Ok(DataClassCounts {
         attempts: count("attempts")?,
@@ -1367,7 +1383,12 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
     // the restored `learning_events` while this transaction is still open --
     // after commit would be too late for the deferred check below.
     crate::learning_observations::learning_observations_rebuild_in_transaction(tx)?;
-    if tables.get("practice_assets").is_some_and(|table| !table.columns.iter().any(|column| column == "question_kinds_json")) {
+    if tables.get("practice_assets").is_some_and(|table| {
+        !table
+            .columns
+            .iter()
+            .any(|column| column == "question_kinds_json")
+    }) {
         crate::reading::assets::backfill_question_kinds_in_transaction(tx)?;
     }
     resolve_references_to_unrestored_tables(tx, &source_tables)?;
@@ -2189,8 +2210,11 @@ fn load_all_attempt_summaries(conn: &Connection) -> DbResult<Vec<AttemptRecord>>
             schema_version: row.get::<_, i64>(17)? as u32,
             id: row.get(0)?,
             activity: match row.get::<_, String>(1)?.as_str() {
+                "reading" => Activity::Reading,
                 "writing" => Activity::Writing,
-                _ => Activity::Reading,
+                "listening" => Activity::Listening,
+                "vocabulary" => Activity::Vocabulary,
+                value => return Err(crate::sqlite::invalid_column_value(1, value, "activity")),
             },
             asset_id: row.get(2)?,
             mode: match row.get::<_, String>(3)?.as_str() {
