@@ -501,6 +501,7 @@ fn apply_weekly_submission(
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         report.memory_changes = ielts_db::weekly_memory_changes(&tx, &query.user_id)?;
+        ielts_db::promote_cross_module_memories(&tx, &query.user_id, now_iso)?;
         let applied = ielts_db::soul::soul_apply_edits_in_transaction(&tx, &query.user_id, run_id, &profile_edits, &facts)?;
         report.profile_edits = applied
             .into_iter()

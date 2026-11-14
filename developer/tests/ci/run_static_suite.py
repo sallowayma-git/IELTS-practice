@@ -318,11 +318,16 @@ def main() -> int:
                 #   consolidation    — M8 memory lifecycle: user feedback and
                 #                      the stale sweep archive (never delete)
                 #                      and propagate to dependent supports.
+                #   cross_module     — W3-4 weekly promotion from activity
+                #                      scopes to global memory, idempotent and
+                #                      capacity-safe.
                 #   writing_coach_context — W3-3b host-resolved writing
                 #                      evidence: completed attempt + evaluation,
                 #                      no cross-scene fallback.
                 "--test",
                 "consolidation",
+                "--test",
+                "cross_module",
                 "--test",
                 "writing_coach_context",
                 # Startup recovery must survive duplicate windows and must

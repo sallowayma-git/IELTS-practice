@@ -186,6 +186,7 @@ pub(crate) fn record_weekly_without_ai(db: &AppDb, window: &WeeklyWindow) -> DbR
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         let run = ielts_db::record_completed_weekly_run(&tx, "local", &journal_id, window, &now)?;
+        ielts_db::promote_cross_module_memories(&tx, "local", &now)?;
         ielts_db::put_weekly_report(&tx, "local", &run.id, &report, *local.offset(), &now)?;
         tx.commit()?;
         Ok(())
