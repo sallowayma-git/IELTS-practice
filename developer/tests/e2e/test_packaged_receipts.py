@@ -14,6 +14,31 @@ from unittest.mock import patch
 
 import packaged_tauri_flow as flow
 
+QUESTION_KINDS_FIXTURE = (
+    flow.ROOT / "developer/tests/fixtures/weekly-snapshot/0031_practice_assets_question_kinds.sql"
+)
+
+
+def migration_version(path: Path) -> int:
+    return int(path.name.split("_", 1)[0])
+
+
+def add_snapshot_question_kinds(schema: sqlite3.Connection) -> None:
+    """Mirror crates/ielts-db/src/migrate/snapshot.rs::add_question_kinds."""
+    columns = {row[1] for row in schema.execute("PRAGMA table_info(practice_assets)")}
+    if "question_kinds_json" not in columns:
+        schema.executescript(QUESTION_KINDS_FIXTURE.read_text(encoding="utf-8"))
+
+
+def replay_migrations(schema: sqlite3.Connection) -> None:
+    """Replay the SQL files in the order crates/ielts-db/src/migrate/mod.rs applies them."""
+    for migration in sorted((flow.ROOT / "crates/ielts-db/migrations").glob("*.sql")):
+        # run_in_transaction adds the snapshot column inside the version-34
+        # step, before 0034's SQL, so later migrations can read it.
+        if migration_version(migration) == 34:
+            add_snapshot_question_kinds(schema)
+        schema.executescript(migration.read_text(encoding="utf-8"))
+
 
 class PackagedReceiptTests(unittest.TestCase):
     def setUp(self):
@@ -25,8 +50,7 @@ class PackagedReceiptTests(unittest.TestCase):
         # Avoid a durable disk commit for every migration statement. Each test
         # still gets a fresh file-backed database for the real receipt helpers.
         with closing(sqlite3.connect(":memory:")) as schema:
-            for migration in sorted((flow.ROOT / "crates/ielts-db/migrations").glob("*.sql")):
-                schema.executescript(migration.read_text(encoding="utf-8"))
+            replay_migrations(schema)
             with closing(sqlite3.connect(self.db)) as conn:
                 schema.backup(conn)
 
