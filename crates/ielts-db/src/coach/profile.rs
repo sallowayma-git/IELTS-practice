@@ -23,6 +23,20 @@ const SOUL_LABELS: [(&str, &str); 5] = [
     ("soul.examDate", "exam date"),
 ];
 pub const PROFILE_MAX_SOUL_LINES: usize = 6;
+pub const PROFILE_MAX_TEACHING_NOTES: usize = 3;
+
+/// Negative feedback kinds that become a standing teaching instruction, keyed
+/// by their wire spelling. Verdicts and style corrections are not instructions.
+static TEACHING_NOTE_MAP: [(&str, &str); 8] = [
+    ("too_long", "Keep every answer under 120 words."),
+    ("too_short", "Give the complete reasoning, not just the final answer."),
+    ("too_abstract", "Start with one concrete passage example, then state the rule."),
+    ("need_example", "Include one concrete example from the passage."),
+    ("need_step_by_step", "Walk through the reasoning in numbered steps."),
+    ("incorrect", "Re-check the official answer before explaining; never contradict it."),
+    ("not_relevant", "Answer the exact question asked and omit unrelated context."),
+    ("reask_same_question", "When the learner re-asks, explain differently instead of repeating."),
+];
 
 /// Per-list caps, then one total cap over the serialized snapshot.
 pub const PROFILE_MAX_PREFERENCES: usize = 5;
@@ -57,6 +71,10 @@ pub struct LearnerProfileSnapshot {
     /// Soul settings as labelled lines. Outside `fit()`: never changes which memories survive.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub soul: Vec<String>,
+    /// Standing teaching instructions distilled from recent negative feedback.
+    /// Outside `fit()` and rendered in the system prompt only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub teaching_notes: Vec<String>,
 }
 
 /// One preference or learned memory. `id` is the memory id (`mem-...`) for a
@@ -79,6 +97,8 @@ pub struct WeakSkill {
 }
 
 impl LearnerProfileSnapshot {
+    /// Empty means no profile data message is needed. Soul settings and
+    /// teaching notes live only in the system prompt, so they are excluded.
     pub fn is_empty(&self) -> bool {
         self.preferences.is_empty() && self.memories.is_empty() && self.weak_skills.is_empty()
     }
@@ -140,11 +160,47 @@ pub fn select_learner_profile(
     let module_memories = memories.len();
     memories.extend(memory_rows(conn, MemoryScope::Global.storage_key(), false, PROFILE_MAX_GLOBAL_MEMORIES)?);
     let weak_skills = weak_skill_rows(conn, scene.activity)?;
-    let mut snapshot = LearnerProfileSnapshot { preferences, memories, weak_skills, soul: Vec::new() }
-        .fit(PROFILE_TOKEN_BUDGET, module_memories);
-    // Added after fit(): soul lines are a separate small list and never shrink memories.
+    let mut snapshot = LearnerProfileSnapshot {
+        preferences,
+        memories,
+        weak_skills,
+        soul: Vec::new(),
+        teaching_notes: Vec::new(),
+    }
+    .fit(PROFILE_TOKEN_BUDGET, module_memories);
+    // Added after fit(): soul lines and teaching notes are separate small lists
+    // and never shrink or evict memories.
     snapshot.soul = soul_lines(conn)?;
+    snapshot.teaching_notes = teaching_note_lines(conn)?;
     Ok(snapshot)
+}
+
+/// The most frequent mapped negative-feedback kinds from the last 30 days, as
+/// standing teaching instructions, most frequent first then by kind.
+fn teaching_note_lines(conn: &Connection) -> DbResult<Vec<String>> {
+    let cutoff = (chrono::Utc::now() - chrono::Duration::days(30)).to_rfc3339();
+    let mut statement = conn.prepare(
+        "SELECT feedback_kind, COUNT(*) FROM coach_feedback
+         WHERE user_id=?1 AND created_at>=?2
+         GROUP BY feedback_kind
+         ORDER BY COUNT(*) DESC, feedback_kind ASC",
+    )?;
+    let rows = statement.query_map(params![PROFILE_USER_ID, cutoff], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (kind, _count) = row?;
+        let Some((_, instruction)) = TEACHING_NOTE_MAP.iter().find(|(mapped, _)| *mapped == kind)
+        else {
+            continue;
+        };
+        out.push((*instruction).to_owned());
+        if out.len() == PROFILE_MAX_TEACHING_NOTES {
+            break;
+        }
+    }
+    Ok(out)
 }
 
 /// Soul settings that are set, as `label: value` lines that pass the prompt filter.
@@ -341,6 +397,7 @@ mod tests {
             memories: (0..8).map(|i| statement(&format!("mem-{i}"), &long)).collect(),
             weak_skills: vec![],
             soul: vec![],
+            teaching_notes: vec![],
         };
         let fitted = snapshot.clone().fit(PROFILE_TOKEN_BUDGET, 8);
         assert!(fitted.tokens() <= PROFILE_TOKEN_BUDGET);
@@ -366,6 +423,7 @@ mod tests {
                 .collect(),
             weak_skills: (0..2).map(skill).collect(),
             soul: vec![],
+            teaching_notes: vec![],
         };
         let globals = base.memories[2..].to_vec();
         let with = |memories: Vec<ProfileStatement>, weak: usize, preferences: usize| LearnerProfileSnapshot {
@@ -373,6 +431,7 @@ mod tests {
             memories,
             weak_skills: base.weak_skills[..weak].to_vec(),
             soul: vec![],
+            teaching_notes: vec![],
         };
 
         let fitted = base.clone().fit(with(base.memories[1..].to_vec(), 2, 2).tokens(), 2);
@@ -406,6 +465,7 @@ mod tests {
             memories: vec![statement("mem-a", "y")],
             weak_skills: vec![],
             soul: vec![],
+            teaching_notes: vec![],
         };
         assert_eq!(snapshot.memory_ids(), vec!["mem-p", "mem-a"]);
         assert!(LearnerProfileSnapshot::default().is_empty());

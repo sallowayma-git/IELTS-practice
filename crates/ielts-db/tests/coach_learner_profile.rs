@@ -1,7 +1,7 @@
 //! The learner profile a coach thread is frozen with: selection, freezing,
 //! recall counting and trace provenance, against real SQLite.
 use ielts_db::*;
-use ielts_domain::Activity;
+use ielts_domain::{Activity, CoachFeedbackKind, RecordCoachFeedbackCommand};
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 
@@ -268,6 +268,130 @@ fn a_writing_memory_does_not_enter_a_reading_scene() {
     let snapshot = select_learner_profile(&conn, &reading()).unwrap();
     let ids: Vec<&str> = snapshot.memories.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(ids, vec!["mem-reading"]);
+}
+
+fn assistant_message(conn: &Connection, thread: &str) -> String {
+    append_coach_message(
+        conn,
+        &AppendCoachMessageCommand {
+            thread_id: thread.into(),
+            role: "assistant".into(),
+            content: "Check the qualifier.".into(),
+            structured_payload: None,
+            status: "completed".into(),
+        },
+    )
+    .unwrap()
+    .id
+}
+
+fn feedback_on_new_message(conn: &Connection, thread: &str, kind: CoachFeedbackKind) {
+    let message = assistant_message(conn, thread);
+    record_coach_feedback(
+        conn,
+        &RecordCoachFeedbackCommand {
+            user_id: "local".into(),
+            coach_message_id: message,
+            feedback_kind: kind,
+            payload: None,
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn without_negative_feedback_there_are_no_teaching_notes() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    assistant_message(&conn, &thread);
+    assert!(select_learner_profile(&conn, &reading()).unwrap().teaching_notes.is_empty());
+}
+
+#[test]
+fn teaching_notes_are_the_most_frequent_negative_feedback_first() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    for kind in [CoachFeedbackKind::TooLong, CoachFeedbackKind::TooLong, CoachFeedbackKind::NeedExample] {
+        feedback_on_new_message(&conn, &thread, kind);
+    }
+    assert_eq!(
+        select_learner_profile(&conn, &reading()).unwrap().teaching_notes,
+        vec![
+            "Keep every answer under 120 words.",
+            "Include one concrete example from the passage.",
+        ]
+    );
+}
+
+#[test]
+fn feedback_older_than_thirty_days_is_ignored() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    let message = assistant_message(&conn, &thread);
+    let old = (chrono::Utc::now() - chrono::Duration::days(40)).to_rfc3339();
+    conn.execute(
+        "INSERT INTO coach_feedback (id,user_id,coach_message_id,feedback_kind,payload_json,created_at)
+         VALUES ('cfb-old','local',?1,'too_long',NULL,?2)",
+        params![message, old],
+    )
+    .unwrap();
+    assert!(select_learner_profile(&conn, &reading()).unwrap().teaching_notes.is_empty());
+}
+
+#[test]
+fn unmapped_feedback_kinds_never_become_teaching_notes() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    for kind in [CoachFeedbackKind::ThumbsUp, CoachFeedbackKind::ThumbsDown, CoachFeedbackKind::StyleCorrection] {
+        feedback_on_new_message(&conn, &thread, kind);
+    }
+    assert!(select_learner_profile(&conn, &reading()).unwrap().teaching_notes.is_empty());
+}
+
+#[test]
+fn at_most_three_teaching_notes_in_count_then_kind_order() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    for kind in [
+        CoachFeedbackKind::TooLong,
+        CoachFeedbackKind::TooShort,
+        CoachFeedbackKind::NeedExample,
+        CoachFeedbackKind::NeedStepByStep,
+        CoachFeedbackKind::Incorrect,
+    ] {
+        feedback_on_new_message(&conn, &thread, kind);
+    }
+    let notes = select_learner_profile(&conn, &reading()).unwrap().teaching_notes;
+    // Every count is one, so the wire kind breaks the tie alphabetically:
+    // incorrect < need_example < need_step_by_step.
+    assert_eq!(
+        notes,
+        vec![
+            "Re-check the official answer before explaining; never contradict it.",
+            "Include one concrete example from the passage.",
+            "Walk through the reasoning in numbered steps.",
+        ]
+    );
+    assert_eq!(notes.len(), PROFILE_MAX_TEACHING_NOTES);
+}
+
+#[test]
+fn the_frozen_thread_profile_carries_the_teaching_notes() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    feedback_on_new_message(&conn, &thread, CoachFeedbackKind::TooLong);
+    let frozen = freeze_coach_learner_profile(&conn, &thread).unwrap();
+    assert_eq!(frozen.teaching_notes, vec!["Keep every answer under 120 words."]);
+    let raw: String = conn
+        .query_row(
+            "SELECT learner_profile_json FROM coach_threads WHERE id=?1",
+            [&thread],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(raw.contains("teachingNotes"));
+    let stored: LearnerProfileSnapshot = serde_json::from_str(&raw).unwrap();
+    assert_eq!(stored, frozen);
 }
 
 #[test]
