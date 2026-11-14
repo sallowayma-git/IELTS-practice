@@ -250,6 +250,8 @@ def main() -> int:
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading AI review is opt-in", ["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
+        run_command("Vocabulary list view model", ["node", "developer/tests/js/vocabListView.test.mjs"]),
+        run_command("Vocabulary session queue core", ["node", "developer/tests/js/vocabSessionCore.test.mjs"]),
         run_command("Vue production build", [NPM, "--prefix", "apps/writing-vue", "run", "build"]),
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),
         run_command(

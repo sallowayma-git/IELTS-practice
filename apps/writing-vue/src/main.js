@@ -42,6 +42,11 @@ const router = createRouter({
             component: () => import('./views/NotebookPage.vue')
         },
         {
+            path: '/vocabulary',
+            name: 'Vocabulary',
+            component: () => import('./views/VocabularyPage.vue')
+        },
+        {
             path: '/memory-center',
             name: 'MemoryCenter',
             redirect: { name: 'Notebook' }

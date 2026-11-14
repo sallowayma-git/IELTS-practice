@@ -67,6 +67,7 @@ const navItems = [
     ? [{ key: 'learner', to: '/reading/learner', label: '技能', match: ['/reading/learner'] }]
     : []),
   { key: 'notebook', to: '/notebook', label: '札记', match: ['/notebook'] },
+  { key: 'vocabulary', to: '/vocabulary', label: '生词', match: ['/vocabulary'] },
   { key: 'history', to: '/history', label: '历史', match: ['/history'] },
   { key: 'more', to: libraryView('more'), label: '更多', match: ['/'], view: 'more' },
   { key: 'settings', to: '/settings', label: '设置', match: ['/settings'] }
