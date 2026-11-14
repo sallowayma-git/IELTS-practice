@@ -16,7 +16,7 @@ mod profile;
 mod trace;
 pub use profile::*;
 pub use trace::*;
-pub use context::{resolve_reading_coach_context, ResolvedCoachContext};
+pub use context::{resolve_coach_context, resolve_reading_coach_context, ResolvedCoachContext};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

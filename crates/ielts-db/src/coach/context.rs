@@ -2,7 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use ielts_domain::Activity;
+use ielts_domain::{
+    Activity, AttemptMode, AttemptRecord, AttemptStatus, EvaluationStatus, WritingFeedbackV4,
+    WritingTaskType,
+};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -86,6 +89,23 @@ fn invalid(message: impl Into<String>) -> DbError {
     DbError::Validation(format!("coach.context_invalid: {}", message.into()))
 }
 
+/// Parse the client selector once, then hand the exact same selector to the
+/// scene it names. Anything that does not explicitly say "writing" keeps the
+/// reading gate: a writing-bound thread can never silently borrow reading
+/// evidence, and a reading-bound thread cannot borrow writing evidence.
+pub fn resolve_coach_context(
+    conn: &Connection,
+    thread_id: &str,
+    raw: Option<&Value>,
+) -> DbResult<ResolvedCoachContext> {
+    let selector = parse_selector(raw)?;
+    if selector.activity.as_deref() == Some("writing") {
+        resolve_writing_selector(conn, thread_id, selector)
+    } else {
+        resolve_reading_selector(conn, thread_id, selector)
+    }
+}
+
 /// One SQLite read snapshot, plus fingerprint-verified asset payload. No write
 /// and no search for "another attempt of the same asset" if evidence was pruned.
 pub fn resolve_reading_coach_context(
@@ -93,7 +113,14 @@ pub fn resolve_reading_coach_context(
     thread_id: &str,
     raw: Option<&Value>,
 ) -> DbResult<ResolvedCoachContext> {
-    let selector = parse_selector(raw)?;
+    resolve_reading_selector(conn, thread_id, parse_selector(raw)?)
+}
+
+fn resolve_reading_selector(
+    conn: &Connection,
+    thread_id: &str,
+    selector: Selector,
+) -> DbResult<ResolvedCoachContext> {
     let tx = conn.unchecked_transaction()?;
     let thread = get_thread(&tx, thread_id)?;
     let attempt_id = thread
@@ -186,16 +213,7 @@ pub fn resolve_reading_coach_context(
     };
     let answers = evidence_answers(&attempt.answers, correct_answers.as_ref())?;
     let selection = selector.selected_context.as_ref();
-    let quote = if selector.selected_text.is_empty() {
-        selection
-            .map(|selected| selected.text.as_str())
-            .unwrap_or("")
-    } else {
-        &selector.selected_text
-    };
-    if quote.chars().count() > 500 {
-        return Err(invalid("selection quote exceeds 500 characters"));
-    }
+    let quote = selection_quote(&selector)?;
     let metadata = json!({
         "activity": "reading", "sessionId": attempt.id, "assetId": asset_id,
         "mode": mode, "locale": selector.locale, "surface": selector.surface,
@@ -222,9 +240,7 @@ pub fn resolve_reading_coach_context(
     if let Some(labels) = selection_paragraphs(quote, selection) {
         request["selectionParagraphs"] = json!(labels);
     }
-    if evidence.to_string().len() + request.to_string().len() > 64 * 1024 {
-        return Err(invalid("canonical context exceeds 64 KiB"));
-    }
+    ensure_context_bounded(&evidence, &request)?;
     tx.commit()?;
     Ok(ResolvedCoachContext {
         activity: Activity::Reading,
@@ -232,6 +248,184 @@ pub fn resolve_reading_coach_context(
         request,
         message_metadata: metadata,
     })
+}
+
+/// A writing thread replays the canonical attempt plus its persisted
+/// evaluation. Selectors may narrow identity and carry a quote; they can never
+/// supply scores, raw evaluation JSON or annotations.
+fn resolve_writing_selector(
+    conn: &Connection,
+    thread_id: &str,
+    selector: Selector,
+) -> DbResult<ResolvedCoachContext> {
+    let tx = conn.unchecked_transaction()?;
+    let thread = get_thread(&tx, thread_id)?;
+    let attempt_id = thread
+        .attempt_id
+        .as_deref()
+        .ok_or_else(|| invalid("thread has no retained attempt evidence"))?;
+    let attempt = load_attempt(&tx, attempt_id)?;
+    if attempt.activity != Activity::Writing || attempt.status != AttemptStatus::Completed {
+        return Err(invalid(
+            "writing coach requires a completed writing attempt",
+        ));
+    }
+    if let (Some(thread_asset), Some(attempt_asset)) = (&thread.asset_id, &attempt.asset_id) {
+        if thread_asset != attempt_asset {
+            return Err(invalid("thread asset conflicts with its bound attempt"));
+        }
+    }
+    let mode = attempt_mode_str(attempt.mode);
+    validate_writing_identity(&selector, &attempt, mode)?;
+    let evaluation = crate::writing::load_evaluation_for_attempt(&tx, attempt_id)?
+        .ok_or_else(|| invalid("writing coach requires a completed evaluation with band scores"))?;
+    if !matches!(
+        evaluation.status,
+        EvaluationStatus::Completed | EvaluationStatus::Degraded
+    ) {
+        return Err(invalid(
+            "writing coach requires a completed evaluation with band scores",
+        ));
+    }
+    let score = evaluation
+        .score
+        .as_ref()
+        .ok_or_else(|| invalid("writing coach requires a completed evaluation with band scores"))?;
+    let Some(essay) = attempt
+        .content_text
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+    else {
+        return Err(invalid("writing attempt has no retained essay text"));
+    };
+    let task_type = attempt.task_type.map(writing_task_type_str);
+    let feedback = evaluation.feedback.as_ref();
+    let limitations = if evaluation.status == EvaluationStatus::Degraded {
+        json!([{
+            "code": "evaluation_degraded",
+            "message": "The evaluation was degraded; use only the persisted scores and essay."
+        }])
+    } else {
+        json!([])
+    };
+    let evidence = json!({
+        "identity": {"attemptId": attempt.id, "assetId": attempt.asset_id,
+            "activity": "writing", "taskType": task_type, "mode": mode,
+            "sessionOwnerId": attempt.suite_id},
+        "source": {"title": attempt.title_snapshot, "prompt": attempt.prompt_snapshot,
+            "essay": essay, "taskType": task_type},
+        "result": {"status": "completed",
+            "score": {"overall": score.overall, "taskResponse": score.task_response,
+                "coherence": score.coherence, "lexical": score.lexical,
+                "grammar": score.grammar},
+            "feedback": {"overall": feedback.and_then(|value| value.overall.clone()),
+                "sentences": capped_sentences(feedback)}},
+        "evidenceLimitations": limitations,
+    });
+    let quote = selection_quote(&selector)?;
+    let metadata = json!({
+        "activity": "writing", "sessionId": attempt.id, "assetId": attempt.asset_id,
+        "mode": mode, "locale": selector.locale, "surface": selector.surface,
+        "action": selector.action, "promptKind": selector.prompt_kind,
+    });
+    let request =
+        json!({"controls": metadata, "selectionQuote": quote, "selectionIsEvidence": false});
+    ensure_context_bounded(&evidence, &request)?;
+    tx.commit()?;
+    Ok(ResolvedCoachContext {
+        activity: Activity::Writing,
+        evidence,
+        request,
+        message_metadata: metadata,
+    })
+}
+
+fn validate_writing_identity(
+    selector: &Selector,
+    attempt: &AttemptRecord,
+    mode: &str,
+) -> DbResult<()> {
+    if selector
+        .activity
+        .as_deref()
+        .is_some_and(|value| value != "writing")
+    {
+        return Err(invalid("request identity conflicts with bound attempt"));
+    }
+    if selector
+        .session_id
+        .as_deref()
+        .is_some_and(|value| value != attempt.id)
+    {
+        return Err(invalid("request identity conflicts with bound attempt"));
+    }
+    if let Some(requested) = selector.asset_id.as_deref().filter(|id| !id.is_empty()) {
+        if attempt.asset_id.as_deref() != Some(requested) {
+            return Err(invalid("request identity conflicts with bound attempt"));
+        }
+    }
+    if selector
+        .mode
+        .as_deref()
+        .is_some_and(|value| value != "review" && value != mode)
+    {
+        return Err(invalid("request mode conflicts with bound attempt"));
+    }
+    Ok(())
+}
+
+fn attempt_mode_str(mode: AttemptMode) -> &'static str {
+    match mode {
+        AttemptMode::Single => "single",
+        AttemptMode::Suite => "suite",
+        AttemptMode::Endless => "endless",
+        AttemptMode::Memorize => "memorize",
+        AttemptMode::Freeform => "freeform",
+        AttemptMode::Bank => "bank",
+    }
+}
+
+fn writing_task_type_str(task_type: WritingTaskType) -> &'static str {
+    match task_type {
+        WritingTaskType::Task1 => "task1",
+        WritingTaskType::Task2 => "task2",
+    }
+}
+
+/// At most 12 sentence notes keep the stable evidence prefix bounded; feedback
+/// serialization failure degrades to no sentences, never to raw JSON.
+fn capped_sentences(feedback: Option<&WritingFeedbackV4>) -> Value {
+    let Some(feedback) = feedback else {
+        return json!([]);
+    };
+    match serde_json::to_value(&feedback.sentences) {
+        Ok(Value::Array(items)) => Value::Array(items.into_iter().take(12).collect()),
+        _ => json!([]),
+    }
+}
+
+/// One rule for both scenes: explicit quote first, then the selection payload.
+fn selection_quote(selector: &Selector) -> DbResult<&str> {
+    let quote = if selector.selected_text.is_empty() {
+        selector
+            .selected_context
+            .as_ref()
+            .map(|selected| selected.text.as_str())
+            .unwrap_or("")
+    } else {
+        &selector.selected_text
+    };
+    if quote.chars().count() > 500 {
+        return Err(invalid("selection quote exceeds 500 characters"));
+    }
+    Ok(quote)
+}
+
+fn ensure_context_bounded(evidence: &Value, request: &Value) -> DbResult<()> {
+    if evidence.to_string().len() + request.to_string().len() > 64 * 1024 {
+        return Err(invalid("canonical context exceeds 64 KiB"));
+    }
+    Ok(())
 }
 
 /// Retained answers plus, when known, the official `correctAnswer` per question.

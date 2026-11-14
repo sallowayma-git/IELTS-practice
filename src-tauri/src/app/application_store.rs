@@ -85,7 +85,7 @@ impl CoachStore for ApplicationStore<'_> {
         thread_id: &str,
         selector: Option<&Value>,
     ) -> Result<ielts_db::ResolvedCoachContext, ApplicationError> {
-        self.db.with_conn(|conn| ielts_db::resolve_reading_coach_context(conn, thread_id, selector))
+        self.db.with_conn(|conn| ielts_db::resolve_coach_context(conn, thread_id, selector))
             .map_err(enrichment_error)
     }
 
