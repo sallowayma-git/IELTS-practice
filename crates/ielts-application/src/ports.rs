@@ -206,6 +206,7 @@ pub trait CoachStore: Send + Sync {
     fn learner_profile(
         &self,
         thread_id: &str,
+        activity: ielts_domain::Activity,
     ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError>;
 
     /// Persist a long-term teaching preference the learner stated explicitly

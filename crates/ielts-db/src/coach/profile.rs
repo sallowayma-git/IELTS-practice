@@ -1,4 +1,4 @@
-//! The learner profile a reading coach thread is tailored with.
+//! The learner profile a coach thread is tailored with.
 //!
 //! Selected once, on the thread's first coach run, and frozen on the thread row
 //! (`coach_threads.learner_profile_json`). Every later turn replays the stored
@@ -333,6 +333,7 @@ fn weak_skill_rows(conn: &Connection, activity: Activity) -> DbResult<Vec<WeakSk
 pub fn freeze_coach_learner_profile(
     conn: &Connection,
     thread_id: &str,
+    activity: Activity,
 ) -> DbResult<LearnerProfileSnapshot> {
     let tx = conn.unchecked_transaction()?;
     let stored: Option<Option<String>> = tx
@@ -348,8 +349,7 @@ pub fn freeze_coach_learner_profile(
     if let Some(raw) = stored {
         return Ok(serde_json::from_str(&raw)?);
     }
-    let snapshot =
-        select_learner_profile(&tx, &CoachScene { activity: Activity::Reading })?;
+    let snapshot = select_learner_profile(&tx, &CoachScene { activity })?;
     tx.execute(
         "UPDATE coach_threads SET learner_profile_json=?1 WHERE id=?2 AND learner_profile_json IS NULL",
         params![serde_json::to_string(&snapshot)?, thread_id],

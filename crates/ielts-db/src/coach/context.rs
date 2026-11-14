@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 
+use ielts_domain::Activity;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -13,6 +14,9 @@ use crate::{history::load_attempt, load_answer_key, load_practice_asset_payload}
 
 #[derive(Debug, Clone)]
 pub struct ResolvedCoachContext {
+    /// The scene that owns this evidence and this thread. It decides the task
+    /// rules and which activity-scoped memories the frozen profile may carry.
+    pub activity: Activity,
     /// Stable evidence: byte-identical for every turn of one attempt
     /// (`identity`, `result`, `source`, `evidenceLimitations`). Prompt builders
     /// put it first so the provider can cache the prefix.
@@ -223,6 +227,7 @@ pub fn resolve_reading_coach_context(
     }
     tx.commit()?;
     Ok(ResolvedCoachContext {
+        activity: Activity::Reading,
         evidence,
         request,
         message_metadata: metadata,

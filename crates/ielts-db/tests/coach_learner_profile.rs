@@ -172,7 +172,7 @@ fn the_first_freeze_stores_the_profile_and_counts_one_recall() {
     learned(&conn, "mem-a", "Misses qualifiers in TFNG statements.", 0.9);
     skill(&conn, "reading.tfng", 0.3, 2);
 
-    let first = freeze_coach_learner_profile(&conn, &thread).unwrap();
+    let first = freeze_coach_learner_profile(&conn, &thread, Activity::Reading).unwrap();
     assert_eq!(first.memory_ids(), vec!["mem-a"]);
     assert_eq!(recall_count(&conn, "mem-a"), 1);
 
@@ -180,24 +180,24 @@ fn the_first_freeze_stores_the_profile_and_counts_one_recall() {
     learned(&conn, "mem-b", "A new habit observed later.", 1.0);
     conn.execute("UPDATE memory_items SET status='archived' WHERE id='mem-a'", []).unwrap();
     skill(&conn, "reading.yng", 0.1, 3);
-    let again = freeze_coach_learner_profile(&conn, &thread).unwrap();
+    let again = freeze_coach_learner_profile(&conn, &thread, Activity::Reading).unwrap();
     assert_eq!(again, first);
     assert_eq!(recall_count(&conn, "mem-a"), 1, "reuse is not a new recall");
     assert_eq!(recall_count(&conn, "mem-b"), 0);
 
     // A new thread sees the current state.
     let other = self::thread(&conn, "coach-t2");
-    assert_eq!(freeze_coach_learner_profile(&conn, &other).unwrap().memory_ids(), vec!["mem-b"]);
+    assert_eq!(freeze_coach_learner_profile(&conn, &other, Activity::Reading).unwrap().memory_ids(), vec!["mem-b"]);
 }
 
 #[test]
 fn an_empty_profile_is_frozen_too() {
     let (_dir, conn) = open();
     let thread = thread(&conn, "coach-t1");
-    assert!(freeze_coach_learner_profile(&conn, &thread).unwrap().is_empty());
+    assert!(freeze_coach_learner_profile(&conn, &thread, Activity::Reading).unwrap().is_empty());
     learned(&conn, "mem-a", "Appears after the thread started.", 0.9);
-    assert!(freeze_coach_learner_profile(&conn, &thread).unwrap().is_empty());
-    assert!(freeze_coach_learner_profile(&conn, "coach-missing").is_err());
+    assert!(freeze_coach_learner_profile(&conn, &thread, Activity::Reading).unwrap().is_empty());
+    assert!(freeze_coach_learner_profile(&conn, "coach-missing", Activity::Reading).is_err());
 }
 
 #[test]
@@ -206,7 +206,7 @@ fn the_trace_records_the_frozen_memory_ids() {
     let thread = thread(&conn, "coach-t1");
     learned(&conn, "mem-a", "Misses qualifiers in TFNG statements.", 0.9);
     learned(&conn, "mem-b", "Rushes the last passage.", 0.5);
-    freeze_coach_learner_profile(&conn, &thread).unwrap();
+    freeze_coach_learner_profile(&conn, &thread, Activity::Reading).unwrap();
     let user = append_coach_message(
         &conn,
         &AppendCoachMessageCommand {
@@ -268,6 +268,19 @@ fn a_writing_memory_does_not_enter_a_reading_scene() {
     let snapshot = select_learner_profile(&conn, &reading()).unwrap();
     let ids: Vec<&str> = snapshot.memories.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(ids, vec!["mem-reading"]);
+}
+
+#[test]
+fn a_writing_scene_freezes_writing_memories_and_excludes_reading_ones() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    learned_in(&conn, "mem-reading", "Checks the question stem first.", 0.9, "activity:reading");
+    learned_in(&conn, "mem-writing", "Plans an essay outline.", 1.0, "activity:writing");
+    let frozen = freeze_coach_learner_profile(&conn, &thread, Activity::Writing).unwrap();
+    let ids: Vec<&str> = frozen.memories.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, vec!["mem-writing"]);
+    assert_eq!(recall_count(&conn, "mem-writing"), 1);
+    assert_eq!(recall_count(&conn, "mem-reading"), 0);
 }
 
 fn assistant_message(conn: &Connection, thread: &str) -> String {
@@ -380,7 +393,7 @@ fn the_frozen_thread_profile_carries_the_teaching_notes() {
     let (_dir, conn) = open();
     let thread = thread(&conn, "coach-t1");
     feedback_on_new_message(&conn, &thread, CoachFeedbackKind::TooLong);
-    let frozen = freeze_coach_learner_profile(&conn, &thread).unwrap();
+    let frozen = freeze_coach_learner_profile(&conn, &thread, Activity::Reading).unwrap();
     assert_eq!(frozen.teaching_notes, vec!["Keep every answer under 120 words."]);
     let raw: String = conn
         .query_row(

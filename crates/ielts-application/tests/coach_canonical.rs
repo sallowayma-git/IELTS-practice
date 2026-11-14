@@ -8,6 +8,7 @@ use ielts_application::{
     LanguageModel, ModelError,
 };
 use ielts_db::*;
+use ielts_domain::Activity;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
@@ -64,8 +65,12 @@ impl CoachStore for Store {
             .map(|_| ())
             .map_err(app_error)
     }
-    fn learner_profile(&self, thread: &str) -> Result<LearnerProfileSnapshot, ApplicationError> {
-        freeze_coach_learner_profile(&self.0.lock().unwrap(), thread).map_err(app_error)
+    fn learner_profile(
+        &self,
+        thread: &str,
+        activity: Activity,
+    ) -> Result<LearnerProfileSnapshot, ApplicationError> {
+        freeze_coach_learner_profile(&self.0.lock().unwrap(), thread, activity).map_err(app_error)
     }
     fn remember_teaching_preference(
         &self,
