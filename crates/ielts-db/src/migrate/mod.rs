@@ -884,6 +884,24 @@ mod tests {
                 object_count(&conn, "trigger", "trg_delete_gate_attempts"),
                 1
             );
+            // 0038 rebuilds practice_assets. The indexes it recreates must be
+            // back on the surviving table, not left behind on the dropped one.
+            for index in [
+                "idx_practice_assets_activity_category",
+                "idx_practice_assets_source_key",
+            ] {
+                assert_eq!(object_count(&conn, "index", index), 1, "{index} from v{start}");
+                assert_eq!(
+                    conn.query_row(
+                        "SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = ?1",
+                        rusqlite::params![index],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .unwrap(),
+                    "practice_assets",
+                    "{index} is not on practice_assets (from v{start})"
+                );
+            }
             verify_idempotent(&mut conn).unwrap();
         }
     }
@@ -1089,13 +1107,13 @@ mod tests {
                 .unwrap()
         };
         let mut expected = vec![
-            "listening.diagram_labelling",
+            "listening.diagram_completion",
             "listening.flow_chart_completion",
             "listening.form_completion",
             "listening.map_labelling",
             "listening.matching",
             "listening.multi_choice",
-            "listening.note_completion",
+            "listening.notes_completion",
             "listening.plan_labelling",
             "listening.sentence_completion",
             "listening.short_answer",

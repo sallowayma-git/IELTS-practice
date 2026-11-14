@@ -10,7 +10,7 @@ INSERT OR IGNORE INTO skill_catalog
   (skill_key, activity, parent_key, label, description, taxonomy_version, mapping_source, active)
 VALUES
   ('listening.form_completion', 'listening', NULL, 'Form completion', 'Track spoken detail into a form and keep spelling and the word limit.', 1, 'builtin', 1),
-  ('listening.note_completion', 'listening', NULL, 'Note completion', 'Capture the exact detail required by notes while following the talk.', 1, 'builtin', 1),
+  ('listening.notes_completion', 'listening', NULL, 'Note completion', 'Capture the exact detail required by notes while following the talk.', 1, 'builtin', 1),
   ('listening.table_completion', 'listening', NULL, 'Table completion', 'Track detail and grammatical fit inside a table.', 1, 'builtin', 1),
   ('listening.flow_chart_completion', 'listening', NULL, 'Flow-chart completion', 'Follow sequence and causal transitions in the recording.', 1, 'builtin', 1),
   ('listening.summary_completion', 'listening', NULL, 'Summary completion', 'Track paraphrase evidence across a bounded summary.', 1, 'builtin', 1),
@@ -20,5 +20,5 @@ VALUES
   ('listening.matching', 'listening', NULL, 'Matching', 'Match statements to options while the recording moves on.', 1, 'builtin', 1),
   ('listening.map_labelling', 'listening', NULL, 'Map labelling', 'Follow spatial language and orient the map before the answer passes.', 1, 'builtin', 1),
   ('listening.plan_labelling', 'listening', NULL, 'Plan labelling', 'Follow spatial language and label the plan without losing the sequence.', 1, 'builtin', 1),
-  ('listening.diagram_labelling', 'listening', NULL, 'Diagram labelling', 'Match local description and label the diagram correctly.', 1, 'builtin', 1),
+  ('listening.diagram_completion', 'listening', NULL, 'Diagram labelling', 'Match local description and label the diagram correctly.', 1, 'builtin', 1),
   ('listening.short_answer', 'listening', NULL, 'Short answer', 'Locate detail and respect the word limit.', 1, 'builtin', 1);
