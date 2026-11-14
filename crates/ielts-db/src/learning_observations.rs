@@ -1609,6 +1609,7 @@ fn parse_event_type(raw: &str) -> Option<LearningEventType> {
         "attempt_submitted" => Some(LearningEventType::AttemptSubmitted),
         "attempt_completed" => Some(LearningEventType::AttemptCompleted),
         "reading_question_outcome" => Some(LearningEventType::ReadingQuestionOutcome),
+        "listening_question_outcome" => Some(LearningEventType::ListeningQuestionOutcome),
         "writing_evaluation_completed" => Some(LearningEventType::WritingEvaluationCompleted),
         "coach_question_asked" => Some(LearningEventType::CoachQuestionAsked),
         "coach_response_generated" => Some(LearningEventType::CoachResponseGenerated),

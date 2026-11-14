@@ -17,9 +17,7 @@ use crate::modes::timer::{
     load_reading_timer_state, save_reading_timer_state, TimerOwnerScope, TimerState,
 };
 use crate::reading::analysis::analyze_reading_attempt;
-use crate::reading::assets::{
-    load_answer_key, load_controls, load_kinds, load_practice_asset_payload,
-};
+use crate::reading::assets::{load_answer_key, load_controls, load_kinds};
 use crate::reading::scoring::{score_attempt, AnswerComparison, ScoreSummary};
 use crate::sqlite::{DbError, DbResult};
 
@@ -147,6 +145,7 @@ pub(crate) fn save_reading_draft_in_scope(
     let loaded = load_answerable_asset(
         conn,
         &cmd.asset_id,
+        Activity::Reading,
         cmd.asset_revision,
         cmd.asset_fingerprint.as_deref(),
     )?;
@@ -262,6 +261,7 @@ pub(crate) fn submit_reading_attempt_in_scope(
     let loaded = load_answerable_asset(
         conn,
         &cmd.asset_id,
+        Activity::Reading,
         cmd.asset_revision,
         cmd.asset_fingerprint.as_deref(),
     )?;
@@ -661,7 +661,7 @@ fn lookup_submit_response(
     }
 }
 
-fn value_to_map(v: &Value) -> serde_json::Map<String, Value> {
+pub(crate) fn value_to_map(v: &Value) -> serde_json::Map<String, Value> {
     match v {
         Value::Object(m) => m
             .iter()
@@ -676,7 +676,7 @@ fn value_to_map(v: &Value) -> serde_json::Map<String, Value> {
     }
 }
 
-fn answers_to_vec(
+pub(crate) fn answers_to_vec(
     answers: &Value,
     marked: &[String],
     timeline: &[ReadingQuestionProgress],
@@ -712,7 +712,7 @@ fn answers_to_vec(
     out
 }
 
-fn progress_by_question(
+pub(crate) fn progress_by_question(
     timeline: &[ReadingQuestionProgress],
 ) -> std::collections::HashMap<String, &ReadingQuestionProgress> {
     timeline
@@ -727,32 +727,35 @@ fn progress_by_question(
 fn load_answerable_asset(
     conn: &Connection,
     asset_id: &str,
+    expected_activity: Activity,
     expected_revision: Option<u32>,
     expected_fingerprint: Option<&str>,
 ) -> DbResult<ielts_domain::dto::PracticeAssetV2Payload> {
-    let loaded = load_practice_asset_payload(conn, asset_id)?;
+    let loaded =
+        crate::reading::assets::load_practice_asset_payload_for_activity(conn, asset_id, expected_activity)?;
+    let label = crate::reading::assets::activity_name(expected_activity);
     if loaded.asset.pdf_only {
         return Err(DbError::Validation(format!(
-            "reading asset is not answerable: {asset_id}"
+            "{label} asset is not answerable: {asset_id}"
         )));
     }
     if let Some(revision) = expected_revision {
         if revision != loaded.asset.schema_version {
             return Err(DbError::Validation(format!(
-                "reading asset revision mismatch: {asset_id}"
+                "{label} asset revision mismatch: {asset_id}"
             )));
         }
     }
     if let Some(fingerprint) = expected_fingerprint {
         if fingerprint.trim() != loaded.asset.fingerprint {
             return Err(DbError::Validation(format!(
-                "reading asset fingerprint mismatch: {asset_id}"
+                "{label} asset fingerprint mismatch: {asset_id}"
             )));
         }
     }
     if load_answer_key(&loaded.payload).is_empty() {
         return Err(DbError::Validation(format!(
-            "reading asset is not answerable: {asset_id}"
+            "{label} asset is not answerable: {asset_id}"
         )));
     }
     Ok(loaded)

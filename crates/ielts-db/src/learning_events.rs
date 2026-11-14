@@ -77,6 +77,52 @@ impl NewLearningEvent {
         }
     }
 
+    pub fn listening_attempt_completed(
+        attempt_id: &str,
+        asset_id: &str,
+        payload: Value,
+        occurred_at: String,
+    ) -> Self {
+        Self {
+            event_type: LearningEventType::AttemptCompleted,
+            source_kind: "listening_attempt".into(),
+            source_id: Some(attempt_id.into()),
+            activity: Some("listening".into()),
+            asset_id: Some(asset_id.into()),
+            attempt_id: Some(attempt_id.into()),
+            question_id: None,
+            skill_key: None,
+            occurred_at,
+            payload,
+            schema_version: LearningEventType::SCHEMA_VERSION,
+            sensitivity: DEFAULT_SENSITIVITY.into(),
+        }
+    }
+
+    pub fn listening_question_outcome(
+        attempt_id: &str,
+        asset_id: &str,
+        question_id: &str,
+        skill_key: &str,
+        payload: Value,
+        occurred_at: String,
+    ) -> Self {
+        Self {
+            event_type: LearningEventType::ListeningQuestionOutcome,
+            source_kind: "listening_question".into(),
+            source_id: Some(format!("{attempt_id}:{question_id}")),
+            activity: Some("listening".into()),
+            asset_id: Some(asset_id.into()),
+            attempt_id: Some(attempt_id.into()),
+            question_id: Some(question_id.into()),
+            skill_key: Some(skill_key.into()),
+            occurred_at,
+            payload,
+            schema_version: LearningEventType::SCHEMA_VERSION,
+            sensitivity: DEFAULT_SENSITIVITY.into(),
+        }
+    }
+
     pub fn writing_evaluation_completed(
         evaluation_id: &str,
         attempt_id: &str,
@@ -223,6 +269,36 @@ pub fn project_reading_attempt_events(
     attempt: &AttemptRecord,
 ) -> DbResult<LearningEventProjectionReport> {
     let events = reading_projection_events(conn, attempt)?;
+    let mut report = LearningEventProjectionReport {
+        expected: events.len() as u32,
+        ..Default::default()
+    };
+    for event in events {
+        let outcome = append_learning_event_with_status(conn, event)?;
+        if outcome.inserted {
+            report.inserted += 1;
+        } else {
+            report.existing += 1;
+        }
+    }
+    Ok(report)
+}
+
+pub fn project_listening_attempt_events_if_enabled(
+    conn: &Connection,
+    attempt: &AttemptRecord,
+) -> DbResult<LearningEventProjectionReport> {
+    if !learning_event_generation_enabled() {
+        return Ok(LearningEventProjectionReport::default());
+    }
+    project_listening_attempt_events(conn, attempt)
+}
+
+pub fn project_listening_attempt_events(
+    conn: &Connection,
+    attempt: &AttemptRecord,
+) -> DbResult<LearningEventProjectionReport> {
+    let events = listening_projection_events(conn, attempt)?;
     let mut report = LearningEventProjectionReport {
         expected: events.len() as u32,
         ..Default::default()
@@ -510,6 +586,96 @@ fn reading_projection_events(
     Ok(events)
 }
 
+fn listening_projection_events(
+    conn: &Connection,
+    attempt: &AttemptRecord,
+) -> DbResult<Vec<NewLearningEvent>> {
+    if attempt.activity != Activity::Listening || attempt.status != AttemptStatus::Completed {
+        return Err(DbError::Validation(
+            "learning event projection requires a completed listening attempt".into(),
+        ));
+    }
+    let asset_id = attempt
+        .asset_id
+        .as_deref()
+        .filter(|asset_id| !asset_id.trim().is_empty())
+        .ok_or_else(|| DbError::Validation("completed listening attempt has no asset".into()))?;
+    let occurred_at = attempt
+        .completed_at
+        .as_deref()
+        .or(attempt.submitted_at.as_deref())
+        .ok_or_else(|| {
+            DbError::Validation("completed listening attempt has no terminal time".into())
+        })?;
+    let sections = crate::listening::assets::load_listening_sections(conn, asset_id)?;
+    let answered_count = attempt.answers.iter().filter(|answer| answer.is_answered()).count();
+    let unanswered_count = attempt.answers.len() - answered_count;
+    let section_count = attempt
+        .answers
+        .iter()
+        .filter_map(|answer| sections.get(&answer.question_id).copied())
+        .collect::<BTreeSet<u8>>()
+        .len() as u32;
+
+    let mut events = Vec::with_capacity(attempt.answers.len() + 1);
+    events.push(NewLearningEvent::listening_attempt_completed(
+        &attempt.id,
+        asset_id,
+        json!({
+            "attemptId": attempt.id,
+            "assetId": asset_id,
+            "correctCount": attempt.correct_count,
+            "questionCount": attempt.question_count,
+            "scoreValue": attempt.score_value,
+            "durationMs": attempt.duration_ms,
+            "answeredCount": answered_count,
+            "unansweredCount": unanswered_count,
+            "sectionCount": section_count,
+        }),
+        occurred_at.to_string(),
+    ));
+    for answer in &attempt.answers {
+        let kind = answer.question_kind.as_deref().ok_or_else(|| {
+            DbError::Validation(format!(
+                "listening answer has no question kind: {}",
+                answer.question_id
+            ))
+        })?;
+        let section = sections.get(&answer.question_id).copied().ok_or_else(|| {
+            DbError::Validation(format!(
+                "listening answer has no section: {}",
+                answer.question_id
+            ))
+        })?;
+        let skill_key = format!("listening.{kind}");
+        events.push(NewLearningEvent::listening_question_outcome(
+            &attempt.id,
+            asset_id,
+            &answer.question_id,
+            &skill_key,
+            json!({
+                "attemptId": attempt.id,
+                "assetId": asset_id,
+                "questionId": answer.question_id,
+                "section": section,
+                "questionKind": kind,
+                "skillKey": skill_key,
+                "isCorrect": answer.is_correct,
+                "answered": answer.is_answered(),
+                "firstTryCorrect": answer
+                    .is_correct
+                    .map(|correct| correct && answer.change_count == 0),
+                "changeCount": answer.change_count,
+                "visitCount": answer.visit_count,
+                "elapsedMs": answer.elapsed_ms,
+                "marked": answer.marked,
+            }),
+            occurred_at.to_string(),
+        ));
+    }
+    Ok(events)
+}
+
 /// Fields owned by the answered/unanswered split. An event recorded before the
 /// split carries neither marker; it keeps its stored version of these fields so
 /// the immutable ledger row still verifies. Only new events carry the split.
@@ -687,6 +853,7 @@ fn parse_event_type(value: &str) -> DbResult<LearningEventType> {
         "attempt_submitted" => Ok(LearningEventType::AttemptSubmitted),
         "attempt_completed" => Ok(LearningEventType::AttemptCompleted),
         "reading_question_outcome" => Ok(LearningEventType::ReadingQuestionOutcome),
+        "listening_question_outcome" => Ok(LearningEventType::ListeningQuestionOutcome),
         "writing_evaluation_completed" => Ok(LearningEventType::WritingEvaluationCompleted),
         "coach_question_asked" => Ok(LearningEventType::CoachQuestionAsked),
         "coach_response_generated" => Ok(LearningEventType::CoachResponseGenerated),

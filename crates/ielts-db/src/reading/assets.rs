@@ -166,6 +166,17 @@ pub fn seed_builtin_reading_pack(
     })
 }
 
+/// Canonical SQL name of an activity. `practice_assets.activity` is the one
+/// authority for what an asset is; never infer it from the caller's module.
+pub(crate) fn activity_name(activity: Activity) -> &'static str {
+    match activity {
+        Activity::Reading => "reading",
+        Activity::Writing => "writing",
+        Activity::Listening => "listening",
+        Activity::Vocabulary => "vocabulary",
+    }
+}
+
 pub fn upsert_practice_asset(conn: &Connection, asset: &PracticeAssetV2) -> DbResult<()> {
     let now = chrono::Utc::now().to_rfc3339();
     let meta = asset.metadata.as_ref().map(|v| v.to_string());
@@ -187,7 +198,7 @@ pub fn upsert_practice_asset(conn: &Connection, asset: &PracticeAssetV2) -> DbRe
             updated_at = excluded.updated_at",
         params![
             asset.id,
-            "reading",
+            activity_name(asset.activity),
             match asset.source_kind {
                 AssetSourceKind::Builtin => "builtin",
                 AssetSourceKind::Imported => "imported",
@@ -214,7 +225,7 @@ pub fn list_assets(
     activity: Option<Activity>,
 ) -> DbResult<Vec<AssetIndexEntry>> {
     let mut sql = String::from(
-        "SELECT id, title, category, difficulty, frequency, fingerprint, schema_version, content_ref, pdf_only, question_kinds_json
+        "SELECT id, title, category, difficulty, frequency, fingerprint, schema_version, content_ref, pdf_only, question_kinds_json, activity
          FROM practice_assets",
     );
     if activity.is_some() {
@@ -235,19 +246,13 @@ pub fn list_assets(
             schema_version: row.get::<_, i64>(6)? as u32,
             content_ref: content_ref.clone(),
             payload_ref: content_ref,
-            activity: "reading".into(),
+            activity: row.get(10)?,
             pdf_only: row.get::<_, i64>(8)? != 0,
             question_kinds: parse_question_kinds(question_kinds_json.as_deref()),
         })
     };
     let rows = if let Some(act) = activity {
-        let a = match act {
-            Activity::Reading => "reading",
-            Activity::Writing => "writing",
-            Activity::Listening => "listening",
-            Activity::Vocabulary => "vocabulary",
-        };
-        stmt.query_map(params![a], map_row)?
+        stmt.query_map(params![activity_name(act)], map_row)?
     } else {
         stmt.query_map([], map_row)?
     };
@@ -293,15 +298,17 @@ pub fn load_pdf_data_url(conn: &Connection, asset_id: &str) -> DbResult<String> 
     ))
 }
 
-/// Load the complete JSON payload for one reading asset.
+/// Load the complete JSON payload for one asset whose activity is `expected`.
 ///
 /// `practice_assets` remains the queryable index. The payload stays in the
 /// referenced resource file and is verified against the indexed fingerprint on
 /// every load, so a stale or damaged resource cannot silently enter a session.
-pub fn load_practice_asset_payload(
+pub fn load_practice_asset_payload_for_activity(
     conn: &Connection,
     asset_id: &str,
+    expected: Activity,
 ) -> DbResult<PracticeAssetV2Payload> {
+    let activity = activity_name(expected);
     let asset = conn
         .query_row(
             "SELECT id, activity, source_kind, source_key, title, category, difficulty,
@@ -312,18 +319,18 @@ pub fn load_practice_asset_payload(
         )
         .map_err(|err| match err {
             rusqlite::Error::QueryReturnedNoRows => {
-                DbError::Validation(format!("reading asset not found: {asset_id}"))
+                DbError::Validation(format!("{activity} asset not found: {asset_id}"))
             }
             other => DbError::Sqlite(other),
         })?;
 
-    if asset.activity != Activity::Reading {
+    if asset.activity != expected {
         return Err(DbError::Validation(format!(
-            "asset is not a reading asset: {asset_id}"
+            "asset is not a {activity} asset: {asset_id}"
         )));
     }
     let content_ref = asset.content_ref.as_deref().ok_or_else(|| {
-        DbError::Validation(format!("reading asset has no content_ref: {asset_id}"))
+        DbError::Validation(format!("{activity} asset has no content_ref: {asset_id}"))
     })?;
     let raw = fs::read_to_string(content_ref)?;
     let payload: Value = serde_json::from_str(&raw)
@@ -331,11 +338,19 @@ pub fn load_practice_asset_payload(
     let actual_fingerprint = fingerprint_payload(&payload);
     if actual_fingerprint != asset.fingerprint {
         return Err(DbError::Validation(format!(
-            "reading asset fingerprint mismatch: {asset_id}"
+            "{activity} asset fingerprint mismatch: {asset_id}"
         )));
     }
 
     Ok(PracticeAssetV2Payload { asset, payload })
+}
+
+/// Load the complete JSON payload for one reading asset.
+pub fn load_practice_asset_payload(
+    conn: &Connection,
+    asset_id: &str,
+) -> DbResult<PracticeAssetV2Payload> {
+    load_practice_asset_payload_for_activity(conn, asset_id, Activity::Reading)
 }
 
 /// Load a reading payload for display in the practice webview.
@@ -451,10 +466,14 @@ fn attribute_end(bytes: &[u8], after: usize) -> usize {
     }
 }
 
-fn practice_asset_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PracticeAssetV2> {
+/// Map one `practice_assets` row. Every known activity round-trips; an unknown
+/// string is an error, never a silent fallback to Reading.
+pub(crate) fn practice_asset_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<PracticeAssetV2> {
     let activity = match row.get::<_, String>(1)?.as_str() {
         "reading" => Activity::Reading,
         "writing" => Activity::Writing,
+        "listening" => Activity::Listening,
+        "vocabulary" => Activity::Vocabulary,
         value => return Err(invalid_column_value(1, value, "activity")),
     };
     let source_kind = match row.get::<_, String>(2)?.as_str() {
@@ -560,7 +579,11 @@ pub fn import_asset_payload(
 /// Store the classified tag keys for one asset. Called right after every
 /// insert/update of `practice_assets` so the column never drifts from the
 /// payload it was computed from.
-fn set_question_kinds(conn: &Connection, asset_id: &str, kinds: &[String]) -> DbResult<()> {
+pub(crate) fn set_question_kinds(
+    conn: &Connection,
+    asset_id: &str,
+    kinds: &[String],
+) -> DbResult<()> {
     let encoded = serde_json::to_string(kinds).unwrap_or_else(|_| "[]".to_string());
     conn.execute(
         "UPDATE practice_assets SET question_kinds_json = ?1 WHERE id = ?2",

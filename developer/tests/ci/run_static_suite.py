@@ -334,6 +334,12 @@ def main() -> int:
                 # not reset terminal retry budgets on every reboot.
                 "--test",
                 "background_jobs",
+                # W3-2 listening data layer: pack seeding/index/audio and the
+                # draft/submit/ledger pipeline.
+                "--test",
+                "listening_assets",
+                "--test",
+                "listening_attempt",
             ],
         ),
         run_command(

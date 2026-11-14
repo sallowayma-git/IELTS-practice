@@ -20,6 +20,7 @@ pub mod journal;
 pub mod learning_events;
 pub mod learning_observations;
 pub mod learning_tools;
+pub mod listening;
 pub mod local_day;
 pub mod memory;
 pub mod learner;
@@ -55,6 +56,16 @@ pub use journal::*;
 pub use learning_events::*;
 pub use learning_observations::*;
 pub use learning_tools::*;
+pub use listening::assets::{
+    list_listening_assets, load_listening_audio_data_url, load_listening_payload,
+    load_listening_payload_for_view, load_listening_sections, load_sections,
+    seed_builtin_listening_pack, validate_exam_source, ListeningExamMeta, ListeningExamSourceV1,
+    ListeningQuestionGroup, ListeningResourceAsset, ListeningResourceManifestV1,
+};
+pub use listening::attempt::{
+    get_open_listening_draft, save_listening_draft, submit_listening_attempt,
+    ListeningDraftCommand, ListeningQuestionProgress, ListeningSubmitCommand, ListeningSubmitResult,
+};
 pub use memory::*;
 pub use learner::*;
 pub use migrate::*;
