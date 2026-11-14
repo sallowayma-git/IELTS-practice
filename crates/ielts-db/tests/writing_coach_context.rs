@@ -400,6 +400,30 @@ fn writing_thread_never_falls_back_to_the_reading_scene() {
 }
 
 #[test]
+fn the_writing_coach_scene_has_its_four_criterion_skills() {
+    let (_dir, conn) = open_db();
+    let keys: Vec<String> = conn
+        .prepare(
+            "SELECT skill_key FROM skill_catalog
+             WHERE activity='writing' AND active=1 ORDER BY skill_key",
+        )
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        keys,
+        vec![
+            "writing.coherence",
+            "writing.grammar",
+            "writing.lexical",
+            "writing.taskResponse",
+        ]
+    );
+}
+
+#[test]
 fn degraded_evaluation_keeps_scores_and_records_the_limitation() {
     let (_dir, conn, thread) = fixture();
     conn.execute(

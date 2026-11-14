@@ -240,6 +240,12 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0036_vocabulary_sm2_state.sql"),
                 rebuilds: Some("vocabulary_review_state"),
             },
+            Migration {
+                version: 37,
+                name: "writing_skills",
+                sql: include_str!("../../migrations/0037_writing_skills.sql"),
+                rebuilds: None,
+            },
         ]
     })
 }
@@ -492,7 +498,7 @@ mod tests {
             interval_days,repetitions,0,0,lapses,due_at,last_reviewed_at FROM vocabulary_review_state ORDER BY item_id");
         let trigger: String = conn.query_row("SELECT sql FROM sqlite_master WHERE name='trg_delete_gate_vocabulary_review_state'",
             [], |row| row.get(0)).unwrap();
-        assert_eq!(migrate(&mut conn).unwrap(), vec![36]);
+        assert_eq!(migrate(&mut conn).unwrap(), vec![36, 37]);
         assert_eq!(rows(&conn,"SELECT * FROM vocabulary_review_state ORDER BY item_id"), expected);
         assert_eq!(rows(&conn,"SELECT * FROM vocabulary_items ORDER BY id"), words);
         assert_eq!(conn.query_row("SELECT sql FROM sqlite_master WHERE name='trg_delete_gate_vocabulary_review_state'",

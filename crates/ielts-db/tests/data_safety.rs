@@ -410,7 +410,7 @@ fn a_pending_migration_is_preceded_by_a_snapshot_and_a_current_database_is_not()
     // leaves a v36 table that cannot honestly represent a pending rebuild.
     conn.execute_batch("DROP TABLE vocabulary_review_state;").unwrap();
     conn.execute_batch(include_str!("../../../developer/tests/fixtures/vocabulary_review_state_v35.sql")).unwrap();
-    conn.execute("DELETE FROM schema_migrations WHERE version = 36", []).unwrap();
+    conn.execute("DELETE FROM schema_migrations WHERE version >= 36", []).unwrap();
     assert!(ielts_db::has_pending_migrations(&conn).unwrap());
     ielts_db::migrate_with_snapshot(&mut conn, &backups).unwrap();
     let snapshots: Vec<_> = std::fs::read_dir(&backups)
