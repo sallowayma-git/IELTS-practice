@@ -2,6 +2,10 @@
 //!
 //! Canonical enums, DTOs, error envelope, view models.
 
+/// The one product identity every teaching prompt starts with. Scene-specific
+/// task rules append after it, so identity wording lives in exactly one place.
+pub const TEACHER_IDENTITY: &str = "You are IELTS Atlas, a local-first IELTS study coach.";
+
 pub mod cognitive_read;
 pub mod coach_feedback;
 pub mod consolidation;

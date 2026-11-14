@@ -744,7 +744,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
       void openDictionaryBubble(highlight)
       return
     }
-    if (target?.closest?.('#selbar, #review-highlight-dictionary-bubble, #settings-panel, #notes-panel, #settings-btn, #note-btn')) {
+    if (target?.closest?.('#selbar, #review-highlight-dictionary-bubble, #settings-panel, #settings-btn')) {
       return
     }
     if (!keepSelectionToolbar.value) {

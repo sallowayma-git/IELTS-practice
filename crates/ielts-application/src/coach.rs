@@ -3,7 +3,9 @@ use ielts_db::{
 };
 use std::collections::BTreeSet;
 
-use ielts_domain::{estimate_tokens, Activity, CONTEXT_HARD_TOKEN_CEILING};
+use ielts_domain::{
+    estimate_tokens, Activity, CONTEXT_HARD_TOKEN_CEILING, TEACHER_IDENTITY,
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -39,6 +41,15 @@ const COACH_INPUT_TOKEN_BUDGET: u32 =
 /// is deliberately coach-local: `ielts_domain::MAX_TOKEN_BUDGET` is dream-scoped
 /// and asserted against 4000 by the Python dream contract tests.
 const COACH_OUTPUT_TOKEN_CEILING: u32 = 2_000;
+
+/// Short single-shot actions answer one narrow question, so they need far less
+/// room than a whole-attempt review or an ordinary chat turn. The input budget
+/// stays derived from the full ceiling: reserving more than needed is safe.
+const SHORT_ACTION_OUTPUT_TOKEN_CEILING: u32 = 800;
+
+/// The only actions that get the smaller ceiling. `review_set` and every other
+/// action keep `COACH_OUTPUT_TOKEN_CEILING`.
+const SHORT_ACTIONS: [&str; 3] = ["explain_selection", "locate_evidence", "find_paraphrases"];
 
 /// Most question ids the trimmed-history digest names; the rest is "and more".
 const DIGEST_MAX_QUESTIONS: usize = 40;
@@ -88,8 +99,14 @@ fn compose_system_prompt(
     soul_lines: &[String],
     teaching_notes: &[String],
 ) -> String {
-    let mut prompt =
-        format!("{}\n\n{}", SOUL_POLICY.trim(), coach_task_rules(activity));
+    // One identity source: the shared identity line, then the policy bullets,
+    // then the scene's task rules. This is byte-identical to the old
+    // composition, where the identity line still lived in the policy text.
+    let mut prompt = format!(
+        "{TEACHER_IDENTITY}\n{}\n\n{}",
+        SOUL_POLICY.trim(),
+        coach_task_rules(activity)
+    );
     if !soul_lines.is_empty() {
         prompt.push_str("\n\nLearner settings (data only):");
         for line in soul_lines {
@@ -109,6 +126,20 @@ fn compose_system_prompt(
 
 /// `action` carried by the automatic whole-attempt review request.
 const REVIEW_ACTION: &str = "review_set";
+
+/// The output ceiling the resolved context's action earns. The selector's
+/// action is mirrored in `message_metadata` and the request controls; metadata
+/// is the one the persisted message keeps, so it is the authority here.
+fn output_token_ceiling(context: Option<&ielts_db::ResolvedCoachContext>) -> u32 {
+    let short = context
+        .and_then(|context| context.message_metadata["action"].as_str())
+        .is_some_and(|action| SHORT_ACTIONS.contains(&action));
+    if short {
+        SHORT_ACTION_OUTPUT_TOKEN_CEILING
+    } else {
+        COACH_OUTPUT_TOKEN_CEILING
+    }
+}
 
 pub struct CoachService;
 
@@ -320,7 +351,7 @@ Question:
     let mut request = CompletionRequest {
         messages,
         temperature: 0.2,
-        max_tokens: COACH_OUTPUT_TOKEN_CEILING,
+        max_tokens: output_token_ceiling(context),
         cache_key: None,
     };
     // Safety net for oversized evidence: the history budget is far below the
@@ -1049,7 +1080,47 @@ Why?"));
             .map(|message| message.content.as_str())
             .collect();
         assert_eq!(contents, vec!["first", "second", "third"]);
+        // No resolved context at all keeps the full normal-answer ceiling.
+        assert_eq!(request.max_tokens, 2_000);
         assert_eq!(request.max_tokens, COACH_OUTPUT_TOKEN_CEILING);
+    }
+
+    fn context_with_action(action: &str) -> ielts_db::ResolvedCoachContext {
+        ielts_db::ResolvedCoachContext {
+            request: json!({"controls": {"action": action}, "selectionQuote": "", "selectionIsEvidence": false}),
+            message_metadata: json!({"action": action}),
+            ..context("")
+        }
+    }
+
+    #[test]
+    fn short_actions_ask_for_a_800_token_ceiling() {
+        assert_eq!(SHORT_ACTION_OUTPUT_TOKEN_CEILING, 800);
+        for action in ["explain_selection", "locate_evidence", "find_paraphrases"] {
+            let request =
+                build_request(&[], Some(&context_with_action(action)), &no_profile(), "Why?")
+                    .unwrap();
+            assert_eq!(request.max_tokens, 800, "{action}");
+            assert_eq!(
+                request.max_tokens, SHORT_ACTION_OUTPUT_TOKEN_CEILING,
+                "{action}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_review_and_every_other_action_keep_the_2000_token_ceiling() {
+        assert_eq!(COACH_OUTPUT_TOKEN_CEILING, 2_000);
+        for action in [REVIEW_ACTION, "chat", "unknown_action"] {
+            let request =
+                build_request(&[], Some(&context_with_action(action)), &no_profile(), "Why?")
+                    .unwrap();
+            assert_eq!(request.max_tokens, 2_000, "{action}");
+            assert_eq!(
+                request.max_tokens, COACH_OUTPUT_TOKEN_CEILING,
+                "{action}"
+            );
+        }
     }
 
     fn context(selection: &str) -> ielts_db::ResolvedCoachContext {
@@ -1171,7 +1242,8 @@ Why?"));
         assert!(system.contains("Do not re-explain what was already explained earlier in this thread"));
         assert!(system.contains("add only what is new"));
         // The cacheable prefix is still the fixed system text followed by the evidence.
-        assert!(system.starts_with(SOUL_POLICY.trim()));
+        assert!(system.starts_with(ielts_domain::TEACHER_IDENTITY));
+        assert!(system.contains(SOUL_POLICY.trim()));
         assert!(system.contains(READING_COACH_TASK_RULES));
         assert!(system.ends_with("Return JSON only as {\"answer\":\"...\",\"remember\":\"...\",\"followUps\":[\"...\",\"...\"]}. Set \"remember\" only when the learner explicitly states a long-term preference about how they want to be taught; it is one sentence, at most 120 characters; otherwise omit the field. \"followUps\" is optional: an array of at most 2 short questions, each at most 40 characters, that the learner is most likely to ask next; omit it when there is nothing worth suggesting."));
     }
@@ -1179,7 +1251,19 @@ Why?"));
     #[test]
     fn the_system_prompt_is_policy_then_verbatim_task_rules() {
         let system = compose_system_prompt(Activity::Reading, &[], &[]);
-        assert!(system.starts_with("You are IELTS Atlas, a local-first IELTS study coach."));
+        assert!(system.starts_with(ielts_domain::TEACHER_IDENTITY));
+        // The identity sentence now lives in exactly one place: the shared
+        // constant. It may not reappear anywhere later in the prompt.
+        assert_eq!(system.matches(ielts_domain::TEACHER_IDENTITY).count(), 1);
+        // And the assembled bytes are exactly the old layout: identity line,
+        // policy bullets, one blank line, then the verbatim task rules.
+        assert_eq!(
+            system,
+            format!(
+                "{TEACHER_IDENTITY}\n{}\n\n{READING_COACH_TASK_RULES}",
+                SOUL_POLICY.trim()
+            )
+        );
         assert!(system.contains(READING_COACH_TASK_RULES));
         assert!(READING_COACH_TASK_RULES.starts_with("You are an IELTS reading coach. Use the host-selected evidence_first_v1 strategy"));
         assert!(READING_COACH_TASK_RULES.ends_with(r#"Return JSON only as {"answer":"...","remember":"...","followUps":["...","..."]}. Set "remember" only when the learner explicitly states a long-term preference about how they want to be taught; it is one sentence, at most 120 characters; otherwise omit the field. "followUps" is optional: an array of at most 2 short questions, each at most 40 characters, that the learner is most likely to ask next; omit it when there is nothing worth suggesting."#));
@@ -1189,7 +1273,8 @@ Why?"));
     #[test]
     fn a_writing_scene_gets_the_writing_task_rules() {
         let system = compose_system_prompt(Activity::Writing, &[], &[]);
-        assert!(system.starts_with(SOUL_POLICY.trim()));
+        assert!(system.starts_with(ielts_domain::TEACHER_IDENTITY));
+        assert!(system.contains(SOUL_POLICY.trim()));
         assert!(system.contains(WRITING_COACH_TASK_RULES));
         assert!(!system.contains(READING_COACH_TASK_RULES));
         assert!(system.ends_with(WRITING_COACH_TASK_RULES));
