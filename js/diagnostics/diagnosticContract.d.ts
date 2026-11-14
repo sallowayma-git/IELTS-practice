@@ -7,6 +7,8 @@ export type CauseCode = 'BACKEND_UNAVAILABLE' | 'QUOTA_EXCEEDED' | 'CONFLICT'
     | 'CORRUPT_RECORD' | 'VALIDATION' | 'INITIALIZATION_BLOCKED'
     | 'TIMING_FINALIZED' | 'TIMING_STALE_WRITER' | 'TIMING_STALE_REVISION' | 'unknown';
 export type OperationPersistence = 'committed' | 'not-committed' | 'unconfirmed';
+export type TimingReason = 'writer-mismatch' | 'not-frozen' | 'snapshot-mismatch'
+    | 'finalized-row-conflict' | 'missing-row' | 'stale-revision';
 export type DiagnosticPersistence = 'memory-only' | 'pending' | 'persisted' | 'disabled' | 'failed';
 export type CorrelationKind = 'session' | 'suite' | 'submission' | 'operation';
 export type ModuleName = 'bootstrap' | 'main' | 'practice' | 'reading' | 'listening' | 'suite'
@@ -31,6 +33,8 @@ export interface ErrorDetails {
     /** Fixed catalog text or [redacted]; never arbitrary exception text. */
     readonly message: string;
     readonly code: CauseCode;
+    /** Additive v1 evidence; absent for old, unrelated or invalid reasons. */
+    readonly timingReason?: TimingReason;
     readonly kind: string;
     readonly stack: readonly SourceLocation[];
     readonly cause: ErrorDetails | null;
@@ -70,6 +74,8 @@ export interface DiagnosticEvent {
     readonly fingerprint: string;
     readonly code: OperationCode;
     readonly causeCode: CauseCode;
+    /** Nearest supported error-chain reason; recomputed during revalidation. */
+    readonly timingReason?: TimingReason;
     readonly module: ModuleName;
     readonly action: Action;
     /** One independent occurrence per event; duplicate observations do not increment it. */
@@ -151,6 +157,7 @@ export const LIMITS: Readonly<{
 }>;
 export const CODES: readonly OperationCode[];
 export const CAUSE_CODES: readonly CauseCode[];
+export const TIMING_REASONS: Readonly<Record<TimingReason, readonly CauseCode[]>>;
 export const MESSAGES: Readonly<Record<OperationCode, string>>;
 export const PROJECT_PATHS: readonly string[];
 export const COVERAGE_LIMITATIONS: readonly string[];

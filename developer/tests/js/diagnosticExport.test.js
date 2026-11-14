@@ -20,6 +20,20 @@ function storage(extra = {}) {
         cutoff: -1, phase: 'active', failure: null, coverage: 'complete', pendingEvents: 0, pendingBytes: 0, dropped: 0, ...extra };
 }
 
+test('passive JSON and text retain allowlisted timing reasons and accept old events without them', async () => {
+    const h = fixture();
+    const current = h.make({ code: 'PRACTICE_SAVE_FAILED', error: { name: 'AppDataError', code: 'TIMING_STALE_WRITER',
+        message: 'PRIVATE_ANSWER', details: { timingReason: 'not-frozen', writer: 'PRIVATE_WRITER' } },
+        persistence: { operation: 'not-committed' } });
+    const old = h.make({ code: 'PRACTICE_SAVE_FAILED' });
+    const poisoned = plain(current); poisoned.timingReason = 'PRIVATE_NOTE'; poisoned.error.unallowlisted = 'PRIVATE_PATH';
+    const output = await h.exporter({ reporter: source([poisoned, old]) }).exportJSON();
+    assert.equal(output.report.events.find(event => event.eventId === current.eventId).timingReason, 'not-frozen');
+    assert.equal(output.report.events.find(event => event.eventId === old.eventId).timingReason, undefined);
+    assert.match(output.text, /timing: not-frozen; operation: not-committed/);
+    assert.doesNotMatch(output.text + output.json, /PRIVATE_/);
+});
+
 test('merges bootstrap, memory and durable identities; keeps specific classification and origin sequence despite clock skew', async () => {
     const h = fixture();
     const first = h.make({ code: 'PRACTICE_SAVE_FAILED', collection: { source: 'business' } });

@@ -73,6 +73,43 @@ test('only business evidence classifies a confirmed failure; arbitrary Error.com
     assert.equal(h.events()[1].notification.kind, 'persistent');
 });
 
+test('timing failures retain rejection reasons and only offer explicitly supported recovery', async () => {
+    for (const operation of ['committed', 'not-committed', 'unconfirmed']) {
+        for (const retryWhenNotCommitted of [false, true]) {
+            const h = setup();
+            const error = Object.assign(appError('TIMING_STALE_WRITER'), {
+                details: { timingReason: 'not-frozen', writer: 'PRIVATE_WRITER', answers: 'PRIVATE_ANSWER' }
+            });
+            h.sandbox.AppData = { getOperationFailureState: () => operation };
+            const correlation = { session: 'PRIVATE_SESSION', suite: 'PRIVATE_SUITE',
+                submission: 'PRIVATE_SUBMISSION', operation: 'PRIVATE_OPERATION' };
+            h.sandbox.AppOperationDiagnostics.breadcrumb('suite', 'save-recovery', 'succeeded', correlation);
+            let calls = 0;
+            h.sandbox.AppOperationDiagnostics.failure({ code: 'PRACTICE_SAVE_FAILED', module: 'suite', action: 'submit',
+                error, correlation, retryWhenNotCommitted }, async () => { calls++; return { verified: true, operation: 'committed' }; });
+            const event = h.events()[0];
+            assert.equal(event.timingReason, 'not-frozen');
+            assert.equal(event.persistence.operation, operation);
+            assert.equal(event.breadcrumbs[0].outcome, 'succeeded');
+            const available = operation === 'unconfirmed' || (operation === 'not-committed' && retryWhenNotCommitted);
+            assert.equal(event.retry.available, available);
+            assert.equal(calls, 0, 'reporting and recovery breadcrumbs never execute a retry');
+            assert.doesNotMatch(JSON.stringify(event), /PRIVATE_|private\/user/);
+            if (available) {
+                const retry = h.presentations[0].presentation.retry;
+                assert.equal(retry.operationAlias, event.correlation.operation);
+                assert.equal(retry.submissionAlias, event.correlation.submission);
+                assert.equal((await retry.run()).operation, 'committed');
+                assert.equal(event.persistence.operation, operation, 'historical evidence remains unchanged');
+            }
+        }
+    }
+    const h = setup();
+    h.sandbox.AppOperationDiagnostics.failure({ code: 'PRACTICE_SAVE_FAILED', module: 'suite', action: 'submit',
+        operation: 'not-committed', retryWhenNotCommitted: true, correlation: { operation: 'PRIVATE_OPERATION' } });
+    assert.equal(h.events()[0].retry.available, false, 'metadata alone cannot supply an executable recovery');
+});
+
 test('retry binds original aliases and performs only the supplied reconciliation on user invocation', async () => {
     const h = setup();
     let calls = 0;
@@ -223,6 +260,41 @@ test('host NACK distinguishes a proven rejection from an unknown save outcome', 
 });
 
 for (const method of ['handleSuitePracticeComplete', '_handleInlineSimulationSuiteSubmit']) {
+    for (const valid of [true, false]) test(`${method} binds only the accepted session's diagnostic aliases (${valid})`, async () => {
+        const h = setup();
+        h.run('js/app/suitePracticeMixin.js');
+        const error = Object.assign(appError('TIMING_STALE_WRITER'), { details: { timingReason: 'not-frozen' } });
+        const session = { id: 'PRIVATE_SUITE', status: 'finalizing', flowMode: 'simulation',
+            _finalizeSubmissionId: 'PRIVATE_SUBMISSION', finalizeRecord: {}, sequence: [{ examId: 'p3' }] };
+        const raw = { session: 'PRIVATE_CHILD_SESSION', suite: session.id, submission: session._finalizeSubmissionId,
+            operation: 'PRIVATE_CHILD_OPERATION' };
+        const base = h.collector.correlate(raw);
+        const childAliases = h.sandbox.AppDiagnosticContract.createNormalizer().normalize({ correlation: raw }).correlation;
+        const aliases = { ...childAliases, scopeId: base.scopeId, session: base.session, suite: base.suite };
+        if (!valid) aliases.session = childAliases.session;
+        h.sandbox.AppData = { practice: { recoverSuiteFinalization: async () => { throw error; } },
+            getOperationFailureState: () => 'not-committed' };
+        const app = Object.assign({}, h.sandbox.ExamSystemAppMixins.suitePractice, { currentSuiteSession: session,
+            _ensureSuiteRecoveryReady: async () => {} });
+        const outcome = await app[method]('p3', { sessionId: raw.session, suiteSessionId: session.id,
+            submissionId: session._finalizeSubmissionId, diagnosticCorrelation: aliases });
+        assert.equal(outcome.committed, false);
+        const event = h.events()[0];
+        assert.equal(event.timingReason, 'not-frozen'); assert.equal(event.retry.available, true);
+        const expected = valid ? aliases : h.collector.correlate({ session: session.id, suite: session.id,
+            submission: session._finalizeSubmissionId, operation: `practice-suite:${session.id}:finalize` });
+        assert.deepEqual(JSON.parse(JSON.stringify(event.correlation)), JSON.parse(JSON.stringify(expected)));
+        const retry = h.presentations[0].presentation.retry;
+        assert.equal(retry.operationAlias, event.correlation.operation);
+        assert.equal(retry.submissionAlias, event.correlation.submission);
+        const count = h.events().length;
+        await app[method]('p3', { sessionId: raw.session, suiteSessionId: session.id, submissionId: 'PRIVATE_REPLACEMENT',
+            diagnosticCorrelation: childAliases });
+        assert.equal(h.events().length, count, 'conflicting submissions cannot replace the accepted diagnostic context');
+        await app._recoverSuiteFinalization(session);
+        assert.deepEqual(JSON.parse(JSON.stringify(h.events()[0].correlation)), JSON.parse(JSON.stringify(expected)));
+        assert.doesNotMatch(JSON.stringify(h.events()), /PRIVATE_/);
+    });
     for (const status of ['finalizing', 'completed']) test(`${method} only confirms the original ${status} submission`, async () => {
         const h = setup();
         h.run('js/app/suitePracticeMixin.js');

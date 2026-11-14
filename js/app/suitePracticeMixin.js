@@ -1,16 +1,43 @@
 (function(global) {
     const suiteFailures = new WeakMap();
+    const suiteDiagnosticContexts = new WeakMap();
+    function bindSuiteDiagnostics(session, data) {
+        try {
+            if (!session?._finalizeSubmissionId || data?.submissionId !== session._finalizeSubmissionId
+                || data.suiteSessionId !== session.id || !data.diagnosticCorrelation) return;
+            const reporter = global.AppDiagnostics;
+            const local = reporter?.correlate({ session: data.sessionId, suite: session.id });
+            const incoming = reporter?.correlate(undefined, data.diagnosticCorrelation);
+            if (local && incoming && incoming.scopeId !== 'unknown' && incoming.session !== 'unknown'
+                && incoming.scopeId === local.scopeId && incoming.session === local.session && incoming.suite === local.suite
+                && incoming.submission !== 'unknown' && incoming.operation !== 'unknown') {
+                // The business ingress already validated the registered window.
+                // Keep aliases only, privately and for this accepted submission.
+                suiteDiagnosticContexts.set(session, { submissionId: session._finalizeSubmissionId, aliases: incoming });
+            }
+        } catch (_) { }
+    }
+    function suiteCorrelation(session, operation) {
+        const raw = { suite: session?.id, session: session?.id,
+            submission: session?._finalizeSubmissionId, operation };
+        const binding = session && suiteDiagnosticContexts.get(session);
+        if (!binding || binding.submissionId !== session._finalizeSubmissionId) return raw;
+        try {
+            const local = global.AppDiagnostics?.correlate(raw);
+            if (!local || local.scopeId !== binding.aliases.scopeId) return raw;
+            return { ...binding.aliases, operation: operation === `practice-suite:${session.id}:finalize`
+                ? binding.aliases.operation : local.operation };
+        } catch (_) { return raw; }
+    }
     function suiteStep(action, outcome, session, operation) {
-        try { global.AppOperationDiagnostics?.breadcrumb('suite', action, outcome, {
-            suite: session?.id, session: session?.id, submission: session?._finalizeSubmissionId, operation
-        }); } catch (_) { }
+        try { global.AppOperationDiagnostics?.breadcrumb('suite', action, outcome, suiteCorrelation(session, operation)); } catch (_) { }
     }
     function suiteFailure(error, session, action = 'submit', operation, retry) {
         if (session && typeof session === 'object') suiteFailures.set(session, error);
         try { global.AppOperationDiagnostics?.failure({ code: action === 'save-recovery'
             ? 'RECOVERY_SAVE_FAILED' : 'PRACTICE_SAVE_FAILED', module: 'suite', action, error,
-            correlation: { suite: session?.id, session: session?.id,
-                submission: session?._finalizeSubmissionId, operation }
+            retryWhenNotCommitted: typeof retry === 'function',
+            correlation: suiteCorrelation(session, operation)
         }, retry || (action === 'submit' && operation && typeof global.AppData?.practice?.getCommitState === 'function'
             ? () => global.AppData.practice.getCommitState(operation) : undefined)); } catch (_) { }
     }
@@ -406,6 +433,7 @@
                 session._finalizeSubmissionId = data && data.submissionId
                     ? String(data.submissionId)
                     : (session._finalizeSubmissionId || null);
+                bindSuiteDiagnostics(session, data);
                 const committed = await this._finalizeSuiteRecordWithGate(session, {
                     deferTeardown: Boolean(
                         session._finalizeSubmissionId
@@ -583,6 +611,7 @@
             if (session.currentIndex >= session.sequence.length) {
                 const deferTeardown = Boolean(data && data.submissionId && sourceWindow && !sourceWindow.closed);
                 session._finalizeSubmissionId = data && data.submissionId ? String(data.submissionId) : null;
+                bindSuiteDiagnostics(session, data);
                 const committed = await this._finalizeSuiteRecordWithGate(session, { deferTeardown });
                 return withSubmitOutcome(true, committed, committed ? '' : 'suite_save_failed', deferTeardown ? {
                     teardownSession: session
@@ -803,6 +832,7 @@
                 session._finalizeSubmissionId = data && data.submissionId
                     ? String(data.submissionId)
                     : (session._finalizeSubmissionId || null);
+                bindSuiteDiagnostics(session, data);
                 const committed = await this._finalizeSuiteRecordWithGate(session, {
                     deferTeardown: Boolean(
                         session._finalizeSubmissionId
@@ -899,6 +929,7 @@
             this._mirrorSessionToStorage(session);
             const deferTeardown = Boolean(data && data.submissionId && sourceWindow && !sourceWindow.closed);
             session._finalizeSubmissionId = data && data.submissionId ? String(data.submissionId) : null;
+            bindSuiteDiagnostics(session, data);
             const committed = await this._finalizeSuiteRecordWithGate(session, { deferTeardown });
             return withSubmitOutcome(true, committed, committed ? '' : 'suite_save_failed', deferTeardown ? {
                 teardownSession: session
@@ -4070,10 +4101,12 @@
         },
 
         async _saveSuitePracticeRecord(record) {
-            try { global.AppOperationDiagnostics?.breadcrumb('suite', 'submit', 'started', {
+            const session = this.currentSuiteSession;
+            const correlation = session?.id === record.sessionId ? suiteCorrelation(session, record.operationId) : {
                 session: record.sessionId, suite: record.suiteSessionId || record.sessionId,
                 submission: record.submissionId, operation: record.operationId
-            }); } catch (_) { }
+            };
+            try { global.AppOperationDiagnostics?.breadcrumb('suite', 'submit', 'started', correlation); } catch (_) { }
             const childSessionIds = [];
             (Array.isArray(record && record.suiteEntries) ? record.suiteEntries : []).forEach((entry) => {
                 const raw = entry && entry.rawData || {};
@@ -4090,10 +4123,7 @@
                 error.code = 'SUITE_COMMIT_NOT_CONFIRMED';
                 throw error;
             }
-            try { global.AppOperationDiagnostics?.breadcrumb('suite', 'storage-confirmed', 'succeeded', {
-                session: record.sessionId, suite: record.suiteSessionId || record.sessionId,
-                submission: record.submissionId, operation: record.operationId
-            }); } catch (_) { }
+            try { global.AppOperationDiagnostics?.breadcrumb('suite', 'storage-confirmed', 'succeeded', correlation); } catch (_) { }
             return receipt.record || record;
         },
 

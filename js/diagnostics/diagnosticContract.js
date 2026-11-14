@@ -18,6 +18,16 @@
         'BACKEND_UNAVAILABLE', 'QUOTA_EXCEEDED', 'CONFLICT', 'CORRUPT_RECORD', 'VALIDATION',
         'INITIALIZATION_BLOCKED', 'TIMING_FINALIZED', 'TIMING_STALE_WRITER', 'TIMING_STALE_REVISION'
     ]);
+    // Reasons are additive v1 evidence, accepted only with their producer code.
+    // The same public code may describe several independently failed invariants.
+    const TIMING_REASONS = Object.freeze({
+        'writer-mismatch': Object.freeze(['TIMING_STALE_WRITER']),
+        'not-frozen': Object.freeze(['TIMING_STALE_WRITER']),
+        'snapshot-mismatch': Object.freeze(['TIMING_STALE_WRITER', 'VALIDATION']),
+        'finalized-row-conflict': Object.freeze(['TIMING_FINALIZED', 'TIMING_STALE_WRITER']),
+        'missing-row': Object.freeze(['TIMING_STALE_WRITER', 'TIMING_FINALIZED']),
+        'stale-revision': Object.freeze(['TIMING_STALE_REVISION'])
+    });
     const ERROR_NAMES = [
         'Error', 'AppDataError', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError',
         'URIError', 'EvalError', 'AggregateError', 'DOMException', 'QuotaExceededError',
@@ -264,7 +274,7 @@
         const cause = field(value, 'cause', context);
         return cause == null ? field(field(value, 'details', context), 'cause', context) : cause;
     }
-    function errorDetails(value, context, depth = 0, seen = new Set()) {
+    function errorDetails(value, context, wire = false, depth = 0, seen = new Set()) {
         const result = { name: 'unknown', message: '[redacted]', code: 'unknown', kind: 'unknown', stack: [], cause: null };
         if (!objectLike(value)) {
             result.kind = choice(typeof value, ['string', 'number', 'boolean', 'bigint', 'symbol', 'undefined']);
@@ -279,6 +289,11 @@
         result.name = choice(name, ERROR_NAMES);
         result.code = result.name === 'AppDataError' ? choice(field(value, 'code', context), CAUSE_CODES)
             : result.name === 'QuotaExceededError' ? 'QUOTA_EXCEEDED' : 'unknown';
+        if (result.name === 'AppDataError') {
+            const reason = field(wire ? value : field(value, 'details', context), 'timingReason', context);
+            if (typeof reason === 'string' && Object.prototype.hasOwnProperty.call(TIMING_REASONS, reason)
+                && TIMING_REASONS[reason].includes(result.code)) result.timingReason = reason;
+        }
         result.message = choice(message, Object.values(MESSAGES).concat('[redacted]'), '[redacted]');
         if (typeof message === 'string' && message.length > LIMITS.inputStringUnits) context.issues.add('input-truncated');
         if (integer(field(value, 'nodeType', context), 1, 12)) {
@@ -291,7 +306,7 @@
         }
         const cause = errorCause(value, context);
         if (cause != null) {
-            if (depth < LIMITS.causeDepth) result.cause = errorDetails(cause, context, depth + 1, seen);
+            if (depth < LIMITS.causeDepth) result.cause = errorDetails(cause, context, wire, depth + 1, seen);
             else context.issues.add('causes-truncated');
         }
         // Preserve explicit markers when sanitizing an already normalized record.
@@ -306,6 +321,12 @@
             current = current.cause;
         }
         return 'unknown';
+    }
+    function timingReason(error) {
+        for (let current = error; current; current = current.cause) {
+            if (current.timingReason) return current.timingReason;
+        }
+        return undefined;
     }
     function environment(value, context) {
         const browserVersion = field(value, 'browserVersion', context);
@@ -355,6 +376,8 @@
         // Only normalized fields enter this non-cryptographic grouping hash.
         const parts = [event.code, event.causeCode, event.module, event.action, event.error.name,
             event.error.stack[0] || null, event.resource.path];
+        // Keep old fingerprints stable when no supported reason was recorded.
+        if (event.timingReason) parts.push(event.timingReason);
         const text = JSON.stringify(parts);
         let hash = 2166136261;
         for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
@@ -436,7 +459,8 @@
             return identity;
         }
         function project(input, identity, context, wire) {
-            const error = errorDetails(field(input, 'error', context), context);
+            const error = errorDetails(field(input, 'error', context), context, wire);
+            const reason = timingReason(error);
             const rawResource = field(input, 'resource', context);
             const resource = wire ? frame(rawResource, context) : location(field(rawResource, 'url', context), context);
             if (!wire && resource.path !== 'unknown') {
@@ -464,6 +488,7 @@
                 fingerprint: '',
                 code: choice(field(input, 'code', context), CODES, 'UNEXPECTED_RUNTIME_ERROR'),
                 causeCode: causeCode(error),
+                ...(reason ? { timingReason: reason } : {}),
                 module: choice(field(input, 'module', context), MODULES),
                 action: choice(field(input, 'action', context), ACTIONS),
                 repetitionCount: 1,
@@ -558,7 +583,7 @@
         ]) });
     }
 
-    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, MESSAGES, sanitizeTransportStatus, sanitizeEntryCoverage,
+    const api = Object.freeze({ SCHEMA_VERSION, LIMITS, CODES, CAUSE_CODES, TIMING_REASONS, MESSAGES, sanitizeTransportStatus, sanitizeEntryCoverage,
         PROJECT_PATHS, COVERAGE_LIMITATIONS, createCorrelationScope, createWindowIdentity, createNormalizer, utf8Bytes, eventBytes });
     global.AppDiagnosticContract = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

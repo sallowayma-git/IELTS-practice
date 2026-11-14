@@ -107,6 +107,80 @@ test('recognized cause codes require AppDataError names at every normalization b
     assert.equal(normalizer.normalize({ error: new AppDataError(secret, secret) }).causeCode, 'unknown');
 });
 
+test('timing reasons survive native and AppDataError wrappers without changing public codes', () => {
+    const AppDataError = loadAppDataError();
+    const normalizer = contract.createNormalizer();
+    const reasons = {
+        'writer-mismatch': ['TIMING_STALE_WRITER'], 'not-frozen': ['TIMING_STALE_WRITER'],
+        'snapshot-mismatch': ['TIMING_STALE_WRITER', 'VALIDATION'],
+        'finalized-row-conflict': ['TIMING_FINALIZED', 'TIMING_STALE_WRITER'],
+        'missing-row': ['TIMING_STALE_WRITER', 'TIMING_FINALIZED'], 'stale-revision': ['TIMING_STALE_REVISION']
+    };
+    assert.deepEqual(contract.TIMING_REASONS, reasons);
+    for (const [timingReason, codes] of Object.entries(reasons)) for (const code of codes) {
+        const cause = new AppDataError(code, secret, { timingReason, answers: secret, writer: secret });
+        for (const raw of [cause, new Error(secret, { cause }), new AppDataError('BACKEND_UNAVAILABLE', secret, { cause })]) {
+            const event = normalizer.normalize({ code: 'PRACTICE_SAVE_FAILED', error: raw });
+            assert.equal(event.timingReason, timingReason);
+            assert.equal(event.causeCode, raw.code === 'BACKEND_UNAVAILABLE' ? raw.code : code);
+            assert.deepEqual(normalizer.sanitizeEvent(JSON.parse(assertSafe(event))), event);
+        }
+    }
+    const first = normalizer.normalize({ error: new AppDataError('TIMING_STALE_WRITER', secret, { timingReason: 'writer-mismatch' }) });
+    const second = normalizer.normalize({ error: new AppDataError('TIMING_STALE_WRITER', secret, { timingReason: 'not-frozen' }) });
+    assert.notEqual(first.fingerprint, second.fingerprint);
+    const nested = new AppDataError('TIMING_STALE_WRITER', secret, {
+        timingReason: 'writer-mismatch', cause: new AppDataError('TIMING_STALE_WRITER', secret, { timingReason: 'not-frozen' })
+    });
+    assert.equal(normalizer.normalize({ error: nested }).timingReason, 'writer-mismatch', 'nearest supported reason wins');
+});
+
+test('old v1 events keep their fingerprints and malformed timing evidence is discarded', () => {
+    const normalizer = contract.createNormalizer();
+    const old = normalizer.normalize({ error: error({ code: 'TIMING_STALE_WRITER' }) });
+    assert.equal(old.schemaVersion, 1);
+    assert.equal(old.timingReason, undefined);
+    assert.equal(old.error.timingReason, undefined);
+    assert.deepEqual(normalizer.sanitizeEvent(JSON.parse(JSON.stringify(old))), old);
+    for (const reason of [secret, 'checksum-mismatch', '__proto__', 1, null, {}, ['not-frozen'], 'x'.repeat(100000)]) {
+        const clean = normalizer.normalize({ timingReason: 'not-frozen', error: error({
+            code: 'TIMING_STALE_WRITER', details: { timingReason: reason, notes: secret }
+        }) });
+        assert.equal(clean.timingReason, undefined);
+        assert.equal(clean.fingerprint, old.fingerprint);
+        const wire = JSON.parse(JSON.stringify(clean));
+        wire.timingReason = 'not-frozen'; wire.error.timingReason = reason;
+        const checked = normalizer.sanitizeEvent(wire);
+        assert.equal(checked.timingReason, undefined); assertSafe(checked);
+    }
+    for (const raw of [error({ name: 'Error', code: 'TIMING_STALE_WRITER' }), error({ code: 'QUOTA_EXCEEDED' })]) {
+        raw.details = { timingReason: 'not-frozen' };
+        assert.equal(normalizer.normalize({ error: raw }).timingReason, undefined);
+        const wire = JSON.parse(JSON.stringify(old));
+        wire.error.name = raw.name; wire.error.code = raw.code; wire.error.timingReason = 'not-frozen';
+        assert.equal(normalizer.sanitizeEvent(wire).timingReason, undefined);
+    }
+    let reads = 0;
+    const details = Object.defineProperty({}, 'timingReason', { get() { reads++; throw Error(secret); } });
+    const checked = normalizer.normalize({ error: error({ code: 'TIMING_STALE_WRITER', details }) });
+    assert.equal(reads, 0); assert.equal(checked.timingReason, undefined);
+    assert.ok(checked.collection.issues.includes('accessor-skipped'));
+});
+
+test('timing evidence remains bounded alongside saturated stack, cause and breadcrumb budgets', () => {
+    const normalizer = contract.createNormalizer();
+    const frame = '    at ignored (file:///C:/Users/private/js/diagnostics/diagnosticContract.js:123456:123456)';
+    const raw = error({ code: 'TIMING_STALE_WRITER', details: { timingReason: 'not-frozen', answers: secret },
+        stack: Array(20).fill(frame).join('\n') });
+    const event = normalizer.normalize({ error: raw, correlation: { session: secret, operation: secret },
+        breadcrumbs: Array.from({ length: 70 }, () => ({ action: 'save-recovery', outcome: 'succeeded',
+            correlation: { session: secret, suite: secret, submission: secret, operation: secret } })) });
+    assert.equal(event.timingReason, 'not-frozen');
+    assert.equal(event.persistence.operation, 'unconfirmed');
+    assert.ok(event.collection.issues.includes('event-truncated'));
+    assert.deepEqual(normalizer.sanitizeEvent(JSON.parse(assertSafe(event))), event);
+});
+
 test('excludes learning data and arbitrary fields before memory, persistence, relay, and export', async () => {
     const normalizer = contract.createNormalizer({
         appVersion: '0.6.3', buildId: `git:${'a'.repeat(40)}`,
