@@ -296,7 +296,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
 import { learningRepository } from '@/api/learning-repository.js'
@@ -327,6 +327,7 @@ import { applyMemorizeLocatorHighlights, clearMemorizeLocatorHighlights } from '
 import { readSelectedContext } from '@/modules/practice-reading/selectionContext.js'
 import { canSnapshotReadingAnswers, readingDraftOwnerMatches } from '@/modules/practice-reading/readingModeFlowCore.js'
 import { useReadingTimer } from '@/modules/practice-reading/useReadingTimer'
+import { useQuestionTimeline } from '@/modules/practice-reading/useQuestionTimeline'
 import { useReadingAttempt } from '@/modules/practice-reading/useReadingAttempt'
 import { useReadingUiPreferences } from '@/modules/practice-reading/useReadingUiPreferences'
 import { useReadingInteractions } from '@/modules/practice-reading/useReadingInteractions'
@@ -399,8 +400,6 @@ const attemptReviewError = ref('')
 const attemptReviewContent = ref('')
 const attemptReviewToolCalls = ref([])
 const suiteSession = ref(null)
-const answerTimeline = reactive({})
-const markedQuestions = ref([])
 const interactionCount = ref(0)
 const endlessCountdown = ref(0)
 const endlessNextAssetId = ref('')
@@ -428,11 +427,28 @@ const {
   setDarkMode,
   setQuestionNavCollapsed
 } = useUnifiedDisplay()
-const activeQuestionVisit = {
-  questionId: '',
-  startedAtMs: 0
-}
-const activeQuestionId = ref('')
+// Answer timeline, visits and marks: one shared tracker for every practice
+// surface, so a submitted ledger row always carries real change/visit/elapsed
+// numbers instead of zeros.
+const {
+  answerTimeline,
+  markedQuestions,
+  activeQuestionId,
+  flushActiveQuestionVisit,
+  recordQuestionVisit,
+  recordAnswerTimeline,
+  hydrateFromDraftAnswers,
+  hydrateFromSubmission,
+  reset: resetQuestionTimeline,
+  buildQuestionTimelineLite,
+  buildPersistedQuestionTimeline
+} = useQuestionTimeline({
+  payloadSource: () => payload.value,
+  readOnlySource: () => readOnlyMode.value,
+  getRawAnswer: (questionId) => getRawAnswer(questionId),
+  getDisplayLabel: (questionId) => getDisplayLabel(questionId),
+  onInteraction: () => recordInteraction()
+})
 const readingPassagePane = ref(null)
 const readingAttempt = useReadingAttempt()
 let tauriAttemptId = ''
@@ -539,8 +555,7 @@ const {
   getRawAnswer,
   getAnswerEntries,
   hasAnswer,
-  snapshotAnswers: snapshotAnswerMap,
-  getAnswerFingerprint
+  snapshotAnswers: snapshotAnswerMap
 } = useReadingAnswers({
   payloadSource: () => payload.value,
   readOnlySource: readOnlyMode,
@@ -1216,27 +1231,15 @@ async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null
     tauriAttemptId = String(attempt.id)
     if (timer) applyPracticeTimerState(timer)
     const answers = {}
-    const marked = []
     for (const entry of attempt.answers || []) {
       const questionId = String(entry.questionId || entry.question_id || '').trim()
       if (!questionId) continue
       if (entry.answer != null) answers[questionId] = entry.answer
-      if (entry.marked) marked.push(questionId)
-      answerTimeline[questionId] = {
-        firstAnsweredAt: entry.answeredAt || entry.answered_at || null,
-        lastAnsweredAt: entry.answeredAt || entry.answered_at || null,
-        changeCount: Math.max(0, Number(entry.changeCount ?? entry.change_count) || 0),
-        visitCount: Math.max(0, Number(entry.visitCount ?? entry.visit_count) || 0),
-        elapsedMs: Math.max(0, Number(entry.elapsedMs ?? entry.elapsed_ms) || 0),
-        lastFingerprint: getAnswerFingerprint(entry.answer)
-      }
     }
+    hydrateFromDraftAnswers(attempt.answers)
     Object.entries(answers).forEach(([questionId, value]) => {
       assignAnswer(questionId, value)
     })
-    if (marked.length) {
-      markedQuestions.value = marked
-    }
     showSnapshotMessage('已恢复未提交草稿。')
     return timer
   } catch (draftError) {
@@ -1270,14 +1273,7 @@ function restoreSubmittedViewport(loadedSubmission) {
 }
 
 function resetAttemptMetadata() {
-  flushActiveQuestionVisit()
-  activeQuestionVisit.questionId = ''
-  activeQuestionVisit.startedAtMs = 0
-  activeQuestionId.value = ''
-  Object.keys(answerTimeline).forEach((key) => {
-    delete answerTimeline[key]
-  })
-  markedQuestions.value = []
+  resetQuestionTimeline()
   interactionCount.value = 0
 }
 
@@ -1337,26 +1333,7 @@ async function updateReadingCoachEnabled(enabled) {
 }
 
 function restoreSubmittedMetadata(loadedSubmission) {
-  markedQuestions.value = Array.isArray(loadedSubmission?.markedQuestions)
-    ? loadedSubmission.markedQuestions.map(normalizeQuestionId).filter(Boolean)
-    : []
-  Object.keys(answerTimeline).forEach((key) => {
-    delete answerTimeline[key]
-  })
-  const timeline = Array.isArray(loadedSubmission?.questionTimelineLite) ? loadedSubmission.questionTimelineLite : []
-  timeline.forEach((entry) => {
-    const questionId = normalizeQuestionId(entry?.questionId)
-    if (!questionId) return
-    const elapsedMs = Math.max(0, Number(entry.elapsedMs ?? entry.durationMs) || 0)
-    answerTimeline[questionId] = {
-      firstAnsweredAt: entry.firstAnsweredAt || null,
-      lastAnsweredAt: entry.lastAnsweredAt || null,
-      changeCount: Math.max(0, Number(entry.changeCount) || 0),
-      visitCount: Math.max(0, Number(entry.visitCount) || 0),
-      elapsedMs,
-      lastFingerprint: getAnswerFingerprint(loadedSubmission.answers?.[questionId])
-    }
-  })
+  hydrateFromSubmission(loadedSubmission)
 }
 
 function resetAnswers() {
@@ -1681,112 +1658,10 @@ function getSeverityLabel(severity) {
   return labels[severity] || '提示'
 }
 
-function getOrCreateQuestionTimelineEntry(questionId) {
-  const normalized = normalizeQuestionId(questionId)
-  if (!normalized) return null
-  const current = answerTimeline[normalized] || {
-    firstAnsweredAt: null,
-    lastAnsweredAt: null,
-    changeCount: 0,
-    visitCount: 0,
-    elapsedMs: 0,
-    lastFingerprint: getAnswerFingerprint(getRawAnswer(normalized))
-  }
-  current.changeCount = Math.max(0, Number(current.changeCount) || 0)
-  current.visitCount = Math.max(0, Number(current.visitCount) || 0)
-  current.elapsedMs = Math.max(0, Number(current.elapsedMs) || 0)
-  answerTimeline[normalized] = current
-  return current
-}
-
-function flushActiveQuestionVisit(nowMs = Date.now()) {
-  const questionId = activeQuestionVisit.questionId
-  const startedAtMs = Number(activeQuestionVisit.startedAtMs) || 0
-  if (!questionId || !startedAtMs || nowMs <= startedAtMs) {
-    return
-  }
-  const entry = getOrCreateQuestionTimelineEntry(questionId)
-  if (!entry) return
-  entry.elapsedMs = Math.max(0, Number(entry.elapsedMs) || 0) + Math.max(0, nowMs - startedAtMs)
-  activeQuestionVisit.startedAtMs = nowMs
-}
-
-function recordQuestionVisit(questionId) {
-  if (readOnlyMode.value) {
-    return
-  }
-  const normalized = normalizeQuestionId(questionId)
-  if (!normalized) return
-  activeQuestionId.value = normalized
-  const nowMs = Date.now()
-  if (activeQuestionVisit.questionId && activeQuestionVisit.questionId !== normalized) {
-    flushActiveQuestionVisit(nowMs)
-  }
-  const entry = getOrCreateQuestionTimelineEntry(normalized)
-  if (!entry) return
-  if (activeQuestionVisit.questionId !== normalized) {
-    entry.visitCount += 1
-    activeQuestionVisit.questionId = normalized
-  }
-  activeQuestionVisit.startedAtMs = nowMs
-}
-
 function recordInteraction() {
   if (!readOnlyMode.value) {
     interactionCount.value += 1
   }
-}
-
-function recordAnswerTimeline(questionId, previousFingerprint, nextFingerprint) {
-  const changed = previousFingerprint !== nextFingerprint
-  if (!changed) {
-    return
-  }
-  recordInteraction()
-  const now = new Date().toISOString()
-  recordQuestionVisit(questionId)
-  const current = getOrCreateQuestionTimelineEntry(questionId)
-  if (!current) return
-  if (nextFingerprint && !current.firstAnsweredAt) {
-    current.firstAnsweredAt = now
-  }
-  if (nextFingerprint) {
-    current.lastAnsweredAt = now
-  }
-  if (current.lastFingerprint && current.lastFingerprint !== nextFingerprint) {
-    current.changeCount += 1
-  }
-  current.lastFingerprint = nextFingerprint
-  answerTimeline[questionId] = current
-}
-
-function buildQuestionTimelineLite() {
-  flushActiveQuestionVisit()
-  const order = Array.isArray(payload.value?.questionOrder) ? payload.value.questionOrder : []
-  return order.map((questionId) => {
-    const entry = answerTimeline[questionId] || {}
-    const elapsedMs = Math.max(0, Math.round(Number(entry.elapsedMs) || 0))
-    return {
-      questionId,
-      displayLabel: getDisplayLabel(questionId),
-      firstAnsweredAt: entry.firstAnsweredAt || null,
-      lastAnsweredAt: entry.lastAnsweredAt || null,
-      changeCount: Math.max(0, Number(entry.changeCount) || 0),
-      visitCount: Math.max(0, Number(entry.visitCount) || 0),
-      elapsedMs,
-      durationMs: elapsedMs
-    }
-  })
-}
-
-function buildPersistedQuestionTimeline(timeline = buildQuestionTimelineLite()) {
-  return timeline.map((entry) => ({
-    questionId: entry.questionId,
-    changeCount: entry.changeCount,
-    visitCount: entry.visitCount,
-    elapsedMs: entry.elapsedMs,
-    answeredAt: entry.lastAnsweredAt || entry.firstAnsweredAt || null
-  }))
 }
 
 function normalizeOfficialQuestionExplanationSection(section, index) {

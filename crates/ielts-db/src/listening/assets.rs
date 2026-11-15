@@ -263,6 +263,23 @@ pub fn validate_exam_source(payload: &ListeningExamSourceV1) -> DbResult<()> {
         }
         validate_answer_value(&payload.exam_id, &question_id, value)?;
     }
+    // The interaction control decides how a question is collected, and the
+    // scorer already derives it from the kind (`multi_choice` is a checkbox
+    // group). A paper that renders a control the scorer never sees would score
+    // every answer wrong, so reject the mismatch at seed time. A question with
+    // no interactionModel entry keeps its kind-derived control.
+    let mut interaction_controls = BTreeMap::new();
+    if let Some(model) = payload.interaction_model.as_object() {
+        for (raw, entry) in model {
+            let question_id = normalize_question_id(raw);
+            let Some(control) = entry.get("control").and_then(Value::as_str) else {
+                continue;
+            };
+            if !question_id.is_empty() {
+                interaction_controls.insert(question_id, control.to_string());
+            }
+        }
+    }
     let mut grouped = std::collections::BTreeSet::new();
     for group in &payload.question_groups {
         if !(1..=4).contains(&group.section) {
@@ -300,6 +317,16 @@ pub fn validate_exam_source(payload: &ListeningExamSourceV1) -> DbResult<()> {
                 return Err(DbError::Validation(format!(
                     "listening question {question_id} appears in two groups"
                 )));
+            }
+            if let Some(control) = interaction_controls.get(&question_id) {
+                let expects_checkbox = group.kind == "multi_choice";
+                if expects_checkbox != (control == "checkbox") {
+                    let expected = if expects_checkbox { "checkbox" } else { "not-checkbox" };
+                    return Err(DbError::Validation(format!(
+                        "listening question {question_id} is {} but declares control {control:?}; expected {expected}",
+                        group.kind
+                    )));
+                }
             }
         }
     }

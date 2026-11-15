@@ -302,6 +302,36 @@ fn unknown_question_kind_is_rejected() {
     assert!(err.to_string().contains("unknown question kind"), "{err}");
 }
 
+/// The scorer maps `multi_choice` to a checkbox group; a paper that renders it
+/// as radios would collect answers the scorer cannot compare as a set.
+#[test]
+fn listening_multi_choice_rendered_as_radio_is_rejected() {
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    let mut payload = sample_payload();
+    payload["interactionModel"]["q4"] = json!({ "control": "radio" });
+    write_pack(&pack, &payload, &wav_bytes());
+    let err = seed(&conn, &pack).unwrap_err().to_string();
+    assert!(err.contains("q4"), "{err}");
+    assert!(err.contains("multi_choice"), "{err}");
+    assert!(err.contains("checkbox"), "{err}");
+}
+
+/// The mirror case: a single-choice question rendered as checkboxes would let
+/// the learner tick several letters for a one-mark question.
+#[test]
+fn listening_single_choice_rendered_as_checkbox_is_rejected() {
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    let mut payload = sample_payload();
+    payload["interactionModel"]["q3"] = json!({ "control": "checkbox" });
+    write_pack(&pack, &payload, &wav_bytes());
+    let err = seed(&conn, &pack).unwrap_err().to_string();
+    assert!(err.contains("q3"), "{err}");
+    assert!(err.contains("single_choice"), "{err}");
+    assert!(err.contains("checkbox"), "{err}");
+}
+
 #[test]
 fn duplicate_question_across_groups_is_rejected() {
     let (dir, conn) = open_db();

@@ -48,8 +48,24 @@ LISTENING_SCREENSHOT = ROOT / "developer/tests/e2e/reports/listening-practice-cu
 # Staged over the shipped (empty) `listening` resource so the packaged app seeds
 # a deterministic exam: resource_dir()/listening/manifest.json is read at startup.
 LISTENING_FIXTURE = ROOT / "developer/tests/fixtures/listening-pack"
-# crates/ielts-db/migrations/0040_listening_skills.sql seeds exactly these.
-LISTENING_SKILL_COUNT = 13
+# crates/ielts-db/migrations/0040_listening_skills.sql seeds these keys.
+# They are a required subset, not an exact inventory: a later migration may add
+# a listening skill or label, but none of these may vanish or go inactive.
+LISTENING_SKILL_KEYS = (
+    "listening.form_completion",
+    "listening.notes_completion",
+    "listening.table_completion",
+    "listening.flow_chart_completion",
+    "listening.summary_completion",
+    "listening.sentence_completion",
+    "listening.single_choice",
+    "listening.multi_choice",
+    "listening.matching",
+    "listening.map_labelling",
+    "listening.plan_labelling",
+    "listening.diagram_completion",
+    "listening.short_answer",
+)
 READING_P95_BUDGET_MS = 3000
 FAKE_NOW_ENV = "IELTS_ATLAS_FAKE_NOW"
 WEEKLY_MIN_OBSERVATIONS = 8  # ielts_db::WEEKLY_MIN_OBSERVATIONS
@@ -1493,21 +1509,18 @@ def listening_sections(exam: dict) -> dict[str, int]:
             for group in exam["questionGroups"] for question_id in group["questionIds"]}
 
 
-def listening_total_marks(exam: dict) -> float:
-    """The exam's mark total, mirroring crates/ielts-db/src/reading/scoring.rs:
+def listening_answer_marks(exam: dict, question_id: str) -> float:
+    """What one question is worth, mirroring crates/ielts-db/src/reading/scoring.rs:
     only a multiple-answer (`multi_choice`, checkbox) key weighs more than one
     mark; a list anywhere else is a set of alternatives for a single mark."""
-    kinds = listening_question_kinds(exam)
-    total = 0.0
-    for question_id in exam["questionOrder"]:
-        key = exam["answerKey"][question_id]
-        total += float(len(key)) if kinds[question_id] == "multi_choice" and isinstance(key, list) else 1.0
-    return total
+    key = exam["answerKey"][question_id]
+    kind = listening_question_kinds(exam)[question_id]
+    return float(len(key)) if kind == "multi_choice" and isinstance(key, list) else 1.0
 
 
-def listening_answer(key) -> str:
-    """The text to type for one answer-key entry (first alternative of a list)."""
-    return str(key[0] if isinstance(key, list) and key else key)
+def listening_total_marks(exam: dict) -> float:
+    """The exam's mark total: the sum of what each question is worth."""
+    return sum(listening_answer_marks(exam, question_id) for question_id in exam["questionOrder"])
 
 
 def wait_for_listening_view(driver: Driver, marker: str, timeout_seconds: int = 30):
@@ -1537,18 +1550,69 @@ def fill_native_answer(driver: Driver, question_id: str, value: str) -> dict:
 
     The answer store only moves on a real DOM event (the same controls and
     handler the reading page uses), so this check cannot pass by writing the
-    store directly.
+    store directly. A disabled or read-only control would swallow a scripted
+    write while no learner could use it, so its real state is reported back and
+    asserted by the caller.
     """
     return driver.script(r"""
-        const input = document.querySelector('#question-groups input[name="' + arguments[0] + '"]')
-          || document.querySelector('#question-groups textarea[name="' + arguments[0] + '"]');
+        const input = document.querySelector('#question-groups input[type="text"][name="' + arguments[0] + '"]')
+          || document.querySelector('#question-groups textarea[name="' + arguments[0] + '"]')
+          || document.querySelector('#question-groups input[name="' + arguments[0] + '"]');
         if (!input) return {found: false};
+        if (input.disabled || input.readOnly) {
+          return {found: true, blocked: true, disabled: input.disabled, readOnly: input.readOnly};
+        }
         input.focus();
         input.value = arguments[1];
         input.dispatchEvent(new Event('input', {bubbles: true}));
         input.dispatchEvent(new Event('change', {bubbles: true}));
         return {found: true, name: input.name, value: input.value};
     """, [question_id, value])
+
+
+def click_native_control(driver: Driver, question_id: str, control_type: str, value: str) -> dict:
+    """Tick one radio or checkbox with a real click.
+
+    `single_choice`, `multi_choice` and `matching` are answered by clicking a
+    rendered input; the page learns the answer only from the input/change
+    events those controls fire. Typing into a text box proves none of that.
+    """
+    return driver.script(r"""
+        const selector = '#question-groups input[type="' + arguments[1] + '"][name="' + arguments[0] + '"]';
+        const input = Array.from(document.querySelectorAll(selector))
+          .find((node) => String(node.value || '').trim() === arguments[2]);
+        if (!input) {
+          return {found: false, options: Array.from(document.querySelectorAll(selector))
+            .map((node) => String(node.value || '').trim())};
+        }
+        if (input.disabled) return {found: true, blocked: true, disabled: true};
+        input.click();
+        return {found: true, name: input.name, value: input.value,
+                checked: input.checked === true, type: input.type};
+    """, [question_id, control_type, value])
+
+
+def select_listening_section(driver: Driver, section: int) -> dict:
+    """Open one section the way a learner does, through the section nav."""
+    return driver.script(r"""
+        const buttons = Array.from(document.querySelectorAll('.listening-section-nav__item'));
+        const button = buttons[arguments[0] - 1];
+        if (!button) return {found: false, count: buttons.length};
+        if (button.disabled) return {found: true, blocked: true};
+        button.click();
+        return {found: true, pressed: button.getAttribute('aria-pressed')};
+    """, [section])
+
+
+def wait_for_listening_progress(driver: Driver, answered: int, total: int) -> str:
+    """The footer counter must show exactly this many answered questions."""
+    expected = f"已作答 {answered} / {total} 题"
+    return wait_for_value(driver, r"""
+        const node = document.querySelector('.listening-practice__progress');
+        if (!node) return null;
+        const text = node.textContent.replace(/\s+/g, ' ').trim();
+        return text === arguments[0] ? text : null;
+    """, 15, label="listening answered counter", args=[expected])
 
 
 def check_listening_ipc(driver: Driver) -> dict:
@@ -1596,13 +1660,77 @@ def check_listening_ipc(driver: Driver) -> dict:
             "audioPrefix": data_url[:22]}
 
 
+def wait_for_listening_control(driver: Driver, question_id: str, control_type: str,
+                               timeout_seconds: int = 15) -> dict:
+    """Wait for a section's rendered control; navigation renders it a tick later."""
+    return wait_for_value(driver, r"""
+        const input = document.querySelector(
+          '#question-groups input[type="' + arguments[1] + '"][name="' + arguments[0] + '"]');
+        return input ? {found: true, disabled: input.disabled === true, type: input.type} : null;
+    """, timeout_seconds, label=f"listening {control_type} {question_id}",
+        args=[question_id, control_type])
+
+
+def wait_for_listening_draft(driver: Driver, asset_id: str, expected_answers: dict) -> dict:
+    """Poll `listening_get_open_draft` until the latest autosave is complete.
+
+    The page debounces draft saves, so the first reads after the final edit can
+    still see an earlier snapshot: returning null keeps polling. Every returned
+    row must already carry the learner's final answer and real effort numbers.
+    """
+    return wait_for_value(driver, r"""
+        return window.__TAURI_INTERNALS__.invoke('listening_get_open_draft', {assetId: arguments[0]})
+          .then((response) => {
+            if (!response || response.ok !== true || !response.data) return null;
+            const attempt = response.data;
+            const rows = Array.isArray(attempt.answers) ? attempt.answers : [];
+            if (rows.length !== Object.keys(arguments[1]).length) return null;
+            const byId = {};
+            rows.forEach((row) => { byId[row.questionId] = row; });
+            const stored = Object.keys(arguments[1]).every(
+              (questionId) => byId[questionId]
+                && JSON.stringify(byId[questionId].answer) === JSON.stringify(arguments[1][questionId]));
+            const tracked = rows.every(
+              (row) => Number(row.visitCount) >= 1 && Number(row.elapsedMs) > 0);
+            if (!stored || !tracked || Number(byId.q1?.changeCount) < 1) return null;
+            return {attemptId: attempt.id, answers: rows.map((row) => ({
+              questionId: row.questionId,
+              answer: row.answer,
+              changeCount: Number(row.changeCount),
+              visitCount: Number(row.visitCount),
+              elapsedMs: Number(row.elapsedMs),
+              marked: row.marked === true
+            }))};
+          });
+    """, 20, label="listening open draft", args=[asset_id, expected_answers])
+
+
 def check_listening_view(driver: Driver) -> dict:
-    """Open the fixture exam, answer through the native input, submit, read review."""
+    """Answer every control family in the fixture, submit, then read the review.
+
+    The paper renders two text inputs, a `single_choice` radio, a `multi_choice`
+    checkbox group (two marks) and two `matching` radios. Typing q1 twice proves
+    the change counter; clicking each radio/checkbox proves the page hears the
+    input/change events a learner actually produces, not just a typed store.
+    """
     exam = listening_fixture()["exam"]
     exam_id = exam["examId"]
     sections = listening_sections(exam)
     section_counts = {section: sum(1 for value in sections.values() if value == section)
                       for section in (1, 2, 3, 4)}
+    total_questions = len(exam["questionOrder"])
+    marks = listening_total_marks(exam)
+    # questionId -> (the learner's final answer, whether the key scores it right)
+    expected = {
+        "q1": ("waterproof", True),   # typed "cotton" first -> one recorded change
+        "q2": ("cotton", False),
+        "q3": ("B", True),
+        "q4": (["A", "C"], True),     # multi_choice: two ticked letters, two marks
+        "q5": ("B", False),           # key is "A"
+        "q6": ("A", False),           # key is "B"
+    }
+    expected_answers = {question_id: answer for question_id, (answer, _) in expected.items()}
+    expected_correct = {question_id: is_correct for question_id, (_, is_correct) in expected.items()}
     driver.script("location.hash = arguments[0]; return true",
                   [f"#/listening/{urllib.parse.quote(exam_id, safe='')}"])
     wait_for_listening_view(driver, "[data-listening-question-groups]")
@@ -1630,30 +1758,64 @@ def check_listening_view(driver: Driver) -> dict:
                 f"section {section} control shows the wrong question count: {control}")
         require(control.get("disabled") is (section_counts[section] == 0),
                 f"section {section} control enabled/disabled state is wrong: {control}")
-    # Fill one answer through the real input: the fixture's first group is a
-    # text control, and its key entry is what a correct answer looks like.
-    typed = driver.script("""
-        const input = document.querySelector('#question-groups input[type="text"][name]');
-        return input ? {name: input.name} : null;
-    """)
-    require(isinstance(typed, dict) and typed.get("name"),
-            f"listening page rendered no native text input: {typed}")
-    question_id = str(typed["name"])
-    require(question_id in exam["answerKey"],
-            f"fixture has no answer key entry for the rendered input: {question_id}")
-    value = listening_answer(exam["answerKey"][question_id])
-    filled = fill_native_answer(driver, question_id, value)
-    require(filled.get("found") is True and filled.get("value") == value,
-            f"listening native input did not take the answer: {filled}")
-    expected_progress = f"已作答 1 / {len(exam['questionOrder'])} 题"
-    progress = wait_for_value(driver, r"""
-        const node = document.querySelector('.listening-practice__progress');
-        if (!node) return null;
-        const text = node.textContent.replace(/\s+/g, ' ').trim();
-        return text === arguments[0] ? text : null;
-    """, 15, label="listening answered counter", args=[expected_progress])
-    require(progress == expected_progress,
-            f"listening answer never reached the store: {progress!r} != {expected_progress!r}")
+
+    # Section 1: q1 wrong then right, q2 wrong. Both are native text inputs.
+    wait_for_listening_control(driver, "q1", "text")
+    first = fill_native_answer(driver, "q1", "cotton")
+    require(first.get("found") is True and not first.get("blocked") and first.get("value") == "cotton",
+            f"listening q1 input did not take the wrong answer: {first}")
+    corrected = fill_native_answer(driver, "q1", "waterproof")
+    require(corrected.get("found") is True and corrected.get("value") == "waterproof",
+            f"listening q1 input did not take the corrected answer: {corrected}")
+    second = fill_native_answer(driver, "q2", "cotton")
+    require(second.get("found") is True and second.get("value") == "cotton",
+            f"listening q2 input did not take the answer: {second}")
+    wait_for_listening_progress(driver, 2, total_questions)
+
+    # Section 2: single_choice is a radio.
+    select_listening_section(driver, 2)
+    wait_for_listening_control(driver, "q3", "radio")
+    q3 = click_native_control(driver, "q3", "radio", "B")
+    require(q3.get("found") is True and q3.get("checked") is True,
+            f"listening q3 radio did not take the answer: {q3}")
+    wait_for_listening_progress(driver, 3, total_questions)
+
+    # Section 3: multi_choice is a checkbox group; tick the two correct letters.
+    select_listening_section(driver, 3)
+    wait_for_listening_control(driver, "q4", "checkbox")
+    for letter in ("A", "C"):
+        ticked = click_native_control(driver, "q4", "checkbox", letter)
+        require(ticked.get("found") is True and ticked.get("checked") is True,
+                f"listening q4 checkbox {letter} did not stay ticked: {ticked}")
+    wait_for_listening_progress(driver, 4, total_questions)
+
+    # Section 4: two matching radios, both deliberately wrong.
+    select_listening_section(driver, 4)
+    wait_for_listening_control(driver, "q5", "radio")
+    q5 = click_native_control(driver, "q5", "radio", "B")
+    require(q5.get("found") is True and q5.get("checked") is True,
+            f"listening q5 radio did not take the answer: {q5}")
+    wait_for_listening_control(driver, "q6", "radio")
+    q6 = click_native_control(driver, "q6", "radio", "A")
+    require(q6.get("found") is True and q6.get("checked") is True,
+            f"listening q6 radio did not take the answer: {q6}")
+    wait_for_listening_progress(driver, total_questions, total_questions)
+
+    # The page autosaves through listening_save_draft; read the same draft back
+    # through listening_get_open_draft before submit so both commands are
+    # proven on the real bridge with real timeline numbers.
+    draft = wait_for_listening_draft(driver, exam_id, expected_answers)
+    draft_rows = {row["questionId"]: row for row in draft["answers"]}
+    require(len(draft["answers"]) == total_questions,
+            f"open draft has {len(draft['answers'])} answer rows, expected {total_questions}")
+    require(draft_rows["q1"]["changeCount"] == 1,
+            f"q1 draft should record exactly one change: {draft}")
+    for row in draft["answers"]:
+        require(row["visitCount"] >= 1 and row["elapsedMs"] > 0,
+                f"draft timeline lost effort for {row['questionId']}: {draft}")
+    require(all(row["marked"] is False for row in draft["answers"]),
+            f"the fixture never marks a question: {draft}")
+
     submitted = driver.script("""
         const button = document.querySelector('.listening-practice__submit');
         if (!button || button.disabled) return false;
@@ -1681,7 +1843,7 @@ def check_listening_view(driver: Driver) -> dict:
           wrong: panel.querySelectorAll('.listening-review__row.is-wrong').length,
           answers: Array.from(panel.querySelectorAll('.listening-review__answers dd'))
             .map((node) => node.textContent.trim()),
-          // The score is two adjacent elements ("1" and "/ 7"), so read the
+          // The score is two adjacent elements ("4" and "/ 7"), so read the
           // rendered numbers instead of matching concatenated textContent.
           score: score ? {
             correct: score.querySelector('.listening-score__value strong')?.textContent.trim() || '',
@@ -1690,34 +1852,45 @@ def check_listening_view(driver: Driver) -> dict:
           } : null
         };
     """, 60, label="listening review content")
-    require(review["rows"] == len(exam["questionOrder"]),
-            f"listening review rendered {review['rows']} rows, expected {len(exam['questionOrder'])}")
+    require(review["rows"] == total_questions,
+            f"listening review rendered {review['rows']} rows, expected {total_questions}")
     require(sorted(review["questionIds"]) == sorted(exam["questionOrder"]),
             f"listening review rows differ from the exam: {review['questionIds']}")
-    require(review["correct"] == 1 and review["wrong"] == len(exam["questionOrder"]) - 1,
+    correct_questions = {question_id for question_id, (_, ok) in expected.items() if ok}
+    wrong_questions = set(expected) - correct_questions
+    require(review["correct"] == len(correct_questions) and review["wrong"] == len(wrong_questions),
             f"listening review verdicts are wrong: {review}")
-    marks = listening_total_marks(exam)
+    correct_marks = sum(listening_answer_marks(exam, question_id) for question_id in correct_questions)
     score = review.get("score") or {}
-    require(score.get("correct") == "1",
-            f"listening review score is not 1 correct answer: {review.get('score')!r}")
+    # Questions and marks are different denominators on purpose: the review
+    # lists 6 questions but the ratio score weighs q4 as two marks (4 / 7).
+    require(score.get("correct") == str(int(correct_marks)),
+            f"listening review score is not {int(correct_marks)} correct marks: {review.get('score')!r}")
     require(score.get("total") == f"/ {int(marks)}",
             f"listening review denominator is not /{int(marks)}: {review.get('score')!r}")
-    require(score.get("percent") == f"{round(1000 / marks) / 10}%",
-            f"listening review percentage is not 1/{int(marks)}: {review.get('score')!r}")
-    require(value in review["answers"],
-            f"listening review lost the typed answer {value!r}: {review['answers']}")
+    require(score.get("percent") == f"{round(correct_marks / marks * 1000) / 10}%",
+            f"listening review percentage is not {int(correct_marks)}/{int(marks)}: {review.get('score')!r}")
+    require("waterproof" in review["answers"] and "cotton" in review["answers"],
+            f"listening review lost the typed answers: {review['answers']}")
     driver.screenshot(LISTENING_SCREENSHOT)
-    return {"assetId": exam_id, "attemptId": attempt_id, "answered": question_id,
-            "answer": value, "scoreCorrect": score["correct"], "scoreTotal": score["total"],
+    return {"assetId": exam_id, "attemptId": attempt_id,
+            "answers": expected_answers, "correct": expected_correct,
+            "draftChangeCount": draft_rows["q1"]["changeCount"],
+            "draftVisitCount": sum(row["visitCount"] for row in draft["answers"]),
+            "scoreCorrect": score["correct"], "scoreTotal": score["total"],
             "scorePercent": score["percent"],
             "screenshot": str(LISTENING_SCREENSHOT.resolve())}
 
 
+
 def assert_listening_ledger(app_data: Path, exam: dict, asset_id: str, attempt_id: str,
-                            answered_question: str, marks: float) -> dict:
+                            expected_answers: dict, expected_correct: dict) -> dict:
     """The listening attempt, its answers and its ledger, read from SQLite."""
     kinds = listening_question_kinds(exam)
     sections = listening_sections(exam)
+    marks = listening_total_marks(exam)
+    correct_marks = sum(listening_answer_marks(exam, question_id)
+                        for question_id, is_correct in expected_correct.items() if is_correct)
     with closing(database_connection(app_data)) as conn:
         conn.execute("BEGIN")
         attempt = conn.execute("SELECT * FROM attempts WHERE id=?", (attempt_id,)).fetchone()
@@ -1727,15 +1900,17 @@ def assert_listening_ledger(app_data: Path, exam: dict, asset_id: str, attempt_i
                 f"listening attempt is not terminal: {dict(attempt)}")
         require(attempt["asset_id"] == asset_id, f"attempt asset is {attempt['asset_id']!r}")
         require(attempt["score_scale"] == "ratio", f"attempt score scale is {attempt['score_scale']!r}")
+        # question_count is the weighted mark total (7), not the 6 questions:
+        # the multi_choice question weighs two marks.
         require(attempt["question_count"] == int(marks),
                 f"attempt question_count is {attempt['question_count']}, expected {int(marks)}")
-        require(float(attempt["correct_count"] or 0) == 1.0,
-                f"attempt correct_count is {attempt['correct_count']}, expected 1")
-        require(math.isclose(float(attempt["score_value"] or 0), 1.0 / marks, abs_tol=1e-9),
-                f"attempt score_value {attempt['score_value']} != 1/{int(marks)}")
+        require(math.isclose(float(attempt["correct_count"] or 0), correct_marks, abs_tol=1e-9),
+                f"attempt correct_count is {attempt['correct_count']}, expected {correct_marks}")
+        require(math.isclose(float(attempt["score_value"] or 0), correct_marks / marks, abs_tol=1e-9),
+                f"attempt score_value {attempt['score_value']} != {correct_marks}/{int(marks)}")
         answers = conn.execute(
-            "SELECT question_id,answer_json,is_correct,question_kind FROM attempt_answers "
-            "WHERE attempt_id=? ORDER BY question_id", (attempt_id,)).fetchall()
+            "SELECT question_id,answer_json,is_correct,question_kind,weight,change_count "
+            "FROM attempt_answers WHERE attempt_id=? ORDER BY question_id", (attempt_id,)).fetchall()
         require(len(answers) == len(exam["questionOrder"]),
                 f"attempt has {len(answers)} answer rows, expected {len(exam['questionOrder'])}")
         require(all(row["question_kind"] for row in answers),
@@ -1743,11 +1918,29 @@ def assert_listening_ledger(app_data: Path, exam: dict, asset_id: str, attempt_i
         require(all(row["question_kind"] == kinds[row["question_id"]] for row in answers),
                 "a listening answer kind differs from the fixture, "
                 f"{[(row['question_id'], row['question_kind']) for row in answers]}")
+        by_question = {row["question_id"]: row for row in answers}
+        # Every question was driven through a rendered control, so every row is
+        # answered -- an empty row here would mean the gate silently skipped a
+        # control type.
         answered = [row for row in answers
                     if json.loads(row["answer_json"]) not in ("", [], None)]
-        require(len(answered) == 1 and answered[0]["question_id"] == answered_question,
-                f"unexpected answered rows: {[(row['question_id'], row['answer_json']) for row in answered]}")
-        require(answered[0]["is_correct"] == 1, "the typed correct answer was not scored correct")
+        require(len(answered) == len(exam["questionOrder"]),
+                f"unexpected answered rows: {[(row['question_id'], row['answer_json']) for row in answers]}")
+        for question_id, expected_answer in expected_answers.items():
+            row = by_question.get(question_id)
+            require(row is not None, f"attempt has no answer row for {question_id}")
+            require(json.loads(row["answer_json"]) == expected_answer,
+                    f"attempt stored {row['answer_json']} for {question_id}, expected {expected_answer!r}")
+            require(row["is_correct"] == (1 if expected_correct[question_id] else 0),
+                    f"{question_id} is_correct is {row['is_correct']}, "
+                    f"expected {expected_correct[question_id]}")
+        # q1 was typed wrong, then corrected: the ledger must remember the edit.
+        require(by_question["q1"]["change_count"] == 1,
+                f"q1 change_count is {by_question['q1']['change_count']}, expected 1")
+        # q4 is the multi_choice question: two ticked letters, two marks.
+        require(math.isclose(float(by_question["q4"]["weight"]), 2.0, abs_tol=1e-9),
+                f"q4 weight is {by_question['q4']['weight']}, expected 2")
+        require(by_question["q4"]["is_correct"] == 1, "q4 was not scored correct")
         events = conn.execute(
             "SELECT * FROM learning_events WHERE attempt_id=? ORDER BY event_type,question_id",
             (attempt_id,)).fetchall()
@@ -1766,8 +1959,9 @@ def assert_listening_ledger(app_data: Path, exam: dict, asset_id: str, attempt_i
                 "a listening learning event is bound to another attempt/asset")
         seeded = {row[0] for row in conn.execute(
             "SELECT skill_key FROM skill_catalog WHERE activity='listening' AND active=1")}
-        require(len(seeded) == LISTENING_SKILL_COUNT,
-                f"expected {LISTENING_SKILL_COUNT} seeded listening skill keys, found {sorted(seeded)}")
+        missing_skills = set(LISTENING_SKILL_KEYS) - seeded
+        require(not missing_skills,
+                f"seeded listening skill keys are missing or inactive: {sorted(missing_skills)}")
         summary = json.loads(completed[0]["payload_json"])
         require(summary.get("correctCount") == attempt["correct_count"]
                 and summary.get("questionCount") == attempt["question_count"]
@@ -1784,14 +1978,30 @@ def assert_listening_ledger(app_data: Path, exam: dict, asset_id: str, attempt_i
             require(row["skill_key"] == f"listening.{kinds[question_id]}"
                     and payload.get("skillKey") == row["skill_key"],
                     f"ledger question {question_id} skill {row['skill_key']!r} disagrees with its kind")
+            # Every rendered control was driven, so every outcome carries real
+            # effort instead of the all-zero timeline an unwired page submits.
+            require(payload.get("visitCount", 0) >= 1 and payload.get("elapsedMs", 0) > 0,
+                    f"ledger question {question_id} lost its effort: {payload}")
+        outcomes_by_question = {
+            row["question_id"]: json.loads(row["payload_json"]) for row in outcomes}
+        first_try = outcomes_by_question["q1"]
+        require(first_try.get("isCorrect") is True,
+                f"q1 outcome is not correct: {first_try}")
+        require(first_try.get("changeCount") == 1,
+                f"q1 outcome changeCount is {first_try.get('changeCount')}, expected 1")
+        require(first_try.get("firstTryCorrect") is False,
+                f"q1 firstTryCorrect is {first_try.get('firstTryCorrect')}, expected False")
     return {"attemptId": attempt_id, "answers": len(answers), "events": len(events),
-            "outcomes": len(outcomes), "skillKeys": len(seeded)}
+            "outcomes": len(outcomes), "skillKeys": len(seeded),
+            "correctMarks": correct_marks, "questionCount": int(marks)}
 
 
 def check_listening_submit_boundary(driver: Driver, app_data: Path, exam: dict, asset_id: str,
-                                    attempt_id: str, answered_question: str, marks: float) -> dict:
+                                    attempt_id: str, expected_answers: dict,
+                                    expected_correct: dict) -> dict:
     """Idempotent replay and the terminal-attempt boundary, proven in SQLite."""
-    receipt = assert_listening_ledger(app_data, exam, asset_id, attempt_id, answered_question, marks)
+    receipt = assert_listening_ledger(app_data, exam, asset_id, attempt_id,
+                                      expected_answers, expected_correct)
     with closing(database_connection(app_data)) as conn:
         key_row = conn.execute(
             "SELECT idempotency_key FROM attempt_idempotency "
@@ -1812,7 +2022,7 @@ def check_listening_submit_boundary(driver: Driver, app_data: Path, exam: dict, 
 
     before = counts()
     replay = invoke_data(driver, "listening_submit_attempt", {"cmd": {
-        "attemptId": attempt_id, "assetId": asset_id, "answers": {answered_question: "replayed"},
+        "attemptId": attempt_id, "assetId": asset_id, "answers": expected_answers,
         "markedQuestions": [], "questionTimeline": [], "idempotencyKey": submission_key}})
     require(replay["attempt"]["id"] == attempt_id and replay.get("idempotentReplay") is True,
             f"replayed listening submit was not idempotent: {replay}")
@@ -2326,7 +2536,7 @@ def main() -> int:
         listening_view = metadata["listeningView"]
         metadata["listeningSubmitBoundary"] = check_listening_submit_boundary(
             driver, Path(isolated_app_data.name), listening_exam, listening_view["assetId"],
-            listening_view["attemptId"], listening_view["answered"], listening_total_marks(listening_exam))
+            listening_view["attemptId"], listening_view["answers"], listening_view["correct"])
         checks["listeningSubmitBoundary"] = "passed"
         created_backup = driver.script(
             "return window.__TAURI_INTERNALS__.invoke('create_backup', {appVersion: null})"

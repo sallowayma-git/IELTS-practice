@@ -135,6 +135,7 @@ import {
   sectionLabel
 } from '@/modules/practice-listening/listeningTags.js'
 import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
+import { useQuestionTimeline } from '@/modules/practice-reading/useQuestionTimeline'
 import { useNativeAnswerControls } from '@/modules/reading-unified/composables/useNativeAnswerControls.js'
 
 const props = defineProps({
@@ -182,6 +183,18 @@ let draftTimer = null
 let hydrating = false
 let dirty = false
 
+// The ledger stores changeCount / visitCount / elapsedMs / firstTryCorrect per
+// question. A page that submits an empty timeline makes all four zero, so the
+// same tracker the reading page uses owns this state here too.
+const timeline = useQuestionTimeline({
+  payloadSource: () => payload.value,
+  readOnlySource: () => reviewMode.value,
+  getRawAnswer: (questionId) => getRawAnswer(questionId),
+  getDisplayLabel: (questionId) => String(
+    payload.value?.questionDisplayMap?.[questionId] || String(questionId || '').replace(/^q/i, '')
+  )
+})
+
 const {
   questionOrder,
   answeredCount,
@@ -194,6 +207,7 @@ const {
 } = useReadingAnswers({
   payloadSource: () => payload.value,
   readOnlySource: () => reviewMode.value,
+  onTrack: timeline.recordAnswerTimeline,
   onMutate: (_questionId, _value, metadata) => {
     if (!hydrating && metadata?.changed) {
       dirty = true
@@ -211,7 +225,8 @@ const nativeControls = useNativeAnswerControls({
   setAnswer,
   isDragDropControl: () => false,
   syncDropzoneControl: () => {},
-  onAnswerInput: () => {
+  onAnswerInput: (questionIds) => {
+    questionIds.forEach((questionId) => timeline.recordQuestionVisit(questionId))
     if (!hydrating) scheduleDraftSave()
   }
 })
@@ -257,13 +272,28 @@ function firstPresentSection() {
   return present || 1
 }
 
+function sectionFirstQuestion(section) {
+  for (const group of payload.value?.questionGroups || []) {
+    if (Number(group?.section) !== section) continue
+    const first = Array.isArray(group?.questionIds) ? String(group.questionIds[0] || '') : ''
+    if (first) return first
+  }
+  return ''
+}
+
 function syncDomAnswers() {
   nativeControls.syncDomAnswers()
 }
 
 function selectSection(section) {
   const target = sectionNav.value.find((entry) => entry.section === section)
-  if (!target || target.disabled || section === activeSection.value) return
+  if (!target || target.disabled) return
+  // Opening a section is navigation: it ends the previous question's elapsed
+  // clock and starts the section's first question, exactly like scrolling to a
+  // question on the reading page.
+  const firstQuestion = sectionFirstQuestion(section)
+  if (firstQuestion) timeline.recordQuestionVisit(firstQuestion)
+  if (section === activeSection.value) return
   activeSection.value = section
   void nextTick(() => syncDomAnswers())
 }
@@ -288,14 +318,16 @@ async function saveDraftNow() {
   if (reviewMode.value || !payload.value || !asset.value?.id) return
   if (!attemptId.value) attemptId.value = listeningAttempt.newAttemptId()
   if (!draftKey) draftKey = listeningAttempt.newIdempotencyKey('draft')
+  // Flush first: the open question's elapsed time belongs to this save.
+  timeline.flushActiveQuestionVisit()
   await listeningAttempt.persistDraft({
     attemptId: attemptId.value,
     assetId: asset.value.id,
     assetRevision: asset.value.schemaVersion,
     assetFingerprint: asset.value.fingerprint,
     answers: snapshotAnswers(),
-    markedQuestions: [],
-    questionTimeline: [],
+    markedQuestions: timeline.markedQuestions.value.slice(),
+    questionTimeline: timeline.buildPersistedQuestionTimeline(),
     titleSnapshot: pageTitle.value,
     timerSnapshot: null,
     idempotencyKey: draftKey
@@ -318,6 +350,10 @@ async function restoreDraft() {
   if (Number.isFinite(startedAt) && startedAt > 0) startedAtMs.value = startedAt
   hydrating = true
   try {
+    // Restore the timeline before answers: assigning a hydrated answer must
+    // never look like a learner edit, and the saved change/visit counts own
+    // that question from here on.
+    timeline.hydrateFromDraftAnswers(draft.answers)
     for (const entry of draft.answers || []) {
       const questionId = String(entry?.questionId ?? entry?.question_id ?? '').trim()
       if (!questionId) continue
@@ -363,14 +399,16 @@ async function submitAnswers() {
   try {
     if (!attemptId.value) attemptId.value = listeningAttempt.newAttemptId()
     if (!submitKey) submitKey = listeningAttempt.newIdempotencyKey('submit')
+    // Flush first: the open question's elapsed time belongs to this submit.
+    timeline.flushActiveQuestionVisit()
     const { submission } = await listeningAttempt.submit({
       attemptId: attemptId.value,
       assetId: asset.value.id,
       assetRevision: asset.value.schemaVersion,
       assetFingerprint: asset.value.fingerprint,
       answers: snapshotAnswers(),
-      markedQuestions: [],
-      questionTimeline: [],
+      markedQuestions: timeline.markedQuestions.value.slice(),
+      questionTimeline: timeline.buildPersistedQuestionTimeline(),
       durationMs: Math.max(0, Date.now() - startedAtMs.value),
       titleSnapshot: pageTitle.value,
       idempotencyKey: submitKey
@@ -410,6 +448,7 @@ async function initialize() {
   draftRestored.value = false
   submitted.value = false
   dirty = false
+  timeline.reset()
   try {
     await loadListeningAsset(props.assetId)
     initializeAnswers(payload.value)
@@ -437,6 +476,7 @@ onBeforeUnmount(() => {
     clearTimeout(draftTimer)
     draftTimer = null
   }
+  timeline.flushActiveQuestionVisit()
   if (!reviewMode.value && !submitted.value && dirty) {
     void saveDraftNow().catch((saveError) => {
       console.warn('离开听力页面前保存草稿失败:', saveError)
