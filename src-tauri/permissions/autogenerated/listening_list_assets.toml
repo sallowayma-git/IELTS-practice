@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-listening-list-assets"
+description = "Enables the listening_list_assets command without any pre-configured scope."
+commands.allow = ["listening_list_assets"]
+
+[[permission]]
+identifier = "deny-listening-list-assets"
+description = "Denies the listening_list_assets command without any pre-configured scope."
+commands.deny = ["listening_list_assets"]

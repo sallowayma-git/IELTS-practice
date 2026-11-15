@@ -267,6 +267,55 @@ function emitEvaluation(state, host, evaluationId, attemptId, channel, taskType)
   })
 }
 
+// ------------------------------------------------------------ listening ----
+
+/** Mirrors crates/ielts-db ListeningSubmitResult and the AttemptRecord wire shape. */
+function recordListeningSubmission(state, cmd) {
+  const asset = state.listening.assets.find((entry) => entry.id === cmd.assetId)
+  const payload = ownOf(state.listening.payloads, cmd.assetId)?.payload
+  const key = payload?.answerKey || {}
+  const questionIds = Object.keys(key)
+  const answers = questionIds.map((questionId) => {
+    const answer = ownOf(cmd.answers, questionId) ?? null
+    return {
+      questionId,
+      answer,
+      isCorrect: answer != null && sameAnswer(answer, key[questionId]),
+      weight: 1,
+      questionKind: null,
+      marked: (cmd.markedQuestions || []).includes(questionId),
+    }
+  })
+  const correctCount = answers.filter((row) => row.isCorrect).length
+  const questionCount = answers.length
+  const scoreValue = questionCount ? Math.round((correctCount / questionCount) * 100) / 100 : 0
+  const attemptId = cmd.attemptId || idFrom('listening')
+  const submittedAt = new Date().toISOString()
+  const startedAt = new Date(Date.parse(submittedAt) - (cmd.durationMs ?? 0)).toISOString()
+  const attempt = {
+    schemaVersion: 1,
+    id: attemptId,
+    activity: 'listening',
+    mode: 'single',
+    suiteId: null,
+    status: 'completed',
+    startedAt,
+    submittedAt,
+    completedAt: submittedAt,
+    durationMs: cmd.durationMs ?? 0,
+    scoreValue,
+    scoreScale: 'ratio',
+    correctCount,
+    questionCount,
+    assetId: cmd.assetId,
+    titleSnapshot: cmd.titleSnapshot || asset?.title || 'Listening practice',
+    answers,
+    annotations: [],
+  }
+  state.listening.drafts[attemptId] = { ...attempt }
+  return { attempt, scoreValue, correctCount, questionCount, idempotentReplay: false }
+}
+
 // ------------------------------------------------------------ handlers ----
 
 export function createHandlers(state, host) {
@@ -308,6 +357,45 @@ export function createHandlers(state, host) {
       return true
     },
     reading_submit_attempt: ({ cmd }) => recordReadingSubmission(state, cmd),
+    listening_list_assets: () => clone(state.listening.assets),
+    listening_get_asset_payload: ({ assetId }) => {
+      const entry = ownOf(state.listening.payloads, assetId)
+      if (!entry) throw fail('listening.error', `listening asset not found: ${assetId}`)
+      return clone(entry.payload)
+    },
+    listening_get_audio_data_url: ({ assetId }) => {
+      if (!ownOf(state.listening.payloads, assetId)) throw fail('listening.error', `listening asset not found: ${assetId}`)
+      return null
+    },
+    listening_save_draft: ({ cmd }) => {
+      state.listening.drafts[cmd.attemptId] = { ...cmd, status: 'draft', updatedAt: new Date().toISOString() }
+      return {
+        schemaVersion: 1,
+        id: cmd.attemptId,
+        activity: 'listening',
+        assetId: cmd.assetId,
+        mode: 'single',
+        suiteId: null,
+        status: 'draft',
+        startedAt: new Date().toISOString(),
+        submittedAt: null,
+        completedAt: null,
+        durationMs: 0,
+        scoreValue: null,
+        scoreScale: null,
+        correctCount: null,
+        questionCount: null,
+        titleSnapshot: cmd.titleSnapshot || null,
+        answers: [],
+        annotations: [],
+      }
+    },
+    listening_get_open_draft: ({ assetId }) => {
+      const draft = Object.values(state.listening.drafts)
+        .find((entry) => entry.assetId === assetId && entry.status === 'draft')
+      return draft ? clone(draft) : null
+    },
+    listening_submit_attempt: ({ cmd }) => recordListeningSubmission(state, cmd),
     suite_create: sessionStub('suite'),
     suite_get: ({ suiteId }) => ({ id: suiteId, kind: 'suite', status: 'active', passages: [] }),
     suite_submit_passage: () => ({ status: 'completed' }),

@@ -921,6 +921,42 @@
           "markdownDescription": "Enables the list_settings command without any pre-configured scope."
         },
         {
+          "description": "Enables the listening_get_asset_payload command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listening-get-asset-payload",
+          "markdownDescription": "Enables the listening_get_asset_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the listening_get_audio_data_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listening-get-audio-data-url",
+          "markdownDescription": "Enables the listening_get_audio_data_url command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the listening_get_open_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listening-get-open-draft",
+          "markdownDescription": "Enables the listening_get_open_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the listening_list_assets command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listening-list-assets",
+          "markdownDescription": "Enables the listening_list_assets command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the listening_save_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listening-save-draft",
+          "markdownDescription": "Enables the listening_save_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the listening_submit_attempt command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-listening-submit-attempt",
+          "markdownDescription": "Enables the listening_submit_attempt command without any pre-configured scope."
+        },
+        {
           "description": "Enables the memorize_create command without any pre-configured scope.",
           "type": "string",
           "const": "allow-memorize-create",
@@ -1861,6 +1897,42 @@
           "type": "string",
           "const": "deny-list-settings",
           "markdownDescription": "Denies the list_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listening_get_asset_payload command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listening-get-asset-payload",
+          "markdownDescription": "Denies the listening_get_asset_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listening_get_audio_data_url command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listening-get-audio-data-url",
+          "markdownDescription": "Denies the listening_get_audio_data_url command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listening_get_open_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listening-get-open-draft",
+          "markdownDescription": "Denies the listening_get_open_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listening_list_assets command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listening-list-assets",
+          "markdownDescription": "Denies the listening_list_assets command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listening_save_draft command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listening-save-draft",
+          "markdownDescription": "Denies the listening_save_draft command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the listening_submit_attempt command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-listening-submit-attempt",
+          "markdownDescription": "Denies the listening_submit_attempt command without any pre-configured scope."
         },
         {
           "description": "Denies the memorize_create command without any pre-configured scope.",

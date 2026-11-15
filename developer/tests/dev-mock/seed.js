@@ -677,6 +677,14 @@ export function createSeedState(now = Date.now()) {
       payloads: buildReadingPayloads(assets),
       drafts: {},
     },
+    // The bundled listening pack ships with an empty manifest, so the mock
+    // starts empty too. Shapes stay real: drafts and submissions are created
+    // by the handlers, exactly like reading.
+    listening: {
+      assets: [],
+      payloads: {},
+      drafts: {},
+    },
     history: { items: history.items, details: history.details, retention: { maxTerminalAttempts: 200 }, clearTokens: {} },
     topics: buildTopics(now),
     prompts: buildWritingPrompts(now),

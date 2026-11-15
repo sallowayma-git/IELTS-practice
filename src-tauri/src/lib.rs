@@ -273,6 +273,12 @@ pub fn run() {
             commands::reading::reading_get_open_draft,
             commands::reading::reading_patch_answer,
             commands::reading::reading_submit_attempt,
+            commands::listening::listening_list_assets,
+            commands::listening::listening_get_asset_payload,
+            commands::listening::listening_get_audio_data_url,
+            commands::listening::listening_save_draft,
+            commands::listening::listening_get_open_draft,
+            commands::listening::listening_submit_attempt,
             commands::modes::suite_create,
             commands::modes::suite_get,
             commands::modes::suite_submit_passage,
@@ -351,6 +357,27 @@ pub fn run() {
                 assets = seed_report.imported,
                 "validated and indexed bundled reading resources"
             );
+            // The listening pack is optional: a build without it stays usable,
+            // and a bad pack is logged instead of aborting startup.
+            let listening_pack = app.path().resource_dir()?.join("listening");
+            if listening_pack.join("manifest.json").is_file() {
+                match db
+                    .with_conn(|conn| ielts_db::seed_builtin_listening_pack(conn, &listening_pack))
+                {
+                    Ok(assets) => tracing::info!(
+                        assets,
+                        "validated and indexed bundled listening resources"
+                    ),
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to seed bundled listening resources")
+                    }
+                }
+            } else {
+                tracing::info!(
+                    path = %listening_pack.display(),
+                    "listening resource pack absent; skipping seed"
+                );
+            }
             match db.with_conn(|conn| ielts_db::recover_interrupted_sessions(conn)) {
                 Ok(n) if n > 0 => {
                     tracing::warn!(count = n, "marked interrupted evaluation sessions")
