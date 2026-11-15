@@ -1,5 +1,11 @@
 <template>
-  <div id="question-groups" class="listening-question-pane" data-listening-question-groups>
+  <div
+    id="question-groups"
+    class="listening-question-pane"
+    data-listening-question-groups
+    @input="$emit('question-input', $event)"
+    @change="$emit('question-input', $event)"
+  >
     <article
       v-for="group in groups"
       :key="group.groupId"

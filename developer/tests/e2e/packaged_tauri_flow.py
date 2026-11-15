@@ -44,6 +44,12 @@ TOPICS_SCREENSHOT = ROOT / "developer/tests/e2e/reports/topics-current.png"
 NOTEBOOK_SCREENSHOT = ROOT / "developer/tests/e2e/reports/notebook-current.png"
 NOTEBOOK_WEEKLY_SCREENSHOT = ROOT / "developer/tests/e2e/reports/notebook-weekly-current.png"
 DRIVER_LOG = ROOT / "developer/tests/e2e/reports/tauri-driver.log"
+LISTENING_SCREENSHOT = ROOT / "developer/tests/e2e/reports/listening-practice-current.png"
+# Staged over the shipped (empty) `listening` resource so the packaged app seeds
+# a deterministic exam: resource_dir()/listening/manifest.json is read at startup.
+LISTENING_FIXTURE = ROOT / "developer/tests/fixtures/listening-pack"
+# crates/ielts-db/migrations/0040_listening_skills.sql seeds exactly these.
+LISTENING_SKILL_COUNT = 13
 READING_P95_BUDGET_MS = 3000
 FAKE_NOW_ENV = "IELTS_ATLAS_FAKE_NOW"
 WEEKLY_MIN_OBSERVATIONS = 8  # ielts_db::WEEKLY_MIN_OBSERVATIONS
@@ -190,22 +196,26 @@ def executable_version(path: str | None) -> str | None:
         return None
 
 
+# Every check this gate can report, in report order. The blocked baseline, the
+# live run and test_packaged_receipts.py all read this one list, so a check can
+# neither be silently dropped nor invented at report time.
+FLOW_CHECKS = (
+    "launch", "vueRoutes", "uiRouteVisuals", "readingIpc", "bundledResources",
+    "agentIpcBoundary", "agentDefaultWorkspace", "agentWorkspaceRun",
+    "promptAuthorityBoundary", "ipcAllowList", "readingArchiveBoundary",
+    "historyRetentionBoundary", "readingView", "readingPerformance", "notesDialog",
+    "readingSubmitBoundary", "listeningIpc", "listeningView",
+    "listeningSubmitBoundary", "coachReceipts", "selectionCoachUi",
+    "selectionCoachRequest", "automaticDaily", "dailyRestartDedupe",
+    "weeklyReport", "backupPathBoundary", "updaterBoundary", "sqliteRestart",
+)
+
+
 def blocked(reason: str, missing: list[str]) -> int:
     report = {"schemaVersion": 2, "generatedAt": datetime.now(timezone.utc).isoformat(),
               "status": "blocked", "exitCode": 2, "target": "packaged-tauri-2",
               "reason": reason, "missingDependencies": missing,
-              "checks": {"launch": "blocked", "vueRoutes": "blocked", "readingIpc": "blocked",
-                          "uiRouteVisuals": "blocked", "agentIpcBoundary": "blocked",
-                          "agentWorkspaceRun": "blocked",
-                         "bundledResources": "blocked", "readingView": "blocked",
-                         "readingPerformance": "blocked", "notesDialog": "blocked",
-                         "readingSubmitBoundary": "blocked",
-                         "backupPathBoundary": "blocked",
-                         "updaterBoundary": "blocked",
-                         "sqliteRestart": "blocked",
-                         "coachReceipts": "blocked", "automaticDaily": "blocked",
-                         "dailyRestartDedupe": "blocked", "weeklyReport": "blocked",
-                         "promptAuthorityBoundary": "blocked", "ipcAllowList": "blocked"}}
+              "checks": {name: "blocked" for name in FLOW_CHECKS}}
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -271,11 +281,12 @@ def wait_for_vue(driver: Driver, timeout_seconds: int = 30):
     raise RuntimeError(f"Vue root did not mount: {last}")
 
 
-def wait_for_value(driver: Driver, source: str, timeout_seconds: int = 15, *, label: str = "WebDriver condition"):
+def wait_for_value(driver: Driver, source: str, timeout_seconds: int = 15, *, label: str = "WebDriver condition",
+                   args: list | None = None):
     deadline = time.time() + timeout_seconds
     last = None
     while time.time() < deadline:
-        last = driver.script(source)
+        last = driver.script(source, args)
         if last:
             return last
         time.sleep(0.1)
@@ -1364,12 +1375,22 @@ def check_notebook_week(driver: Driver, weekly_run: dict) -> dict:
             "factValue": rendered_volume, "soulNotes": notes, "soulUndo": notice}
 
 
-def stage_test_runtime(app: Path) -> tuple[tempfile.TemporaryDirectory[str], Path, dict]:
+def stage_test_runtime(app: Path, resource_overrides: dict[str, Path] | None = None) -> tuple[tempfile.TemporaryDirectory[str], Path, dict]:
+    """Copy the built host, its externalBin and every declared resource.
+
+    `resource_overrides` swaps the source directory for a declared resource
+    target (e.g. `{"listening": LISTENING_FIXTURE}`). It goes through the same
+    copytree as the shipped packs, so bytes stay byte-identical and the
+    manifest's sha256 still matches.
+    """
     config_path = ROOT / "src-tauri/tauri.conf.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
     resources = ((config.get("bundle") or {}).get("resources") or {})
     if not isinstance(resources, dict) or not resources:
         raise RuntimeError("tauri.conf.json does not declare packaged runtime resources")
+    overrides = {str(name): Path(path).resolve() for name, path in (resource_overrides or {}).items()}
+    undeclared = sorted(set(overrides) - {str(target) for target in resources.values()})
+    require(not undeclared, f"resource overrides target an undeclared resource: {undeclared}")
     external_bins = ((config.get("bundle") or {}).get("externalBin") or [])
     require(isinstance(external_bins, list) and len(external_bins) == 1,
             "packaged runtime requires one declared externalBin")
@@ -1390,7 +1411,9 @@ def stage_test_runtime(app: Path) -> tuple[tempfile.TemporaryDirectory[str], Pat
     require(source_sidecar.is_file() and sha256_file(source_sidecar) == expected_hash,
             "externalBin is missing or differs from its SHA-256 manifest")
 
-    temporary = tempfile.TemporaryDirectory(prefix="ielts-tauri-e2e-")
+    # A throwaway staging tree. A still-running sidecar can hold its own .exe on
+    # Windows, so a failed cleanup must never turn a finished run into a crash.
+    temporary = tempfile.TemporaryDirectory(prefix="ielts-tauri-e2e-", ignore_cleanup_errors=True)
     runtime_root = Path(temporary.name).resolve()
     runtime_app = runtime_root / app.name
     try:
@@ -1400,7 +1423,8 @@ def stage_test_runtime(app: Path) -> tuple[tempfile.TemporaryDirectory[str], Pat
         require(runtime_sidecar.is_file() and sha256_file(runtime_sidecar) == expected_hash,
                 "staged externalBin SHA-256 mismatch")
         for source_name, target_name in resources.items():
-            source = (config_path.parent / str(source_name)).resolve()
+            override = overrides.get(str(target_name))
+            source = override if override is not None else (config_path.parent / str(source_name)).resolve()
             destination = (runtime_root / str(target_name)).resolve()
             if destination != runtime_root and runtime_root not in destination.parents:
                 raise RuntimeError(f"Tauri resource target escapes runtime directory: {target_name}")
@@ -1442,6 +1466,372 @@ def wait_for_reading_view(driver: Driver, timeout_seconds: int = 30):
             return last
         time.sleep(0.1)
     raise RuntimeError(f"Reading view did not become ready: {last}")
+
+
+def listening_fixture() -> dict:
+    """The staged fixture pack: its manifest entry plus the exam it declares."""
+    manifest = json.loads((LISTENING_FIXTURE / "manifest.json").read_text(encoding="utf-8"))
+    require(isinstance(manifest.get("assets"), list) and len(manifest["assets"]) == 1,
+            "listening fixture must declare exactly one exam")
+    entry = manifest["assets"][0]
+    require(sha256_file(LISTENING_FIXTURE / entry["file"]) == entry["sha256"],
+            "listening fixture exam bytes do not match the manifest sha256")
+    exam = json.loads((LISTENING_FIXTURE / entry["file"]).read_text(encoding="utf-8"))
+    require(exam.get("examId") == entry["id"], "listening fixture manifest and exam disagree")
+    return {"entry": entry, "exam": exam}
+
+
+def listening_question_kinds(exam: dict) -> dict[str, str]:
+    """questionId -> declared kind, straight from the fixture's groups."""
+    return {question_id: group["kind"]
+            for group in exam["questionGroups"] for question_id in group["questionIds"]}
+
+
+def listening_sections(exam: dict) -> dict[str, int]:
+    """questionId -> declared section, straight from the fixture's groups."""
+    return {question_id: int(group["section"])
+            for group in exam["questionGroups"] for question_id in group["questionIds"]}
+
+
+def listening_total_marks(exam: dict) -> float:
+    """The exam's mark total, mirroring crates/ielts-db/src/reading/scoring.rs:
+    only a multiple-answer (`multi_choice`, checkbox) key weighs more than one
+    mark; a list anywhere else is a set of alternatives for a single mark."""
+    kinds = listening_question_kinds(exam)
+    total = 0.0
+    for question_id in exam["questionOrder"]:
+        key = exam["answerKey"][question_id]
+        total += float(len(key)) if kinds[question_id] == "multi_choice" and isinstance(key, list) else 1.0
+    return total
+
+
+def listening_answer(key) -> str:
+    """The text to type for one answer-key entry (first alternative of a list)."""
+    return str(key[0] if isinstance(key, list) and key else key)
+
+
+def wait_for_listening_view(driver: Driver, marker: str, timeout_seconds: int = 30):
+    """Wait for the listening page marker; a page-level error fails immediately."""
+    deadline = time.time() + timeout_seconds
+    last = None
+    while time.time() < deadline:
+        last = driver.script("""
+            const page = document.querySelector('[data-listening-practice]');
+            const failure = document.querySelector('[data-listening-practice] [role=alert]');
+            return {
+              ready: Boolean(page && page.querySelector(arguments[0])),
+              error: failure ? failure.textContent.trim() : '',
+              hash: location.hash
+            };
+        """, [marker])
+        if isinstance(last, dict) and last.get("error"):
+            raise RuntimeError(f"Listening view failed: {last}")
+        if isinstance(last, dict) and last.get("ready"):
+            return last
+        time.sleep(0.1)
+    raise RuntimeError(f"Listening view did not become ready: {last}")
+
+
+def fill_native_answer(driver: Driver, question_id: str, value: str) -> dict:
+    """Type one answer into the rendered native control, the way a learner does.
+
+    The answer store only moves on a real DOM event (the same controls and
+    handler the reading page uses), so this check cannot pass by writing the
+    store directly.
+    """
+    return driver.script(r"""
+        const input = document.querySelector('#question-groups input[name="' + arguments[0] + '"]')
+          || document.querySelector('#question-groups textarea[name="' + arguments[0] + '"]');
+        if (!input) return {found: false};
+        input.focus();
+        input.value = arguments[1];
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.dispatchEvent(new Event('change', {bubbles: true}));
+        return {found: true, name: input.name, value: input.value};
+    """, [question_id, value])
+
+
+def check_listening_ipc(driver: Driver) -> dict:
+    """listening_list_assets / payload / audio through the real command bridge."""
+    exam = listening_fixture()["exam"]
+    exam_id = exam["examId"]
+    listing = driver.script("return window.__TAURI_INTERNALS__.invoke('listening_list_assets')")
+    require(isinstance(listing, dict) and listing.get("ok") is True, f"listening_list_assets failed: {listing}")
+    assets = listing.get("data")
+    require(isinstance(assets, list) and bool(assets), f"listening_list_assets returned no assets: {listing}")
+    require(all(isinstance(entry, dict) and entry.get("activity") == "listening" for entry in assets),
+            f"listening_list_assets returned a non-listening asset: {assets}")
+    indexed = {str(entry.get("id")) for entry in assets}
+    require(exam_id in indexed, f"staged listening fixture {exam_id} is not indexed: {sorted(indexed)}")
+    payload = driver.script(
+        "return window.__TAURI_INTERNALS__.invoke('listening_get_asset_payload', {assetId: arguments[0]})",
+        [exam_id])
+    require(isinstance(payload, dict) and payload.get("ok") is True and isinstance(payload.get("data"), dict),
+            f"listening_get_asset_payload failed for {exam_id}: {payload}")
+    view = payload["data"]
+    require(view.get("examId") == exam_id,
+            f"listening payload lost the fixture examId: {view.get('examId')!r}")
+    require(view.get("questionOrder") == exam["questionOrder"],
+            f"listening payload questionOrder differs from the fixture: {view.get('questionOrder')!r}")
+    require(view.get("answerKey") == exam["answerKey"],
+            "listening payload answer key differs from the fixture")
+    groups = view.get("questionGroups")
+    require(isinstance(groups, list) and len(groups) == len(exam["questionGroups"]),
+            f"listening payload questionGroups are incomplete: {groups}")
+    expected_groups = [(group["groupId"], int(group["section"]), group["kind"], list(group["questionIds"]))
+                       for group in exam["questionGroups"]]
+    actual_groups = [(group.get("groupId"), int(group.get("section") or 0), group.get("kind"),
+                      list(group.get("questionIds") or [])) for group in groups]
+    require(actual_groups == expected_groups,
+            f"listening payload questionGroups differ from the fixture: {actual_groups}")
+    audio = driver.script(
+        "return window.__TAURI_INTERNALS__.invoke('listening_get_audio_data_url', {assetId: arguments[0]})",
+        [exam_id])
+    require(isinstance(audio, dict) and audio.get("ok") is True, f"listening_get_audio_data_url failed: {audio}")
+    data_url = audio.get("data")
+    require(isinstance(data_url, str) and data_url.startswith("data:audio/"),
+            f"listening audio is not a data URL: {str(data_url)[:64]!r}")
+    return {"assetId": exam_id, "assetCount": len(assets),
+            "questionGroups": len(groups), "questions": len(view["questionOrder"]),
+            "audioPrefix": data_url[:22]}
+
+
+def check_listening_view(driver: Driver) -> dict:
+    """Open the fixture exam, answer through the native input, submit, read review."""
+    exam = listening_fixture()["exam"]
+    exam_id = exam["examId"]
+    sections = listening_sections(exam)
+    section_counts = {section: sum(1 for value in sections.values() if value == section)
+                      for section in (1, 2, 3, 4)}
+    driver.script("location.hash = arguments[0]; return true",
+                  [f"#/listening/{urllib.parse.quote(exam_id, safe='')}"])
+    wait_for_listening_view(driver, "[data-listening-question-groups]")
+    audio = wait_for_value(driver, r"""
+        const element = document.querySelector('[data-listening-practice] audio');
+        const src = element ? element.getAttribute('src') || '' : '';
+        if (!src) return null;
+        return {src: src.slice(0, 22), controls: element.controls === true};
+    """, 30, label="listening audio element")
+    require(audio.get("controls") is True, f"listening audio is not a native controls element: {audio}")
+    require(str(audio.get("src", "")).startswith("data:audio/"),
+            f"listening audio element lost its data URL: {audio}")
+    nav = driver.script(r"""
+        return Array.from(document.querySelectorAll('.listening-section-nav__item')).map((button) => ({
+          text: button.textContent.replace(/\s+/g, ' ').trim(),
+          disabled: button.disabled === true,
+          pressed: button.getAttribute('aria-pressed')
+        }));
+    """)
+    require(isinstance(nav, list) and len(nav) == 4,
+            f"listening page does not render four section controls: {nav}")
+    for section in (1, 2, 3, 4):
+        control = nav[section - 1]
+        require(f"{section_counts[section]} 题" in str(control.get("text") or ""),
+                f"section {section} control shows the wrong question count: {control}")
+        require(control.get("disabled") is (section_counts[section] == 0),
+                f"section {section} control enabled/disabled state is wrong: {control}")
+    # Fill one answer through the real input: the fixture's first group is a
+    # text control, and its key entry is what a correct answer looks like.
+    typed = driver.script("""
+        const input = document.querySelector('#question-groups input[type="text"][name]');
+        return input ? {name: input.name} : null;
+    """)
+    require(isinstance(typed, dict) and typed.get("name"),
+            f"listening page rendered no native text input: {typed}")
+    question_id = str(typed["name"])
+    require(question_id in exam["answerKey"],
+            f"fixture has no answer key entry for the rendered input: {question_id}")
+    value = listening_answer(exam["answerKey"][question_id])
+    filled = fill_native_answer(driver, question_id, value)
+    require(filled.get("found") is True and filled.get("value") == value,
+            f"listening native input did not take the answer: {filled}")
+    expected_progress = f"已作答 1 / {len(exam['questionOrder'])} 题"
+    progress = wait_for_value(driver, r"""
+        const node = document.querySelector('.listening-practice__progress');
+        if (!node) return null;
+        const text = node.textContent.replace(/\s+/g, ' ').trim();
+        return text === arguments[0] ? text : null;
+    """, 15, label="listening answered counter", args=[expected_progress])
+    require(progress == expected_progress,
+            f"listening answer never reached the store: {progress!r} != {expected_progress!r}")
+    submitted = driver.script("""
+        const button = document.querySelector('.listening-practice__submit');
+        if (!button || button.disabled) return false;
+        button.click();
+        return true;
+    """)
+    require(submitted is True, "listening submit button was not clickable")
+    route = wait_for_value(driver, r"""
+        const match = location.hash.match(/^#\/listening\/([^/]+)\/review\/([^/?#]+)/);
+        if (!match) return null;
+        return {assetId: decodeURIComponent(match[1]), attemptId: decodeURIComponent(match[2])};
+    """, 60, label="listening review route")
+    require(route.get("assetId") == exam_id, f"listening review route lost the asset: {route}")
+    attempt_id = str(route.get("attemptId") or "")
+    require(bool(attempt_id), f"listening review route has no attempt id: {route}")
+    review = wait_for_value(driver, r"""
+        const panel = document.querySelector('[data-listening-review]');
+        const score = document.querySelector('[data-listening-score]');
+        if (!panel) return null;
+        const rows = Array.from(panel.querySelectorAll('[data-review-question-id]'));
+        return {
+          rows: rows.length,
+          questionIds: rows.map((row) => row.getAttribute('data-review-question-id')),
+          correct: panel.querySelectorAll('.listening-review__row.is-correct').length,
+          wrong: panel.querySelectorAll('.listening-review__row.is-wrong').length,
+          answers: Array.from(panel.querySelectorAll('.listening-review__answers dd'))
+            .map((node) => node.textContent.trim()),
+          // The score is two adjacent elements ("1" and "/ 7"), so read the
+          // rendered numbers instead of matching concatenated textContent.
+          score: score ? {
+            correct: score.querySelector('.listening-score__value strong')?.textContent.trim() || '',
+            total: score.querySelector('.listening-score__value span')?.textContent.trim() || '',
+            percent: score.querySelector('.listening-score__percent')?.textContent.trim() || ''
+          } : null
+        };
+    """, 60, label="listening review content")
+    require(review["rows"] == len(exam["questionOrder"]),
+            f"listening review rendered {review['rows']} rows, expected {len(exam['questionOrder'])}")
+    require(sorted(review["questionIds"]) == sorted(exam["questionOrder"]),
+            f"listening review rows differ from the exam: {review['questionIds']}")
+    require(review["correct"] == 1 and review["wrong"] == len(exam["questionOrder"]) - 1,
+            f"listening review verdicts are wrong: {review}")
+    marks = listening_total_marks(exam)
+    score = review.get("score") or {}
+    require(score.get("correct") == "1",
+            f"listening review score is not 1 correct answer: {review.get('score')!r}")
+    require(score.get("total") == f"/ {int(marks)}",
+            f"listening review denominator is not /{int(marks)}: {review.get('score')!r}")
+    require(score.get("percent") == f"{round(1000 / marks) / 10}%",
+            f"listening review percentage is not 1/{int(marks)}: {review.get('score')!r}")
+    require(value in review["answers"],
+            f"listening review lost the typed answer {value!r}: {review['answers']}")
+    driver.screenshot(LISTENING_SCREENSHOT)
+    return {"assetId": exam_id, "attemptId": attempt_id, "answered": question_id,
+            "answer": value, "scoreCorrect": score["correct"], "scoreTotal": score["total"],
+            "scorePercent": score["percent"],
+            "screenshot": str(LISTENING_SCREENSHOT.resolve())}
+
+
+def assert_listening_ledger(app_data: Path, exam: dict, asset_id: str, attempt_id: str,
+                            answered_question: str, marks: float) -> dict:
+    """The listening attempt, its answers and its ledger, read from SQLite."""
+    kinds = listening_question_kinds(exam)
+    sections = listening_sections(exam)
+    with closing(database_connection(app_data)) as conn:
+        conn.execute("BEGIN")
+        attempt = conn.execute("SELECT * FROM attempts WHERE id=?", (attempt_id,)).fetchone()
+        require(attempt is not None, f"listening attempt {attempt_id} is not in SQLite")
+        require(attempt["activity"] == "listening", f"attempt activity is {attempt['activity']!r}")
+        require(attempt["status"] == "completed" and attempt["completed_at"] and attempt["submitted_at"],
+                f"listening attempt is not terminal: {dict(attempt)}")
+        require(attempt["asset_id"] == asset_id, f"attempt asset is {attempt['asset_id']!r}")
+        require(attempt["score_scale"] == "ratio", f"attempt score scale is {attempt['score_scale']!r}")
+        require(attempt["question_count"] == int(marks),
+                f"attempt question_count is {attempt['question_count']}, expected {int(marks)}")
+        require(float(attempt["correct_count"] or 0) == 1.0,
+                f"attempt correct_count is {attempt['correct_count']}, expected 1")
+        require(math.isclose(float(attempt["score_value"] or 0), 1.0 / marks, abs_tol=1e-9),
+                f"attempt score_value {attempt['score_value']} != 1/{int(marks)}")
+        answers = conn.execute(
+            "SELECT question_id,answer_json,is_correct,question_kind FROM attempt_answers "
+            "WHERE attempt_id=? ORDER BY question_id", (attempt_id,)).fetchall()
+        require(len(answers) == len(exam["questionOrder"]),
+                f"attempt has {len(answers)} answer rows, expected {len(exam['questionOrder'])}")
+        require(all(row["question_kind"] for row in answers),
+                "a listening attempt answer row has no question_kind")
+        require(all(row["question_kind"] == kinds[row["question_id"]] for row in answers),
+                "a listening answer kind differs from the fixture, "
+                f"{[(row['question_id'], row['question_kind']) for row in answers]}")
+        answered = [row for row in answers
+                    if json.loads(row["answer_json"]) not in ("", [], None)]
+        require(len(answered) == 1 and answered[0]["question_id"] == answered_question,
+                f"unexpected answered rows: {[(row['question_id'], row['answer_json']) for row in answered]}")
+        require(answered[0]["is_correct"] == 1, "the typed correct answer was not scored correct")
+        events = conn.execute(
+            "SELECT * FROM learning_events WHERE attempt_id=? ORDER BY event_type,question_id",
+            (attempt_id,)).fetchall()
+        completed = [row for row in events if row["event_type"] == "attempt_completed"]
+        outcomes = [row for row in events if row["event_type"] == "listening_question_outcome"]
+        require(len(completed) == 1,
+                f"attempt has {len(completed)} attempt_completed events, expected 1")
+        require(len(outcomes) == len(exam["questionOrder"]),
+                f"attempt has {len(outcomes)} listening_question_outcome events, "
+                f"expected {len(exam['questionOrder'])}")
+        require(len(events) == len(completed) + len(outcomes),
+                f"attempt carries unrelated learning events: {[row['event_type'] for row in events]}")
+        require(all(row["activity"] == "listening" for row in events),
+                "a listening learning event has the wrong activity")
+        require(all(row["asset_id"] == asset_id and row["attempt_id"] == attempt_id for row in events),
+                "a listening learning event is bound to another attempt/asset")
+        seeded = {row[0] for row in conn.execute(
+            "SELECT skill_key FROM skill_catalog WHERE activity='listening' AND active=1")}
+        require(len(seeded) == LISTENING_SKILL_COUNT,
+                f"expected {LISTENING_SKILL_COUNT} seeded listening skill keys, found {sorted(seeded)}")
+        summary = json.loads(completed[0]["payload_json"])
+        require(summary.get("correctCount") == attempt["correct_count"]
+                and summary.get("questionCount") == attempt["question_count"]
+                and summary.get("scoreValue") == attempt["score_value"],
+                f"attempt_completed payload disagrees with the attempt: {summary}")
+        for row in outcomes:
+            payload = json.loads(row["payload_json"])
+            question_id = row["question_id"]
+            require(question_id in sections, f"ledger question {question_id} is not in the exam")
+            require(payload.get("section") == sections[question_id] and payload["section"] in (1, 2, 3, 4),
+                    f"ledger question {question_id} carries section {payload.get('section')!r}")
+            require(row["skill_key"] in seeded,
+                    f"ledger question {question_id} skill {row['skill_key']!r} is not a seeded listening key")
+            require(row["skill_key"] == f"listening.{kinds[question_id]}"
+                    and payload.get("skillKey") == row["skill_key"],
+                    f"ledger question {question_id} skill {row['skill_key']!r} disagrees with its kind")
+    return {"attemptId": attempt_id, "answers": len(answers), "events": len(events),
+            "outcomes": len(outcomes), "skillKeys": len(seeded)}
+
+
+def check_listening_submit_boundary(driver: Driver, app_data: Path, exam: dict, asset_id: str,
+                                    attempt_id: str, answered_question: str, marks: float) -> dict:
+    """Idempotent replay and the terminal-attempt boundary, proven in SQLite."""
+    receipt = assert_listening_ledger(app_data, exam, asset_id, attempt_id, answered_question, marks)
+    with closing(database_connection(app_data)) as conn:
+        key_row = conn.execute(
+            "SELECT idempotency_key FROM attempt_idempotency "
+            "WHERE scope='listening.submit' AND attempt_id=?", (attempt_id,)).fetchone()
+    require(key_row is not None, f"listening submit left no idempotency receipt for {attempt_id}")
+    submission_key = key_row[0]
+
+    def counts() -> dict:
+        with closing(database_connection(app_data)) as conn:
+            conn.execute("BEGIN")
+            return {
+                "attempts": conn.execute("SELECT COUNT(*) FROM attempts WHERE id=?", (attempt_id,)).fetchone()[0],
+                "answers": conn.execute("SELECT COUNT(*) FROM attempt_answers WHERE attempt_id=?",
+                                        (attempt_id,)).fetchone()[0],
+                "events": conn.execute("SELECT COUNT(*) FROM learning_events WHERE attempt_id=?",
+                                       (attempt_id,)).fetchone()[0],
+            }
+
+    before = counts()
+    replay = invoke_data(driver, "listening_submit_attempt", {"cmd": {
+        "attemptId": attempt_id, "assetId": asset_id, "answers": {answered_question: "replayed"},
+        "markedQuestions": [], "questionTimeline": [], "idempotencyKey": submission_key}})
+    require(replay["attempt"]["id"] == attempt_id and replay.get("idempotentReplay") is True,
+            f"replayed listening submit was not idempotent: {replay}")
+    require(counts() == before,
+            f"replayed listening submit changed ledger rows: {before} -> {counts()}")
+    fresh = driver.script("""
+        return window.__TAURI_INTERNALS__.invoke('listening_submit_attempt', {cmd: {
+          attemptId: arguments[0], assetId: arguments[1], answers: {},
+          markedQuestions: [], questionTimeline: [], idempotencyKey: 'e2e-listening-fresh-key'
+        }});
+    """, [attempt_id, asset_id])
+    require(isinstance(fresh, dict) and fresh.get("ok") is False,
+            f"a completed listening attempt accepted a fresh-key submit: {fresh}")
+    error = fresh.get("error") or {}
+    require(error.get("code") == "listening.error", f"fresh-key submit failed with the wrong code: {fresh}")
+    require("only an open listening attempt" in str(error.get("message") or ""),
+            f"fresh-key submit failed for the wrong reason: {error}")
+    require(counts() == before, f"rejected listening submit changed ledger rows: {before} -> {counts()}")
+    return receipt
 
 
 def capture_route_visual(driver: Driver, route: str, selector: str, screenshot: Path) -> dict:
@@ -1538,8 +1928,9 @@ def main() -> int:
     driver_port, native_port = pick_ports(configured_port)
     driver_url = configured_url or f"http://127.0.0.1:{driver_port}"
     driver = Driver(driver_url)
-    checks = {"coachReceipts": "not_run", "automaticDaily": "not_run", "dailyRestartDedupe": "not_run",
-              "weeklyReport": "not_run"}
+    # Every declared check starts as "not_run": a skipped check can never be
+    # mistaken for a passing one, and the report always carries the full schema.
+    checks = {name: "not_run" for name in FLOW_CHECKS}
     local_now = datetime.now().astimezone()
     weekly_now = weekly_fake_now(local_now).isoformat(timespec="seconds")
     weekday_now = weekday_fake_now(local_now).isoformat(timespec="seconds")
@@ -1562,8 +1953,9 @@ def main() -> int:
     fake_agent_provider = None
     fake_coach_provider = None
     try:
-        isolated_app_data = tempfile.TemporaryDirectory(prefix="ielts-tauri-appdata-")
-        staged_runtime, runtime_app, sidecar_metadata = stage_test_runtime(app)
+        isolated_app_data = tempfile.TemporaryDirectory(prefix="ielts-tauri-appdata-", ignore_cleanup_errors=True)
+        staged_runtime, runtime_app, sidecar_metadata = stage_test_runtime(
+            app, {"listening": LISTENING_FIXTURE})
         metadata["stagedExternalBin"] = sidecar_metadata
         # The product workspace is persistent and installation-relative. Only
         # the complete test installation is temporary, to isolate test writes.
@@ -1593,7 +1985,7 @@ def main() -> int:
         driver.create(str(runtime_app))
         checks["launch"] = "passed"
         wait_for_vue(driver)
-        for route in ("#/writing", "#/topics", "#/settings", "#/history", "#/notebook", "#/"):
+        for route in ("#/writing", "#/topics", "#/settings", "#/history", "#/notebook", "#/listening", "#/"):
             reached = driver.script("location.hash=arguments[0]; return location.hash === arguments[0]", [route])
             if not reached: raise RuntimeError(f"Vue hash route failed: {route}")
         checks["vueRoutes"] = "passed"
@@ -1926,6 +2318,16 @@ def main() -> int:
         if isinstance(negative, dict) and negative.get("resolved") and (negative.get("value") or {}).get("ok"):
             raise RuntimeError("reading_submit_attempt accepted forbidden client payload/answerKey")
         checks["readingSubmitBoundary"] = "passed"
+        listening_exam = listening_fixture()["exam"]
+        metadata["listeningIpc"] = check_listening_ipc(driver)
+        checks["listeningIpc"] = "passed"
+        metadata["listeningView"] = check_listening_view(driver)
+        checks["listeningView"] = "passed"
+        listening_view = metadata["listeningView"]
+        metadata["listeningSubmitBoundary"] = check_listening_submit_boundary(
+            driver, Path(isolated_app_data.name), listening_exam, listening_view["assetId"],
+            listening_view["attemptId"], listening_view["answered"], listening_total_marks(listening_exam))
+        checks["listeningSubmitBoundary"] = "passed"
         created_backup = driver.script(
             "return window.__TAURI_INTERNALS__.invoke('create_backup', {appVersion: null})"
         )

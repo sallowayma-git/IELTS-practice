@@ -24,6 +24,8 @@ MIGRATIONS = ROOT / "crates/ielts-db/migrations"
 # backend mocks. Each entry must say why it is allowed.
 SKILL_KEY_ALLOWLIST = {
     ("packaged_tauri_flow.py", "reading.question.outcome"): "observation_type in scored-evidence SQL, not a skill key",
+    ("packaged_tauri_flow.py", "listening.submit"): "attempt_idempotency scope value written by Rust, not a skill key",
+    ("packaged_tauri_flow.py", "listening.error"): "listening command error code returned by Rust, not a skill key",
     ("test_packaged_weekly.py", "reading.question.outcome"): "observation_type fixture for scored-evidence SQL",
     ("test_packaged_weekly.py", "reading.attempt.score"): "negative observation_type fixture: attempt totals are not scored question outcomes",
     ("notebookPhrasing.test.mjs", "writing.new_criterion"): "deliberate ASCII-label fallback: a real label would not exercise bracketing",
