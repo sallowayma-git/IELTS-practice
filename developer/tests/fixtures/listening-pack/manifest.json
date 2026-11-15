@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "l1-e2e",
+      "file": "exam.json",
+      "sha256": "3e35f622d2247c0b973aad7353322d1f1e2bc022b18ca08c9c8696ab91fc6b35"
+    }
+  ]
+}

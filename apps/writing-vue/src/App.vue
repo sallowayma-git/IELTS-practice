@@ -31,13 +31,19 @@ const route = useRoute()
 const framelessRouteNames = new Set([
   'PracticeReading',
   'PracticeReadingSuite',
-  'PracticeReadingReview'
+  'PracticeReadingReview',
+  'PracticeListening',
+  'PracticeListeningReview'
 ])
 // The reading exam routes own their whole viewport under the unified IELTS
 // skin; neither shell skin applies, so they run under a neutral root class.
 const unifiedExamRouteNames = new Set(['PracticeReading', 'PracticeReadingReview'])
+// Frameless does not mean exam chrome: listening pages own their viewport but
+// keep the paper design system, so they never pick up the frozen exam skin.
+const paperFramelessRouteNames = new Set(['PracticeListening', 'PracticeListeningReview'])
 const shellSkinClass = computed(() => {
   if (unifiedExamRouteNames.has(route.name)) return 'atlas-unified'
+  if (paperFramelessRouteNames.has(route.name)) return 'atlas-paper'
   return showShellNav.value ? 'atlas-paper' : 'atlas-exam'
 })
 const showShellNav = computed(() => !framelessRouteNames.has(route.name))

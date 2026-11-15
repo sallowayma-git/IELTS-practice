@@ -87,6 +87,23 @@ const router = createRouter({
             props: true
         },
         {
+            path: '/listening',
+            name: 'ListeningLibrary',
+            component: () => import('./views/ListeningLibraryPage.vue')
+        },
+        {
+            path: '/listening/:assetId',
+            name: 'PracticeListening',
+            component: () => import('./views/PracticeListeningPage.vue'),
+            props: true
+        },
+        {
+            path: '/listening/:assetId/review/:attemptId',
+            name: 'PracticeListeningReview',
+            component: () => import('./views/PracticeListeningPage.vue'),
+            props: true
+        },
+        {
             path: '/evaluating/:sessionId',
             name: 'Evaluating',
             component: () => import('./views/EvaluatingPage.vue'),
@@ -132,6 +149,12 @@ router.beforeEach((to) => {
         const sessionId = String(to.params.sessionId || '').trim()
         if (!isValidSessionId(sessionId)) {
             return { name: 'Compose' }
+        }
+    }
+    if (to.name === 'PracticeListeningReview') {
+        const attemptId = String(to.params.attemptId || '').trim()
+        if (!isValidSessionId(attemptId)) {
+            return { name: 'ListeningLibrary' }
         }
     }
     return true

@@ -63,6 +63,7 @@ const navItems = [
     ]
   },
   { key: 'writing', to: '/writing', label: '写作', match: ['/writing', '/evaluating/', '/result/'] },
+  { key: 'listening', to: '/listening', label: '听力', match: ['/listening'] },
   ...(featureFlags.learnerModelV1
     ? [{ key: 'learner', to: '/reading/learner', label: '技能', match: ['/reading/learner'] }]
     : []),
