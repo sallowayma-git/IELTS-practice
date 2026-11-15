@@ -413,12 +413,15 @@ pub fn learning_events_verify(conn: &Connection) -> DbResult<LearningEventsVerif
             )));
         }
     }
-    let expected = expected_reading_events(conn, u32::MAX)?;
+    let expected = expected_events(conn, u32::MAX)?;
     let expected_keys = expected.keys().cloned().collect::<BTreeSet<_>>();
     let mut actual = BTreeMap::new();
     let mut statement = conn.prepare(
         "SELECT idempotency_key,content_hash FROM learning_events
-         WHERE activity = 'reading' AND event_type IN ('attempt_completed','reading_question_outcome')",
+         WHERE (activity = 'reading'
+                AND event_type IN ('attempt_completed','reading_question_outcome'))
+            OR (activity = 'listening'
+                AND event_type IN ('attempt_completed','listening_question_outcome'))",
     )?;
     let rows = statement.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -433,7 +436,14 @@ pub fn learning_events_verify(conn: &Connection) -> DbResult<LearningEventsVerif
         .count() as u32;
     let mismatched = expected
         .iter()
-        .filter(|(key, hash)| actual.get(*key).is_some_and(|actual| actual != *hash))
+        .filter(|(key, hash)| {
+            let Some(expected_hash) = hash else {
+                return false;
+            };
+            actual
+                .get(*key)
+                .is_some_and(|actual| actual != expected_hash)
+        })
         .count() as u32;
     let orphaned = actual
         .keys()
@@ -466,17 +476,18 @@ pub fn learning_events_rebuild(
     conn: &Connection,
     limit: u32,
 ) -> DbResult<LearningEventsRebuildReport> {
-    let attempt_ids = completed_reading_attempt_ids(conn, limit)?;
-    let mut report = LearningEventsRebuildReport {
-        scanned_attempts: attempt_ids.len() as u32,
-        ..Default::default()
-    };
-    for attempt_id in attempt_ids {
+    let mut report = LearningEventsRebuildReport::default();
+    // Reading and listening are scanned independently: each activity has its
+    // own projection builder, and neither may borrow the other's chronology.
+    for attempt_id in completed_reading_attempt_ids(conn, limit)? {
         let attempt = crate::history::load_attempt(conn, &attempt_id)?;
         let projection = project_reading_attempt_events(conn, &attempt)?;
-        report.expected_events += projection.expected;
-        report.inserted_events += projection.inserted;
-        report.existing_events += projection.existing;
+        report.record(projection);
+    }
+    for attempt_id in completed_listening_attempt_ids(conn, limit)? {
+        let attempt = crate::history::load_attempt(conn, &attempt_id)?;
+        let projection = project_listening_attempt_events(conn, &attempt)?;
+        report.record(projection);
     }
     Ok(report)
 }
@@ -488,6 +499,15 @@ pub struct LearningEventsRebuildReport {
     pub expected_events: u32,
     pub inserted_events: u32,
     pub existing_events: u32,
+}
+
+impl LearningEventsRebuildReport {
+    fn record(&mut self, projection: LearningEventProjectionReport) {
+        self.scanned_attempts += 1;
+        self.expected_events += projection.expected;
+        self.inserted_events += projection.inserted;
+        self.existing_events += projection.existing;
+    }
 }
 
 fn reading_projection_events(
@@ -708,24 +728,108 @@ fn completed_reading_attempt_ids(conn: &Connection, limit: u32) -> DbResult<Vec<
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
+fn completed_listening_attempt_ids(conn: &Connection, limit: u32) -> DbResult<Vec<String>> {
+    let limit = i64::from(limit.clamp(1, 10_000));
+    let mut statement = conn.prepare(
+        "SELECT id FROM attempts
+         WHERE activity = 'listening' AND status = 'completed'
+         ORDER BY COALESCE(completed_at, submitted_at, started_at), id LIMIT ?1",
+    )?;
+    let rows = statement.query_map(params![limit], |row| row.get::<_, String>(0))?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+/// Everything the ledger should contain, keyed by idempotency key.
+///
+/// `None` means the payload cannot be derived from retained data; the key must
+/// still exist, but its stored hash is accepted as written.
+fn expected_events(
+    conn: &Connection,
+    limit: u32,
+) -> DbResult<BTreeMap<String, Option<String>>> {
+    let mut expected = BTreeMap::new();
+    for (key, hash) in expected_reading_events(conn, limit)? {
+        expected.insert(key, Some(hash));
+    }
+    for (key, hash) in expected_listening_events(conn, limit)? {
+        expected.insert(key, hash);
+    }
+    Ok(expected)
+}
+
 fn expected_reading_events(conn: &Connection, limit: u32) -> DbResult<BTreeMap<String, String>> {
     let mut expected = BTreeMap::new();
     for attempt_id in completed_reading_attempt_ids(conn, limit)? {
         let attempt = crate::history::load_attempt(conn, &attempt_id)?;
-        for event in reading_projection_events(conn, &attempt)? {
-            let payload_json = serde_json::to_string(&event.payload)
-                .map_err(|error| DbError::Message(error.to_string()))?;
-            expected.insert(
-                event_key(
-                    event.event_type,
-                    event.source_id.as_deref(),
-                    event.schema_version,
-                ),
-                sha256_hex(&payload_json),
-            );
+        expected.extend(projection_hashes(reading_projection_events(conn, &attempt)?)?);
+    }
+    Ok(expected)
+}
+
+/// Idempotency key -> content hash for one projection.
+fn projection_hashes(events: Vec<NewLearningEvent>) -> DbResult<BTreeMap<String, String>> {
+    let mut hashes = BTreeMap::new();
+    for event in events {
+        let payload_json = serde_json::to_string(&event.payload)
+            .map_err(|error| DbError::Message(error.to_string()))?;
+        hashes.insert(
+            event_key(
+                event.event_type,
+                event.source_id.as_deref(),
+                event.schema_version,
+            ),
+            sha256_hex(&payload_json),
+        );
+    }
+    Ok(hashes)
+}
+
+/// Listening payloads embed the section and question kind, which only exist in
+/// the indexed pack. When the pack can no longer be read, the payload must not
+/// be invented: compare the stable keys derived from the retained attempt rows
+/// and accept the hashes already stored.
+fn expected_listening_events(
+    conn: &Connection,
+    limit: u32,
+) -> DbResult<BTreeMap<String, Option<String>>> {
+    let mut expected = BTreeMap::new();
+    for attempt_id in completed_listening_attempt_ids(conn, limit)? {
+        let attempt = crate::history::load_attempt(conn, &attempt_id)?;
+        match listening_projection_events(conn, &attempt) {
+            Ok(events) => {
+                for (key, hash) in projection_hashes(events)? {
+                    expected.insert(key, Some(hash));
+                }
+            }
+            Err(_) => {
+                for key in listening_expected_keys(&attempt) {
+                    expected.insert(key, None);
+                }
+            }
         }
     }
     Ok(expected)
+}
+
+/// The keys a completed listening attempt must own, derived only from the
+/// attempt row and its answers.
+fn listening_expected_keys(attempt: &AttemptRecord) -> Vec<String> {
+    let schema_version = LearningEventType::SCHEMA_VERSION;
+    let mut keys = Vec::with_capacity(attempt.answers.len() + 1);
+    keys.push(event_key(
+        LearningEventType::AttemptCompleted,
+        Some(&attempt.id),
+        schema_version,
+    ));
+    for answer in &attempt.answers {
+        let source_id = format!("{}:{}", attempt.id, answer.question_id);
+        keys.push(event_key(
+            LearningEventType::ListeningQuestionOutcome,
+            Some(&source_id),
+            schema_version,
+        ));
+    }
+    keys
 }
 
 fn attempt_ordinal_and_gap(

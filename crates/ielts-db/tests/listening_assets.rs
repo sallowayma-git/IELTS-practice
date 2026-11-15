@@ -194,6 +194,90 @@ fn audio_paths_may_not_escape_the_pack() {
     }
 }
 
+/// Every answer key value must be scoreable: one non-empty string or a
+/// non-empty list of non-empty strings. Anything else marks every response
+/// wrong while looking like a valid key.
+#[test]
+fn unscoreable_answer_key_values_are_rejected() {
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    for (value, reason) in [
+        (json!(""), "empty string"),
+        (json!(null), "null"),
+        (json!({"value": "silk"}), "object"),
+        (json!(42), "number"),
+        (json!([]), "empty array"),
+        (json!(["silk", ""]), "array must contain only non-empty strings"),
+    ] {
+        let mut payload = sample_payload();
+        payload["answerKey"]["q2"] = value.clone();
+        write_pack(&pack, &payload, &wav_bytes());
+        let err = seed(&conn, &pack).unwrap_err().to_string();
+        assert!(
+            err.contains("invalid answerKey value for q2"),
+            "{value}: {err}"
+        );
+        assert!(err.contains(reason), "{value}: {err}");
+    }
+}
+
+#[test]
+fn duplicate_normalized_answer_keys_are_rejected() {
+    // "2" and "q2" both normalize to q2. `load_answer_key` would keep only one
+    // of them, so the pack must fail here instead of scoring against a key the
+    // author did not write.
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    let mut payload = sample_payload();
+    payload["answerKey"]["2"] = json!("cotton");
+    write_pack(&pack, &payload, &wav_bytes());
+    let err = seed(&conn, &pack).unwrap_err().to_string();
+    assert!(err.contains("normalize to the same question"), "{err}");
+    assert!(err.contains("q2"), "{err}");
+}
+
+#[test]
+fn unsupported_audio_extension_is_rejected() {
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    let mut payload = sample_payload();
+    payload["meta"]["audio"] = json!("audio/exam.ogg");
+    write_pack(&pack, &payload, &wav_bytes());
+    let err = seed(&conn, &pack).unwrap_err().to_string();
+    assert!(
+        err.contains("unsupported listening audio extension: ogg"),
+        "{err}"
+    );
+}
+
+#[test]
+fn missing_audio_file_is_rejected_at_seed() {
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    let mut payload = sample_payload();
+    payload["meta"]["audio"] = json!("audio/missing.wav");
+    write_pack(&pack, &payload, &wav_bytes());
+    let err = seed(&conn, &pack).unwrap_err().to_string();
+    assert!(err.contains("not accessible"), "{err}");
+    assert!(err.contains("audio/missing.wav"), "{err}");
+    let rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM practice_assets", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(rows, 0);
+}
+
+#[test]
+fn audio_directory_is_rejected_at_seed() {
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    let mut payload = sample_payload();
+    payload["meta"]["audio"] = json!("audio/dir.wav");
+    write_pack(&pack, &payload, &wav_bytes());
+    fs::create_dir_all(pack.join("audio/dir.wav")).unwrap();
+    let err = seed(&conn, &pack).unwrap_err().to_string();
+    assert!(err.contains("not a regular file"), "{err}");
+}
+
 #[test]
 fn section_outside_one_to_four_is_rejected() {
     let (dir, conn) = open_db();
@@ -329,9 +413,9 @@ fn audio_outside_the_pack_root_is_rejected() {
 }
 
 /// A relative path with no `..` can still escape through a link, so the
-/// canonicalize containment check is a second, independent defense. Directory
-/// symlinks need developer mode on Windows; when the OS refuses to create one
-/// there is nothing left to exercise here.
+/// canonicalize containment check is a second, independent defense. Windows
+/// junctions need no administrator rights, unlike `symlink_dir`, so this test
+/// always exercises the escape instead of silently returning.
 #[test]
 fn audio_link_escaping_the_pack_root_is_rejected() {
     let (dir, conn) = open_db();
@@ -340,9 +424,9 @@ fn audio_link_escaping_the_pack_root_is_rejected() {
     let outside = dir.path().join("outside");
     fs::create_dir_all(&outside).unwrap();
     fs::write(outside.join("escape.wav"), wav_bytes()).unwrap();
-    if symlink_dir(&outside, &pack.join("linked")).is_err() {
-        return;
-    }
+    create_directory_link(&outside, &pack.join("linked")).unwrap_or_else(|error| {
+        panic!("could not create the directory link used by this test: {error}")
+    });
 
     let mut payload = sample_payload();
     payload["meta"]["audio"] = json!("linked/escape.wav");
@@ -351,14 +435,37 @@ fn audio_link_escaping_the_pack_root_is_rejected() {
     assert!(err.to_string().contains("escapes the pack root"), "{err}");
 }
 
-fn symlink_dir(original: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
-    #[cfg(windows)]
-    {
-        std::os::windows::fs::symlink_dir(original, link)
-    }
+fn create_directory_link(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(original, link)
+        std::os::unix::fs::symlink(target, link)
+    }
+    #[cfg(windows)]
+    {
+        // Junctions resolve without SeCreateSymbolicLinkPrivilege, which a
+        // default Windows account does not hold.
+        let output = std::process::Command::new("cmd")
+            .arg("/c")
+            .arg("mklink")
+            .arg("/J")
+            .arg(link)
+            .arg(target)
+            .output()?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(std::io::Error::other(format!(
+                "mklink /J failed: {}{}",
+                String::from_utf8_lossy(&output.stdout).trim(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            )))
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        Err(std::io::Error::other(
+            "no directory link support on this platform",
+        ))
     }
 }
 

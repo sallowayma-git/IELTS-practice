@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -138,6 +138,9 @@ pub fn seed_builtin_listening_pack(conn: &Connection, pack_root: &Path) -> DbRes
             )));
         }
         validate_exam_source(&payload)?;
+        // A pack whose recording is missing, unreadable or outside the pack
+        // must fail at seed time, not when the learner presses play.
+        resolve_pack_audio(pack_root, &payload.meta.audio)?;
 
         let existing_activity: Option<String> = tx
             .query_row(
@@ -204,6 +207,9 @@ pub fn validate_exam_source(payload: &ListeningExamSourceV1) -> DbResult<()> {
         ));
     }
     validate_relative_path(&payload.meta.audio, "listening audio")?;
+    // `audio_mime` owns the supported-extension list; serving and seeding must
+    // never disagree about which files can be played.
+    audio_mime(Path::new(&payload.meta.audio))?;
     if payload.question_order.is_empty() {
         return Err(DbError::Validation(format!(
             "listening exam {} has no questions",
@@ -236,11 +242,27 @@ pub fn validate_exam_source(payload: &ListeningExamSourceV1) -> DbResult<()> {
         }
     }
 
-    let answer_key: std::collections::BTreeSet<String> = payload
-        .answer_key
-        .keys()
-        .map(|raw| normalize_question_id(raw))
-        .collect();
+    // The answer key is the scoring truth. A key that cannot be scored (empty
+    // answer, wrong JSON shape) or two raw keys that normalize to the same
+    // question would silently score every attempt wrong, so both are rejected
+    // here instead of at submit time.
+    let mut answer_key = BTreeMap::new();
+    for (raw, value) in &payload.answer_key {
+        let question_id = normalize_question_id(raw);
+        if question_id.is_empty() {
+            return Err(DbError::Validation(format!(
+                "listening exam {} has an empty answerKey key",
+                payload.exam_id
+            )));
+        }
+        if answer_key.insert(question_id.clone(), value).is_some() {
+            return Err(DbError::Validation(format!(
+                "listening exam {} has answerKey entries that normalize to the same question: {question_id}",
+                payload.exam_id
+            )));
+        }
+        validate_answer_value(&payload.exam_id, &question_id, value)?;
+    }
     let mut grouped = std::collections::BTreeSet::new();
     for group in &payload.question_groups {
         if !(1..=4).contains(&group.section) {
@@ -269,7 +291,7 @@ pub fn validate_exam_source(payload: &ListeningExamSourceV1) -> DbResult<()> {
                     group.group_id
                 )));
             }
-            if !answer_key.contains(&question_id) {
+            if !answer_key.contains_key(&question_id) {
                 return Err(DbError::Validation(format!(
                     "listening question {question_id} has no answerKey entry"
                 )));
@@ -292,6 +314,62 @@ pub fn validate_exam_source(payload: &ListeningExamSourceV1) -> DbResult<()> {
         )));
     }
     Ok(())
+}
+
+/// One answer is either a single accepted string or a list of accepted
+/// alternatives. Neither form may be empty: an empty answer marks every
+/// response wrong while looking like a valid key.
+fn validate_answer_value(exam_id: &str, question_id: &str, value: &Value) -> DbResult<()> {
+    let invalid = |reason: &str| {
+        Err(DbError::Validation(format!(
+            "listening exam {exam_id} has an invalid answerKey value for {question_id}: {reason}"
+        )))
+    };
+    match value {
+        Value::String(answer) if !answer.trim().is_empty() => Ok(()),
+        Value::String(_) => invalid("empty string"),
+        Value::Array(answers) if !answers.is_empty() => {
+            let all_strings = answers.iter().all(|answer| {
+                answer
+                    .as_str()
+                    .is_some_and(|answer| !answer.trim().is_empty())
+            });
+            if all_strings {
+                Ok(())
+            } else {
+                invalid("array must contain only non-empty strings")
+            }
+        }
+        Value::Array(_) => invalid("empty array"),
+        Value::Null => invalid("null"),
+        Value::Bool(_) => invalid("boolean"),
+        Value::Number(_) => invalid("number"),
+        Value::Object(_) => invalid("object"),
+    }
+}
+
+/// Resolve `audio` inside `pack_root` for both seeding and serving.
+///
+/// The relative-path check and the canonicalize containment check live here so
+/// the two callers can never disagree about what counts as inside the pack.
+/// The result is guaranteed to be an existing regular file.
+fn resolve_pack_audio(pack_root: &Path, audio: &str) -> DbResult<PathBuf> {
+    validate_relative_path(audio, "listening audio")?;
+    let root = pack_root.canonicalize()?;
+    let resolved = root.join(audio).canonicalize().map_err(|error| {
+        DbError::Validation(format!("listening audio is not accessible ({error}): {audio}"))
+    })?;
+    if !resolved.starts_with(&root) {
+        return Err(DbError::Validation(format!(
+            "listening audio escapes the pack root: {audio}"
+        )));
+    }
+    if !resolved.is_file() {
+        return Err(DbError::Validation(format!(
+            "listening audio is not a regular file: {audio}"
+        )));
+    }
+    Ok(resolved)
 }
 
 /// A manifest or payload path must stay inside the pack root.
@@ -403,15 +481,7 @@ pub fn load_listening_audio_data_url(
         .ok_or_else(|| {
             DbError::Validation(format!("listening asset has no meta.audio: {asset_id}"))
         })?;
-    validate_relative_path(audio, "listening audio")?;
-
-    let root = pack_root.canonicalize()?;
-    let resolved = root.join(audio).canonicalize()?;
-    if !resolved.starts_with(&root) {
-        return Err(DbError::Validation(format!(
-            "listening audio escapes the pack root: {audio}"
-        )));
-    }
+    let resolved = resolve_pack_audio(pack_root, audio)?;
     if fs::metadata(&resolved)?.len() > MAX_AUDIO_BYTES {
         return Err(DbError::Validation(format!(
             "listening audio exceeds {MAX_AUDIO_BYTES} bytes: {audio}"
