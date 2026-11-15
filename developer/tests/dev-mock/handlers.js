@@ -11,6 +11,7 @@ import {
   APP_DATA_PATHS,
   APP_INFO,
   EVAL_EVENT_TEMPLATE,
+  LISTENING_AUDIO_DATA_URL,
   buildWritingEvaluation,
   writingDetail,
 } from './seed.js'
@@ -280,6 +281,51 @@ function timerElapsedMs(timer, nowMs) {
   return elapsed
 }
 
+/** Lowercase trimmed tokens of an answer value, mirroring scoring.rs split_answer_tokens. */
+const normalizedTokens = (value) => answerTokens(value).map((token) => token.toLowerCase())
+
+/** Case-insensitive set equality, mirroring scoring.rs compare_token_sets. */
+function sameTokenSet(left, right) {
+  const a = new Set(normalizedTokens(left))
+  const b = new Set(normalizedTokens(right))
+  return a.size === b.size && [...a].every((token) => b.has(token))
+}
+
+/** Mirrors scoring.rs compare_answer -> is_correct. */
+function listeningAnswerIsCorrect(user, correct, control) {
+  const actual = normalizedTokens(user)
+  const expected = normalizedTokens(correct)
+  if (!actual.length || !expected.length) return false
+  switch (matchModeOf(correct, control)) {
+    case 'set':
+      return sameTokenSet(actual, expected)
+    case 'alternatives':
+      return actual.length === 1 ? expected.includes(actual[0]) : sameTokenSet(actual, expected)
+    default:
+      return actual.length > 1 || expected.length > 1 ? sameTokenSet(actual, expected) : actual[0] === expected[0]
+  }
+}
+
+/** Mirrors scoring.rs question_weight: a checkbox set is worth its required answers. */
+const listeningQuestionWeight = (correct, control) => (Array.isArray(correct) && control === 'checkbox'
+  ? Math.max(1, answerTokens(correct).length)
+  : 1)
+
+/** Mirrors listening::question_kinds::load_kinds: questionId -> group kind. */
+function listeningQuestionKinds(payload) {
+  const kinds = {}
+  for (const group of payload?.questionGroups || []) {
+    if (!group?.kind) continue
+    for (const questionId of group.questionIds || []) {
+      if (questionId) kinds[questionId] = group.kind
+    }
+  }
+  return kinds
+}
+
+/** Mirrors listening::attempt::match_control: only multi_choice is a checkbox set. */
+const listeningControl = (kind) => (kind === 'multi_choice' ? 'checkbox' : undefined)
+
 /** Mirrors reading::attempt::answers_to_vec: keyed answers plus marked/timeline ids. */
 function listeningDraftAnswers(cmd) {
   const given = cmd.answers && typeof cmd.answers === 'object' && !Array.isArray(cmd.answers) ? cmd.answers : {}
@@ -332,28 +378,52 @@ function listeningDraftRecord(state, cmd) {
   }
 }
 
-/** Mirrors crates/ielts-db ListeningSubmitResult and the AttemptRecord wire shape. */
+/**
+ * Mirrors crates/ielts-db ListeningSubmitResult and the AttemptRecord wire
+ * shape: weighted scoring over questionOrder, an empty string for a blank slot,
+ * and the kind plus timeline fields on every answer row.
+ */
 function recordListeningSubmission(state, cmd) {
-  const asset = state.listening.assets.find((entry) => entry.id === cmd.assetId)
-  const payload = ownOf(state.listening.payloads, cmd.assetId)?.payload
-  const key = payload?.answerKey || {}
-  const questionIds = Object.keys(key)
+  const entry = ownOf(state.listening.payloads, cmd.assetId)
+  if (!entry) throw fail('listening.error', `listening asset not found: ${cmd.assetId}`)
+  const payload = entry.payload
+  const key = payload.answerKey || {}
+  const kinds = listeningQuestionKinds(payload)
+  const questionIds = Array.isArray(payload.questionOrder) ? payload.questionOrder : Object.keys(key)
+  const progress = new Map()
+  for (const item of cmd.questionTimeline || []) {
+    const questionId = String(item?.questionId || '').trim()
+    if (questionId) progress.set(questionId, item)
+  }
+  const marked = cmd.markedQuestions || []
+  const attemptId = cmd.attemptId || idFrom('listening')
+  const submittedAt = new Date().toISOString()
+  let correctCount = 0
+  let questionCount = 0
   const answers = questionIds.map((questionId) => {
-    const answer = ownOf(cmd.answers, questionId) ?? null
+    const kind = kinds[questionId] || null
+    const correct = ownOf(key, questionId)
+    const control = listeningControl(kind)
+    const answer = hasOwn(cmd.answers, questionId) ? cmd.answers[questionId] : ''
+    const weight = listeningQuestionWeight(correct, control)
+    const isCorrect = listeningAnswerIsCorrect(answer, correct, control)
+    questionCount += weight
+    if (isCorrect) correctCount += weight
+    const timeline = progress.get(questionId)
     return {
       questionId,
       answer,
-      isCorrect: answer != null && sameAnswer(answer, key[questionId]),
-      weight: 1,
-      questionKind: null,
-      marked: (cmd.markedQuestions || []).includes(questionId),
+      isCorrect,
+      weight,
+      questionKind: kind,
+      changeCount: timeline?.changeCount ?? 0,
+      visitCount: timeline?.visitCount ?? 0,
+      elapsedMs: timeline?.elapsedMs ?? 0,
+      marked: marked.includes(questionId),
+      answeredAt: timeline?.answeredAt || submittedAt,
     }
   })
-  const correctCount = answers.filter((row) => row.isCorrect).length
-  const questionCount = answers.length
-  const scoreValue = questionCount ? Math.round((correctCount / questionCount) * 100) / 100 : 0
-  const attemptId = cmd.attemptId || idFrom('listening')
-  const submittedAt = new Date().toISOString()
+  const scoreValue = questionCount ? correctCount / questionCount : 0
   const startedAt = new Date(Date.parse(submittedAt) - (cmd.durationMs ?? 0)).toISOString()
   const attempt = {
     schemaVersion: 1,
@@ -371,7 +441,7 @@ function recordListeningSubmission(state, cmd) {
     correctCount,
     questionCount,
     assetId: cmd.assetId,
-    titleSnapshot: cmd.titleSnapshot || asset?.title || 'Listening practice',
+    titleSnapshot: cmd.titleSnapshot || entry.asset?.title || 'Listening practice',
     answers,
     annotations: [],
   }
@@ -428,7 +498,7 @@ export function createHandlers(state, host) {
     },
     listening_get_audio_data_url: ({ assetId }) => {
       if (!ownOf(state.listening.payloads, assetId)) throw fail('listening.error', `listening asset not found: ${assetId}`)
-      return null
+      return LISTENING_AUDIO_DATA_URL
     },
     listening_save_draft: ({ cmd }) => {
       const attempt = listeningDraftRecord(state, cmd)
