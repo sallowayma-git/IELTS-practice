@@ -174,7 +174,8 @@ async function timingRejections(host, child, auth) {
 const results = [];
 let browser;
 try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: true, args: ['--allow-file-access-from-files'],
+        ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : {}) });
     for (const [mode, url] of [['file', pathToFileURL(fixture).href],
         ['http', origin + '/developer/tests/e2e/reports/diagnostic-channel-fixture.html'],
         ['subpath', origin + '/app/developer/tests/e2e/reports/diagnostic-channel-fixture.html']]) {
@@ -336,7 +337,8 @@ try {
         }
     }
 } finally {
-    fs.writeFileSync(path.join(reports, 'diagnostic-channel-report.json'), JSON.stringify({ results }, null, 2));
+    fs.writeFileSync(process.env.DIAGNOSTIC_CHANNEL_REPORT || path.join(reports, 'diagnostic-channel-report.json'),
+        JSON.stringify({ browser: browser?.version(), platform: process.platform, headless: true, results }, null, 2));
     await browser?.close(); server.closeAllConnections(); foreignServer.closeAllConnections();
     await Promise.all([new Promise(resolve => server.close(resolve)), new Promise(resolve => foreignServer.close(resolve))]);
 }
