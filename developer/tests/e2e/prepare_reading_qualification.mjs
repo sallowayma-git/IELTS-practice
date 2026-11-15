@@ -10,7 +10,8 @@ const integrated = execFileSync('git', ['rev-parse', process.argv[2] || 'HEAD'],
 const directory = fs.mkdtempSync(path.join(checkout, 'developer/tests/e2e/reports/issue-296-artifacts-'));
 const git = args => execFileSync('git', args, { cwd: checkout, maxBuffer: 128 * 1024 * 1024 });
 const evidence = { baseline, syncRevision, integrated, artifacts: {} };
-for (const [name, revision] of [['baseline', baseline], ['sync-baseline', syncRevision], ['compatibility', integrated]]) {
+for (const [name, revision] of [['baseline', baseline], ['sync-baseline', syncRevision],
+    ['integrated', integrated], ['compatibility', integrated]]) {
     const target = path.join(directory, name);
     fs.mkdirSync(target);
     const archive = git(['archive', '--format=tar', revision]);

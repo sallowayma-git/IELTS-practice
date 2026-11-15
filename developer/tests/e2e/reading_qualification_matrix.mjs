@@ -7,6 +7,9 @@ import { checkout } from './helpers/readingQualification.mjs';
 
 assert.equal(process.platform, 'win32', 'The mandatory installed Chrome/Edge matrix must run on Windows');
 const provenance = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const integrated = provenance.artifacts.integrated;
+assert.ok(integrated?.directory, 'Regenerate provenance with an unpatched integrated artifact');
+assert.equal(integrated.sourceRevision, provenance.integrated, 'The integrated artifact must match the recorded revision');
 const section = process.env.READING_MATRIX_SECTION || 'all';
 assert.ok(['all', 'baseline', 'compatibility'].includes(section));
 const output = fs.mkdtempSync(path.join(checkout, 'developer/tests/e2e/reports/issue-296-matrix-'));
@@ -25,7 +28,7 @@ function run(script, label, browserName, mode, repetition = 1, options = {}) {
     const child = spawnSync(process.execPath, [scriptPath], {
         cwd: checkout, timeout: 600000, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
         env: { ...process.env, READING_FREEZE_SCENARIOS: '', READING_RECOVERY_SCENARIOS: '',
-            READING_FREEZE_EXPECT_BASELINE: '0', READING_QUALIFICATION_ROOT: checkout,
+            READING_FREEZE_EXPECT_BASELINE: '0', READING_QUALIFICATION_ROOT: integrated.directory,
             READING_QUALIFICATION_REVISION: provenance.integrated, READING_QUALIFICATION_SYNC: '0',
             PLAYWRIGHT_EXECUTABLE_PATH: browsers[browserName], READING_QUALIFICATION_BROWSER: browserName,
             READING_QUALIFICATION_MODE: mode, READING_QUALIFICATION_REPETITION: String(repetition),

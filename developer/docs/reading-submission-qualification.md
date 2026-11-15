@@ -23,13 +23,18 @@ node developer/tests/e2e/reading_qualification_matrix.mjs <provenance.json>
 The preparation command creates a new ignored artifact directory. It extracts
 the exact pre-fix baseline `b5ffd429f9225b047be98c4c855340a67c737983`, the original
 #284 build at `c23a113da27fd961effa1811950a8d56f5a4b088`, and the supplied integrated
-revision. It applies the pinned #284 source delta to the integrated tree in an
-isolated evaluation directory, excluding generated bundles and inline diagnostic
-stamps, then rebuilds and verifies the combined artifact. One-line patch context
-allows the adjacent recovery reconciliation method to remain intact; no recovery
-or transaction fence is removed. An unexpected source conflict stops preparation.
+revision. The integrated submission and recovery cases use this unpatched
+extracted artifact, even when the current checkout has a different revision or
+local runtime changes. It applies the pinned #284 source delta to a separate
+compatibility extraction of the integrated revision, excluding generated bundles
+and inline diagnostic stamps, then rebuilds and verifies the combined artifact.
+One-line patch context allows the adjacent recovery reconciliation method to
+remain intact; no recovery or transaction fence is removed. An unexpected source
+conflict stops preparation.
 The resulting source revision, input archive hashes, applied patch hash, build IDs
 and absence/presence of `fileJournal.js` are recorded in `provenance.json`.
+Regenerate older provenance files that do not include the unpatched `integrated`
+artifact before running the matrix.
 
 The matrix fails if either installed browser is missing. `CHROME_PATH` and
 `EDGE_PATH` can select their executable paths. `READING_MATRIX_SECTION=baseline`
