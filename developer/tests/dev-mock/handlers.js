@@ -269,6 +269,69 @@ function emitEvaluation(state, host, evaluationId, attemptId, channel, taskType)
 
 // ------------------------------------------------------------ listening ----
 
+/** Mirrors TimerState::elapsed_ms (anchor, paused offset, current pause). */
+function timerElapsedMs(timer, nowMs) {
+  if (!timer) return 0
+  let elapsed = Math.max(0, nowMs - (Number(timer.anchorMs) || 0))
+  elapsed = Math.max(0, elapsed - (Number(timer.pausedOffsetMs) || 0))
+  if (!timer.running && timer.pausedAtMs != null && nowMs > timer.pausedAtMs) {
+    elapsed = Math.max(0, elapsed - (nowMs - timer.pausedAtMs))
+  }
+  return elapsed
+}
+
+/** Mirrors reading::attempt::answers_to_vec: keyed answers plus marked/timeline ids. */
+function listeningDraftAnswers(cmd) {
+  const given = cmd.answers && typeof cmd.answers === 'object' && !Array.isArray(cmd.answers) ? cmd.answers : {}
+  const progress = new Map()
+  for (const entry of cmd.questionTimeline || []) {
+    const questionId = String(entry?.questionId || '').trim()
+    if (questionId) progress.set(questionId, entry)
+  }
+  const questionIds = Object.keys(given)
+  for (const questionId of [...(cmd.markedQuestions || []), ...progress.keys()]) {
+    if (!questionIds.includes(questionId)) questionIds.push(questionId)
+  }
+  return questionIds.map((questionId) => {
+    const entry = progress.get(questionId)
+    return {
+      questionId,
+      answer: hasOwn(given, questionId) ? given[questionId] : null,
+      weight: 1,
+      changeCount: entry?.changeCount ?? 0,
+      visitCount: entry?.visitCount ?? 0,
+      elapsedMs: entry?.elapsedMs ?? 0,
+      marked: (cmd.markedQuestions || []).includes(questionId),
+      ...(entry?.answeredAt ? { answeredAt: entry.answeredAt } : {}),
+    }
+  })
+}
+
+/**
+ * Mirrors crates/ielts-db save_listening_draft -> AttemptRecord. The wire
+ * record has no timerSnapshot and no idempotencyKey: the timer is folded into
+ * durationMs here, exactly like the Rust command. One record is stored and
+ * returned by both save and get_open so the two commands cannot drift.
+ */
+function listeningDraftRecord(state, cmd) {
+  const previous = ownOf(state.listening.drafts, cmd.attemptId)
+  const asset = state.listening.assets.find((entry) => entry.id === cmd.assetId)
+  const nowMs = Date.now()
+  return {
+    schemaVersion: 1,
+    id: cmd.attemptId,
+    activity: 'listening',
+    assetId: cmd.assetId,
+    mode: 'single',
+    status: 'draft',
+    startedAt: previous?.startedAt || new Date(nowMs).toISOString(),
+    durationMs: timerElapsedMs(cmd.timerSnapshot, nowMs),
+    titleSnapshot: cmd.titleSnapshot || asset?.title || null,
+    answers: listeningDraftAnswers(cmd),
+    annotations: [],
+  }
+}
+
 /** Mirrors crates/ielts-db ListeningSubmitResult and the AttemptRecord wire shape. */
 function recordListeningSubmission(state, cmd) {
   const asset = state.listening.assets.find((entry) => entry.id === cmd.assetId)
@@ -368,32 +431,17 @@ export function createHandlers(state, host) {
       return null
     },
     listening_save_draft: ({ cmd }) => {
-      state.listening.drafts[cmd.attemptId] = { ...cmd, status: 'draft', updatedAt: new Date().toISOString() }
-      return {
-        schemaVersion: 1,
-        id: cmd.attemptId,
-        activity: 'listening',
-        assetId: cmd.assetId,
-        mode: 'single',
-        suiteId: null,
-        status: 'draft',
-        startedAt: new Date().toISOString(),
-        submittedAt: null,
-        completedAt: null,
-        durationMs: 0,
-        scoreValue: null,
-        scoreScale: null,
-        correctCount: null,
-        questionCount: null,
-        titleSnapshot: cmd.titleSnapshot || null,
-        answers: [],
-        annotations: [],
-      }
+      const attempt = listeningDraftRecord(state, cmd)
+      state.listening.drafts[cmd.attemptId] = attempt
+      return clone(attempt)
     },
+    // Same query as crates/ielts-db get_open_listening_draft: newest open
+    // (draft/active) single attempt for the asset, or null.
     listening_get_open_draft: ({ assetId }) => {
-      const draft = Object.values(state.listening.drafts)
-        .find((entry) => entry.assetId === assetId && entry.status === 'draft')
-      return draft ? clone(draft) : null
+      const open = Object.values(state.listening.drafts)
+        .filter((entry) => entry.assetId === assetId && (entry.status === 'draft' || entry.status === 'active'))
+        .sort((left, right) => String(right.startedAt || '').localeCompare(String(left.startedAt || '')))
+      return open.length ? clone(open[0]) : null
     },
     listening_submit_attempt: ({ cmd }) => recordListeningSubmission(state, cmd),
     suite_create: sessionStub('suite'),
