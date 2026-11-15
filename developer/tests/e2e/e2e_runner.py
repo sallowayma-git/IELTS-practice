@@ -37,6 +37,7 @@ E2E_CASES = [
     "reading_analytics.py",
     "reading_timing.py",
     "reading_submission_freeze.py",
+    "reading_recovery_qualification.py",
     "reading_single_flow.py",
     "practice_review_flow.py",
     "reading_reader_isolation.py",
