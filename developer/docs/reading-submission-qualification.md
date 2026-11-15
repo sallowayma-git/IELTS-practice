@@ -118,8 +118,9 @@ files in the #284 tests are transport, while IndexedDB remains authoritative.
 
 ## Evidence interpretation
 
-The final validation report and sanitized per-case evidence accompany this
-document. The #291 reproduction establishes a real failure path on the original
+The [final validation report](reading-submission-qualification-report.md) and
+[sanitized per-case evidence](evidence/reading-qualification-296.json) accompany
+this document. The #291 reproduction establishes a real failure path on the original
 baseline and the pinned #284 artifact. Matching #289's reported build ID does not
 verify every file deployed on the reporting machine or establish the unique
 cause of that incident. Retained recovery answers demonstrate failed completion
