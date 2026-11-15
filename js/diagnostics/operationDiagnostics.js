@@ -43,7 +43,9 @@
                 ...correlationInput(field(input, 'correlation')), resource: field(input, 'resource'),
                 cancelled: field(input, 'cancelled'),
                 persistence: { operation }, notification: { kind },
-                retry: { available: !expected && operation === 'unconfirmed' && typeof retry === 'function',
+                retry: { available: !expected && typeof retry === 'function'
+                    && (operation === 'unconfirmed' || (operation === 'not-committed'
+                        && field(input, 'retryWhenNotCommitted') === true)),
                     action: field(input, 'retryAction') || action },
                 collection: { source: 'business', coverage: 'partial', aggregation: 'local' } }) || null;
             if (!id || expected) return id;

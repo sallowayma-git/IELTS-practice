@@ -67,10 +67,11 @@ must retain the originating window, sequence, timestamp and event ID.
 | --- | --- |
 | `schemaVersion`, `appVersion`, `buildId` | Version 1; bounded release version and content/commit identity, otherwise `unknown`. No timestamp or query-derived build identity. |
 | `eventId`, `windowId`, `sequence`, `timestamp` | Generated window nonce plus monotonically increasing sequence; timestamp is milliseconds since the epoch. Identity and timestamp survive observations and relay. |
-| `fingerprint` | Non-cryptographic grouping hash of sanitized operation/cause, module/action, error type, first frame and resource. Never an identity or authorization credential. |
+| `fingerprint` | Non-cryptographic grouping hash of sanitized operation/cause, module/action, error type, first frame, resource and supported timing reason when present. Never an identity or authorization credential. |
 | `code` | One of the eight operation codes in #194; invalid/missing codes become `UNEXPECTED_RUNTIME_ERROR`. |
 | `causeCode` | Nearest recognized AppDataError code in the root/cause chain: `BACKEND_UNAVAILABLE`, `QUOTA_EXCEEDED`, `CONFLICT`, `CORRUPT_RECORD`, `VALIDATION`, `INITIALIZATION_BLOCKED`, `TIMING_FINALIZED`, `TIMING_STALE_WRITER`, `TIMING_STALE_REVISION`, or `unknown`. Codes on other error names are ignored, including during stored/relayed record revalidation. |
-| `error` | Allowlisted type/code, fixed catalog message or `[redacted]`, safe source locations and bounded causes. No `details` payload. `details.cause` alone is inspected for existing AppDataError compatibility. |
+| `timingReason` | Optional additive v1 enum from the nearest supported `AppDataError` reason in the bounded error chain; absent for old or unsupported evidence. Recomputed from sanitized errors, never trusted from the event's top-level input. See the timing taxonomy below. |
+| `error` | Allowlisted type/code, optional `timingReason`, fixed catalog message or `[redacted]`, safe source locations and bounded causes. No `details` payload. Only `details.cause` and the exact `details.timingReason` producer field are inspected. |
 | `module`, `action` | Code-owned enums in the declarations. Extend them centrally for a new semantic boundary; never use learner text as a label. |
 | `resource` | Exact known project path or `unknown`; safe positive line/column; explicitly supplied HTTP status or `unknown`; declared optionality or `unknown`. Opaque errors never imply 404. |
 | `environment` | Coarse allowlisted browser/platform/context/run-mode/online values and a numeric browser version. No raw user agent, location, hostname or referrer. |
@@ -82,6 +83,89 @@ must retain the originating window, sequence, timestamp and event ID.
 | `retry` | Availability, semantic action and original operation/submission aliases. Availability requires an operation alias and a known retryable action; executable retry/idempotency logic stays in a separate live runtime registry. |
 | `breadcrumbs` | Only known semantic actions such as submit/handshake/storage confirmation, with timestamp, outcome and aliases. No keystrokes or arbitrary DOM interactions. |
 | `collection` | Source, coverage, aggregation, redaction version, fixed coverage limitations and bounded issue markers. Unknown coverage is never silently upgraded to complete. |
+
+## Reading timing rejection evidence (#295)
+
+The producer puts a code-owned `timingReason` string in `AppDataError.details`.
+The normalizer copies only an allowed reason/code pair from an `AppDataError` to
+`error.timingReason`. Wrappers through `cause` or `details.cause` retain the reason
+within the existing three-link budget. The nearest supported reason becomes
+`event.timingReason`, independently of the nearest recognized `causeCode`; an
+outer storage error can therefore retain a deeper timing invariant. Neither
+field is derived from exception messages, writer tokens, revisions or learner data.
+
+| Reason | Existing public code(s) | Producer boundary |
+| --- | --- | --- |
+| `writer-mismatch` | `TIMING_STALE_WRITER` | Checkpoint, seal or recovery finds a different writer. |
+| `not-frozen` | `TIMING_STALE_WRITER` | Seal receives an unfrozen snapshot, including #291's unfrozen and advanced snapshot with the same writer. |
+| `snapshot-mismatch` | `TIMING_STALE_WRITER`, `VALIDATION` | Seal checksum mismatch; checkpoint or acquired recovery draft conflicts at the same revision. |
+| `finalized-row-conflict` | `TIMING_FINALIZED`, `TIMING_STALE_WRITER` | Checkpoint/acquisition meets a sealed row; seal changes immutable timing or targets another completion; recovery finds a completed or differently reserved row. |
+| `missing-row` | `TIMING_STALE_WRITER`, `TIMING_FINALIZED` | A live checkpoint has no acquired row, or suite recovery cannot find required live timing. |
+| `stale-revision` | `TIMING_STALE_REVISION` | Checkpoint or recovery revision predates the authoritative timing. |
+
+Selection is deterministic and retains the existing validation order. Shape,
+identity and source validations still run at their original boundaries. Sealing
+first checks the existing completed record's immutability, then processes the
+record and its suite entries in order. For each live row it checks same-record
+immutability, a different finalized record (except a legitimately consumed child),
+writer mismatch, not-frozen, then snapshot mismatch. Thus writer mismatch wins
+over not-frozen/checksum, and not-frozen wins over checksum. Mutation checks sealed
+rows before source validation, missing/wrong writer before stale revision, and
+same-revision checksum last. Recovery checks row presence/reservation before
+writer and revision. Only the first failed invariant is reported.
+
+The historical/imported missing-row bypass in `sealReadingTiming()` remains a
+bypass. It does not emit a new error or invent live timing. Existing completed
+record immutability and valid child-record folding still apply. Other validation
+failures without a supported timing reason remain unclassified.
+
+This is an additive extension to event schema 1 and redaction `allowlist-v1`;
+the IndexedDB and channel versions do not change. Old stored events without
+either reason field remain readable with their original fingerprints. Unknown,
+malformed, accessor-backed, unrelated-error and incompatible reason/code pairs
+are omitted. Serialized `error.timingReason` is revalidated at relay, store and
+export boundaries; serialized `details` cannot supply a timing reason. A forged
+top-level reason cannot override the normalized error chain. Older readers drop
+the extra fields through their allowlist. Supported reasons participate in new
+fingerprints so distinct invariants do not group together; reasonless events
+retain their prior fingerprint inputs. Event identity and correlation are unchanged.
+
+No reason implies a commit outcome or grants a retry. The operation adapter uses
+explicit business evidence or `AppData.getOperationFailureState()`. Its default
+retry remains reconciliation of an unconfirmed outcome. A caller with a supported
+recovery closure can explicitly set `retryWhenNotCommitted: true`; suite
+finalization uses that option for #294's gated recovery. Committed outcomes never
+offer a retry. Successful `save-recovery` breadcrumbs remain checkpoints, not
+completed-record commits, even when their aliases match a failed submission.
+
+Relay retains origin event/window identity, reason, outcome and aliases. The host
+suppresses notification and executable retry availability on its relayed memory
+observation, as before: no child callback is transferred. Shared durable storage
+retains the higher-priority originating observation and its historical retry
+metadata. A passive export may retain that metadata, but cannot recreate a live
+retry callback. A host and child with the same suite/submission/operation aliases
+describe one attempt; window IDs distinguish observations, not learner attempts.
+The JSON export and bounded text summary include supported timing reasons. All
+existing event, cause, relay, store and export size limits remain unchanged.
+
+Focused regression evidence lives in `readingTimingRejections.test.js`,
+`diagnosticContract.test.js`, `operationDiagnostics.test.js`,
+`diagnosticExport.test.js` and `suiteFinalizationRecovery.test.js`.
+`diagnostic_channel.node.js` exercises six real producer failures through a real
+child/host channel, durable storage and passive export after reload, in file,
+HTTP and subpath modes, including secret markers and cross-window aliases.
+`reading_submission_freeze.node.js` asserts the production #291 fixture's reason,
+supported recovery, failed completion despite successful checkpoints and shared
+host/practice aliases. #296 retains the broader integrated qualification matrix.
+
+The suite handler retains the accepted child's submission/operation aliases in a
+private WeakMap keyed by the live suite session. It validates the host scope,
+registered session/suite aliases and original submission before binding. Its
+finalization failures and completion breadcrumbs reuse that association; recovery
+checkpoint operations keep their separate operation aliases. Conflicting
+submissions cannot replace the binding. The map never enters recovery snapshots
+or diagnostic exports. A new host page starts a new correlation scope, consistent
+with the correlation lifetime contract below.
 
 ## Privacy and work limits
 

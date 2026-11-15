@@ -50,6 +50,140 @@ function pageForSubmissionTimeout(h) {
     };
 }
 
+function setupTimingBarrier() {
+    let release;
+    let entered;
+    let hold = true;
+    const saved = new Promise(resolve => { entered = resolve; });
+    const gate = new Promise(resolve => { release = resolve; });
+    const h = setup({ configure({ context, window }) {
+        window.performance = { now: () => 1000, timeOrigin: 10000 };
+        window.setInterval = () => null;
+        window.document.visibilityState = 'visible';
+        window.document.hasFocus = () => true;
+        const query = window.document.querySelectorAll.bind(window.document);
+        const input = query('input[type="radio"][name="q1"]')[0];
+        Object.setPrototypeOf(input, window.HTMLInputElement.prototype);
+        input.closest = () => null;
+        window.document.querySelectorAll = selector => selector === 'input, textarea, select' ? [input] : query(selector);
+        const row = snapshot => ({ snapshot: JSON.parse(JSON.stringify(snapshot)), updatedAt: new Date().toISOString() });
+        window.AppData.recovery.acquireReadingTiming = async snapshot => row(snapshot);
+        window.AppData.recovery.saveReadingTiming = async snapshot => {
+            if (hold) { hold = false; entered(); await gate; }
+            return row(snapshot);
+        };
+        for (const file of ['js/services/readingTiming.js', 'js/runtime/readingTimingController.js']) {
+            vm.runInContext(read(file), context);
+        }
+    } });
+    h.hooks.setTestState({ libraryConfigurationId: null,
+        dataset: { meta: {}, questionOrder: ['q1'], answerKey: { q1: 'A' }, questionGroups: [] } });
+    return { ...h, saved, release };
+}
+
+test('the real page/controller barrier keeps the accepted draft separate from late mutable callbacks', async () => {
+    const h = setupTimingBarrier();
+    try {
+        const submit = h.hooks.handleSubmit();
+        await h.saved;
+        assert.equal(h.hooks.getTestState().submissionPhase, 'freezing');
+        assert.equal(h.hooks.getReadingTimingState().context.editable, false);
+        h.document.querySelectorAll('input[type="radio"][name="q1"]')[0].value = 'B';
+        await h.hooks.handleSubmit();
+        h.release();
+        await submit;
+        const messages = h.calls.filter(message => message.type === 'PRACTICE_COMPLETE');
+        assert.equal(messages.length, 1);
+        assert.equal(messages[0].data.answers.q1, 'A');
+        assert.equal(messages[0].data.readingTiming.frozen, true);
+        assert.equal(h.hooks.getTestState().submissionPhase, 'handoff');
+        await h.ack();
+        assert.equal(h.hooks.getTestState().submissionPhase, 'committed');
+    } finally { h.release(); h.hooks.stopReadingDraftSync(); h.hooks.restoreDraftSubmissionState(); }
+});
+
+for (const sessionId of ['PRIVATE_SESSION', 'replacement']) test(`a trusted INIT restores editable controls and timing after canceling preparation: ${sessionId}`, async () => {
+    const h = setupTimingBarrier();
+    try {
+        const submit = h.hooks.handleSubmit();
+        await h.saved;
+        const input = h.document.querySelectorAll('input[type="radio"][name="q1"]')[0];
+        assert.equal(input.disabled, true);
+        assert.equal(h.document.inert, true);
+        await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+            source: 'exam_host', type: 'INIT_SESSION', data: { examId: 'reading-p1', sessionId,
+                parentOrigin: 'http://localhost', libraryConfigurationId: null,
+                windowSessionToken: 'replacement-token', windowSessionGeneration: 2 }
+        } });
+        h.release();
+        await submit;
+        await new Promise(setImmediate);
+        assert.equal(h.calls.filter(message => message.type === 'PRACTICE_COMPLETE').length, 0);
+        assert.equal(h.hooks.getTestState().submissionPhase, 'draft');
+        assert.equal(h.hooks.getTestState().submissionEditingLocked, false);
+        assert.equal(input.disabled, false);
+        assert.equal(h.document.inert, false);
+        assert.equal(h.hooks.getReadingTimingState().context.editable, true);
+        assert.ok(h.hooks.getReadingTimingState().active.includes(sessionId));
+        assert.equal(input.value, 'A');
+        input.value = 'B';
+        await h.hooks.handleSubmit();
+        const messages = h.calls.filter(message => message.type === 'PRACTICE_COMPLETE');
+        assert.equal(messages.length, 1);
+        assert.equal(messages[0].data.sessionId, sessionId);
+        assert.equal(messages[0].data.answers.q1, 'B');
+        assert.ok(messages[0].data.readingTiming.attemptId.includes(sessionId));
+        assert.equal(h.hooks.getTestState().submissionEditingLocked, true);
+        assert.equal(h.hooks.getTestState().submissionPhase, 'handoff');
+    } finally { h.release(); h.hooks.stopReadingDraftSync(); h.hooks.restoreDraftSubmissionState(); }
+});
+
+test('a canceled preparation cannot unlock a newer submission after trusted re-registration', async () => {
+    const h = setupTimingBarrier();
+    try {
+        const submit = h.hooks.handleSubmit();
+        await h.saved;
+        await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+            source: 'exam_host', type: 'INIT_SESSION', data: { examId: 'reading-p1', sessionId: 'replacement',
+                parentOrigin: 'http://localhost', libraryConfigurationId: null,
+                windowSessionToken: 'replacement-token', windowSessionGeneration: 2 }
+        } });
+        assert.equal(h.hooks.beginSubmission('PRACTICE_COMPLETE', { answers: { q1: 'B' } }), true);
+        const submissionId = h.hooks.getTestState().submissionId;
+        h.release();
+        await submit;
+        assert.equal(h.calls.filter(message => message.type === 'PRACTICE_COMPLETE').length, 1);
+        assert.equal(h.hooks.getTestState().submissionId, submissionId);
+        assert.equal(h.hooks.getTestState().submissionPhase, 'handoff');
+        assert.equal(h.hooks.getTestState().submissionEditingLocked, true);
+        assert.equal(h.document.querySelectorAll('input[type="radio"][name="q1"]')[0].disabled, true);
+        assert.equal(h.document.inert, true);
+        assert.equal(h.hooks.getReadingTimingState().context.editable, false);
+    } finally { h.release(); h.hooks.stopReadingDraftSync(); h.hooks.restoreDraftSubmissionState(); }
+});
+
+test('a definite host rejection reactivates the currently viewed passage after locked navigation', async () => {
+    const h = setupTimingBarrier();
+    try {
+        const submit = h.hooks.handleSubmit();
+        await h.saved;
+        h.release();
+        await submit;
+        const original = h.calls.find(message => message.type === 'PRACTICE_COMPLETE').data;
+        // The presentation can move after handoff while timing stays frozen on
+        // the accepted passage. A definite rejection must acquire the visible one.
+        h.hooks.setTestState({ examId: 'reading-p2' });
+        await h.hooks.handleIncoming({ source: h.parent, origin: 'http://localhost', data: {
+            source: 'exam_host', type: 'PRACTICE_SUBMIT_FAILED', data: { ...original,
+                operation: 'not-committed', windowSessionToken: 'PRIVATE_TOKEN' }
+        } });
+        await new Promise(setImmediate);
+        assert.equal(h.hooks.getReadingTimingState().context.editable, true);
+        assert.ok(h.hooks.getReadingTimingState().active.includes('reading-p2'));
+        assert.equal(h.hooks.getTestState().submissionPhase, 'failed');
+    } finally { h.release(); h.hooks.stopReadingDraftSync(); h.hooks.restoreDraftSubmissionState(); }
+});
+
 test('E2E timeout synchronization accepts only matching timeout evidence', async () => {
     const manual = setup();
     manual.hooks.beginSubmission('PRACTICE_COMPLETE', {});

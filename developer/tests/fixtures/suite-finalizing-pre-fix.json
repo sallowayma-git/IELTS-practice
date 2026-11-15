@@ -1,0 +1,864 @@
+{
+  "session": {
+    "schema": "suite-session-v2",
+    "version": 2,
+    "id": "legacy-suite-294",
+    "status": "finalizing",
+    "flowMode": "simulation",
+    "sequence": [
+      {
+        "examId": "p1",
+        "category": "P1",
+        "exam": {
+          "id": "p1",
+          "title": "Passage 1",
+          "libraryConfigurationId": null
+        }
+      },
+      {
+        "examId": "p2",
+        "category": "P2",
+        "exam": {
+          "id": "p2",
+          "title": "Passage 2",
+          "libraryConfigurationId": null
+        }
+      },
+      {
+        "examId": "p3",
+        "category": "P3",
+        "exam": {
+          "id": "p3",
+          "title": "Passage 3",
+          "libraryConfigurationId": null
+        }
+      }
+    ],
+    "results": [
+      {
+        "examId": "p1",
+        "title": "Passage 1",
+        "category": "P1",
+        "sessionId": "child-0",
+        "metadata": {
+          "libraryConfigurationId": null
+        },
+        "duration": 10,
+        "scoreInfo": {
+          "correct": 1,
+          "total": 2,
+          "accuracy": 0.5,
+          "percentage": 50
+        },
+        "answers": {
+          "q1": "retained-0",
+          "q2": ""
+        },
+        "answerComparison": {
+          "q1": {
+            "isCorrect": true
+          },
+          "q2": {
+            "isCorrect": false
+          }
+        },
+        "readingTiming": {
+          "version": 1,
+          "measurement": "foreground-selection",
+          "attemptId": "timing-0",
+          "examId": "p1",
+          "libraryConfigurationId": null,
+          "parentAttemptId": "legacy-suite-294",
+          "sequenceIndex": 0,
+          "writer": "original-0",
+          "revision": 10,
+          "unallocatedMs": 100,
+          "totalMs": 1000,
+          "frozen": true,
+          "questionOrder": [
+            "q1",
+            "q2"
+          ],
+          "unsupportedQuestionIds": [],
+          "partialReasons": [],
+          "units": [
+            {
+              "id": "unit:q1",
+              "kind": "question",
+              "questionIds": [
+                "q1"
+              ],
+              "durationMs": 800
+            },
+            {
+              "id": "unit:q2",
+              "kind": "question",
+              "questionIds": [
+                "q2"
+              ],
+              "durationMs": 100
+            }
+          ]
+        }
+      },
+      {
+        "examId": "p2",
+        "title": "Passage 2",
+        "category": "P2",
+        "sessionId": "child-1",
+        "metadata": {
+          "libraryConfigurationId": null
+        },
+        "duration": 10,
+        "scoreInfo": {
+          "correct": 1,
+          "total": 2,
+          "accuracy": 0.5,
+          "percentage": 50
+        },
+        "answers": {
+          "q1": "retained-1",
+          "q2": ""
+        },
+        "answerComparison": {
+          "q1": {
+            "isCorrect": true
+          },
+          "q2": {
+            "isCorrect": false
+          }
+        },
+        "readingTiming": {
+          "version": 1,
+          "measurement": "foreground-selection",
+          "attemptId": "timing-1",
+          "examId": "p2",
+          "libraryConfigurationId": null,
+          "parentAttemptId": "legacy-suite-294",
+          "sequenceIndex": 1,
+          "writer": "original-1",
+          "revision": 10,
+          "unallocatedMs": 100,
+          "totalMs": 1000,
+          "frozen": true,
+          "questionOrder": [
+            "q1",
+            "q2"
+          ],
+          "unsupportedQuestionIds": [],
+          "partialReasons": [],
+          "units": [
+            {
+              "id": "unit:q1",
+              "kind": "question",
+              "questionIds": [
+                "q1"
+              ],
+              "durationMs": 800
+            },
+            {
+              "id": "unit:q2",
+              "kind": "question",
+              "questionIds": [
+                "q2"
+              ],
+              "durationMs": 100
+            }
+          ]
+        }
+      },
+      {
+        "examId": "p3",
+        "title": "Passage 3",
+        "category": "P3",
+        "sessionId": "child-2",
+        "metadata": {
+          "libraryConfigurationId": null
+        },
+        "duration": 10,
+        "scoreInfo": {
+          "correct": 1,
+          "total": 2,
+          "accuracy": 0.5,
+          "percentage": 50
+        },
+        "answers": {
+          "q1": "retained-2",
+          "q2": ""
+        },
+        "answerComparison": {
+          "q1": {
+            "isCorrect": true
+          },
+          "q2": {
+            "isCorrect": false
+          }
+        },
+        "readingTiming": {
+          "version": 1,
+          "measurement": "foreground-selection",
+          "attemptId": "timing-2",
+          "examId": "p3",
+          "libraryConfigurationId": null,
+          "parentAttemptId": "legacy-suite-294",
+          "sequenceIndex": 2,
+          "writer": "original-2",
+          "revision": 14,
+          "unallocatedMs": 100,
+          "totalMs": 1000,
+          "frozen": false,
+          "questionOrder": [
+            "q1",
+            "q2"
+          ],
+          "unsupportedQuestionIds": [],
+          "partialReasons": [],
+          "units": [
+            {
+              "id": "unit:q1",
+              "kind": "question",
+              "questionIds": [
+                "q1"
+              ],
+              "durationMs": 800
+            },
+            {
+              "id": "unit:q2",
+              "kind": "question",
+              "questionIds": [
+                "q2"
+              ],
+              "durationMs": 100
+            }
+          ]
+        }
+      }
+    ],
+    "draftsByExam": {
+      "p1": {
+        "answers": {
+          "q1": "retained-0",
+          "q2": ""
+        },
+        "readingTiming": {
+          "version": 1,
+          "measurement": "foreground-selection",
+          "attemptId": "timing-0",
+          "examId": "p1",
+          "libraryConfigurationId": null,
+          "parentAttemptId": "legacy-suite-294",
+          "sequenceIndex": 0,
+          "writer": "original-0",
+          "revision": 10,
+          "unallocatedMs": 100,
+          "totalMs": 1000,
+          "frozen": true,
+          "questionOrder": [
+            "q1",
+            "q2"
+          ],
+          "unsupportedQuestionIds": [],
+          "partialReasons": [],
+          "units": [
+            {
+              "id": "unit:q1",
+              "kind": "question",
+              "questionIds": [
+                "q1"
+              ],
+              "durationMs": 800
+            },
+            {
+              "id": "unit:q2",
+              "kind": "question",
+              "questionIds": [
+                "q2"
+              ],
+              "durationMs": 100
+            }
+          ]
+        },
+        "highlights": [
+          {
+            "id": "highlight-0",
+            "text": "synthetic highlight 0"
+          }
+        ],
+        "noteText": "synthetic note 0",
+        "notes": [],
+        "noteOutlines": [],
+        "markedQuestions": [
+          "q2"
+        ],
+        "scrollY": 12,
+        "updatedAt": 1
+      },
+      "p2": {
+        "answers": {
+          "q1": "retained-1",
+          "q2": ""
+        },
+        "readingTiming": {
+          "version": 1,
+          "measurement": "foreground-selection",
+          "attemptId": "timing-1",
+          "examId": "p2",
+          "libraryConfigurationId": null,
+          "parentAttemptId": "legacy-suite-294",
+          "sequenceIndex": 1,
+          "writer": "original-1",
+          "revision": 10,
+          "unallocatedMs": 100,
+          "totalMs": 1000,
+          "frozen": true,
+          "questionOrder": [
+            "q1",
+            "q2"
+          ],
+          "unsupportedQuestionIds": [],
+          "partialReasons": [],
+          "units": [
+            {
+              "id": "unit:q1",
+              "kind": "question",
+              "questionIds": [
+                "q1"
+              ],
+              "durationMs": 800
+            },
+            {
+              "id": "unit:q2",
+              "kind": "question",
+              "questionIds": [
+                "q2"
+              ],
+              "durationMs": 100
+            }
+          ]
+        },
+        "highlights": [
+          {
+            "id": "highlight-1",
+            "text": "synthetic highlight 1"
+          }
+        ],
+        "noteText": "synthetic note 1",
+        "notes": [],
+        "noteOutlines": [],
+        "markedQuestions": [
+          "q2"
+        ],
+        "scrollY": 12,
+        "updatedAt": 1
+      },
+      "p3": {
+        "answers": {
+          "q1": "retained-2",
+          "q2": ""
+        },
+        "readingTiming": {
+          "version": 1,
+          "measurement": "foreground-selection",
+          "attemptId": "timing-2",
+          "examId": "p3",
+          "libraryConfigurationId": null,
+          "parentAttemptId": "legacy-suite-294",
+          "sequenceIndex": 2,
+          "writer": "original-2",
+          "revision": 14,
+          "unallocatedMs": 100,
+          "totalMs": 1000,
+          "frozen": false,
+          "questionOrder": [
+            "q1",
+            "q2"
+          ],
+          "unsupportedQuestionIds": [],
+          "partialReasons": [],
+          "units": [
+            {
+              "id": "unit:q1",
+              "kind": "question",
+              "questionIds": [
+                "q1"
+              ],
+              "durationMs": 800
+            },
+            {
+              "id": "unit:q2",
+              "kind": "question",
+              "questionIds": [
+                "q2"
+              ],
+              "durationMs": 100
+            }
+          ]
+        },
+        "highlights": [
+          {
+            "id": "highlight-2",
+            "text": "synthetic highlight 2"
+          }
+        ],
+        "noteText": "synthetic note 2",
+        "notes": [],
+        "noteOutlines": [],
+        "markedQuestions": [
+          "q2"
+        ],
+        "scrollY": 12,
+        "updatedAt": 1
+      }
+    },
+    "elapsedByExam": {
+      "p1": 10,
+      "p2": 10,
+      "p3": 10
+    },
+    "currentIndex": 3,
+    "activeExamId": null,
+    "startTime": 1794441600000,
+    "lastUpdate": 1794441630000,
+    "revision": 17,
+    "draftRevision": 3,
+    "suiteTimerMode": "countdown",
+    "suiteTimerLimitSeconds": 3600,
+    "suiteTimerRunning": false,
+    "suiteTimerPausedOffsetMs": 0,
+    "suiteTimerPausedAtMs": 1794441630000,
+    "finalizeOperationId": "practice-suite:legacy-suite-294:finalize",
+    "finalizeRecord": {
+      "id": "legacy-suite-294",
+      "sessionId": "legacy-suite-294",
+      "examId": "suite-legacy-suite-294",
+      "title": "Retained suite",
+      "type": "reading",
+      "suiteMode": true,
+      "frequency": "suite",
+      "operationId": "practice-suite:legacy-suite-294:finalize",
+      "duration": 30,
+      "totalQuestions": 6,
+      "correctAnswers": 3,
+      "accuracy": 0.5,
+      "percentage": 50,
+      "scoreInfo": {
+        "correct": 3,
+        "total": 6,
+        "accuracy": 0.5,
+        "percentage": 50
+      },
+      "answers": {
+        "p1::q1": "retained-0",
+        "p1::q2": "",
+        "p2::q1": "retained-1",
+        "p2::q2": "",
+        "p3::q1": "retained-2",
+        "p3::q2": ""
+      },
+      "answerComparison": {
+        "p1::q1": {
+          "isCorrect": true
+        },
+        "p1::q2": {
+          "isCorrect": false
+        },
+        "p2::q1": {
+          "isCorrect": true
+        },
+        "p2::q2": {
+          "isCorrect": false
+        },
+        "p3::q1": {
+          "isCorrect": true
+        },
+        "p3::q2": {
+          "isCorrect": false
+        }
+      },
+      "date": "2026-11-12T00:00:30.000Z",
+      "startTime": "2026-11-12T00:00:00.000Z",
+      "endTime": "2026-11-12T00:00:30.000Z",
+      "suiteEntries": [
+        {
+          "examId": "p1",
+          "title": "Passage 1",
+          "category": "P1",
+          "sessionId": "child-0",
+          "metadata": {
+            "libraryConfigurationId": null
+          },
+          "duration": 10,
+          "scoreInfo": {
+            "correct": 1,
+            "total": 2,
+            "accuracy": 0.5,
+            "percentage": 50
+          },
+          "answers": {
+            "q1": "retained-0",
+            "q2": ""
+          },
+          "answerComparison": {
+            "q1": {
+              "isCorrect": true
+            },
+            "q2": {
+              "isCorrect": false
+            }
+          },
+          "readingTiming": {
+            "version": 1,
+            "measurement": "foreground-selection",
+            "attemptId": "timing-0",
+            "examId": "p1",
+            "libraryConfigurationId": null,
+            "parentAttemptId": "legacy-suite-294",
+            "sequenceIndex": 0,
+            "writer": "original-0",
+            "revision": 10,
+            "unallocatedMs": 100,
+            "totalMs": 1000,
+            "frozen": true,
+            "questionOrder": [
+              "q1",
+              "q2"
+            ],
+            "unsupportedQuestionIds": [],
+            "partialReasons": [],
+            "units": [
+              {
+                "id": "unit:q1",
+                "kind": "question",
+                "questionIds": [
+                  "q1"
+                ],
+                "durationMs": 800
+              },
+              {
+                "id": "unit:q2",
+                "kind": "question",
+                "questionIds": [
+                  "q2"
+                ],
+                "durationMs": 100
+              }
+            ]
+          },
+          "highlights": [
+            {
+              "id": "highlight-0",
+              "text": "synthetic highlight 0"
+            }
+          ],
+          "noteText": "synthetic note 0",
+          "notes": [],
+          "noteOutlines": [],
+          "markedQuestions": [
+            "q2"
+          ],
+          "scrollY": 12,
+          "updatedAt": 1
+        },
+        {
+          "examId": "p2",
+          "title": "Passage 2",
+          "category": "P2",
+          "sessionId": "child-1",
+          "metadata": {
+            "libraryConfigurationId": null
+          },
+          "duration": 10,
+          "scoreInfo": {
+            "correct": 1,
+            "total": 2,
+            "accuracy": 0.5,
+            "percentage": 50
+          },
+          "answers": {
+            "q1": "retained-1",
+            "q2": ""
+          },
+          "answerComparison": {
+            "q1": {
+              "isCorrect": true
+            },
+            "q2": {
+              "isCorrect": false
+            }
+          },
+          "readingTiming": {
+            "version": 1,
+            "measurement": "foreground-selection",
+            "attemptId": "timing-1",
+            "examId": "p2",
+            "libraryConfigurationId": null,
+            "parentAttemptId": "legacy-suite-294",
+            "sequenceIndex": 1,
+            "writer": "original-1",
+            "revision": 10,
+            "unallocatedMs": 100,
+            "totalMs": 1000,
+            "frozen": true,
+            "questionOrder": [
+              "q1",
+              "q2"
+            ],
+            "unsupportedQuestionIds": [],
+            "partialReasons": [],
+            "units": [
+              {
+                "id": "unit:q1",
+                "kind": "question",
+                "questionIds": [
+                  "q1"
+                ],
+                "durationMs": 800
+              },
+              {
+                "id": "unit:q2",
+                "kind": "question",
+                "questionIds": [
+                  "q2"
+                ],
+                "durationMs": 100
+              }
+            ]
+          },
+          "highlights": [
+            {
+              "id": "highlight-1",
+              "text": "synthetic highlight 1"
+            }
+          ],
+          "noteText": "synthetic note 1",
+          "notes": [],
+          "noteOutlines": [],
+          "markedQuestions": [
+            "q2"
+          ],
+          "scrollY": 12,
+          "updatedAt": 1
+        },
+        {
+          "examId": "p3",
+          "title": "Passage 3",
+          "category": "P3",
+          "sessionId": "child-2",
+          "metadata": {
+            "libraryConfigurationId": null
+          },
+          "duration": 10,
+          "scoreInfo": {
+            "correct": 1,
+            "total": 2,
+            "accuracy": 0.5,
+            "percentage": 50
+          },
+          "answers": {
+            "q1": "retained-2",
+            "q2": ""
+          },
+          "answerComparison": {
+            "q1": {
+              "isCorrect": true
+            },
+            "q2": {
+              "isCorrect": false
+            }
+          },
+          "readingTiming": {
+            "version": 1,
+            "measurement": "foreground-selection",
+            "attemptId": "timing-2",
+            "examId": "p3",
+            "libraryConfigurationId": null,
+            "parentAttemptId": "legacy-suite-294",
+            "sequenceIndex": 2,
+            "writer": "original-2",
+            "revision": 14,
+            "unallocatedMs": 100,
+            "totalMs": 1000,
+            "frozen": false,
+            "questionOrder": [
+              "q1",
+              "q2"
+            ],
+            "unsupportedQuestionIds": [],
+            "partialReasons": [],
+            "units": [
+              {
+                "id": "unit:q1",
+                "kind": "question",
+                "questionIds": [
+                  "q1"
+                ],
+                "durationMs": 800
+              },
+              {
+                "id": "unit:q2",
+                "kind": "question",
+                "questionIds": [
+                  "q2"
+                ],
+                "durationMs": 100
+              }
+            ]
+          },
+          "highlights": [
+            {
+              "id": "highlight-2",
+              "text": "synthetic highlight 2"
+            }
+          ],
+          "noteText": "synthetic note 2",
+          "notes": [],
+          "noteOutlines": [],
+          "markedQuestions": [
+            "q2"
+          ],
+          "scrollY": 12,
+          "updatedAt": 1
+        }
+      ],
+      "metadata": {
+        "libraryConfigurationId": null,
+        "suiteSessionId": "legacy-suite-294",
+        "suiteEntryCount": 3
+      },
+      "realData": {
+        "source": "suite_mode",
+        "correct": 3,
+        "total": 6,
+        "duration": 30
+      }
+    }
+  },
+  "timingRows": [
+    {
+      "id": "timing-0",
+      "snapshot": {
+        "version": 1,
+        "measurement": "foreground-selection",
+        "attemptId": "timing-0",
+        "examId": "p1",
+        "libraryConfigurationId": null,
+        "parentAttemptId": "legacy-suite-294",
+        "sequenceIndex": 0,
+        "writer": "original-0",
+        "revision": 10,
+        "unallocatedMs": 100,
+        "totalMs": 1000,
+        "frozen": true,
+        "questionOrder": [
+          "q1",
+          "q2"
+        ],
+        "unsupportedQuestionIds": [],
+        "partialReasons": [],
+        "units": [
+          {
+            "id": "unit:q1",
+            "kind": "question",
+            "questionIds": [
+              "q1"
+            ],
+            "durationMs": 800
+          },
+          {
+            "id": "unit:q2",
+            "kind": "question",
+            "questionIds": [
+              "q2"
+            ],
+            "durationMs": 100
+          }
+        ]
+      },
+      "recordId": null
+    },
+    {
+      "id": "timing-1",
+      "snapshot": {
+        "version": 1,
+        "measurement": "foreground-selection",
+        "attemptId": "timing-1",
+        "examId": "p2",
+        "libraryConfigurationId": null,
+        "parentAttemptId": "legacy-suite-294",
+        "sequenceIndex": 1,
+        "writer": "original-1",
+        "revision": 10,
+        "unallocatedMs": 100,
+        "totalMs": 1000,
+        "frozen": true,
+        "questionOrder": [
+          "q1",
+          "q2"
+        ],
+        "unsupportedQuestionIds": [],
+        "partialReasons": [],
+        "units": [
+          {
+            "id": "unit:q1",
+            "kind": "question",
+            "questionIds": [
+              "q1"
+            ],
+            "durationMs": 800
+          },
+          {
+            "id": "unit:q2",
+            "kind": "question",
+            "questionIds": [
+              "q2"
+            ],
+            "durationMs": 100
+          }
+        ]
+      },
+      "recordId": null
+    },
+    {
+      "id": "timing-2",
+      "snapshot": {
+        "version": 1,
+        "measurement": "foreground-selection",
+        "attemptId": "timing-2",
+        "examId": "p3",
+        "libraryConfigurationId": null,
+        "parentAttemptId": "legacy-suite-294",
+        "sequenceIndex": 2,
+        "writer": "original-2",
+        "revision": 11,
+        "unallocatedMs": 100,
+        "totalMs": 900,
+        "frozen": false,
+        "questionOrder": [
+          "q1",
+          "q2"
+        ],
+        "unsupportedQuestionIds": [],
+        "partialReasons": [],
+        "units": [
+          {
+            "id": "unit:q1",
+            "kind": "question",
+            "questionIds": [
+              "q1"
+            ],
+            "durationMs": 700
+          },
+          {
+            "id": "unit:q2",
+            "kind": "question",
+            "questionIds": [
+              "q2"
+            ],
+            "durationMs": 100
+          }
+        ]
+      },
+      "recordId": null
+    }
+  ]
+}

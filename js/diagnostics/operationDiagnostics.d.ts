@@ -13,6 +13,8 @@ export interface OperationFailure {
     cancelled?: boolean;
     expected?: boolean;
     retryAction?: Action;
+    /** The supplied closure supports recovery after definite rejection, with reconciliation. */
+    retryWhenNotCommitted?: boolean;
 }
 declare global {
     const AppOperationDiagnostics: Readonly<{
