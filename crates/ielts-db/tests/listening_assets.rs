@@ -82,6 +82,62 @@ fn changed_bytes_update_the_indexed_row() {
 }
 
 #[test]
+fn reseeding_unchanged_bytes_repoints_a_moved_pack() {
+    // A restored backup or a relocated install directory ships identical pack
+    // bytes at a new absolute path; content_ref must follow or the library is
+    // unreadable even though the index still lists it.
+    let (dir, conn) = open_db();
+    let first = dir.path().join("listening");
+    write_pack(&first, &sample_payload(), &wav_bytes());
+    seed(&conn, &first).unwrap();
+
+    let moved = dir.path().join("listening-moved");
+    let sha = write_pack(&moved, &sample_payload(), &wav_bytes());
+    assert_eq!(seed(&conn, &moved).unwrap(), 1);
+
+    let listening = list_listening_assets(&conn).unwrap();
+    assert_eq!(listening.len(), 1);
+    assert_eq!(listening[0].fingerprint, sha);
+    assert_eq!(
+        listening[0].content_ref.as_deref(),
+        Some(moved.join("exam.json").to_str().unwrap())
+    );
+    load_listening_payload(&conn, "l1-test").unwrap();
+    load_listening_audio_data_url(&conn, "l1-test", &moved).unwrap();
+}
+
+#[test]
+fn reseeding_unchanged_bytes_refreshes_derived_columns() {
+    let (dir, conn) = open_db();
+    let pack = dir.path().join("listening");
+    write_pack(&pack, &sample_payload(), &wav_bytes());
+    seed(&conn, &pack).unwrap();
+    conn.execute(
+        "UPDATE practice_assets SET question_kinds_json = '[]', metadata_json = '{}'
+         WHERE id = 'l1-test'",
+        [],
+    )
+    .unwrap();
+
+    seed(&conn, &pack).unwrap();
+
+    let (kinds, metadata): (String, String) = conn
+        .query_row(
+            "SELECT question_kinds_json, metadata_json FROM practice_assets WHERE id = 'l1-test'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Vec<String>>(&kinds).unwrap(),
+        ["form_completion", "single_choice", "multi_choice", "matching"]
+    );
+    let metadata: Value = serde_json::from_str(&metadata).unwrap();
+    assert_eq!(metadata["audio"], json!("audio/exam.wav"));
+    assert_eq!(metadata["durationSeconds"], json!(1800));
+}
+
+#[test]
 fn checksum_mismatch_is_rejected() {
     let (dir, conn) = open_db();
     let pack = dir.path().join("listening");

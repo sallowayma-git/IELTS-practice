@@ -97,7 +97,10 @@ pub struct ListeningQuestionGroup {
 /// Register every asset of a built-in listening pack.
 ///
 /// Returns the number of assets the manifest declares and that were validated.
-/// Re-seeding the same bytes is a no-op; changed bytes update the indexed row.
+/// Every run rewrites the indexed row from the pack, exactly like the reading
+/// seeder: `content_ref` is an absolute path, so a restored database or a moved
+/// install directory must re-point it even when the bytes are unchanged, and the
+/// derived `question_kinds_json`/`metadata_json` must follow the current code.
 pub fn seed_builtin_listening_pack(conn: &Connection, pack_root: &Path) -> DbResult<usize> {
     let manifest_path = pack_root.join("manifest.json");
     let manifest_raw = fs::read_to_string(&manifest_path)?;
@@ -136,22 +139,19 @@ pub fn seed_builtin_listening_pack(conn: &Connection, pack_root: &Path) -> DbRes
         }
         validate_exam_source(&payload)?;
 
-        let existing: Option<(String, String)> = tx
+        let existing_activity: Option<String> = tx
             .query_row(
-                "SELECT fingerprint, activity FROM practice_assets WHERE id = ?1",
+                "SELECT activity FROM practice_assets WHERE id = ?1",
                 params![entry.id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| row.get(0),
             )
             .optional()?;
-        if let Some((fingerprint, activity)) = existing {
+        if let Some(activity) = existing_activity {
             if activity != LISTENING_ACTIVITY {
                 return Err(DbError::Validation(format!(
                     "listening resource id belongs to a {activity} asset: {}",
                     entry.id
                 )));
-            }
-            if fingerprint == sha256 {
-                continue;
             }
         }
 
