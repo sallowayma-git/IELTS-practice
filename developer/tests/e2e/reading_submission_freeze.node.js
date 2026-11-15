@@ -147,7 +147,7 @@ try {
                 }
             }, true);
         });
-        let sync;
+        let sync, queuedDrop;
         try {
             let recoveryStartedAt;
             const host = await context.newPage();
@@ -267,6 +267,11 @@ try {
                 await dropAnswer(page);
                 assert.notDeepEqual(await page.evaluate(`${hooks}.collectCurrentDraft().answers`), beforeDrop,
                     'the production drag handlers must accept an answer before submission');
+                queuedDrop = await page.evaluateHandle(() => new DataTransfer());
+                await page.locator('#question-groups .drag-item:not(.option-consumed)').first()
+                    .dispatchEvent('dragstart', { dataTransfer: queuedDrop });
+                assert.ok(await queuedDrop.evaluate(transfer => transfer.getData('text/plain')),
+                    'a drag begun before submission must carry a real payload across the barrier');
             }
             if (scenario === 'delayed-checkpoint') {
                 await host.evaluate(() => {
@@ -336,6 +341,8 @@ try {
                 await page.locator('#question-groups .drag-item').first().dragTo(
                     page.locator('#question-groups .paragraph-dropzone, #question-groups .match-dropzone').first(), { force: true });
                 await dropAnswer(page);
+                await page.locator('#question-groups .paragraph-dropzone, #question-groups .match-dropzone').first()
+                    .dispatchEvent('drop', { dataTransfer: queuedDrop });
                 await page.locator('#submit-btn').click({ force: true });
                 assert.deepEqual(await page.evaluate(`${hooks}.collectCurrentDraft().answers`), acceptedAnswers);
             }
@@ -544,7 +551,7 @@ try {
             }
             console.log(`${scenario}: ${report.cases.at(-1).outcome}`);
             if (sync) report.cases.at(-1).sync = await sync.verify(result.suite.id);
-        } finally { await sync?.close(); await restoreInstrumentation(context); await context.close(); }
+        } finally { await queuedDrop?.dispose(); await sync?.close(); await restoreInstrumentation(context); await context.close(); }
     }
     report.status = 'passed';
 } catch (error) {
