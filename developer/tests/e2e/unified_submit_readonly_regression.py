@@ -49,6 +49,7 @@ HOST_HTML = """<!doctype html>
             examId: config.examId,
             sessionId: config.sessionId,
             suiteSessionId: null,
+            libraryConfigurationId: null,
             practiceMode: 'single',
             parentOrigin: 'null'
           }

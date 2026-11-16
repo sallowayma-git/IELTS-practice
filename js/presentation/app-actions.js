@@ -350,7 +350,7 @@
                     '<div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;">',
                     '<button type="button" data-suite-recovery-choice="cancel" style="padding:10px 14px;border:1px solid var(--color-gray-300, #cbd5e1);border-radius:8px;background:var(--color-white, #fff);color:var(--color-gray-700, #334155);font-weight:600;cursor:pointer;">取消</button>',
                     '<button type="button" data-suite-recovery-choice="discard" style="padding:10px 14px;border:1px solid #dc2626;border-radius:8px;background:var(--color-white, #fff);color:#b91c1c;font-weight:600;cursor:pointer;">放弃并新建</button>',
-                    '<button type="button" data-suite-recovery-choice="continue" style="padding:10px 14px;border:1px solid var(--color-brand-primary, #4f46e5);border-radius:8px;background:var(--color-brand-primary, #4f46e5);color:#fff;font-weight:600;cursor:pointer;">继续上次套题</button>',
+                    '<button type="button" data-suite-recovery-choice="continue" style="padding:10px 14px;border:1px solid var(--color-brand-primary, #4f46e5);border-radius:8px;background:var(--color-brand-primary, #4f46e5);color:#fff;font-weight:600;cursor:pointer;">' + (candidate.status === 'finalizing' ? '恢复并确认提交' : '继续上次套题') + '</button>',
                     '</div>',
                     '</div>'
                 ].join('');

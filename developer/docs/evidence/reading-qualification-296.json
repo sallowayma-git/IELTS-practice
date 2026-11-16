@@ -1,0 +1,2553 @@
+{
+  "issue": 296,
+  "generatedAt": "2026-11-15T07:02:39.582Z",
+  "status": "passed",
+  "runtimeRevision": "cc34203081b771a8c4352def88b82c452cd7c5fe",
+  "harnessRevision": "4b5286170484c9739266d597259758992e52b3ab",
+  "runtimeUnchangedFromIntegratedRepair": true,
+  "versions": {
+    "node": "v24.22.1",
+    "python": "3.12.14",
+    "playwrightNode": "1.62.1",
+    "playwrightPython": "1.56.0"
+  },
+  "fixtureSha256": "f10dec85d8baf2e441aba45c85f25d02ea476bd9897f07d4242f10528814f70a",
+  "artifacts": {
+    "baseline": {
+      "sourceRevision": "b5ffd429f9225b047be98c4c855340a67c737983",
+      "archiveSha256": "c2d9f5a423835905486368e99245a048805ce4019fe9e079d99f770785ac0145",
+      "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601",
+      "fileJournal": false
+    },
+    "sync-baseline": {
+      "sourceRevision": "c23a113da27fd961effa1811950a8d56f5a4b088",
+      "archiveSha256": "fa9349300fe0e8fdf4143e38e733ca8af6563b2bf3aa3fad695eb624095db9ce",
+      "buildId": "sha256:b52210b8ec185c23ca130a73968074761e11d6ce738b1f93fd6298190521b06a",
+      "fileJournal": false
+    },
+    "compatibility": {
+      "sourceRevision": "cc34203081b771a8c4352def88b82c452cd7c5fe",
+      "archiveSha256": "0c64f5bb7e22540145ecc6541a0d0f090c1c095e8f9b4b8887ced2f00656b129",
+      "patchSha256": "5ba876959b7a1a028b3feb197f3f9261a537e18f310a1d7bf19c5b17ea89ed22",
+      "recipe": "Integrated source plus the pinned #284 source delta from b5ffd429; generated bundles rebuilt",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "fileJournal": false
+    }
+  },
+  "counts": {
+    "matrix": 170,
+    "supplementalQueuedDrop": 2,
+    "installedBrowserDiagnostics": 66,
+    "javascript": 904,
+    "python": 52,
+    "integrationGroups": 22,
+    "readingDataFiles": 239,
+    "pinnedSyncRegressions": 31
+  },
+  "matrix": [
+    {
+      "label": "baseline",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "2d2f62c6aba9fabf7e2525b0f53761ad5ff54895788cfd50901c14f4d9e16346",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601",
+      "cases": [
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "expected pre-fix failure",
+          "completedRecords": 0,
+          "evidence": {
+            "status": "finalizing",
+            "frozen": false,
+            "writerMatches": true,
+            "submittedRevision": 14,
+            "savedRevision": 12,
+            "code": "TIMING_STALE_WRITER",
+            "operation": "not-committed"
+          }
+        }
+      ]
+    },
+    {
+      "label": "sync-baseline",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "2d2f62c6aba9fabf7e2525b0f53761ad5ff54895788cfd50901c14f4d9e16346",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:b52210b8ec185c23ca130a73968074761e11d6ce738b1f93fd6298190521b06a",
+      "cases": [
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "expected pre-fix failure",
+          "completedRecords": 0,
+          "evidence": {
+            "status": "finalizing",
+            "frozen": false,
+            "writerMatches": true,
+            "submittedRevision": 13,
+            "savedRevision": 11,
+            "code": "TIMING_STALE_WRITER",
+            "operation": "not-committed"
+          }
+        }
+      ]
+    },
+    {
+      "label": "integrated-submit",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "2d2f62c6aba9fabf7e2525b0f53761ad5ff54895788cfd50901c14f4d9e16346",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "same-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "replacement-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "interactions",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "selection-drop",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-activation",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "restored-inactive",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "pre-handoff-failure",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-page-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "cleanupAfterReplayWindow": true
+        },
+        {
+          "scenario": "legacy-page-ack-loss",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-recovery",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "a37c0a12d3bbc6600bcbcdd035663e87f56f9a87e489fce037ad6a10a773e58c",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "a37c0a12d3bbc6600bcbcdd035663e87f56f9a87e489fce037ad6a10a773e58c",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-submit",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "a37c0a12d3bbc6600bcbcdd035663e87f56f9a87e489fce037ad6a10a773e58c",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "same-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "replacement-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "interactions",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "selection-drop",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-activation",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "restored-inactive",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "pre-handoff-failure",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-page-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "cleanupAfterReplayWindow": true
+        },
+        {
+          "scenario": "legacy-page-ack-loss",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-recovery",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "a37c0a12d3bbc6600bcbcdd035663e87f56f9a87e489fce037ad6a10a773e58c",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "a37c0a12d3bbc6600bcbcdd035663e87f56f9a87e489fce037ad6a10a773e58c",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-submit",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "a37c0a12d3bbc6600bcbcdd035663e87f56f9a87e489fce037ad6a10a773e58c",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "same-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "replacement-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "interactions",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "selection-drop",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-activation",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "restored-inactive",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "pre-handoff-failure",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-page-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "cleanupAfterReplayWindow": true
+        },
+        {
+          "scenario": "legacy-page-ack-loss",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-recovery",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-submit",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "same-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "replacement-attempt-registration",
+          "outcome": "passed",
+          "completionMessages": 1,
+          "frozenPersistedSnapshots": 1
+        },
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "interactions",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "selection-drop",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-activation",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "restored-inactive",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "pre-handoff-failure",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-page-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "cleanupAfterReplayWindow": true
+        },
+        {
+          "scenario": "legacy-page-ack-loss",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-recovery",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "integrated-race",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "integrated-fixture",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 3,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        }
+      ]
+    },
+    {
+      "label": "compatibility-offline-submit",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "compatibility-offline-recovery",
+      "browserName": "Chrome",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    },
+    {
+      "label": "compatibility-sync-submit",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        }
+      ]
+    },
+    {
+      "label": "compatibility-sync-recovery",
+      "browserName": "Chrome",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.8103.52",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    },
+    {
+      "label": "compatibility-offline-submit",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ]
+    },
+    {
+      "label": "compatibility-offline-recovery",
+      "browserName": "Edge",
+      "mode": "file",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    },
+    {
+      "label": "compatibility-sync-submit",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_submission_freeze.node.js",
+      "scriptSha256": "07c1e23b14df5b4f35aad24c58f04410cb890e977f74824f1249e177c5b5e1df",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "ordinary",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "control",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "question-click",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "delayed-checkpoint",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "unknown-ack",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "legacy-host-reload",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 3,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        }
+      ]
+    },
+    {
+      "label": "compatibility-sync-recovery",
+      "browserName": "Edge",
+      "mode": "http",
+      "repetition": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "script": "reading_recovery_qualification.node.js",
+      "scriptSha256": "a500ce862802fd60adf638c3768557d2648c7f25bd8c582be7fdcdb9711e115d",
+      "browser": "157.0.4341.46",
+      "buildId": "sha256:8c78ad0018a9570317a9b28e806a6962a6a26eb501c022b9a4392249a9452651",
+      "cases": [
+        {
+          "scenario": "persisted-fixture",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "concurrent-confirmation",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "replacement-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "completion-write-failure",
+          "outcome": "passed",
+          "failedWriteRetainedDraft": true,
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "unknown-outcome",
+          "outcome": "passed",
+          "operation": "unconfirmed",
+          "completedSuiteRecords": 0,
+          "recoveryPreserved": true
+        },
+        {
+          "scenario": "commit-return-lost",
+          "outcome": "passed",
+          "completedSuiteRecords": 1,
+          "totalRecords": 2,
+          "preservedAnswersAnnotationsScoreTiming": true,
+          "originalIdentities": true,
+          "unrelatedPreserved": true,
+          "immutableAfterRepeatAndReload": true,
+          "sync": {
+            "transport": "simulated copy between isolated OPFS folders",
+            "files": 4,
+            "peerCompletedRecords": 1,
+            "duplicateReplayUnchanged": true
+          }
+        },
+        {
+          "scenario": "writer-takeover",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_WRITER",
+            "reason": "writer-mismatch"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        },
+        {
+          "scenario": "revision-drift",
+          "outcome": "passed",
+          "rejection": {
+            "code": "TIMING_STALE_REVISION",
+            "reason": "stale-revision"
+          },
+          "completedSuiteRecords": 0,
+          "validWriterRecords": 1,
+          "unrelatedPreserved": true
+        }
+      ]
+    }
+  ],
+  "supplemental": [
+    {
+      "revision": "4b5286170484c9739266d597259758992e52b3ab",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "manifestSha256": "a81e97daf282a375e88476855164ed16ae31c4939426aff604682cd989e19aa1",
+      "browser": "157.0.8103.52",
+      "browserName": "Chrome",
+      "platform": "win32",
+      "headless": true,
+      "mode": "file",
+      "storage": "real IndexedDB",
+      "sync": "disabled",
+      "fileJournal": false,
+      "repetition": 1,
+      "baseline": false,
+      "cases": [
+        {
+          "scenario": "selection-drop",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "revision": "4b5286170484c9739266d597259758992e52b3ab",
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "manifestSha256": "a81e97daf282a375e88476855164ed16ae31c4939426aff604682cd989e19aa1",
+      "browser": "157.0.8103.52",
+      "browserName": "Chrome",
+      "platform": "win32",
+      "headless": true,
+      "mode": "http",
+      "storage": "real IndexedDB",
+      "sync": "disabled",
+      "fileJournal": false,
+      "repetition": 1,
+      "baseline": false,
+      "cases": [
+        {
+          "scenario": "selection-drop",
+          "outcome": "passed",
+          "completedRecords": 1,
+          "frozenPersistedSnapshots": 3
+        }
+      ],
+      "status": "passed"
+    }
+  ],
+  "diagnostics": [
+    {
+      "browser": "157.0.8103.52",
+      "platform": "win32",
+      "headless": true,
+      "results": [
+        {
+          "mode": "file",
+          "scenario": "relay-and-shared-store",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "untrusted-input",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "parent-closed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "parent-reloaded",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "clear-delayed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "opt-out-delayed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "reset-delayed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "reset-fresh-connection",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "queue-overflow-pending-ack",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "replacement",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "timing-rejections",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "relay-and-shared-store",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "untrusted-input",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "parent-closed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "parent-reloaded",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "clear-delayed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "opt-out-delayed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "reset-delayed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "reset-fresh-connection",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "queue-overflow-pending-ack",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "replacement",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "timing-rejections",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "relay-and-shared-store",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "untrusted-input",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "parent-closed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "parent-reloaded",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "clear-delayed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "opt-out-delayed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "reset-delayed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "reset-fresh-connection",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "queue-overflow-pending-ack",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "replacement",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "timing-rejections",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "browser": "157.0.4341.46",
+      "platform": "win32",
+      "headless": true,
+      "results": [
+        {
+          "mode": "file",
+          "scenario": "relay-and-shared-store",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "untrusted-input",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "parent-closed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "parent-reloaded",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "clear-delayed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "opt-out-delayed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "reset-delayed",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "reset-fresh-connection",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "queue-overflow-pending-ack",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "replacement",
+          "passed": true
+        },
+        {
+          "mode": "file",
+          "scenario": "timing-rejections",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "relay-and-shared-store",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "untrusted-input",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "parent-closed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "parent-reloaded",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "clear-delayed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "opt-out-delayed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "reset-delayed",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "reset-fresh-connection",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "queue-overflow-pending-ack",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "replacement",
+          "passed": true
+        },
+        {
+          "mode": "http",
+          "scenario": "timing-rejections",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "relay-and-shared-store",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "untrusted-input",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "parent-closed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "parent-reloaded",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "clear-delayed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "opt-out-delayed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "reset-delayed",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "reset-fresh-connection",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "queue-overflow-pending-ack",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "replacement",
+          "passed": true
+        },
+        {
+          "mode": "subpath",
+          "scenario": "timing-rejections",
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "integration": {
+    "status": "pass",
+    "startedAt": "2026-11-15T06:35:13.822470+00:00",
+    "generatedAt": "2026-11-15T06:57:11.701101+00:00",
+    "cases": [
+      {
+        "name": "diagnostic_qualification.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 528.11
+      },
+      {
+        "name": "browse_preference_toggle_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 11.125
+      },
+      {
+        "name": "browse_learning_state.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 32.344
+      },
+      {
+        "name": "reading_analytics.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 38.703
+      },
+      {
+        "name": "reading_timing.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 130.422
+      },
+      {
+        "name": "reading_submission_freeze.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 118.687
+      },
+      {
+        "name": "reading_recovery_qualification.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 28.828
+      },
+      {
+        "name": "reading_single_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 14.781
+      },
+      {
+        "name": "practice_review_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 26.266
+      },
+      {
+        "name": "reading_reader_isolation.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 15.703
+      },
+      {
+        "name": "reading_reader_occurrences.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 21.281
+      },
+      {
+        "name": "reading_bookshelf_entrypoints.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 53.125
+      },
+      {
+        "name": "reading_txt_release.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 92.281
+      },
+      {
+        "name": "interrupted_history_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 26.391
+      },
+      {
+        "name": "listening_practice_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 35.844
+      },
+      {
+        "name": "suite_practice_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 45.109
+      },
+      {
+        "name": "practice_popup_readiness.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 5.266
+      },
+      {
+        "name": "practice_submit_file_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 4.578
+      },
+      {
+        "name": "file_init_referrer_trap.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 12.422
+      },
+      {
+        "name": "ui_export_import_click.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 15.234
+      },
+      {
+        "name": "unified_submit_readonly_regression.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 46.281
+      },
+      {
+        "name": "full_reset_flow.py",
+        "status": "pass",
+        "exitCode": 0,
+        "durationSeconds": 13.125
+      }
+    ]
+  },
+  "package": {
+    "status": "pass",
+    "revision": "955580ca55644c80ddf13a343dddb6902017643d",
+    "baseRevision": "cc34203081b771a8c4352def88b82c452cd7c5fe",
+    "archiveSha256": "45b8da7716b378394b71fee9a2a3b1cce2c7d9cebebe451c8c9945c4a85393e1",
+    "archiveBytes": 8207008,
+    "matchedSourceFiles": 527,
+    "assetManifestSha256": "b94b9b57f8ddde9eb9fbfcef040d1eb20dc61fb158e65190f3605ea5654654a3",
+    "diagnosticRuntime": {
+      "buildId": "sha256:38e3da80bafddfb88bdf15818b8e40d886dd8e5bc744d7241b3b695a904ea56c",
+      "requiredAssets": 25,
+      "mappedSections": 206
+    },
+    "browser": "151.0.7922.34",
+    "browserCaseGroups": 9,
+    "diagnosticCaseCount": 222,
+    "diagnosticStatus": "pass"
+  },
+  "limits": [
+    "Headless installed Windows browsers; no native OS backgrounding acceptance.",
+    "DOM DataTransfer events exercise production drag handlers; no native OS drag-and-drop acceptance.",
+    "Real OPFS files with simulated copying and substituted chooser/permission; no live OneDrive or two-device acceptance.",
+    "#286 file journal is absent from both qualified candidate artifacts and is not applicable.",
+    "#291 reproduction does not establish the unique cause of #289 or permanent answer loss."
+  ]
+}
