@@ -13,7 +13,8 @@
     "pdfFilename": "188. P1 - The history of the bar code 条形码的历史.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/",
     "legacyFilename": "188. P1 - The history of the bar code 条形码的历史.html",
-    "questionIntroHtml": "<h3>Questions 1–8</h3>"
+    "questionIntroHtml": "<h3>Questions 1–8</h3>",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

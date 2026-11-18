@@ -10,6 +10,7 @@
     "title": "Skyscraper Farming 摩天大楼种植",
     "category": "P2",
     "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "47. P2 - Skyscraper Farming 摩天大楼种植.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/47. P2 - Skyscraper Farming 摩天大楼种植/",
     "legacyFilename": "47. P2 - Skyscraper Farming 摩天大楼种植.html",

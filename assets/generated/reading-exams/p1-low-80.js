@@ -13,7 +13,8 @@
     "pdfFilename": "170. P1 - The unsung sense 被低估的嗅觉.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/",
     "legacyFilename": "170. P1 - The unsung sense 被低估的嗅觉.html",
-    "questionIntroHtml": "<h3>Questions 1–6</h3>"
+    "questionIntroHtml": "<h3>Questions 1–6</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

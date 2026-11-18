@@ -9,11 +9,12 @@
   "meta": {
     "title": "Rebranding art museums 博物馆品牌重塑",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "80. P3 - Rebranding art museums 博物馆品牌重塑.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/80. P3 - Rebranding art museums 博物馆品牌重塑/",
     "legacyFilename": "80. P3 - Rebranding art museums 博物馆品牌重塑.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

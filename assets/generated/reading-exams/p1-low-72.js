@@ -13,7 +13,8 @@
     "pdfFilename": "163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/",
     "legacyFilename": "163. P1 - How to find your way out of a food desert 城市食物荒漠.html",
-    "questionIntroHtml": "<h3>Questions 1–6</h3>"
+    "questionIntroHtml": "<h3>Questions 1–6</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

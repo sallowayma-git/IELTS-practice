@@ -9,7 +9,8 @@
   "meta": {
     "title": "The Analysis of Fear 猴子恐惧实验",
     "category": "P3",
-    "frequency": "medium",
+    "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "84. P3 - The Analysis of Fear 猴子恐惧实验【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/84. P3 - The Analysis of Fear 猴子恐惧实验【次】/",
     "legacyFilename": "84. P3 - The Analysis of Fear 猴子恐惧实验【次】.html",

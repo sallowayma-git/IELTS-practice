@@ -13,7 +13,8 @@
     "pdfFilename": "17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/",
     "legacyFilename": "17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

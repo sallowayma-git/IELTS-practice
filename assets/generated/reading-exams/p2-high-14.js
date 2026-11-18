@@ -9,7 +9,8 @@
   "meta": {
     "title": "Should space be explored by robots or by humans 人机太空探索",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/",
     "legacyFilename": "110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html",

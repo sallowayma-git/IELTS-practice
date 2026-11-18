@@ -9,11 +9,12 @@
   "meta": {
     "title": "Inside the mind of a fan 观赛心境",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "151. P3 - Inside the mind of a fan 观赛心境.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/151. P3 - Inside the mind of a fan 观赛心境/",
     "legacyFilename": "151. P3 - Inside the mind of a fan 观赛心境.html",
-    "questionIntroHtml": ""
+    "questionIntroHtml": "",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

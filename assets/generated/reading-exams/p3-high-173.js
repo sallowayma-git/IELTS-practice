@@ -13,7 +13,8 @@
     "pdfFilename": "81. P3 - Robert Louis Stevenson 苏格兰作家【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/81. P3 - Robert Louis Stevenson 苏格兰作家【高】/",
     "legacyFilename": "81. P3 - Robert Louis Stevenson 苏格兰作家【高】.html",
-    "questionIntroHtml": "<h3>Questions 27–31</h3>"
+    "questionIntroHtml": "<h3>Questions 27–31</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

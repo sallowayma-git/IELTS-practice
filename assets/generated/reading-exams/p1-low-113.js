@@ -13,7 +13,8 @@
     "pdfFilename": "27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/",
     "legacyFilename": "27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

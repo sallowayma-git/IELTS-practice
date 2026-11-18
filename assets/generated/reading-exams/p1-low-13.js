@@ -10,6 +10,7 @@
     "title": "Report on a university drama project 大学戏剧项目报告",
     "category": "P1",
     "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "11. P1 - Report on a university drama project 大学戏剧项目报告.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/11. P1 - Report on a university drama project 大学戏剧项目报告/",
     "legacyFilename": "11. P1 - Report on a university drama project 大学戏剧项目报告.html",

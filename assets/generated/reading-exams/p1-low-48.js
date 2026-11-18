@@ -10,6 +10,7 @@
     "title": "The history of the guitar 吉他的历史",
     "category": "P1",
     "frequency": "low",
+    "frequencyMonth": "2026-11",
     "pdfFilename": "",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/141. P1 - The history of the guitar 吉他的历史/",
     "legacyFilename": "141. P1 - The history of the guitar 吉他的历史.html",

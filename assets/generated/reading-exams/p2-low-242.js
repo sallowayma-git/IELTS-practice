@@ -9,11 +9,12 @@
   "meta": {
     "title": "Walking and shoes in eighteenth-century London 伦敦鞋子的发展史",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "242. P2 - Walking and shoes in eighteenth-century London 伦敦鞋子的发展史.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

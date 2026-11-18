@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Importance of Business Cards 名片的重要性",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "20. P1 - The Importance of Business Cards 名片的重要性.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/",
     "legacyFilename": "20. P1 - The Importance of Business Cards 名片的重要性.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

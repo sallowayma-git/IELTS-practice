@@ -9,11 +9,12 @@
   "meta": {
     "title": "Nanotechnology: the science of the very small 纳米科技",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
