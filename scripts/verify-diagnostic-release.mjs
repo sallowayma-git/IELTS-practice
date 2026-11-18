@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 export const requiredDiagnosticAssets = [
     'index.html', 'css/main.css', 'css/incident-center.css',
+    'assets/images/floral-bloom.webp',
     'assets/generated/diagnostics/bootstrap-inline.js', 'assets/generated/diagnostics/build-manifest.json',
     'assets/generated/reading-exams/reading-practice-unified.html',
     'assets/generated/listening-exams/listening-practice-unified.html',
