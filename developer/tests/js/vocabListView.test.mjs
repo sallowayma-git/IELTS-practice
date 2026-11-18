@@ -67,6 +67,16 @@ test('counts split reviewed-due words, never-reviewed words and the full total',
   assert.deepEqual(vocabStatus(items[4], NOW), 'fresh')
 })
 
+test('a reviewed word with no due time is still a new word, not a scheduled one', () => {
+  // The backend leaves due_at NULL after the first review: lastReviewedAt is
+  // set, but the word has no schedule yet, so it must stay reviewable.
+  const stranded = word('stranded', { term: 'abandon', lastReviewedAt: NOW - DAY })
+  assert.equal(vocabStatus(stranded, NOW), 'fresh')
+  assert.equal(dueLabel(stranded, NOW), '新词')
+  assert.deepEqual(vocabCounts([stranded], NOW), { total: 1, due: 0, fresh: 1 })
+  assert.deepEqual(filterVocabRows([stranded], { filter: 'fresh', nowMs: NOW }).map((item) => item.id), ['stranded'])
+})
+
 test('dueLabel returns the trail text and formats the ISO date part without timezone shifts', () => {
   assert.equal(dueLabel(dueWord('due', NOW - HOUR), NOW), '待复习')
   assert.equal(dueLabel(freshWord('fresh', 'alpha'), NOW), '新词')

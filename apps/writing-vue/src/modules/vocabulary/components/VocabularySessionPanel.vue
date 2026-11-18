@@ -153,8 +153,14 @@ function skipCurrent() {
 }
 
 function handleFinalized(result) {
-  notice.value = `已记录：${GRADE_LABELS[result.grade] ?? '错误'}`
-  if (!result.needsReview) return
+  const label = GRADE_LABELS[result.grade] ?? '错误'
+  // A first good/hard answer is requeued for an in-session retest; only the
+  // retest is saved, so do not claim this one was recorded.
+  if (!result.needsReview) {
+    notice.value = `稍后再测：${label}`
+    return
+  }
+  notice.value = `已记录：${label}`
   if (!pendingSaves.value.some((pending) => pending.id === result.id)) {
     pendingSaves.value = pendingSaves.value.concat(result)
   }

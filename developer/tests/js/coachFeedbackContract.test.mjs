@@ -71,6 +71,27 @@ test('reading coach panel only offers Rust feedback kinds', () => {
   for (const kind of kinds) assert.ok(rust.has(kind), `${kind} is not a CoachFeedbackKind`)
 })
 
+test('every teaching-note mapping has a production input', () => {
+  const profile = readRepo('crates/ielts-db/src/coach/profile.rs')
+  const map = profile.match(/TEACHING_NOTE_MAP:[^=]*=\s*\[([^\]]*)\]/)
+  assert.ok(map, 'TEACHING_NOTE_MAP not found')
+  const mapped = [...map[1].matchAll(/\("([a-z_]+)"/g)].map((match) => match[1])
+  assert.ok(mapped.length >= 8)
+
+  const coachSource = readApp('modules/practice-reading/useReadingCoach.ts')
+  const block = coachSource.match(/READING_COACH_FEEDBACK_OPTIONS = \[([^]*?)\] as const/)
+  assert.ok(block)
+  const offered = new Set([...block[1].matchAll(/kind: '([a-z_]+)'/g)].map((match) => match[1]))
+
+  // The re-ask button writes coach_reask_links; the profile must read it.
+  assert.ok(profile.includes("'reask_same_question' AS kind"))
+  assert.ok(profile.includes('FROM coach_reask_links'))
+  const missing = mapped
+    .filter((kind) => kind !== 'reask_same_question')
+    .filter((kind) => !offered.has(kind))
+  assert.deepEqual(missing, [], `no UI can submit these mapped kinds: ${missing.join(', ')}`)
+})
+
 test('wrapper commands carry exactly the Rust command struct keys', async () => {
   const repo = loadMemoryRepository()
   await repo.recordCoachFeedback('cmsg-1', 'thumbs_up')
@@ -250,12 +271,16 @@ test('saved verdicts are restored on reload and lock the panel', async () => {
     savedFeedback: [
       { coachMessageId: 'a1', feedbackKind: 'incorrect' },
       { coachMessageId: 'a1', feedbackKind: 'thumbs_up' },
-      { coachMessageId: 'a0', feedbackKind: 'too_long' }
+      { coachMessageId: 'a0', feedbackKind: 'style_correction' },
+      { coachMessageId: 'a2', feedbackKind: 'too_long' }
     ]
   })
   await settle()
   await settle()
-  assert.deepEqual(coach.coachFeedback.value, { a1: { kind: 'incorrect', status: 'saved' } })
+  assert.deepEqual(coach.coachFeedback.value, {
+    a1: { kind: 'incorrect', status: 'saved' },
+    a2: { kind: 'too_long', status: 'saved' }
+  })
   await coach.submitCoachFeedback('a1', 'thumbs_up')
   assert.deepEqual(feedback, [])
 })

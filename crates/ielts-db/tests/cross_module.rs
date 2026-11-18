@@ -245,6 +245,43 @@ fn a_key_in_two_activity_scopes_becomes_one_global_memory_with_support_edges() {
 }
 
 #[test]
+fn activity_scoped_keys_promote_across_modules_by_topic() {
+    let (_dir, conn) = open_db();
+    // The production writers key memories as `namespace.activity.topic`, so the
+    // same topic is `strategy.reading.stem_first` in reading and
+    // `strategy.writing.stem_first` in writing.
+    insert_memory(
+        &conn,
+        "mem-read",
+        "activity:reading",
+        "strategy",
+        "procedural",
+        "strategy.reading.stem_first",
+        "Read the question stem before the passage.",
+    );
+    insert_memory(
+        &conn,
+        "mem-write",
+        "activity:writing",
+        "strategy",
+        "procedural",
+        "strategy.writing.stem_first",
+        "Decide what the question asks before planning.",
+    );
+
+    let report = promote_cross_module_memories(&conn, "local", NOW).unwrap();
+
+    assert_eq!(report.promoted, vec!["strategy.stem_first"]);
+    let row = active_global(&conn, "strategy.stem_first").expect("one global memory");
+    assert_eq!(row.namespace, "strategy");
+    assert_eq!(
+        row.content,
+        "Read the question stem before the passage. / Decide what the question asks before planning."
+    );
+    assert_eq!(relation_count(&conn, &row.id), 2);
+}
+
+#[test]
 fn only_keys_shared_by_two_scopes_with_one_identity_promote() {
     let (_dir, conn) = open_db();
     insert_memory(

@@ -109,26 +109,54 @@ test('20 due + 10 fresh: a batch fills with every due word and then fresh words'
   assert.deepEqual(session.backlog.map((item) => item.id), freshWords.slice(4).map((item) => item.id))
 })
 
-test('a new word graded good is requeued once at the batch end and the copy never requeues again', () => {
+test('a new word graded good is requeued once and only the retest is saved and counted', () => {
   const original = fresh('w1', 'Abandon')
   const session = createSession([original], { now: NOW })
 
   const firstPass = answerCorrectly(session, 'good')
-  assert.deepEqual(firstPass.lastResult, { id: 'w1', grade: 'good', needsReview: true, requeued: true })
+  assert.deepEqual(firstPass.lastResult, { id: 'w1', grade: 'good', needsReview: false, requeued: true })
   assert.equal(firstPass.stage, 'recall')
   assert.equal(firstPass.current.id, 'w1')
   assert.equal(firstPass.current.requeued, true)
   assert.notEqual(firstPass.current, original)
   assert.equal(firstPass.batch.length, 1)
   assert.deepEqual(firstPass.requeuedIds, ['w1'])
+  assert.deepEqual(firstPass.stats, { wrong: 0, hard: 0, good: 0, easy: 0 })
   assert.equal(original.requeued, undefined, 'the source item is never mutated')
 
   const secondPass = answerCorrectly(firstPass, 'good')
-  assert.deepEqual(secondPass.lastResult, { id: 'w1', grade: 'good', needsReview: false, requeued: false })
+  assert.deepEqual(secondPass.lastResult, { id: 'w1', grade: 'good', needsReview: true, requeued: false })
   assert.equal(secondPass.stage, 'complete')
   assert.equal(secondPass.current, null)
   assert.deepEqual(secondPass.requeuedIds, ['w1'])
   assert.deepEqual(secondPass.stats, { wrong: 0, hard: 0, good: 1, easy: 0 })
+})
+
+test('a failed retest saves its grade instead of the first good answer', () => {
+  const session = createSession([fresh('w1', 'abandon')], { now: NOW })
+  const firstPass = answerCorrectly(session, 'good')
+  assert.equal(firstPass.lastResult.needsReview, false)
+
+  const retest = skip(firstPass)
+  assert.deepEqual(retest.lastResult, { id: 'w1', grade: 'wrong', needsReview: true, requeued: false })
+  assert.deepEqual(retest.stats, { wrong: 1, hard: 0, good: 0, easy: 0 })
+})
+
+test('a reviewed word with no due time stays in the fresh queue until it is scheduled', () => {
+  // The backend writes last_reviewed_at on the first review and due_at NULL.
+  const reviewed = word('w1', 'abandon', { lastReviewedAt: NOW - DAY })
+  const queue = buildQueue([reviewed], NOW)
+  assert.deepEqual(queue.due, [])
+  assert.deepEqual(queue.fresh.map((item) => item.id), ['w1'])
+  assert.deepEqual(queue.backlog.map((item) => item.id), ['w1'])
+
+  const session = createSession([reviewed], { now: NOW })
+  assert.equal(session.stage, 'recall')
+  assert.equal(session.current.id, 'w1')
+  assert.equal(session.freshTotal, 1)
+
+  const done = answerCorrectly(session, 'easy')
+  assert.deepEqual(done.lastResult, { id: 'w1', grade: 'easy', needsReview: true, requeued: false })
 })
 
 test('a new word graded easy is not requeued in the session', () => {
@@ -196,7 +224,7 @@ test('invalid ratings and wrong stages throw programmer errors', () => {
   assert.throws(() => skip({ ...session, stage: 'complete', current: null }), /requires a current word/)
 })
 
-test('backend review is requested exactly once per first-pass item', () => {
+test('backend review is requested exactly once per item, after any in-session retest', () => {
   let session = createSession([fresh('a', 'alpha'), fresh('b', 'beta')], { now: NOW })
   const results = []
 
@@ -212,10 +240,10 @@ test('backend review is requested exactly once per first-pass item', () => {
   assert.deepEqual(
     results.map((result) => [result.id, result.needsReview, result.requeued]),
     [
-      ['a', true, true],
-      ['b', true, true],
-      ['a', false, false],
-      ['b', false, false]
+      ['a', false, true],
+      ['b', false, true],
+      ['a', true, false],
+      ['b', true, false]
     ]
   )
   const reviewed = {}

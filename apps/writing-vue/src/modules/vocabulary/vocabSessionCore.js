@@ -1,7 +1,7 @@
 /**
- * Vocabulary session queue: due words first, then never-reviewed words.
+ * Vocabulary session queue: due words first, then never-scheduled words.
  * Pure state transitions only. The caller owns persistence and must submit a
- * backend review exactly once per first-pass item flagged `needsReview`.
+ * backend review exactly once per item flagged `needsReview`.
  *
  * Grades are the numeric backend contract (0 wrong, 1 hard, 2 good, 3 easy).
  */
@@ -21,18 +21,27 @@ function emptyStats() {
   return Object.fromEntries(RATINGS.map((rating) => [rating, 0]))
 }
 
+function hasDueAt(item) {
+  const dueAt = item.review?.dueAt
+  return dueAt !== null && dueAt !== undefined
+}
+
+// The backend writes last_reviewed_at on the first review but leaves due_at
+// NULL until the second one schedules an interval. Checking only
+// lastReviewedAt would strand that word: it is neither due nor fresh, so it
+// leaves the queue forever. A missing due_at is still first contact.
 function isFirstContact(item) {
-  return !item.review?.lastReviewedAt
+  return !item.review?.lastReviewedAt || !hasDueAt(item)
 }
 
 function parseDueAt(item) {
-  if (!item.review?.lastReviewedAt) return null
+  if (isFirstContact(item)) return null
   const dueAt = Date.parse(item.review.dueAt)
   return Number.isFinite(dueAt) ? dueAt : null
 }
 
 /**
- * Split words into a review queue. Completed words whose due time has not
+ * Split words into a review queue. Scheduled words whose due time has not
  * arrived are intentionally omitted: they are neither due nor fresh.
  */
 export function buildQueue(items, nowMs) {
@@ -40,7 +49,7 @@ export function buildQueue(items, nowMs) {
   const fresh = []
 
   items.forEach((item, index) => {
-    if (!item.review?.lastReviewedAt) {
+    if (isFirstContact(item)) {
       fresh.push(item)
       return
     }
@@ -135,6 +144,10 @@ function finalize(session, { skipped = false } = {}) {
     && isFirstContact(item)
     && (grade === 'good' || grade === 'hard')
     && !session.requeuedIds.includes(item.id)
+  // origin/main defers the first good/hard answer: the in-session retest is
+  // the answer that gets saved and counted. Saving the first pass would record
+  // a grade the learner immediately disproved.
+  const needsReview = !shouldRequeue
 
   const batch = session.batch.slice(1)
   if (shouldRequeue) batch.push({ ...item, requeued: true })
@@ -152,7 +165,7 @@ function finalize(session, { skipped = false } = {}) {
     stage: current ? 'recall' : 'complete',
     recognition: null,
     spellingMisses: 0,
-    stats: firstPass
+    stats: needsReview
       ? { ...session.stats, [grade]: session.stats[grade] + 1 }
       : session.stats,
     requeuedIds: shouldRequeue
@@ -161,7 +174,7 @@ function finalize(session, { skipped = false } = {}) {
     lastResult: {
       id: item.id,
       grade,
-      needsReview: firstPass,
+      needsReview,
       requeued: shouldRequeue
     }
   }

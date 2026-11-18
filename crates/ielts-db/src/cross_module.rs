@@ -98,7 +98,7 @@ fn promote_cross_scope_memories(
     let mut groups: BTreeMap<String, Vec<ActivityMemory>> = BTreeMap::new();
     for row in rows {
         let (canonical_key, memory) = row?;
-        groups.entry(canonical_key).or_default().push(memory);
+        groups.entry(topic_key(&canonical_key)).or_default().push(memory);
     }
     for (canonical_key, memories) in groups {
         let Some(candidate) = cross_scope_candidate(&memories) else {
@@ -124,6 +124,28 @@ fn promote_cross_scope_memories(
         link_supports_consolidation(conn, &target_id, &candidate.source_ids, now)?;
     }
     Ok(())
+}
+
+/// Activity memories are keyed `namespace.activity.topic`, so the same topic
+/// learned in two modules has two different canonical keys. Rule A compares
+/// the topic, not the activity-scoped spelling; a key without an activity
+/// segment is already a topic key and stays unchanged.
+fn topic_key(canonical_key: &str) -> String {
+    let mut segments = canonical_key.split('.');
+    let Some(namespace) = segments.next() else {
+        return canonical_key.to_owned();
+    };
+    let rest: Vec<&str> = segments.collect();
+    match rest.split_first() {
+        Some((activity, topic)) if !topic.is_empty() && is_activity_segment(activity) => {
+            format!("{namespace}.{}", topic.join("."))
+        }
+        _ => canonical_key.to_owned(),
+    }
+}
+
+fn is_activity_segment(value: &str) -> bool {
+    matches!(value, "reading" | "writing" | "listening" | "vocabulary")
 }
 
 struct CrossScopeCandidate {

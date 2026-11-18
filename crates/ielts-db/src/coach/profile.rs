@@ -176,14 +176,22 @@ pub fn select_learner_profile(
 }
 
 /// The most frequent mapped negative-feedback kinds from the last 30 days, as
-/// standing teaching instructions, most frequent first then by kind.
+/// standing teaching instructions, most frequent first then by kind. The
+/// re-ask button records its fact in `coach_reask_links`, not `coach_feedback`,
+/// so both sources are merged here; otherwise that approved mapping could
+/// never fire.
 fn teaching_note_lines(conn: &Connection) -> DbResult<Vec<String>> {
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(30)).to_rfc3339();
     let mut statement = conn.prepare(
-        "SELECT feedback_kind, COUNT(*) FROM coach_feedback
-         WHERE user_id=?1 AND created_at>=?2
-         GROUP BY feedback_kind
-         ORDER BY COUNT(*) DESC, feedback_kind ASC",
+        "SELECT kind, COUNT(*) FROM (
+           SELECT feedback_kind AS kind FROM coach_feedback
+            WHERE user_id=?1 AND created_at>=?2
+           UNION ALL
+           SELECT 'reask_same_question' AS kind FROM coach_reask_links
+            WHERE created_at>=?2
+         )
+         GROUP BY kind
+         ORDER BY COUNT(*) DESC, kind ASC",
     )?;
     let rows = statement.query_map(params![PROFILE_USER_ID, cutoff], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))

@@ -38,10 +38,19 @@ type CoachTranscriptEntry = {
 
 // Subset of the Rust CoachFeedbackKind enum offered in the panel. Labels are
 // Chinese; values are the snake_case wire names (see memory-repository.js).
+// Every kind the learner profile turns into a teaching note must be
+// submittable here. `reask_same_question` is recorded by the re-ask button as
+// a coach_reask_link instead.
 export const READING_COACH_FEEDBACK_OPTIONS = [
   { kind: 'thumbs_up', label: '有帮助' },
   { kind: 'thumbs_down', label: '没帮助' },
-  { kind: 'incorrect', label: '讲错了' }
+  { kind: 'incorrect', label: '讲错了' },
+  { kind: 'too_long', label: '太长了' },
+  { kind: 'too_short', label: '太简略' },
+  { kind: 'too_abstract', label: '太抽象' },
+  { kind: 'need_example', label: '要例子' },
+  { kind: 'need_step_by_step', label: '要步骤' },
+  { kind: 'not_relevant', label: '答偏了' }
 ] as const
 
 export type ReadingCoachFeedbackKind = typeof READING_COACH_FEEDBACK_OPTIONS[number]['kind']

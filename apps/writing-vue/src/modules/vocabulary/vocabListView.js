@@ -11,9 +11,14 @@ function parseTime(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-/** A reviewed word is due once its due time has arrived. */
+/**
+ * A word without a schedule (never reviewed, or reviewed once with due_at
+ * NULL) is fresh: it still needs its first scheduled review. A malformed due
+ * time is scheduled rather than fresh so it never pollutes the queue.
+ */
 export function vocabStatus(item, nowMs) {
   if (!item.review?.lastReviewedAt) return STATUS.fresh
+  if (item.review.dueAt === null || item.review.dueAt === undefined) return STATUS.fresh
   const dueAt = parseTime(item.review.dueAt)
   return dueAt !== null && dueAt <= nowMs ? STATUS.due : STATUS.scheduled
 }

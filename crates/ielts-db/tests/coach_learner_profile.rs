@@ -362,6 +362,38 @@ fn unmapped_feedback_kinds_never_become_teaching_notes() {
 }
 
 #[test]
+fn reask_links_become_reask_same_question_teaching_notes() {
+    let (_dir, conn) = open();
+    let thread = thread(&conn, "coach-t1");
+    let parent = assistant_message(&conn, &thread);
+    let user = append_coach_message(
+        &conn,
+        &AppendCoachMessageCommand {
+            thread_id: thread.clone(),
+            role: "user".into(),
+            content: "没太懂，换个讲法。".into(),
+            structured_payload: None,
+            status: "completed".into(),
+        },
+    )
+    .unwrap()
+    .id;
+    // The re-ask path writes coach_reask_links, never coach_feedback.
+    conn.execute(
+        "INSERT INTO coach_reask_links (
+           parent_assistant_message_id,new_user_message_id,feedback_kind,created_at
+         ) VALUES (?1,?2,'reask_same_question',?3)",
+        params![parent, user, chrono::Utc::now().to_rfc3339()],
+    )
+    .unwrap();
+
+    assert_eq!(
+        select_learner_profile(&conn, &reading()).unwrap().teaching_notes,
+        vec!["When the learner re-asks, explain differently instead of repeating."]
+    );
+}
+
+#[test]
 fn at_most_three_teaching_notes_in_count_then_kind_order() {
     let (_dir, conn) = open();
     let thread = thread(&conn, "coach-t1");
