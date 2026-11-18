@@ -1087,18 +1087,7 @@
         },
 
         speakWord(word) {
-            if (!word) return;
-            try {
-                if (window.speechSynthesis) {
-                    window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(word);
-                    utterance.lang = 'en-US';
-                    utterance.rate = 0.9;
-                    window.speechSynthesis.speak(utterance);
-                }
-            } catch (e) {
-                console.warn('[BookshelfView] 发音朗读异常:', e);
-            }
+            global.WordPronunciation?.speak(word);
         },
 
         async navigateToMoreView() {

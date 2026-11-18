@@ -1090,18 +1090,7 @@
         },
 
         speakWord(word) {
-            if (!word) return;
-            try {
-                if (window.speechSynthesis) {
-                    window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(word);
-                    utterance.lang = 'en-US';
-                    utterance.rate = 0.9;
-                    window.speechSynthesis.speak(utterance);
-                }
-            } catch (e) {
-                console.warn('[BookshelfView] 发音朗读异常:', e);
-            }
+            global.WordPronunciation?.speak(word);
         },
 
         async navigateToMoreView() {
@@ -1255,19 +1244,6 @@
         return new Intl.DateTimeFormat('zh-CN', {
             year: 'numeric', month: '2-digit', day: '2-digit'
         }).format(date);
-    }
-
-    function speakWord(word) {
-        if (!word || !global.speechSynthesis || typeof global.SpeechSynthesisUtterance !== 'function') return;
-        try {
-            global.speechSynthesis.cancel();
-            const utterance = new global.SpeechSynthesisUtterance(word);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            global.speechSynthesis.speak(utterance);
-        } catch (error) {
-            console.warn('[ReadingNotebookView] 发音朗读异常:', error);
-        }
     }
 
     const ReadingNotebookView = {
@@ -1599,7 +1575,7 @@
                     return;
                 }
                 if (action === 'notebook-speak') {
-                    speakWord(event.target.closest('[data-action="notebook-speak"]').dataset.word);
+                    global.WordPronunciation?.speak(event.target.closest('[data-action="notebook-speak"]').dataset.word);
                     return;
                 }
                 if (action === 'notebook-export') {

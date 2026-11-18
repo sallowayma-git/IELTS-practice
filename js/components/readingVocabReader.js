@@ -240,24 +240,6 @@
     };
 
     // ============================================================================
-    // 语音朗读
-    // ============================================================================
-    function speakWord(word) {
-        if (!('speechSynthesis' in window) || !word) {
-            return;
-        }
-        try {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(word);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            window.speechSynthesis.speak(utterance);
-        } catch (e) {
-            console.warn('[ReadingVocabReader] 朗读失败:', e);
-        }
-    }
-
-    // ============================================================================
     // 异步加载试卷与解析数据
     // ============================================================================
     function getExamRegistry() {
@@ -946,7 +928,7 @@
                     const deleteButton = event.target.closest('.vocab-delete-btn');
                     if (speakButton && vocabList.contains(speakButton)) {
                         event.stopPropagation();
-                        speakWord(speakButton.dataset.speakWord);
+                        global.WordPronunciation?.speak(speakButton.dataset.speakWord);
                     } else if (deleteButton && vocabList.contains(deleteButton)) {
                         event.stopPropagation();
                         if (deleteButton.disabled) return;
@@ -1661,7 +1643,7 @@
             actions.innerHTML = '<span>' + escapeHtml(mark.dataset.word) + '</span> <button type="button" data-action="remove-occurrence" data-occurrence-id="'
                 + escapeHtml(mark.dataset.occurrenceId) + '">移除这一处高亮</button>';
             actions.querySelector('button').focus({ preventScroll: true });
-            speakWord(mark.dataset.word);
+            global.WordPronunciation?.speak(mark.dataset.word);
         },
 
         renderAnchorStatus() {

@@ -29,7 +29,7 @@
         theme: 'theme', browse: 'browse', timer: 'timer', suite: 'suite', candidateCode: 'candidateCode',
         resourceBasePrefix: 'resourceBasePrefix', onboarding: 'onboarding', readingDisplay: 'readingDisplay',
         threeBackground: 'threeBackground', themePortal: 'themePortal', practiceWidget: 'practiceWidget',
-        practiceDashboard: 'practiceDashboard',
+        practiceDashboard: 'practiceDashboard', vocabShortcuts: 'vocabShortcuts',
         consent: 'consent', logConfig: 'logConfig'
     });
     const PRACTICE_ENTITY_STORES = Object.freeze(['practiceSummaries', 'practiceDetails', 'practiceAnnotations']);
@@ -4015,6 +4015,8 @@
     const preferences = Object.freeze({
         setReadingFavorite,
         async getAll() { return readPreferences(); },
+        async getVocabShortcuts() { return clone((await readPreferences())[PREFERENCE_FIELDS.vocabShortcuts] ?? null); },
+        async setVocabShortcuts(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.vocabShortcuts, value, options); },
         async getTheme() { return (await readPreferences())[PREFERENCE_FIELDS.theme] ?? null; }, async setTheme(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.theme, value, options); },
         async getBrowse() { return clone((await readPreferences())[PREFERENCE_FIELDS.browse] ?? null); }, async setBrowse(value, options) { await ready; return writePreference(PREFERENCE_FIELDS.browse, value, options); }, async patchBrowse(value, options) { return patchPreference(PREFERENCE_FIELDS.browse, value, options); },
         async getTimer(scope) { const timer = clone((await readPreferences())[PREFERENCE_FIELDS.timer] ?? {}); return scope ? clone(timer[String(scope)] ?? null) : timer; }, async setTimer(scope, value, options) { return patchPreference(PREFERENCE_FIELDS.timer, { [String(scope)]: clone(value) }, options); },

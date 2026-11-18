@@ -14,6 +14,7 @@ const bundles = {
         'js/presentation/threeBackground.js',
         'js/runtime/bootScreen.js',
         'js/runtime/lazyLoader.js',
+        'js/utils/wordPronunciation.js',
         'js/utils/suitePreference.js',
         'js/presentation/app-actions.js'
     ],
@@ -59,6 +60,7 @@ const bundles = {
         'js/presentation/message-center.js',
         'js/components/diagnosticSettingsPanel.js',
         'js/utils/practiceTimerPreferences.js',
+        'js/utils/vocabShortcutPreferences.js',
         'js/components/practiceSettingsPanel.js',
         'js/components/libraryManagerPanel.js',
         'js/app/main-entry.js',
@@ -139,6 +141,7 @@ const bundles = {
         'js/runtime/dictionaryLoader.js',
         'js/runtime/reviewHighlightDictionary.js',
         'js/utils/practiceTimerPreferences.js',
+        'js/utils/wordPronunciation.js',
         'js/components/readingVocabContent.js',
         'js/components/readingVocabAnchors.js',
         'js/components/readingVocabReader.js',

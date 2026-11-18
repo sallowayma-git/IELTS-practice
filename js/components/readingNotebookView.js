@@ -19,19 +19,6 @@
         }).format(date);
     }
 
-    function speakWord(word) {
-        if (!word || !global.speechSynthesis || typeof global.SpeechSynthesisUtterance !== 'function') return;
-        try {
-            global.speechSynthesis.cancel();
-            const utterance = new global.SpeechSynthesisUtterance(word);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            global.speechSynthesis.speak(utterance);
-        } catch (error) {
-            console.warn('[ReadingNotebookView] 发音朗读异常:', error);
-        }
-    }
-
     const ReadingNotebookView = {
         containerSelector: '#reading-notebook-root',
         state: {
@@ -361,7 +348,7 @@
                     return;
                 }
                 if (action === 'notebook-speak') {
-                    speakWord(event.target.closest('[data-action="notebook-speak"]').dataset.word);
+                    global.WordPronunciation?.speak(event.target.closest('[data-action="notebook-speak"]').dataset.word);
                     return;
                 }
                 if (action === 'notebook-export') {

@@ -139,6 +139,7 @@ export async function createPage(browser, { localWords = [], canonicalWords = []
             throw new Error(`Missing selection: ${word}`);
         };
     });
+    await page.addScriptTag({ content: source('utils/wordPronunciation.js') });
     await page.addScriptTag({ content: readerSource });
     return page;
 }
