@@ -71,7 +71,8 @@
         listCache: new Map(),
         bundledPhoneticIndex: null,
         commitSubscriptionAttached: false,
-        activeRefreshToken: 0
+        activeRefreshToken: 0,
+        configRefreshToken: 0
     };
 
     function cloneValue(value) {
@@ -340,12 +341,6 @@
         return Object.prototype.hasOwnProperty.call(collections, listId) ? collections[listId] : null;
     }
 
-    async function saveConfigData(configPatch = state.config) {
-        const vocab = await requireVocabData();
-        await vocab.patchConfig(Object.assign({}, configPatch, { activeListId: state.activeListId }));
-        return true;
-    }
-
     function mergeConfig(config) {
         const base = { ...DEFAULT_CONFIG };
         if (!config || typeof config !== 'object' || Array.isArray(config)) {
@@ -388,7 +383,7 @@
     function refreshActiveListFromStorage() {
         const refreshToken = ++state.activeRefreshToken;
         const listId = state.activeListId;
-        Promise.resolve()
+        return Promise.resolve()
             .then(() => readListData(listId))
             .then((storedData) => {
                 if (refreshToken !== state.activeRefreshToken || listId !== state.activeListId) {
@@ -400,6 +395,25 @@
             .catch((error) => {
                 console.error('[VocabStore] 提交后刷新激活词表失败:', error);
             });
+    }
+
+    function configuredListId(config) {
+        return typeof config?.activeListId === 'string' && Object.hasOwn(VOCAB_LISTS, config.activeListId)
+            ? config.activeListId : DEFAULT_LIST_ID;
+    }
+
+    async function refreshConfigFromStorage(vocab) {
+        const token = ++state.configRefreshToken;
+        const stored = await vocab.getConfig();
+        if (token !== state.configRefreshToken) return;
+        state.config = mergeConfig(stored);
+        state.listCache.clear();
+        const listId = configuredListId(stored);
+        if (listId !== state.activeListId) {
+            state.activeListId = listId;
+            setWordsInternal([]);
+            await refreshActiveListFromStorage();
+        }
     }
 
     function handleDataCommitted(event) {
@@ -421,6 +435,11 @@
             shouldRefreshActiveList = shouldRefreshActiveList || state.activeListId !== DEFAULT_LIST_ID;
         }
 
+        if (logicalKeys.has('vocab.userConfig')) {
+            requireVocabData().then(refreshConfigFromStorage).catch(error => {
+                console.error('[VocabStore] 提交后刷新词汇设置失败:', error);
+            });
+        }
         if (shouldRefreshActiveList) {
             refreshActiveListFromStorage();
         }
@@ -592,21 +611,21 @@
         }
         state.loadingPromise = (async () => {
             const vocab = await requireVocabData();
+            const token = ++state.configRefreshToken;
             const storedConfig = await vocab.getConfig();
-            const storedActiveList = storedConfig && storedConfig.activeListId;
+            if (token !== state.configRefreshToken) return;
+            const listId = configuredListId(storedConfig);
+            state.activeListId = listId;
+            state.config = mergeConfig(storedConfig);
 
-            state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList]
-                ? storedActiveList
-                : DEFAULT_LIST_ID;
-
-            const storedWords = await readListData(state.activeListId);
-            const normalizedWords = normalizeStoredListWords(storedWords, state.activeListId);
+            const storedWords = await readListData(listId);
+            if (token !== state.configRefreshToken || listId !== state.activeListId) return;
+            const normalizedWords = normalizeStoredListWords(storedWords, listId);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
                 state.lastLoadSource = 'appData-v2';
             }
 
-            state.config = mergeConfig(storedConfig);
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
@@ -734,8 +753,8 @@
         };
     }
 
-    async function updateWord(id, patch = {}) {
-        if (!id || !state.wordIndex.has(id)) {
+    async function updateWord(id, patch = {}, listId = state.activeListId) {
+        if (!id || (listId === state.activeListId && !state.wordIndex.has(id))) {
             return null;
         }
         const vocab = await requireVocabData();
@@ -748,16 +767,16 @@
                 delete normalizedPatch.phonetic;
             }
         }
-        const receipt = await vocab.patchWord({ listId: state.activeListId, wordId: id, patch: normalizedPatch });
-        const updated = normalizeMutationWord(receipt.word, state.activeListId);
-        const index = state.words.findIndex((word) => word.id === id);
-        if (index >= 0 && updated) {
+        const receipt = await vocab.patchWord({ listId, wordId: id, patch: normalizedPatch });
+        const updated = normalizeMutationWord(receipt.word, listId);
+        if (!updated) return null;
+        const index = listId === state.activeListId ? state.words.findIndex((word) => word.id === id) : -1;
+        if (index >= 0) {
             state.words.splice(index, 1, updated);
             state.wordIndex.set(id, updated);
-            state.listCache.delete(state.activeListId);
-            return cloneValue(updated);
         }
-        return null;
+        state.listCache.delete(listId);
+        return cloneValue(updated);
     }
 
     function getConfig() {
@@ -765,9 +784,13 @@
     }
 
     async function setConfig(config) {
-        const next = mergeConfig(config);
-        await saveConfigData(next);
-        state.config = next;
+        const normalized = mergeConfig(config);
+        const patch = Object.fromEntries(Object.keys(normalized)
+            .filter(key => config && Object.hasOwn(config, key))
+            .map(key => [key, normalized[key]]));
+        const vocab = await requireVocabData();
+        if (Object.keys(patch).length) await vocab.patchConfig(patch);
+        await refreshConfigFromStorage(vocab);
         return getConfig();
     }
 

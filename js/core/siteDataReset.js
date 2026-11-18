@@ -298,7 +298,12 @@
             try {
                 result = await serviceInfo.service.withFullResetLock(async () => {
                     callbackEntered = true;
-                    return performLocked(serviceInfo.service);
+                    const clear = () => performLocked(serviceInfo.service);
+                    if (!global.FolderSyncService) return clear();
+                    try { return await global.FolderSyncService.withReset(clear); }
+                    catch (error) {
+                        return externalBackupFailure(error, 'OneDrive 同步未能安全落盘，本次清理已取消。' + (error.message || ''));
+                    }
                 });
             } catch (error) {
                 return externalBackupFailure(

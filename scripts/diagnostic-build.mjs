@@ -16,7 +16,7 @@ const requiredResources = [
 ];
 const optionalResources = [
     'assets/vendor/three.min.js', 'assets/images/favicon.svg', 'assets/images/logo.svg',
-    'css/heroui-bridge.css', 'css/theme-switcher-scroll.css', 'css/onboarding.css', 'css/vocab-reader.css',
+    'css/heroui-bridge.css', 'css/theme-switcher-scroll.css', 'css/onboarding.css', 'css/vocab-reader.css', 'css/folder-sync.css',
     'assets/generated/listening-exams/manifest.js', 'assets/generated/listening-exams/listening-index.compat.js'
 ];
 const digest = (text) => createHash('sha256').update(text).digest('hex');
