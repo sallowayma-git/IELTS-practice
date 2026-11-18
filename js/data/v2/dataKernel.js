@@ -1090,6 +1090,12 @@
                     return { recordId, revision, operationId: String(row.operationId || options.operationId || 'snapshot'), updatedAt: String(row.updatedAt || nowIso()), data, checksum: checksum(data) };
                 });
             }
+            if (options.cloudSyncState !== undefined) {
+                const entry = lookupEntry('system.cloudSync');
+                const data = canonicalizeJson(options.cloudSyncState);
+                if (!entry.validate(data)) throw validation('Invalid cloud sync state');
+                changes.push({ logicalKey: entry.logicalKey, entry, envelope: makeEnvelope(entry, data) });
+            }
             if (!changes.length && !Object.keys(entityRows).length) throw validation('Snapshot contains no importable data');
             const resetJournal = options.resetJournal === true;
             const expectedRevisionToken = options.expectedRevisionToken && typeof options.expectedRevisionToken === 'object'
@@ -1125,7 +1131,7 @@
                         logicalKey,
                         expected: documentChecks[logicalKey],
                         hasExpected: Object.prototype.hasOwnProperty.call(documentChecks, logicalKey),
-                        request: tx.objectStore(DOCUMENT_STORE).get(logicalKey)
+                        request: tx.objectStore(storeFor(logicalKey)).get(logicalKey)
                     })).concat(Array.from(entityStores).map((store) => {
                         entityStore(store);
                         return {
@@ -1190,7 +1196,7 @@
                                 operationId: spec.operationId,
                                 normalized: true
                             });
-                            tx.objectStore(DOCUMENT_STORE).put({ logicalKey: item.logicalKey, envelope });
+                            tx.objectStore(storeFor(item.logicalKey)).put({ logicalKey: item.logicalKey, envelope });
                             revisions[item.logicalKey] = nextRevision;
                         }
                         const entityReads = new Map(reads.filter((read) => read.kind === 'entities').map((read) => [read.store, read]));

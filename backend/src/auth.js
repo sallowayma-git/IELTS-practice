@@ -218,6 +218,13 @@ function createAuthRouter(options = {}) {
         return res.json({ csrfToken: ensureCsrfToken(req) });
     });
 
+    router.get('/registration', async (_req, res, next) => {
+        try {
+            const allowed = registrationMode === 'open' || (registrationMode === 'first-user' && await store.countUsers() === 0);
+            return res.json({ allowed });
+        } catch (error) { return next(error); }
+    });
+
     router.get('/me', (req, res) => {
         if (!req.session || !req.session.user) {
             return res.status(401).json({ user: null, csrfToken: ensureCsrfToken(req) });

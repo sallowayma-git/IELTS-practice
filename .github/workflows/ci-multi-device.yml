@@ -110,6 +110,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Install browser acceptance dependencies
+        run: |
+          npm ci --prefix developer
+          node developer/node_modules/playwright/cli.js install --with-deps chromium --only-shell
       - name: Verify container deployment and PostgreSQL persistence
         timeout-minutes: 16
         env:

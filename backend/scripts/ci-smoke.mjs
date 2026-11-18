@@ -137,7 +137,9 @@ async function smoke(state, pass) {
         const response = await fetch(`${baseUrl}/${resource === 'index.html' ? '' : resource}`,
             { signal: AbortSignal.timeout(15_000) });
         assert.equal(response.status, 200, resource);
-        assert.ok((await response.text()) === (await fs.readFile(path.join(repoRoot, resource), 'utf8')),
+        const expected = await fs.readFile(path.join(repoRoot, resource), 'utf8');
+        assert.ok((await response.text()) === (resource === 'index.html'
+            ? expected.replace('<head>', '<head><meta name="ielts-backend" content="1">') : expected),
             `${resource} must match the checkout`);
     }
     pass('Container serves the current homepage and practice resources');
@@ -202,6 +204,14 @@ async function smoke(state, pass) {
     await second.request('PUT', '/api/practice-records', { records: [record] }, loggedIn.csrfToken);
     assert.deepEqual((await first.request('GET', '/api/practice-records')).records, [record]);
     pass('Accounts, both sessions, CSRF tokens, and records survive application restart');
+
+    await first.request('DELETE', '/api/practice-records', undefined, registered.csrfToken);
+    execFileSync(process.execPath, [path.join(repoRoot, 'developer/tests/e2e/multi_device_sync.cjs')], {
+        cwd: repoRoot, stdio: 'inherit', timeout: 240_000,
+        env: { ...process.env, MULTI_DEVICE_BASE_URL: baseUrl,
+            MULTI_DEVICE_USERNAME: credentials.username, MULTI_DEVICE_PASSWORD: credentials.password }
+    });
+    pass('Browser login, migration, synchronization, conflicts, and offline recovery work with PostgreSQL');
 }
 
 async function main() {

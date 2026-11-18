@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const { z } = require('zod');
 const { requireAuth, verifyCsrfToken } = require('./auth');
+const { snapshotOf, requireRevision } = require('./practiceSnapshot');
 
 const practiceRecordSchema = z.object({}).passthrough();
 const MAX_RECORDS_PER_REQUEST = 5000;
@@ -449,6 +450,7 @@ class PostgresPracticeRecordStore {
     async replace(userId, records) {
         const list = deduplicatePracticeRecordList(records);
         await this.db.withTransaction(async (client) => {
+            await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
             await client.query('DELETE FROM practice_records WHERE user_id = $1', [userId]);
             for (let index = 0; index < list.length; index += 1) {
                 await insertRecord(client, userId, list[index], index);
@@ -457,17 +459,33 @@ class PostgresPracticeRecordStore {
         return list.map((record) => cloneSafeJsonValue(record));
     }
 
+    async compareAndReplace(userId, revision, records) {
+        const list = deduplicatePracticeRecordList(records);
+        return this.db.withTransaction(async (client) => {
+            // Serialize every write for this account, including the legacy API.
+            await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+            const current = await client.query('SELECT payload FROM practice_records WHERE user_id = $1', [userId]);
+            requireRevision(current.rows.map(row => row.payload), revision);
+            await client.query('DELETE FROM practice_records WHERE user_id = $1', [userId]);
+            for (let index = 0; index < list.length; index += 1) await insertRecord(client, userId, list[index], index);
+            return snapshotOf(list);
+        });
+    }
+
     async deleteById(userId, id) {
         const recordId = requireRecordId(id);
-        const result = await this.db.query(
-            'DELETE FROM practice_records WHERE user_id = $1 AND id = $2',
-            [userId, recordId]
-        );
-        return result.rowCount || 0;
+        return this.db.withTransaction(async (client) => {
+            await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+            const result = await client.query('DELETE FROM practice_records WHERE user_id = $1 AND id = $2', [userId, recordId]);
+            return result.rowCount || 0;
+        });
     }
 
     async clear(userId) {
-        await this.db.query('DELETE FROM practice_records WHERE user_id = $1', [userId]);
+        await this.db.withTransaction(async (client) => {
+            await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+            await client.query('DELETE FROM practice_records WHERE user_id = $1', [userId]);
+        });
         return true;
     }
 }
@@ -524,6 +542,14 @@ class MemoryPracticeRecordStore {
         return this.list(userId);
     }
 
+    async compareAndReplace(userId, revision, records) {
+        // No await between comparison and replacement: match the PostgreSQL lock.
+        requireRevision(this.recordsByUser.get(userId) || [], revision);
+        const list = deduplicatePracticeRecordList(records);
+        this.recordsByUser.set(userId, list.map(record => cloneSafeJsonValue(record)));
+        return snapshotOf(list);
+    }
+
     async deleteById(userId, id) {
         const recordId = requireRecordId(id);
         const records = this.recordsByUser.get(userId) || [];
@@ -573,6 +599,24 @@ function createPracticeRecordsRouter(options = {}) {
         : (() => false);
 
     router.use(requireAuth);
+
+    router.get('/sync', async (req, res, next) => {
+        try {
+            return res.json({ userId: req.session.user.id, ...snapshotOf(await store.list(req.session.user.id)) });
+        } catch (error) { return next(error); }
+    });
+
+    router.post('/sync', verifyCsrfToken, async (req, res, next) => {
+        try {
+            // A cookie may change in another tab while a sync is in flight.
+            if (req.body?.userId !== req.session.user.id) return res.status(403).json({ error: 'Account changed. Sign in again.' });
+            if (!Array.isArray(req.body.records) || typeof req.body.revision !== 'string') {
+                return res.status(400).json({ error: 'records and revision are required' });
+            }
+            const result = await store.compareAndReplace(req.session.user.id, req.body.revision, req.body.records);
+            return res.json({ userId: req.session.user.id, ...result });
+        } catch (error) { return next(error); }
+    });
 
     router.get('/data-manage/status', (req, res) => res.json({
         fresh: Boolean(hasFreshDataManageStepUp(req)),

@@ -23,6 +23,7 @@ const bundles = {
         'js/data/v2/dataKernel.js',
         'js/data/v2/appData.js',
         'js/core/externalBackupService.js',
+        'js/services/practiceCloud.js',
         'js/core/siteDataReset.js',
         'js/core/practiceCore.js',
         'js/core/resourceCore.js',
