@@ -59,11 +59,10 @@ const navItems = [
     view: 'browse',
     sub: [
       { key: 'reading', to: libraryView('browse'), label: '阅读', match: ['/'], view: 'browse' },
-      { key: 'writing', to: '/topics', label: '写作', match: ['/topics'] }
+      { key: 'writing', to: '/topics', label: '写作', match: ['/topics', '/writing', '/evaluating/', '/result/'] },
+      { key: 'listening', to: '/listening', label: '听力', match: ['/listening'] }
     ]
   },
-  { key: 'writing', to: '/writing', label: '写作', match: ['/writing', '/evaluating/', '/result/'] },
-  { key: 'listening', to: '/listening', label: '听力', match: ['/listening'] },
   ...(featureFlags.learnerModelV1
     ? [{ key: 'learner', to: '/reading/learner', label: '技能', match: ['/reading/learner'] }]
     : []),

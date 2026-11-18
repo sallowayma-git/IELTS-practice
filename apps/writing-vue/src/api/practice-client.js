@@ -2,6 +2,7 @@
  * Practice surface — Tauri repositories only (Fastify removed).
  */
 
+import { isJiufenAsset } from '@/api/jiufen.js'
 import {
   listReadingAssets,
   getReadingAssetPayload,
@@ -58,6 +59,10 @@ export const practiceAssets = {
 
   async get(activity, assetId) {
     const normalizedAssetId = String(assetId || '').trim()
+    if (isJiufenAsset(normalizedAssetId)) {
+      const loaded = await getReadingAssetPayload(normalizedAssetId)
+      return { ...loaded.asset, payload: loaded.payload }
+    }
     const { items } = await listReadingAssets()
     const meta = items.find((item) => String(item.id) === normalizedAssetId) || null
     if (!meta) {

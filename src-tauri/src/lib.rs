@@ -8,6 +8,8 @@ pub(crate) mod ai;
 pub(crate) mod cognitive_runtime;
 pub mod app;
 pub mod commands;
+#[path = "../../plug/jiufen/host.rs"]
+mod jiufen;
 #[cfg(test)]
 mod ipc_acl_tests;
 
@@ -89,6 +91,7 @@ pub fn run() {
         .manage(paths)
         .manage(db)
         .manage(vault)
+        .manage(jiufen::service::Account::default())
         .manage(agent::WorkspaceGrants::default())
         .manage(agent::AgentCancelRegistry::default())
         .manage(commands::backup::BackupImportGrants::default())
@@ -264,6 +267,16 @@ pub fn run() {
             commands::writing::writing_prompt_activate,
             commands::writing::writing_prompt_delete,
             commands::reading::reading_list_assets,
+            jiufen::service::jiufen_send_code,
+            jiufen::service::jiufen_login,
+            jiufen::service::jiufen_restore,
+            jiufen::service::jiufen_disconnect,
+            jiufen::service::jiufen_is_connected,
+            jiufen::catalog::jiufen_library,
+            jiufen::practice::jiufen_open_unit,
+            jiufen::practice::jiufen_submit,
+            jiufen::practice::jiufen_review,
+            jiufen::practice::jiufen_listening_audio,
             commands::reading::reading_pick_practice_asset,
             commands::reading::reading_get_asset_payload,
             commands::reading::reading_get_pdf_data_url,

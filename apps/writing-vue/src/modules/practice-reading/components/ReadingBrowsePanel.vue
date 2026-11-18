@@ -30,25 +30,7 @@
           <span class="browse-preference-text">列表位置记录</span>
         </label>
       </div>
-      <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group shui-segmented-control segmented">
-        <span class="shui-segmented-indicator" aria-hidden="true"></span>
-        <button
-          v-for="filter in typeFilters"
-          :key="filter.value"
-          class="shui-segmented-btn shui-filter-btn"
-          :class="{ active: selectedType === filter.value }"
-          type="button"
-          :aria-pressed="selectedType === filter.value ? 'true' : 'false'"
-          :hidden="filter.hidden ? true : null"
-          :data-filter-type="filter.value"
-          data-index-action="filter-exams"
-          :data-action-value="filter.value"
-          data-action="filter-exam-type"
-          @click="$emit('filter-by-type', filter.value)"
-        >
-          {{ filter.label }}
-        </button>
-      </div>
+      <slot />
     </div>
 
     <div v-if="questionKindLabel" class="browse-question-kind" data-reading-question-kind>
@@ -170,6 +152,7 @@
           <div class="reading-card__body">
             <div class="reading-card__tags">
               <span class="tag tag-neutral">{{ categoryOf(asset) }}</span>
+              <span v-if="asset.provider" class="tag tag-info">九分学长</span>
               <span
                 v-if="frequencyTagOf(asset)"
                 class="tag"
@@ -213,12 +196,13 @@
               <button
                 class="btn btn-primary btn-sm"
                 type="button"
+                :disabled="asset.available === false"
                 data-action="start"
                 :data-exam-id="asset.id"
                 :aria-label="`${customSuiteDraft ? '选择' : '开始练习'} ${asset.title}`"
                 @click="$emit('browse-primary-action', asset)"
               >
-                {{ customSuiteDraft ? '选择此题' : '开始练习' }}
+                {{ asset.available === false ? '暂无权限' : customSuiteDraft ? '选择此题' : '开始练习' }}
               </button>
             </template>
           </footer>
@@ -281,8 +265,6 @@ defineProps({
   browsePreferencePanelOpen: { type: Boolean, default: false },
   browseRememberPosition: { type: Boolean, default: true },
   browseTitle: { type: String, required: true },
-  typeFilters: { type: Array, required: true },
-  selectedType: { type: String, required: true },
   questionKindLabel: { type: String, default: '' },
   keyword: { type: String, default: '' },
   frequencyFilters: { type: Array, required: true },
@@ -321,7 +303,6 @@ const emit = defineEmits([
   'update:sortMode',
   'toggle-browse-preference',
   'persist-browse-preference',
-  'filter-by-type',
   'clear-question-kind',
   'clear-search',
   'toggle-frequency-filter',

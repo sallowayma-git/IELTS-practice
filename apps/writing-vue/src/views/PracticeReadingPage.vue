@@ -317,6 +317,7 @@ import { useUnifiedDisplay } from '@/modules/reading-unified/composables/useUnif
 import { useUnifiedDivider } from '@/modules/reading-unified/composables/useUnifiedDivider.js'
 import { useNativeAnswerControls } from '@/modules/reading-unified/composables/useNativeAnswerControls.js'
 import { applyResultsToQuestionArea } from '@/modules/reading-unified/reviewMarks.js'
+import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
 import { useReadingAsset } from '@/modules/practice-reading/useReadingAsset'
 import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
 import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
@@ -1176,6 +1177,9 @@ async function loadSubmittedSession(sessionId) {
   if (expectedAssetId && actualAssetId && expectedAssetId !== actualAssetId) {
     throw new Error('阅读回放记录与当前题目不匹配')
   }
+  if (isJiufenAsset(expectedAssetId)) {
+    Object.assign(payload.value, await jiufen.review(expectedAssetId, sessionId))
+  }
   submission.value = loadedSubmission
   // Field contraction: store may omit correctAnswer; fill from asset answerKey for review UI.
   fillCorrectAnswersFromPayload(loadedSubmission)
@@ -1494,7 +1498,13 @@ const modeFlow = useReadingModeFlow({
   getAttemptId: () => tauriAttemptId,
   setAttemptId: (id) => { tauriAttemptId = id },
   newAttemptId: () => readingAttempt.newAttemptId(),
-  submitSingleAttempt: (input) => readingAttempt.submit(input),
+  submitSingleAttempt: async (input) => {
+    const result = await readingAttempt.submit(input)
+    if (isJiufenAsset(input.assetId) && result.raw?.review) {
+      Object.assign(payload.value, result.raw.review)
+    }
+    return result
+  },
   snapshotAnswerMap,
   markedQuestions,
   interactionCount,

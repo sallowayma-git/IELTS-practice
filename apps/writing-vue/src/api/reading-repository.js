@@ -2,6 +2,7 @@
  * Reading attempt repository — Tauri only.
  */
 
+import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
 import { invokeCommand, isTauriRuntime, unwrapCommandResponse } from '@/api/tauri-bridge.js'
 import { normalizeReadingAssetList } from '@/api/reading-asset-list.js'
 
@@ -113,6 +114,9 @@ export async function patchReadingAnswer(attemptId, questionId, answer, marked =
 }
 
 export async function submitReadingAttempt(payload) {
+  if (isJiufenAsset(payload.assetId)) {
+    return { source: 'tauri', result: await jiufen.submit('reading', payload) }
+  }
   const response = await invokeCommand('reading_submit_attempt', {
     cmd: {
       attemptId: payload.attemptId,

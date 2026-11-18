@@ -753,7 +753,9 @@ fn load_answerable_asset(
             )));
         }
     }
-    if load_answer_key(&loaded.payload).is_empty() {
+    if load_answer_key(&loaded.payload).is_empty()
+        && !(loaded.asset.id.starts_with("jiufen-native-") && loaded.asset.metadata.as_ref().and_then(|m| m["jiufenOwner"].as_str()).is_some())
+    {
         return Err(DbError::Validation(format!(
             "{label} asset is not answerable: {asset_id}"
         )));

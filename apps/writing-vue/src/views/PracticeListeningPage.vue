@@ -47,11 +47,11 @@
       </div>
 
       <ListeningAudioBar
-        :audio-url="audioUrl"
+        :audio-url="onlineAudio ? onlineAudio[activeSection] : audioUrl"
         :loading="audioLoading"
         :error="audioError"
         :duration-seconds="durationSeconds"
-        @retry="loadAudio"
+        @retry="loadPracticeAudio"
       />
 
       <template v-if="!reviewMode">
@@ -115,6 +115,7 @@
 </template>
 
 <script setup>
+import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ListeningAudioBar from '@/modules/practice-listening/components/ListeningAudioBar.vue'
@@ -156,6 +157,7 @@ const submitting = ref(false)
 const submitError = ref('')
 const draftRestored = ref(false)
 const activeSection = ref(1)
+const onlineAudio = ref(null)
 const review = ref(null)
 const reviewLoading = ref(false)
 const reviewError = ref('')
@@ -376,6 +378,9 @@ async function loadReview() {
     if (mapped.assetId && mapped.assetId !== props.assetId) {
       throw new Error('复盘记录与当前听力资源不匹配')
     }
+    if (isJiufenAsset(props.assetId)) {
+      Object.assign(payload.value, await jiufen.review(props.assetId, props.attemptId))
+    }
     review.value = mapped
   } catch (loadError) {
     console.warn('加载听力复盘记录失败:', loadError)
@@ -439,6 +444,20 @@ function formatDurationMs(value) {
   return minutes > 0 ? `${minutes} 分 ${rest} 秒` : `${rest} 秒`
 }
 
+async function loadPracticeAudio() {
+  if (!isJiufenAsset(props.assetId)) return loadAudio(props.assetId)
+  audioLoading.value = true
+  audioError.value = ''
+  try {
+    onlineAudio.value = await jiufen.listeningAudio(props.assetId)
+    if (!Object.keys(onlineAudio.value).length) audioError.value = '当前试题没有可播放音轨'
+  } catch (failure) {
+    audioError.value = failure?.message || String(failure)
+  } finally {
+    audioLoading.value = false
+  }
+}
+
 async function initialize() {
   loading.value = true
   error.value = ''
@@ -453,7 +472,7 @@ async function initialize() {
     await loadListeningAsset(props.assetId)
     initializeAnswers(payload.value)
     activeSection.value = firstPresentSection()
-    void loadAudio(props.assetId)
+    void loadPracticeAudio()
     if (reviewMode.value) {
       await loadReview()
     } else {

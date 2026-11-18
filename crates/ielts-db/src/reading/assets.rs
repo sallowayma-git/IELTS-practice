@@ -35,6 +35,8 @@ pub struct AssetIndexEntry {
     /// heading_match, paragraph_match, matching), canonically ordered and
     /// deduplicated. Empty for a pdf-only or not-yet-classified asset.
     pub question_kinds: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<String>,
 }
 
 const MAX_PDF_BYTES: usize = 20 * 1024 * 1024;
@@ -225,11 +227,11 @@ pub fn list_assets(
     activity: Option<Activity>,
 ) -> DbResult<Vec<AssetIndexEntry>> {
     let mut sql = String::from(
-        "SELECT id, title, category, difficulty, frequency, fingerprint, schema_version, content_ref, pdf_only, question_kinds_json, activity
-         FROM practice_assets",
+        "SELECT id, title, category, difficulty, frequency, fingerprint, schema_version, content_ref, pdf_only, question_kinds_json, activity, json_extract(metadata_json, '$.parts')
+         FROM practice_assets WHERE id NOT LIKE 'jiufen-native-%'",
     );
     if activity.is_some() {
-        sql.push_str(" WHERE activity = ?1");
+        sql.push_str(" AND activity = ?1");
     }
     sql.push_str(" ORDER BY category, title");
     let mut stmt = conn.prepare(&sql)?;
@@ -247,6 +249,7 @@ pub fn list_assets(
             content_ref: content_ref.clone(),
             payload_ref: content_ref,
             activity: row.get(10)?,
+            parts: row.get::<_,Option<String>>(11)?.and_then(|raw|serde_json::from_str(&raw).ok()).unwrap_or_default(),
             pdf_only: row.get::<_, i64>(8)? != 0,
             question_kinds: parse_question_kinds(question_kinds_json.as_deref()),
         })

@@ -21,12 +21,19 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { syncLibrary } from '../../../plug/jiufen/library.js'
 import { useRoute } from 'vue-router'
 import NavBar from './components/NavBar.vue'
 import ShuiBackground from './components/ShuiBackground.vue'
 import CrayonDefs from './modules/notebook/components/CrayonDefs.vue'
 
+let renewTimer
+onMounted(() => {
+  void syncLibrary()
+  renewTimer = window.setInterval(syncLibrary, 30 * 60 * 1000)
+})
+onUnmounted(() => window.clearInterval(renewTimer))
 const route = useRoute()
 const framelessRouteNames = new Set([
   'PracticeReading',

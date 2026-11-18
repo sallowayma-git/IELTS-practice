@@ -789,6 +789,66 @@
           "markdownDescription": "Enables the install_update command without any pre-configured scope."
         },
         {
+          "description": "Enables the jiufen_disconnect command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-disconnect",
+          "markdownDescription": "Enables the jiufen_disconnect command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_is_connected command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-is-connected",
+          "markdownDescription": "Enables the jiufen_is_connected command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_library command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-library",
+          "markdownDescription": "Enables the jiufen_library command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_listening_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-listening-audio",
+          "markdownDescription": "Enables the jiufen_listening_audio command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_login command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-login",
+          "markdownDescription": "Enables the jiufen_login command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_open_unit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-open-unit",
+          "markdownDescription": "Enables the jiufen_open_unit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_restore command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-restore",
+          "markdownDescription": "Enables the jiufen_restore command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-review",
+          "markdownDescription": "Enables the jiufen_review command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_send_code command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-send-code",
+          "markdownDescription": "Enables the jiufen_send_code command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jiufen_submit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-submit",
+          "markdownDescription": "Enables the jiufen_submit command without any pre-configured scope."
+        },
+        {
           "description": "Enables the journal_get_daily command without any pre-configured scope.",
           "type": "string",
           "const": "allow-journal-get-daily",
@@ -1765,6 +1825,66 @@
           "type": "string",
           "const": "deny-install-update",
           "markdownDescription": "Denies the install_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_disconnect command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-disconnect",
+          "markdownDescription": "Denies the jiufen_disconnect command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_is_connected command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-is-connected",
+          "markdownDescription": "Denies the jiufen_is_connected command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_library command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-library",
+          "markdownDescription": "Denies the jiufen_library command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_listening_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-listening-audio",
+          "markdownDescription": "Denies the jiufen_listening_audio command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_login command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-login",
+          "markdownDescription": "Denies the jiufen_login command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_open_unit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-open-unit",
+          "markdownDescription": "Denies the jiufen_open_unit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_restore command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-restore",
+          "markdownDescription": "Denies the jiufen_restore command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-review",
+          "markdownDescription": "Denies the jiufen_review command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_send_code command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-send-code",
+          "markdownDescription": "Denies the jiufen_send_code command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_submit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-submit",
+          "markdownDescription": "Denies the jiufen_submit command without any pre-configured scope."
         },
         {
           "description": "Denies the journal_get_daily command without any pre-configured scope.",

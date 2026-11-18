@@ -7,6 +7,7 @@
  * that may name the listening commands.
  */
 
+import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
 import { invokeCommand, isTauriRuntime, unwrapCommandResponse } from '@/api/tauri-bridge.js'
 
 export function newKey(prefix = 'l') {
@@ -76,6 +77,9 @@ export async function getOpenListeningDraft(assetId) {
 }
 
 export async function submitListeningAttempt(payload) {
+  if (isJiufenAsset(payload.assetId)) {
+    return { source: 'tauri', result: await jiufen.submit('listening', payload) }
+  }
   const response = await invokeCommand('listening_submit_attempt', {
     cmd: {
       attemptId: payload.attemptId,

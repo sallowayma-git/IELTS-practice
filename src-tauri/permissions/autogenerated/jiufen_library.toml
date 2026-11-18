@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-library"
+description = "Enables the jiufen_library command without any pre-configured scope."
+commands.allow = ["jiufen_library"]
+
+[[permission]]
+identifier = "deny-jiufen-library"
+description = "Denies the jiufen_library command without any pre-configured scope."
+commands.deny = ["jiufen_library"]

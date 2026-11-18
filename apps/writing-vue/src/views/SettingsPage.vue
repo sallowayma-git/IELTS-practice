@@ -124,9 +124,10 @@
           <div class="panel-header">
             <div class="settings-card__head">
               <h2 id="settings-general-title">通用</h2>
-              <p class="field-help">新手引导与应用更新。</p>
+              <p class="field-help">题源账号、新手引导与应用更新。</p>
             </div>
           </div>
+          <JiufenAccountPanel />
           <div class="setting-row">
             <div class="setting-row__copy">
               <strong>新手引导</strong>
@@ -684,6 +685,7 @@
             </div>
           </section>
 
+
           <section class="settings-panel danger-zone">
             <div class="panel-header settings-panel__head">
               <div>
@@ -864,6 +866,7 @@ import {
 } from '@/api/settings-repository.js'
 import { invokeCommand } from '@/api/tauri-bridge.js'
 import { useReadingDataTools } from '@/modules/practice-reading/useReadingDataTools.js'
+import JiufenAccountPanel from '../../../../plug/jiufen/JiufenAccountPanel.vue'
 import { createRequestGate } from '@/utils/request-gate.js'
 import {
   isProviderDefaultUrl,

@@ -179,6 +179,7 @@ pub fn seed_builtin_listening_pack(conn: &Connection, pack_root: &Path) -> DbRes
                 "sha256": sha256,
                 "audio": payload.meta.audio,
                 "durationSeconds": payload.meta.duration_seconds,
+                "parts": payload.question_groups.iter().map(|g|format!("P{}",g.section)).collect::<std::collections::BTreeSet<_>>(),
             })),
         };
         crate::reading::assets::upsert_practice_asset(&tx, &asset)?;
