@@ -70,6 +70,7 @@
         manifest['theme-tools'] = [
             'js/bundles/theme.bundle.js'
         ];
+        manifest['theme-background'] = ['assets/vendor/three.min.js'];
 
         manifest['settings-tools'] = [];
         manifest['reading-tools'] = ['js/bundles/reading-tools.bundle.js'];
@@ -358,6 +359,9 @@
 
         if (groupName === 'exam-data') {
             return sequentialLoad(list).then(ensureOptionalListeningExamData);
+        }
+        if (groupName === 'theme-background') {
+            return loadScript(list[0], { optional: true });
         }
 
         if ((groupName === 'browse-runtime' || groupName === 'browse-view') && list.indexOf('js/bundles/browse.bundle.js') === -1) {

@@ -42,6 +42,10 @@ body.hero-body {
     animation: none;
 }
 
+body.hero-body[data-bg-theme="floral-bloom"] {
+    background: #efdfdf url("../assets/images/floral-bloom.webp") center / cover no-repeat fixed;
+}
+
 #shui-three-bg {
     position: fixed;
     inset: 0;
@@ -1709,6 +1713,9 @@ body.hero-body {
 }
 
 #browse-view .exam-item {
+    /* Skip layout and paint inside cards outside the scroll viewport. */
+    content-visibility: auto;
+    contain-intrinsic-block-size: auto 160px;
     background: rgba(255, 255, 255, 0.86);
     background-image: none;
     border: 1px solid rgba(255, 255, 255, 0.48);

@@ -621,7 +621,8 @@ const staleOutputs = [];
 const artifacts = buildDiagnosticArtifacts({
     renderedBundles: Object.fromEntries(Object.entries(bundles).map(([output, inputs]) => [output, renderBundle(output, inputs)])),
     bundleInputs: bundles,
-    readSource
+    readSource,
+    readAsset: relativePath => fs.readFileSync(path.join(root, relativePath))
 });
 for (const [outputPath, expected] of Object.entries({ ...artifacts.bundles, ...artifacts.generated })) {
     const absoluteOutput = path.join(root, outputPath);

@@ -4607,50 +4607,14 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 (function initIndexInteractions(global) {
     'use strict';
 
-    var browsePrefetched = false;
-    var morePrefetched = false;
     var settingsPrefetched = false;
-    var browsePrefetchPromise = null;
-    var morePrefetchPromise = null;
     var settingsPrefetchPromise = null;
     var indexInteractionsInitialized = false;
     var licenseModalInitialized = false;
     var licenseModalInitializationPromise = null;
     var licenseModalRenderToken = 0;
 
-    function ensureBrowse() {
-        if (browsePrefetched) {
-            return browsePrefetchPromise || Promise.resolve();
-        }
-        browsePrefetched = true;
-        var loader = global.AppEntry && typeof global.AppEntry.ensureBrowseGroup === 'function'
-            ? global.AppEntry.ensureBrowseGroup
-            : function fallback() { return Promise.resolve(); };
-        browsePrefetchPromise = loader().catch(function swallow(error) {
-            browsePrefetched = false;
-            browsePrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 browse-view 失败:', error);
-        });
-        return browsePrefetchPromise;
-    }
-
-    function ensureMore() {
-        if (morePrefetched) {
-            return morePrefetchPromise || Promise.resolve();
-        }
-        morePrefetched = true;
-        var loader = global.AppEntry && typeof global.AppEntry.ensureMoreToolsGroup === 'function'
-            ? global.AppEntry.ensureMoreToolsGroup
-            : function fallback() { return Promise.resolve(); };
-        morePrefetchPromise = loader().catch(function swallow(error) {
-            morePrefetched = false;
-            morePrefetchPromise = null;
-            console.warn('[IndexInteractions] 预加载 more-tools 失败:', error);
-        });
-        return morePrefetchPromise;
-    }
-
-function ensureSettings() {
+    function ensureSettings() {
     if (settingsPrefetched) {
         return settingsPrefetchPromise || Promise.resolve();
         }
@@ -5013,106 +4977,13 @@ function ensureSettings() {
         global.__indexDeclarativeActionsInitialized = true;
     }
 
-    function attachNavPrefetch() {
-        var browseBtn = document.querySelector('.main-nav [data-view=\"browse\"]');
-        var moreBtn = document.querySelector('.main-nav [data-view=\"more\"]');
-        var settingsBtn = document.querySelector('.main-nav [data-view=\"settings\"]');
-
-        if (browseBtn) {
-            ['pointerenter', 'focus'].forEach(function (eventName) {
-                browseBtn.addEventListener(eventName, ensureBrowse, { once: true });
-            });
-            browseBtn.addEventListener('click', ensureBrowse);
-        }
-
-        if (moreBtn) {
-            ['pointerenter', 'focus'].forEach(function (eventName) {
-                moreBtn.addEventListener(eventName, ensureMore, { once: true });
-            });
-            moreBtn.addEventListener('click', ensureMore);
-        }
-
-        if (settingsBtn) {
-            ['pointerenter', 'focus'].forEach(function (eventName) {
-                settingsBtn.addEventListener(eventName, ensureSettings, { once: true });
-            });
-            settingsBtn.addEventListener('click', ensureSettings);
-        }
-    }
-
-    function getActiveHeroNavButton(nav) {
-        if (!nav) {
-            return null;
-        }
-        var active = nav.querySelector('.hero-nav__btn.active');
-        if (active) {
-            return active;
-        }
-        return nav.querySelector('.hero-nav__btn');
-    }
-
-    function getHeroNavIndicatorRect(nav, btn) {
-        if (!nav || !btn || !btn.getBoundingClientRect) {
-            return null;
-        }
-
-        var navRect = nav.getBoundingClientRect();
-        var btnRect = btn.getBoundingClientRect();
-        if (!btnRect || btnRect.width <= 0 || btnRect.height <= 0) {
-            return null;
-        }
-
-        var inset = 3;
-        return {
-            left: Math.max(0, btnRect.left - navRect.left + inset),
-            top: Math.max(0, btnRect.top - navRect.top + inset),
-            width: Math.max(16, btnRect.width - inset * 2),
-            height: Math.max(16, btnRect.height - inset * 2)
-        };
-    }
-
-    function applyHeroNavIndicatorRect(indicator, rect) {
-        if (!indicator || !rect) {
-            return;
-        }
-        indicator.style.transform = 'translate3d(' + rect.left + 'px, ' + rect.top + 'px, 0)';
-        indicator.style.width = rect.width + 'px';
-        indicator.style.height = rect.height + 'px';
-    }
-
-    function animateHeroNavIndicator(state, targetRect, immediate) {
-        if (!state || !state.indicator || !targetRect) {
-            return;
-        }
-
-        var indicator = state.indicator;
-
-        // 如果需要瞬间完成（例如窗口 Resize），则临时关闭过渡动画
-        var shouldReduceMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (immediate || shouldReduceMotion) {
-            indicator.style.transition = 'none';
-        } else {
-            indicator.style.transition = ''; // 恢复 CSS 文件中定义的弹簧过渡动画
-        }
-
-        applyHeroNavIndicatorRect(indicator, targetRect);
-
-        // The next animated update restores the CSS transition. Keeping it
-        // disabled here avoids a forced layout during initialization/resize.
-        state.lastRect = targetRect;
-        state.ready = true;
-    }
-
     function setupHeroNavLiquidIndicator() {
-        if (global.__heroNavLiquidInitialized) {
-            return;
-        }
-
+        if (global.__heroNavLiquidInitialized) return;
         var nav = document.querySelector('.hero-nav');
-        if (!nav) {
-            return;
-        }
+        if (!nav) return;
 
+        var buttons = Array.from(nav.querySelectorAll('.hero-nav__btn'));
+        if (!buttons.length) return;
         var indicator = nav.querySelector('.hero-nav__liquid-indicator');
         if (!indicator) {
             indicator = document.createElement('span');
@@ -5120,76 +4991,56 @@ function ensureSettings() {
             nav.insertBefore(indicator, nav.firstChild);
         }
 
-        var state = {
-            nav: nav,
-            indicator: indicator,
-            lastRect: null,
-            ready: false,
-            animation: null
-        };
-
-        var sync = function (immediate) {
-            var activeBtn = getActiveHeroNavButton(nav);
-            var targetRect = getHeroNavIndicatorRect(nav, activeBtn);
-            if (!targetRect) {
-                return;
+        var rects = new Map();
+        var lastRect = null;
+        function updateIndicator(immediate) {
+            var active = nav.querySelector('.hero-nav__btn.active') || buttons[0];
+            var rect = rects.get(active);
+            if (!rect || (rect === lastRect && !immediate)) return;
+            indicator.style.transition = immediate ? 'none' : '';
+            if (!lastRect || rect.width !== lastRect.width) indicator.style.width = rect.width + 'px';
+            if (!lastRect || rect.height !== lastRect.height) indicator.style.height = rect.height + 'px';
+            if (!lastRect || rect.x !== lastRect.x || rect.y !== lastRect.y) {
+                indicator.style.transform = 'translate3d(' + rect.x + 'px, ' + rect.y + 'px, 0)';
             }
-            animateHeroNavIndicator(state, targetRect, !!immediate);
-            if (!nav.classList.contains('hero-nav--liquid-ready')) {
-                nav.classList.add('hero-nav--liquid-ready');
-            }
-        };
-
-        var resizeToken = 0;
-        var scheduleSync = function (immediate) {
-            if (resizeToken) {
-                global.cancelAnimationFrame(resizeToken);
-            }
-            resizeToken = global.requestAnimationFrame(function () {
-                resizeToken = 0;
-                sync(immediate);
-            });
-        };
-
-        nav.addEventListener('click', function (event) {
-            if (!event.target || !event.target.closest('.hero-nav__btn')) {
-                return;
-            }
-            scheduleSync(false);
-        });
-
-        var observer = new MutationObserver(function (mutations) {
-            var shouldSync = false;
-            for (var i = 0; i < mutations.length; i += 1) {
-                var mutation = mutations[i];
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class'
-                    && mutation.target && mutation.target.classList
-                    && mutation.target.classList.contains('hero-nav__btn')) {
-                    shouldSync = true;
-                    break;
-                }
-            }
-            if (shouldSync) {
-                scheduleSync(false);
-            }
-        });
-        observer.observe(nav, {
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class']
-        });
-
-        global.addEventListener('resize', function () {
-            scheduleSync(true);
-        });
-
-        if (document.fonts && typeof document.fonts.ready === 'object' && typeof document.fonts.ready.then === 'function') {
-            document.fonts.ready.then(function () {
-                scheduleSync(true);
-            });
+            if (!lastRect) nav.classList.add('hero-nav--liquid-ready');
+            lastRect = rect;
         }
 
-        scheduleSync(true);
+        function measureButtons() {
+            var navRect = nav.getBoundingClientRect();
+            buttons.forEach(function (button) {
+                var rect = button.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) {
+                    rects.delete(button);
+                    return;
+                }
+                rects.set(button, {
+                    x: Math.max(0, rect.left - navRect.left + 3),
+                    y: Math.max(0, rect.top - navRect.top + 3),
+                    width: Math.max(16, rect.width - 6),
+                    height: Math.max(16, rect.height - 6)
+                });
+            });
+            updateIndicator(true);
+        }
+
+        // Tab selection reuses geometry. ResizeObserver measures after layout,
+        // so opening a large view never forces a layout from the indicator.
+        if (typeof global.ResizeObserver === 'function') {
+            var resizeObserver = new global.ResizeObserver(measureButtons);
+            resizeObserver.observe(nav);
+            buttons.forEach(function (button) { resizeObserver.observe(button); });
+        } else {
+            global.addEventListener('resize', measureButtons);
+            global.requestAnimationFrame(measureButtons);
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureButtons);
+        }
+        var observer = new MutationObserver(function () { updateIndicator(false); });
+        buttons.forEach(function (button) {
+            observer.observe(button, { attributes: true, attributeFilter: ['class'] });
+        });
+
         global.__heroNavLiquidInitialized = true;
     }
 
@@ -5380,7 +5231,6 @@ function ensureSettings() {
             return;
         }
         indexInteractionsInitialized = true;
-        attachNavPrefetch();
         setupHeroNavLiquidIndicator();
         initializeIndexInteractions();
         initLicenseModal();

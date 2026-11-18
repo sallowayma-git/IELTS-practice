@@ -70,7 +70,6 @@
 (function initShuiThreeBackground(global) {
     'use strict';
 
-    const THREE = global.THREE;
     let themeIntentGeneration = 0;
     let pendingInitialBackground = null;
 
@@ -83,7 +82,7 @@
     }
 
     function startInitialBackgroundAfterPaint(themeName, generation) {
-        if (themeName === 'newjeans' || themeName === 'ascii-flower'
+        if (!Object.hasOwn(shaders, themeName)
             || typeof global.requestAnimationFrame !== 'function' || typeof global.setTimeout !== 'function') {
             start(themeName);
             return;
@@ -296,141 +295,11 @@
                 gl_FragColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);
             }
         `,
-        'floral-bloom': `
-            precision mediump float;
-            varying vec2 vUv;
-            uniform vec2 uResolution;
 
-            float random(vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123); }
-
-            mat2 rot(float a) {
-                float s = sin(a), c = cos(a);
-                return mat2(c, -s, s, c);
-            }
-
-            // Photographic lens-like soft falloff
-            float soft(float dist, float radius, float feather) {
-                return smoothstep(radius + feather, radius - feather, dist);
-            }
-
-            void main() {
-                float aspect = uResolution.x / max(uResolution.y, 1.0);
-                vec2 p = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
-
-                // 1. Precise Background Gradient
-                vec3 cBot = vec3(0.40, 0.60, 0.90);
-                vec3 cTop = vec3(0.98, 0.86, 0.76);
-                float bgMix = smoothstep(-0.4, 0.4, p.y + p.x * 0.1);
-                vec3 color = mix(cBot, cTop, bgMix);
-
-                // Pinkish haze in upper left & warmth on right
-                float hazeL = soft(length(p - vec2(-0.3, 0.2)), 0.4, 0.4);
-                color = mix(color, vec3(0.98, 0.65, 0.75), hazeL * 0.4);
-                float hazeR = soft(length(p - vec2(0.4, 0.0)), 0.5, 0.5);
-                color = mix(color, vec3(0.98, 0.8, 0.6), hazeR * 0.5);
-
-                // Pink/Magenta glow strictly behind top blue flower
-                float topGlow = soft(length(p - vec2(-0.02, 0.25)), 0.12, 0.25);
-                color = mix(color, vec3(0.95, 0.5, 0.8), topGlow * 0.65);
-
-                // 2. Base Dark Cluster and Stems
-                // Moved root up to shorten stems
-                vec2 bp = p - vec2(-0.02, -0.28);
-                float baseDark = soft(length(vec2(bp.x * 1.5, bp.y)), 0.12, 0.3);
-                color = mix(color, vec3(0.04, 0.25, 0.50), baseDark * 0.9);
-
-                float stemBottomFold = smoothstep(-0.35, -0.2, p.y); // Fades stems exactly at new root
-
-                // Main central stem (MUST FADE OUT before the flower bulb)
-                float mainStem = soft(abs(p.x + 0.01 + p.y * 0.05), 0.005, 0.04) * smoothstep(0.12, 0.0, p.y) * stemBottomFold;
-                color = mix(color, vec3(0.1, 0.4, 0.45), mainStem * 0.6);
-
-                // Stem to left flower & small right leaf
-                // Re-routed to the new left position (-0.35, -0.16)
-                float stemLeft = soft(abs(p.x + p.y * 1.17 + 0.55), 0.003, 0.03) * smoothstep(-0.05, -0.15, p.y) * stemBottomFold;
-                color = mix(color, vec3(0.12, 0.35, 0.4), stemLeft * 0.5);
-
-                // Stem to right cloned flower (Flower 4)
-                // Adjusted path for new position (0.45, -0.20)
-                float stemRight = soft(abs(p.x - p.y * 0.4 - 0.37), 0.003, 0.03) * smoothstep(-0.05, -0.18, p.y) * stemBottomFold;
-                color = mix(color, vec3(0.12, 0.35, 0.4), stemRight * 0.4);
-
-                vec2 pLeaf = p - vec2(0.04, -0.1); pLeaf *= rot(0.5);
-                float leaf = soft(length(vec2(pLeaf.x * 2.5, pLeaf.y)), 0.01, 0.06);
-                color = mix(color, vec3(0.1, 0.3, 0.45), leaf * 0.7);
-
-                // 3. Flower 3: Right Peach Flower (furthest back)
-                // Moved back down to (0.35, 0.02)
-                vec2 pF3 = p - vec2(0.35, 0.02);
-                pF3 *= rot(-0.4);
-                float a3 = atan(pF3.y, pF3.x); float r3 = length(pF3);
-                float rLimit3 = 0.26 * (0.9 + 0.1 * sin(a3 * 4.0));
-                float f3 = soft(r3, rLimit3 - 0.08, 0.18);
-                float core3 = soft(r3, 0.02, 0.1);
-                vec3 cF3 = mix(vec3(0.98, 0.5, 0.3), vec3(0.99, 0.75, 0.55), r3 * 3.0);
-                color = mix(color, cF3, f3 * 0.85);
-                color = mix(color, vec3(0.98, 0.3, 0.15), core3 * 0.5);
-
-                // 4. Top Blue Flower (Middle layer)
-                vec2 pBulb = p - vec2(-0.03, 0.13); // Greenish calyx/bulb
-                float bulb = soft(length(vec2(pBulb.x * 1.5, pBulb.y)), 0.03, 0.04);
-                color = mix(color, vec3(0.15, 0.5, 0.45), bulb * 0.95);
-
-                vec2 pF2 = p - vec2(-0.03, 0.25);
-                pF2 *= rot(-0.1);
-                float a2 = atan(pF2.y, pF2.x); float r2 = length(pF2);
-                float inner2 = smoothstep(-0.05, 0.1, pF2.y);
-                vec3 cF2 = mix(vec3(0.2, 0.35, 0.75), vec3(0.65, 0.8, 0.98), inner2);
-
-                float lobe2 = 0.16 * (0.65 + 0.35 * pow(abs(sin(a2 * 2.5)), 1.2)); // 5 distinct petals
-                float f2 = soft(r2, lobe2 - 0.02, 0.04);
-                color = mix(color, cF2, f2 * 0.92);
-                // Center shadow core
-                float core2 = soft(length(pF2 - vec2(0.01, -0.06)), 0.02, 0.05);
-                color = mix(color, vec3(0.1, 0.25, 0.45), core2 * 0.85);
-
-                // 5. Flower 1: Left Orange Flower (Foreground)
-                // Leftmost placement, bisected by card edge at x=-0.35
-                vec2 pF1 = p - vec2(-0.35, -0.16);
-                pF1 *= rot(0.25);
-                float a1 = atan(pF1.y, pF1.x); float r1 = length(pF1);
-                float lobe1 = 0.18 * (0.8 + 0.2 * abs(sin(a1 * 3.5)));
-                float f1 = soft(r1, lobe1 - 0.03, 0.07);
-
-                vec3 cF1 = mix(vec3(0.98, 0.35, 0.1), vec3(0.98, 0.65, 0.4), r1 * 4.0);
-                color = mix(color, cF1, f1 * 0.95);
-
-                // Hot red core
-                float core1 = soft(length(pF1 - vec2(0.005, 0.0)), 0.01, 0.07);
-                color = mix(color, vec3(0.98, 0.12, 0.02), core1 * 0.9);
-
-                // 6. Flower 4: Right Orange Flower (Clone of Flower 1)
-                // Moved Right by +0.2 -> New Pos: (0.45, -0.20)
-                vec2 pF4 = p - vec2(0.45, -0.20);
-                pF4 *= rot(-0.6);
-                float a4 = atan(pF4.y, pF4.x); float r4 = length(pF4);
-                float lobe4 = 0.16 * (0.8 + 0.2 * abs(sin(a4 * 3.5)));
-                float f4 = soft(r4, lobe4 - 0.03, 0.07);
-                vec3 cF4 = mix(vec3(0.98, 0.35, 0.1), vec3(0.98, 0.65, 0.4), r4 * 4.0);
-                color = mix(color, cF4, f4 * 0.9);
-                float core4 = soft(length(pF4 - vec2(-0.005, 0.0)), 0.01, 0.07);
-                color = mix(color, vec3(0.98, 0.12, 0.02), core4 * 0.85);
-
-                // 7. Photographic Texture & Vignette
-                float n1 = random(vUv * 123.456 + fract(random(vUv)));
-                float n2 = random(vUv * 345.678 - fract(random(vUv*2.0)));
-                float noise = (n1 + n2 - 1.0) * 0.04;
-
-                float vig = length(p);
-                color *= 1.0 - vig * 0.18;
-                color += noise;
-
-                gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
-            }
-        `
     };
 
     function createBackground(theme = 'misty-mountain') {
+        const THREE = global.THREE;
         if (!THREE) {
             document.body.classList.add('three-bg-fallback');
             return null;
@@ -443,7 +312,8 @@
         const renderer = new THREE.WebGLRenderer({
             antialias: false,
             alpha: false,
-            preserveDrawingBuffer: true,
+            depth: false,
+            stencil: false,
             powerPreference: 'low-power'
         });
         renderer.domElement.id = 'shui-three-bg';
@@ -462,7 +332,7 @@
             uResolution: { value: new THREE.Vector2(1, 1) }
         };
 
-        const fragmentShader = shaders[theme] || shaders['misty-mountain'];
+        const fragmentShader = shaders[theme];
 
         const material = new THREE.ShaderMaterial({
             uniforms,
@@ -479,14 +349,11 @@
         let destroyed = false;
         const motionQuery = typeof global.matchMedia === 'function'
             ? global.matchMedia('(prefers-reduced-motion: reduce)') : null;
-        // Floral bloom has no time uniform in its shader: redraw only on resize
-        // or refresh rather than spending GPU time on identical frames.
-        const animated = /uniform\s+float\s+uTime\s*;/.test(fragmentShader);
         const startedAt = performance.now();
         const frameInterval = 1000 / 24;
 
         function canAnimate() {
-            return !destroyed && animated && !document.hidden && !(motionQuery && motionQuery.matches);
+            return !destroyed && !document.hidden && !(motionQuery && motionQuery.matches);
         }
 
         function scheduleFrame() {
@@ -496,10 +363,12 @@
         function resize() {
             const width = Math.max(1, global.innerWidth || 1);
             const height = Math.max(1, global.innerHeight || 1);
-            const ratio = Math.min(global.devicePixelRatio || 1, 1.5);
-            renderer.setPixelRatio(ratio);
-            renderer.setSize(width, height, false);
-            uniforms.uResolution.value.set(width * ratio, height * ratio);
+            // This soft, decorative shader shares the GPU with the glass UI.
+            const scale = Math.min(1, Math.sqrt(1_250_000 / (width * height)));
+            const renderWidth = Math.max(1, Math.floor(width * scale));
+            const renderHeight = Math.max(1, Math.floor(height * scale));
+            renderer.setSize(renderWidth, renderHeight, false);
+            uniforms.uResolution.value.set(renderWidth, renderHeight);
             render(performance.now(), true);
         }
 
@@ -677,48 +546,40 @@
         container.appendChild(wrapper);
     }
 
-    function start(themeName = null) {
+    function start(themeName) {
         cancelInitialBackground();
-        if (!themeName) {
+        if (!Object.hasOwn(shaders, themeName) && themeName !== 'newjeans' && themeName !== 'ascii-flower') {
             themeName = 'floral-bloom';
         }
-
-        try {
-            document.body.setAttribute('data-bg-theme', themeName);
-        } catch (e) {}
-
+        document.body.setAttribute('data-bg-theme', themeName);
+        document.body.classList.remove('three-bg-active', 'three-bg-fallback');
         const asciiContainer = document.querySelector('.ascii-bg-container');
-        if (asciiContainer) {
-            asciiContainer.innerHTML = '';
-        }
+        if (asciiContainer) asciiContainer.replaceChildren();
 
-        if (themeName === 'newjeans' || themeName === 'ascii-flower') {
-            try {
-                if (global.SHUIThreeBackground) {
-                    global.SHUIThreeBackground.destroy();
-                    global.SHUIThreeBackground = null;
-                }
-                const existing = document.getElementById('shui-three-bg');
-                if (existing) existing.remove();
-                document.body.classList.remove('three-bg-active');
-            } catch (error) {
-                console.warn('[SHUI Three Background] failed to stop WebGL for ' + themeName + ' theme:', error);
-            }
+        global.SHUIThreeBackground?.destroy();
+        global.SHUIThreeBackground = null;
+        if (themeName === 'ascii-flower') renderAsciiFlower();
+        if (!Object.hasOwn(shaders, themeName) || !global.WebGLRenderingContext) return;
 
-            if (themeName === 'ascii-flower') {
-                renderAsciiFlower();
+        const generation = themeIntentGeneration;
+        const applyRenderer = () => {
+            if (themeIntentGeneration === generation) {
+                global.SHUIThreeBackground = createBackground(themeName);
             }
-            return;
-        }
-
-        try {
-            if (global.SHUIThreeBackground) {
-                global.SHUIThreeBackground.destroy();
-            }
-            global.SHUIThreeBackground = createBackground(themeName);
-        } catch (error) {
+        };
+        const showFallback = error => {
+            if (themeIntentGeneration !== generation) return;
             console.warn('[SHUI Three Background] fallback applied:', error);
             document.body.classList.add('three-bg-fallback');
+        };
+        try {
+            if (global.THREE) {
+                applyRenderer();
+            } else {
+                return global.AppLazyLoader.ensureGroup('theme-background').then(applyRenderer).catch(showFallback);
+            }
+        } catch (error) {
+            showFallback(error);
         }
     }
 
@@ -727,7 +588,7 @@
         if (global.AppData && global.AppData.preferences) {
             global.AppData.preferences.setThreeBackground(themeName).catch((error) => console.warn('[SHUI Three Background] preference save failed:', error));
         }
-        start(themeName);
+        return start(themeName);
     };
 
     async function init() {
@@ -932,6 +793,7 @@
         manifest['theme-tools'] = [
             'js/bundles/theme.bundle.js'
         ];
+        manifest['theme-background'] = ['assets/vendor/three.min.js'];
 
         manifest['settings-tools'] = [];
         manifest['reading-tools'] = ['js/bundles/reading-tools.bundle.js'];
@@ -1220,6 +1082,9 @@
 
         if (groupName === 'exam-data') {
             return sequentialLoad(list).then(ensureOptionalListeningExamData);
+        }
+        if (groupName === 'theme-background') {
+            return loadScript(list[0], { optional: true });
         }
 
         if ((groupName === 'browse-runtime' || groupName === 'browse-view') && list.indexOf('js/bundles/browse.bundle.js') === -1) {
@@ -1712,7 +1577,7 @@
         var practiceButton = document.querySelector('.main-nav [data-view="practice"]');
         if (practiceButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                practiceButton.addEventListener(eventName, hintGroup('practice-suite'), { once: true });
+                practiceButton.addEventListener(eventName, hintGroup('browse-runtime'), { once: true });
             });
         }
 

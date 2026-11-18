@@ -28,7 +28,7 @@ test('hover and keyboard focus fetch navigation modules without executing them',
         button.handlers.get('pointerenter')(); button.handlers.get('focus')();
     }
     assert.deepEqual(h.loads, []);
-    assert.deepEqual(h.hints, ['practice-suite', 'practice-suite', 'browse-runtime', 'browse-runtime', 'more-tools', 'more-tools']);
+    assert.deepEqual(h.hints, ['browse-runtime', 'browse-runtime', 'browse-runtime', 'browse-runtime', 'more-tools', 'more-tools']);
 });
 test('save-data skips speculative navigation transfers', () => {
     const h = harness(true);

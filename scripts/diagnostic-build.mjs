@@ -44,7 +44,7 @@ function mapSections(content, paths, readSource) {
 
 // All inputs are content-derived and project-relative. No Git/worktree paths, clock,
 // cache query, environment variable, generated stamp or generated mapping enters identity.
-export function buildDiagnosticArtifacts({ renderedBundles, bundleInputs, readSource }) {
+export function buildDiagnosticArtifacts({ renderedBundles, bundleInputs, readSource, readAsset }) {
     const entries = Object.fromEntries(Object.keys(entryOptions).map((file) => {
         const html = readSource(file);
         if (!BLOCK.test(html)) throw new Error(`Missing diagnostic bootstrap markers in ${file}`);
@@ -59,6 +59,7 @@ export function buildDiagnosticArtifacts({ renderedBundles, bundleInputs, readSo
         ...requiredResources.filter((value) => value.endsWith('.css')), ...optionalResources.filter((value) => value.endsWith('.css'))]) {
         inputs[source] = readSource(source);
     }
+    inputs['assets/images/floral-bloom.webp'] = readAsset('assets/images/floral-bloom.webp');
     const hashes = Object.keys(inputs).sort().map((path) => ({ path, sha256: digest(inputs[path]) }));
     const buildId = 'sha256:' + digest(JSON.stringify(hashes));
     const appVersion = JSON.parse(readSource('developer/package.json')).version;
