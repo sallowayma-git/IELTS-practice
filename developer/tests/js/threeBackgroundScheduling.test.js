@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { test } from 'node:test';
 
 const source = fs.readFileSync(new URL('../../../js/presentation/threeBackground.js', import.meta.url), 'utf8');
-function harness({ theme = 'floral-bloom', reducedMotion = false, hidden = false, readyState = 'complete', getPreference = async () => theme } = {}) {
+function harness({ theme = 'floral-bloom', reducedMotion = false, hidden = false, readyState = 'complete', getPreference = async () => theme, loadThree } = {}) {
     const frames = new Map();
     const timers = new Map();
     const listeners = new Map();
@@ -15,6 +15,8 @@ function harness({ theme = 'floral-bloom', reducedMotion = false, hidden = false
     let disposed = 0;
     let created = 0;
     const preferencesSaved = [];
+    const groups = [];
+    let resolution;
     const attributes = new Map();
     const motion = { matches: reducedMotion,
         addEventListener: (name, fn) => motionListeners.set(name, fn),
@@ -27,14 +29,15 @@ function harness({ theme = 'floral-bloom', reducedMotion = false, hidden = false
     const THREE = {
         WebGLRenderer: class {
             constructor() { created++; this.domElement = { setAttribute() {}, remove() { this.parentNode = null; } }; }
-            setClearColor() {} setPixelRatio() {} setSize() {}
+            setClearColor() {} setSize(width, height) { resolution = { width, height }; }
             render() { renders++; } dispose() { disposed++; }
         },
         Scene: class { add() {} }, OrthographicCamera: class {},
         Vector2: class { set() {} }, ShaderMaterial: class { dispose() {} },
         PlaneGeometry: class { dispose() {} }, Mesh: class { constructor(geometry) { this.geometry = geometry; } }
     };
-    const window = { THREE, WebGLRenderingContext: class {}, innerWidth: 800, innerHeight: 600,
+    const window = { THREE: loadThree ? undefined : THREE, WebGLRenderingContext: class {}, innerWidth: 800, innerHeight: 600,
+        AppLazyLoader: { async ensureGroup(group) { groups.push(group); await loadThree(); window.THREE = THREE; } },
         matchMedia: () => motion,
         requestAnimationFrame(fn) { const id = ++frameId; frames.set(id, fn); return id; },
         cancelAnimationFrame: id => frames.delete(id),
@@ -47,6 +50,7 @@ function harness({ theme = 'floral-bloom', reducedMotion = false, hidden = false
         } } };
     vm.runInNewContext(source, { window, document, performance: { now: () => 100 }, console });
     return { window, frames, timers, attributes, preferencesSaved, motionListeners, listeners, document, motion, windowListeners,
+        groups, get resolution() { return resolution; },
         get created() { return created; }, get renders() { return renders; }, get disposed() { return disposed; },
         tick(now) { const [id, fn] = frames.entries().next().value; frames.delete(id); fn(now); },
         runTasks() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach((fn) => fn()); } };
@@ -58,21 +62,24 @@ async function initialize(h) {
     h.runTasks();
 }
 
-test('static default background renders once and creates no recurring frames', async () => {
-    const h = harness(); await initialize(h);
-    assert.equal(h.renders, 1);
-    assert.equal(h.frames.size, 0);
-    h.windowListeners.get('resize')();
-    assert.equal(h.renders, 2);
-    h.window.SHUIThreeBackground.refresh();
-    assert.equal(h.renders, 3);
+test('static default background needs neither the vendor script nor a WebGL renderer', async () => {
+    const h = harness({ loadThree: async () => {} }); await initialize(h);
+    assert.equal(h.attributes.get('data-bg-theme'), 'floral-bloom');
+    assert.deepEqual(h.groups, []);
+    assert.equal(h.created, 0);
     assert.equal(h.frames.size, 0);
 });
 
 test('animated background stops hidden or reduced-motion frames and resumes one loop', async () => {
     const h = harness({ theme: 'misty-mountain' }); await initialize(h);
+    h.window.innerWidth = 2560;
+    h.window.innerHeight = 1440;
+    h.window.devicePixelRatio = 2;
+    h.windowListeners.get('resize')();
+    assert.ok(h.resolution.width * h.resolution.height <= 1_250_000);
+    assert.ok(Math.abs(h.resolution.width / h.resolution.height - 16 / 9) < 0.01);
     assert.equal(h.frames.size, 1);
-    h.tick(200); assert.equal(h.renders, 2); assert.equal(h.frames.size, 1);
+    h.tick(200); assert.equal(h.renders, 3); assert.equal(h.frames.size, 1);
     h.document.hidden = true; h.listeners.get('visibilitychange')();
     assert.equal(h.frames.size, 0);
     h.document.hidden = false; h.listeners.get('visibilitychange')();
@@ -115,7 +122,7 @@ test('startup WebGL initialization waits until the painted frame completes, then
 
 test('explicit theme selection cancels queued startup work before and after its animation frame', async () => {
     for (const afterFrame of [false, true]) {
-        const h = harness(); await ready();
+        const h = harness({ theme: 'teal-ocean' }); await ready();
         if (afterFrame) h.tick(100);
         h.window.switchBgTheme('misty-mountain');
         assert.equal(h.created, 1);
@@ -129,7 +136,7 @@ test('explicit theme selection cancels queued startup work before and after its 
 
 test('destroying a queued startup background cancels WebGL construction', async () => {
     for (const afterFrame of [false, true]) {
-        const h = harness(); await ready();
+        const h = harness({ theme: 'teal-ocean' }); await ready();
         if (afterFrame) h.tick(100);
         h.window.SHUIThreeBackground.destroy();
         h.runTasks();
@@ -137,6 +144,22 @@ test('destroying a queued startup background cancels WebGL construction', async 
         assert.equal(h.frames.size, 0);
         assert.equal(h.window.SHUIThreeBackground, null);
     }
+});
+
+test('a late vendor download cannot override the most recent theme selection', async () => {
+    let resolveDownload;
+    const download = new Promise(resolve => { resolveDownload = resolve; });
+    const h = harness({ loadThree: () => download }); await ready();
+    const first = h.window.switchBgTheme('teal-ocean');
+    h.window.switchBgTheme('floral-bloom');
+    assert.deepEqual(h.groups, ['theme-background']);
+    resolveDownload();
+    await first;
+    assert.equal(h.created, 0);
+    assert.equal(h.attributes.get('data-bg-theme'), 'floral-bloom');
+    await h.window.switchBgTheme('misty-mountain');
+    assert.equal(h.created, 1);
+    assert.equal(h.frames.size, 1);
 });
 
 test('a theme selected during startup preferences wins over a later saved value or read failure', async () => {

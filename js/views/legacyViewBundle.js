@@ -3077,9 +3077,8 @@
         }
 
         var examList = this._createExamList();
-        if (normalizedExams.length > this.batchSize) {
-            this._renderBatched(normalizedExams, examList, options);
-        } else {
+        var needsBatches = normalizedExams.length > this.batchSize;
+        if (!needsBatches) {
             var fragment = document.createDocumentFragment();
             for (var i = 0; i < normalizedExams.length; i += 1) {
                 var element = this._createExamElement(normalizedExams[i], i, options);
@@ -3091,6 +3090,7 @@
         }
 
         this._replaceContent(container, [examList]);
+        if (needsBatches) this._renderBatched(normalizedExams, examList, options);
         this._hideLoading(loadingIndicator);
         return true;
     };
@@ -3104,6 +3104,7 @@
         var index = 0;
 
         function processBatch() {
+            if (listElement.isConnected === false) return;
             var endIndex = Math.min(index + view.batchSize, exams.length);
             var fragment = document.createDocumentFragment();
 

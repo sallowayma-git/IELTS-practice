@@ -109,7 +109,7 @@
         var practiceButton = document.querySelector('.main-nav [data-view="practice"]');
         if (practiceButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
-                practiceButton.addEventListener(eventName, hintGroup('practice-suite'), { once: true });
+                practiceButton.addEventListener(eventName, hintGroup('browse-runtime'), { once: true });
             });
         }
 

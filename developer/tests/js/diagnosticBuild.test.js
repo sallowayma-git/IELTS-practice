@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import { buildDiagnosticArtifacts } from '../../../scripts/diagnostic-build.mjs';
-import { harness, read } from './helpers/diagnosticHarness.js';
+import { harness, read, root } from './helpers/diagnosticHarness.js';
 
 function inputs() {
     const manifest = JSON.parse(read('assets/generated/diagnostics/build-manifest.json'));
@@ -11,7 +13,8 @@ function inputs() {
         [path, read(path).replace(/^globalThis.AppDiagnosticBuild = [^\n]+\n/, '')]));
     const readSource = (path) => read(path).replace(/\r\n?/g, '\n').split('\n')
         .map((line) => line.replace(/[ \t]+$/g, '')).join('\n').replace(/\s*$/, '\n');
-    return { renderedBundles, bundleInputs, readSource };
+    const readAsset = (file) => fs.readFileSync(path.join(root, file));
+    return { renderedBundles, bundleInputs, readSource, readAsset };
 }
 
 test('identical build inputs reproduce the ID, inline hook, stamped bundles and private-path-free mapping', () => {
@@ -64,6 +67,7 @@ test('relevant emitted code, entry, style and build recipe changes alter the bui
             return options.readSource(file) + (file === source ? '\n/* relevant change */\n' : '');
         } }).metadata.buildId, first, source);
     }
+    assert.notEqual(buildDiagnosticArtifacts({ ...options, readAsset: () => Buffer.from('changed') }).metadata.buildId, first);
     const regenerated = buildDiagnosticArtifacts(options);
     assert.equal(buildDiagnosticArtifacts({ ...options, readSource(file) {
         return file === 'index.html' ? regenerated.generated[file] : options.readSource(file);
