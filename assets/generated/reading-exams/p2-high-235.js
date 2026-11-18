@@ -13,7 +13,8 @@
     "pdfFilename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

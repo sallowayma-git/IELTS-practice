@@ -9,11 +9,12 @@
   "meta": {
     "title": "Australia’s camouflaged creatures 澳洲伪装生物",
     "category": "P2",
-    "frequency": "high",
+    "frequency": "medium",
     "pdfFilename": "180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/",
     "legacyFilename": "180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

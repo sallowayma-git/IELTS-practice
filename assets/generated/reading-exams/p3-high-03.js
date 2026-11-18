@@ -13,7 +13,8 @@
     "pdfFilename": "100. P3 - What makes a musical expert_ 音乐天赋【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/100. P3 - What makes a musical expert_ 音乐天赋【高】/",
     "legacyFilename": "100. P3 - What makes a musical expert_ 音乐天赋【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

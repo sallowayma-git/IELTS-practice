@@ -9,7 +9,8 @@
   "meta": {
     "title": "Multi-tasking and the brain 大脑与多任务处理",
     "category": "P2",
-    "frequency": "high"
+    "frequency": "high",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

@@ -9,11 +9,12 @@
   "meta": {
     "title": "Investing in the Future 投资未来",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "125. P1 - Investing in the Future 投资未来.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/125. P1 - Investing in the Future 投资未来/",
     "legacyFilename": "125. P1 - Investing in the Future 投资未来.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

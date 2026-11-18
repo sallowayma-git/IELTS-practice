@@ -13,7 +13,8 @@
     "pdfFilename": "P3 - Who looks after the children in today's Britain.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "P3 - Who looks after the children in today's Britain.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

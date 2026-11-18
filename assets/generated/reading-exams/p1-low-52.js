@@ -13,7 +13,8 @@
     "pdfFilename": "145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/",
     "legacyFilename": "145. P1 - Caral an ancient South American city 卡拉尔古城.html",
-    "questionIntroHtml": "<h3>Questions 1–6</h3>"
+    "questionIntroHtml": "<h3>Questions 1–6</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

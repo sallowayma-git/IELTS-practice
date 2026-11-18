@@ -163,6 +163,13 @@
             export: false, import: 'ignore'
         },
         {
+            // Device/account binding and the last acknowledged server snapshot.
+            // Never include this metadata in a portable backup or restore it.
+            logicalKey: 'system.cloudSync', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
+        },
+        {
             logicalKey: 'system.operationJournal', classification: 'system',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: false, import: 'ignore'

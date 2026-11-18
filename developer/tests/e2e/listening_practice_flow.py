@@ -435,6 +435,12 @@ async def test_vocab_practice_flow(browser: Browser, console_log: List[ConsoleEn
 
     # 进入单词背诵视图（通过 More 视图），懒加载 bundle 后等待真实识别卡。
     await _click_nav(page, "more")
+    # The section is visible before its lazy bundle attaches entry handlers.
+    # Observe the natural navigation load before clicking the vocabulary entry.
+    await page.wait_for_function(
+        "() => window.AppLazyLoader?.getStatus('more-tools').loaded === true",
+        timeout=15000,
+    )
     vocab_button = page.locator("button[data-action='open-vocab']")
     await vocab_button.wait_for(state="visible", timeout=10000)
     await vocab_button.click()

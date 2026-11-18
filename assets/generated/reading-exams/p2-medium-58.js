@@ -9,11 +9,12 @@
   "meta": {
     "title": "Insect Decision-Making 昆虫决策",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "150. P2 - Insect Decision-Making 昆虫决策【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/",
     "legacyFilename": "150. P2 - Insect Decision-Making 昆虫决策【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

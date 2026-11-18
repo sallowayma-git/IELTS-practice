@@ -99,6 +99,15 @@ npm test --prefix backend
 
 现有后端测试使用内存中的账号、会话和记录存储，覆盖认证、CSRF、独立设备会话的记录往返及静态资源服务。修改相关行为时，应补充有针对性的回归测试。这些测试不替代真实 PostgreSQL、数据库迁移或容器启动验证。
 
+登录与同步界面的浏览器回归可在安装前后端依赖后运行：
+
+```bash
+node developer/node_modules/playwright/cli.js install chromium --only-shell
+node developer/tests/e2e/multi_device_sync.cjs
+```
+
+该脚本默认启动隔离的内存后端。`md-deploy-smoke` 还会在独立的 PostgreSQL 容器部署上执行相同的浏览器操作，验证本地记录迁移、双设备同步、离线恢复、冲突处理和完整回顾数据。
+
 ### 数据库与部署
 
 按照 [README 的多设备后端部署说明](README.md#可选多设备后端部署) 创建本地 `backend/.env`，替换示例密码和会话密钥。验证使用独立的测试数据库或测试部署，避免影响现有数据。

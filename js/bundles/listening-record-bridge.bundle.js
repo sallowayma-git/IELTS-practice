@@ -368,6 +368,13 @@
             export: false, import: 'ignore'
         },
         {
+            // Device/account binding and the last acknowledged server snapshot.
+            // Never include this metadata in a portable backup or restore it.
+            logicalKey: 'system.cloudSync', classification: 'system',
+            defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
+            export: false, import: 'ignore'
+        },
+        {
             logicalKey: 'system.operationJournal', classification: 'system',
             defaultValue: objectDefault, normalize: normalizeObject, validate: isObject,
             export: false, import: 'ignore'
@@ -1536,6 +1543,12 @@
                     return { recordId, revision, operationId: String(row.operationId || options.operationId || 'snapshot'), updatedAt: String(row.updatedAt || nowIso()), data, checksum: checksum(data) };
                 });
             }
+            if (options.cloudSyncState !== undefined) {
+                const entry = lookupEntry('system.cloudSync');
+                const data = canonicalizeJson(options.cloudSyncState);
+                if (!entry.validate(data)) throw validation('Invalid cloud sync state');
+                changes.push({ logicalKey: entry.logicalKey, entry, envelope: makeEnvelope(entry, data) });
+            }
             if (!changes.length && !Object.keys(entityRows).length) throw validation('Snapshot contains no importable data');
             const resetJournal = options.resetJournal === true;
             const expectedRevisionToken = options.expectedRevisionToken && typeof options.expectedRevisionToken === 'object'
@@ -1571,7 +1584,7 @@
                         logicalKey,
                         expected: documentChecks[logicalKey],
                         hasExpected: Object.prototype.hasOwnProperty.call(documentChecks, logicalKey),
-                        request: tx.objectStore(DOCUMENT_STORE).get(logicalKey)
+                        request: tx.objectStore(storeFor(logicalKey)).get(logicalKey)
                     })).concat(Array.from(entityStores).map((store) => {
                         entityStore(store);
                         return {
@@ -1636,7 +1649,7 @@
                                 operationId: spec.operationId,
                                 normalized: true
                             });
-                            tx.objectStore(DOCUMENT_STORE).put({ logicalKey: item.logicalKey, envelope });
+                            tx.objectStore(storeFor(item.logicalKey)).put({ logicalKey: item.logicalKey, envelope });
                             revisions[item.logicalKey] = nextRevision;
                         }
                         const entityReads = new Map(reads.filter((read) => read.kind === 'entities').map((read) => [read.store, read]));
@@ -2140,6 +2153,28 @@
         return jsonValue(joined, 'practice full projection');
     }
 
+    function currentExamId(id) {
+        return typeof global.resolveReadingExamId === 'function' ? global.resolveReadingExamId(id) : id;
+    }
+    // Keep historical storage identities while presenting the canonical passage.
+    function withCurrentExamIds(record) {
+        if (!record || typeof global.resolveReadingExamId !== 'function') return record;
+        const rename = (item) => {
+            if (!item || typeof item !== 'object') return item;
+            const next = clone(item);
+            if (next.examId) next.examId = currentExamId(next.examId);
+            if (next.metadata && next.metadata.examId) next.metadata.examId = currentExamId(next.metadata.examId);
+            if (next.annotations && typeof next.annotations === 'object') {
+                next.annotations = Object.fromEntries(Object.entries(next.annotations).map(([key, value]) => [currentExamId(key), value]));
+            }
+            return next;
+        };
+        const result = rename(record);
+        for (const field of ['suiteEntries', 'suiteEntrySummaries']) {
+            if (Array.isArray(result[field])) result[field] = result[field].map(rename);
+        }
+        return result;
+    }
     function projectDetail(record) { return joinPracticeRecord(splitPracticeRecord(record).summary, splitPracticeRecord(record).detail, null, 'detail'); }
 
     // “什么算真实练习记录”只有一份定义（js/data/practiceRecordSource.js）。
@@ -2477,15 +2512,15 @@
             await ready;
             const projection = String(options.projection || 'full').toLowerCase();
             const summaries = await kernel.listEntities('practiceSummaries');
-            if (projection === 'light' || projection === 'summary') return summaries;
+            if (projection === 'light' || projection === 'summary') return summaries.map(withCurrentExamIds);
             const stores = projection === 'detail' || projection === 'medium'
                 ? ['practiceSummaries', 'practiceDetails']
                 : undefined;
             const snapshot = await kernel.readPracticeSnapshot(null, { stores });
             return (await Promise.all(asArray(snapshot.practiceSummaries)
-                .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot)))).filter(Boolean);
+                .map((summary) => joinedPractice(practiceLayerId(summary), projection, snapshot)))).filter(Boolean).map(withCurrentExamIds);
         },
-        async get(recordId, options = {}) { await ready; return joinedPractice(String(recordId || ''), options.projection || 'full'); },
+        async get(recordId, options = {}) { await ready; return withCurrentExamIds(await joinedPractice(String(recordId || ''), options.projection || 'full')); },
         async completeAttempt(command) {
             await ready;
             const source = command && (command.record || command.attempt) ? (command.record || command.attempt) : command;
@@ -2521,12 +2556,15 @@
                 const current = await practiceLayers(recordId, true); if (!current.summary) throw new AppDataError('VALIDATION', `Unknown practice record: ${recordId}`);
                 if (command.expectedRevision !== undefined && Number(command.expectedRevision) !== entityRevision(current.annotations)) throw new AppDataError('CONFLICT', `Revision conflict for practice annotations ${recordId}`);
                 const annotations = Object.assign({ recordId }, clone(asObject(current.annotations && current.annotations.data)));
-                const detail = clone(asObject(current.detail && current.detail.data)); const examId = String(command.examId || current.summary.data.examId || 'default');
+                const detail = clone(asObject(current.detail && current.detail.data));
+                const requestedExamId = String(command.examId || current.summary.data.examId || 'default');
+                const matchingEntry = asArray(detail.suiteEntries).find(entry => currentExamId(String(entry.examId || asObject(entry.metadata).examId || '')) === currentExamId(requestedExamId));
+                const examId = String(matchingEntry ? matchingEntry.examId || asObject(matchingEntry.metadata).examId : current.summary.data.examId || requestedExamId);
                 if (Array.isArray(detail.suiteEntries) && detail.suiteEntries.length) {
-                    if (!detail.suiteEntries.some((entry) => String(entry.examId || asObject(entry.metadata).examId || '') === examId)) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${examId}`);
+                    if (!matchingEntry) throw new AppDataError('VALIDATION', `Suite record ${recordId} does not contain exam ${requestedExamId}`);
                     annotations.suiteEntries = Object.assign({}, asObject(annotations.suiteEntries), { [examId]: Object.assign({}, asObject(annotations.suiteEntries)[examId], clone(asObject(command.patch))) });
                 } else {
-                    if (current.summary.data.examId && String(current.summary.data.examId) !== examId) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${examId}`);
+                    if (current.summary.data.examId && currentExamId(String(current.summary.data.examId)) !== currentExamId(requestedExamId)) throw new AppDataError('VALIDATION', `Record ${recordId} does not match exam ${requestedExamId}`);
                     annotations.annotations = Object.assign({}, asObject(annotations.annotations), { [examId]: Object.assign({}, asObject(annotations.annotations)[examId], clone(asObject(command.patch))) });
                     Object.assign(annotations, clone(asObject(command.patch)));
                 }
@@ -2561,14 +2599,14 @@
                     .localeCompare(String(left.date || left.completedAt || left.timestamp || '')))
                 .slice(0, limit);
             return Promise.all(summaries.map(async (summary) => {
-                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return clone(summary);
+                if (Object.keys(asObject(summary.questionTypeErrorCounts)).length) return withCurrentExamIds(clone(summary));
                 const detail = await kernel.readEntity('practiceDetails', summary.id);
-                return jsonValue(Object.assign({}, clone(summary), {
+                return withCurrentExamIds(jsonValue(Object.assign({}, clone(summary), {
                     questionTypeErrorCounts: questionTypeErrorCounts(detail)
-                }), 'practice insight');
+                }), 'practice insight'));
             }));
         },
-        async getStats() { await ready; return computeStats(await kernel.listEntities('practiceSummaries')); },
+        async getStats() { await ready; return computeStats((await kernel.listEntities('practiceSummaries')).map(withCurrentExamIds)); },
         projectLight,
         projectDetail
     });
@@ -4429,7 +4467,53 @@
             throw error instanceof AppDataError ? error : new AppDataError('INITIALIZATION_BLOCKED', error && error.message || 'AppData v2 initialization failed');
         });
 
-    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements };
+    const cloudSync = Object.freeze({
+        normalize(records) {
+            return asArray(records).map(record => {
+                const layers = splitPracticeRecord(record);
+                return joinPracticeRecord(layers.summary, layers.detail, layers.annotations, 'full');
+            });
+        },
+        async capture() {
+            await ready;
+            const snapshot = await kernel.exportSnapshot({
+                logicalKeys: ['system.cloudSync', 'system.entityRevisions'], includeSystem: true,
+                entityStores: PRACTICE_ENTITY_STORES
+            });
+            const binding = snapshot.envelopes['system.cloudSync'];
+            const epochs = asObject(asObject(snapshot.envelopes['system.entityRevisions']).data).epochs || {};
+            const rows = snapshot.entities;
+            const details = new Map(rows.practiceDetails.map(row => [row.recordId, row.data]));
+            const annotations = new Map(rows.practiceAnnotations.map(row => [row.recordId, row.data]));
+            return {
+                state: clone(binding.data || {}),
+                records: rows.practiceSummaries.map(row => joinPracticeRecord(row.data, details.get(row.recordId), annotations.get(row.recordId), 'full')),
+                token: {
+                    documents: { 'system.cloudSync': binding.operationId === 'snapshot-default' ? 0 : binding.revision },
+                    entities: Object.fromEntries(PRACTICE_ENTITY_STORES.map(store => [store, Object.fromEntries(rows[store].map(row => [row.recordId, row.revision]))])),
+                    entityEpochs: Object.fromEntries(PRACTICE_ENTITY_STORES.map(store => [store, Number(epochs[store]) || 0]))
+                }
+            };
+        },
+        async apply(captured, records, state) {
+            await ready;
+            const entities = Object.fromEntries(PRACTICE_ENTITY_STORES.map(store => [store, []]));
+            for (const record of records) {
+                const layers = splitPracticeRecord(record);
+                for (const [store, data] of [['practiceSummaries', layers.summary], ['practiceDetails', layers.detail], ['practiceAnnotations', layers.annotations]]) {
+                    entities[store].push({ recordId: layers.summary.id, data, checksum: checksum(data), revision: 1 });
+                }
+            }
+            // The server baseline and local records move together, or neither does.
+            // A concurrent practice save/annotation/import forces a fresh capture.
+            return kernel.installSnapshot({ envelopes: {}, entities }, {
+                operationId: randomId('cloud-sync'), expectedRevisionToken: captured.token,
+                cloudSyncState: jsonValue(state, 'cloud sync state')
+            });
+        }
+    });
+
+    const AppData = { practice, settings, library, recovery, backups, vocab, preferences, goals, achievements, cloudSync };
     Object.defineProperties(AppData, {
         ready: { value: ready, enumerable: false },
         status: { value: () => kernel.status(), enumerable: false }
