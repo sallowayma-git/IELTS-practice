@@ -1,12 +1,18 @@
+mod listening_fixture;
+
 use serde_json::json;
 use tempfile::tempdir;
 
 use ielts_db::{
     append_learning_event, event_key, import_asset_payload_file, learning_events_rebuild,
-    learning_events_verify, list_learning_events, migrate, open_connection, submit_reading_attempt,
-    DbOpenOptions, NewLearningEvent, ReadingQuestionProgress, ReadingSubmitCommand,
+    learning_events_verify, list_learning_events, migrate, open_connection,
+    seed_builtin_listening_pack, submit_listening_attempt, submit_reading_attempt, DbOpenOptions,
+    ListeningSubmitCommand, NewLearningEvent, ReadingQuestionProgress, ReadingSubmitCommand,
 };
 use ielts_domain::LearningEventType;
+use listening_fixture::{
+    sample_payload as listening_payload, wav_bytes, write_pack as write_listening_pack,
+};
 
 fn open_db() -> (tempfile::TempDir, rusqlite::Connection) {
     let dir = tempdir().unwrap();
@@ -90,7 +96,7 @@ fn migration_is_forward_only_from_v11_fixture() {
     let applied = migrate(&mut conn).unwrap();
     assert_eq!(
         applied,
-        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]
+        vec![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]
     );
     let version: i64 = conn
         .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
@@ -304,6 +310,171 @@ fn submit_after_deleting_early_attempts_preserves_ledger_chronology() {
     assert!(learning_events_rebuild(&conn, 100).is_err());
     conn.execute("UPDATE learning_events SET content_hash = 'bad' WHERE attempt_id = 'a3'", []).unwrap();
     assert!(learning_events_verify(&conn).unwrap().bad_hashes > 0);
+}
+
+#[test]
+fn listening_question_event_delete_is_reported_and_rebuilt() {
+    let (dir, conn) = open_db();
+    submit_listening_ledger_attempt(dir.path(), &conn, "l-ledger-1");
+    assert!(learning_events_verify(&conn).unwrap().consistent);
+
+    conn.execute(
+        "DELETE FROM learning_events
+         WHERE attempt_id = 'l-ledger-1' AND event_type = 'listening_question_outcome'
+           AND question_id = 'q2'",
+        [],
+    )
+    .unwrap();
+    let verify = learning_events_verify(&conn).unwrap();
+    assert_eq!(verify.missing, 1);
+    assert_eq!(verify.orphaned, 0);
+    assert_eq!(verify.mismatched, 0);
+    assert!(!verify.consistent);
+
+    let rebuilt = learning_events_rebuild(&conn, 100).unwrap();
+    assert_eq!(rebuilt.scanned_attempts, 1);
+    assert_eq!(rebuilt.inserted_events, 1);
+    assert!(learning_events_verify(&conn).unwrap().consistent);
+
+    let second = learning_events_rebuild(&conn, 100).unwrap();
+    assert_eq!(second.inserted_events, 0);
+    assert_eq!(second.existing_events, 7);
+}
+
+#[test]
+fn listening_attempt_event_delete_is_reported_and_rebuilt() {
+    let (dir, conn) = open_db();
+    submit_listening_ledger_attempt(dir.path(), &conn, "l-ledger-2");
+
+    conn.execute(
+        "DELETE FROM learning_events
+         WHERE attempt_id = 'l-ledger-2' AND event_type = 'attempt_completed'",
+        [],
+    )
+    .unwrap();
+    let verify = learning_events_verify(&conn).unwrap();
+    assert_eq!(verify.missing, 1);
+    assert!(!verify.consistent);
+
+    let rebuilt = learning_events_rebuild(&conn, 100).unwrap();
+    assert_eq!(rebuilt.inserted_events, 1);
+    assert!(learning_events_verify(&conn).unwrap().consistent);
+    assert_eq!(learning_events_rebuild(&conn, 100).unwrap().inserted_events, 0);
+}
+
+#[test]
+fn listening_rows_participate_in_the_hash_check() {
+    let (dir, conn) = open_db();
+    submit_listening_ledger_attempt(dir.path(), &conn, "l-ledger-3");
+    conn.execute(
+        "UPDATE learning_events SET content_hash = 'bad'
+         WHERE attempt_id = 'l-ledger-3' AND event_type = 'listening_question_outcome'",
+        [],
+    )
+    .unwrap();
+    let verify = learning_events_verify(&conn).unwrap();
+    assert_eq!(verify.bad_hashes, 6);
+    assert!(!verify.consistent);
+}
+
+/// A listening rebuild must not renumber or rewrite reading chronology: the
+/// reading ledger rows are byte-identical before and after.
+#[test]
+fn listening_rebuild_leaves_reading_events_untouched() {
+    let (dir, conn) = open_db();
+    submit_reading_ledger_attempt(dir.path(), &conn, "r-ledger-1");
+    let reading_events = list_learning_events(&conn, None, Some("r-ledger-1"), 20).unwrap();
+    assert_eq!(reading_events.len(), 3);
+
+    submit_listening_ledger_attempt(dir.path(), &conn, "l-ledger-4");
+    conn.execute(
+        "DELETE FROM learning_events
+         WHERE attempt_id = 'l-ledger-4' AND event_type = 'listening_question_outcome'
+           AND question_id = 'q1'",
+        [],
+    )
+    .unwrap();
+    assert_eq!(learning_events_rebuild(&conn, 100).unwrap().inserted_events, 1);
+
+    assert_eq!(
+        list_learning_events(&conn, None, Some("r-ledger-1"), 20).unwrap(),
+        reading_events
+    );
+    assert!(learning_events_verify(&conn).unwrap().consistent);
+}
+
+/// Without the pack, the section and question kind cannot be derived. Verify
+/// must fall back to the stable keys instead of inventing a payload, so a
+/// deleted row is still reported missing.
+#[test]
+fn listening_verification_uses_stable_keys_when_the_pack_is_gone() {
+    let (dir, conn) = open_db();
+    submit_listening_ledger_attempt(dir.path(), &conn, "l-ledger-5");
+    std::fs::remove_file(dir.path().join("listening/exam.json")).unwrap();
+    assert!(learning_events_verify(&conn).unwrap().consistent);
+
+    conn.execute(
+        "DELETE FROM learning_events
+         WHERE attempt_id = 'l-ledger-5' AND event_type = 'listening_question_outcome'
+           AND question_id = 'q1'",
+        [],
+    )
+    .unwrap();
+    let verify = learning_events_verify(&conn).unwrap();
+    assert_eq!(verify.missing, 1);
+    assert!(!verify.consistent);
+}
+
+fn submit_reading_ledger_attempt(
+    dir: &std::path::Path,
+    conn: &rusqlite::Connection,
+    attempt_id: &str,
+) {
+    let asset_path = dir.join("asset.json");
+    std::fs::write(&asset_path, serde_json::to_vec(&sample_payload()).unwrap()).unwrap();
+    let asset = import_asset_payload_file(conn, &asset_path).unwrap();
+    submit_reading_attempt(
+        conn,
+        &ReadingSubmitCommand {
+            attempt_id: attempt_id.into(),
+            asset_id: "ledger-asset".into(),
+            asset_revision: Some(asset.schema_version),
+            asset_fingerprint: Some(asset.fingerprint),
+            answers: json!({"q1":"TRUE","q2":"B"}),
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(1000),
+            title_snapshot: None,
+            idempotency_key: format!("submit-{attempt_id}"),
+        },
+    )
+    .unwrap();
+}
+
+fn submit_listening_ledger_attempt(
+    dir: &std::path::Path,
+    conn: &rusqlite::Connection,
+    attempt_id: &str,
+) {
+    let pack = dir.join("listening");
+    let sha = write_listening_pack(&pack, &listening_payload(), &wav_bytes());
+    seed_builtin_listening_pack(conn, &pack).unwrap();
+    submit_listening_attempt(
+        conn,
+        &ListeningSubmitCommand {
+            attempt_id: attempt_id.into(),
+            asset_id: "l1-test".into(),
+            asset_revision: None,
+            asset_fingerprint: Some(sha),
+            answers: json!({"q1": "waterproof", "q3": "B"}),
+            marked_questions: vec![],
+            question_timeline: vec![],
+            duration_ms: Some(1000),
+            title_snapshot: None,
+            idempotency_key: format!("submit-{attempt_id}"),
+        },
+    )
+    .unwrap();
 }
 
 #[allow(dead_code)]

@@ -71,8 +71,8 @@
       :browse-preference-panel-open="browsePreferencePanelOpen"
       v-model:browse-remember-position="browseRememberPosition"
       :browse-title="browseTitle"
-      :type-filters="typeFilters"
-      :selected-type="selectedType"
+
+
       :question-kind-label="questionKindLabel"
       v-model:keyword="keyword"
       :frequency-filters="frequencyFilters"
@@ -91,7 +91,7 @@
       :icons="icons"
       @toggle-browse-preference="toggleBrowsePreference"
       @persist-browse-preference="persistBrowsePreference"
-      @filter-by-type="filterByType"
+
       @clear-question-kind="clearQuestionKind"
       @clear-search="clearSearch"
       @toggle-frequency-filter="toggleFrequencyFilter"
@@ -100,7 +100,9 @@
       @view-pdf="viewPdf"
       @confirm-custom-suite-selection="confirmCustomSuiteSelection"
       @cancel-custom-suite-selection="cancelCustomSuiteSelection"
-    />
+    >
+      <LibraryFilters v-if="!customSuiteDraft" v-model:part="selectedCategory" v-model:source="sourceFilter" :parts="customSuiteCategories" />
+    </ReadingBrowsePanel>
 
     <ReadingMoreToolsPanel
       :active-view="activeView"
@@ -159,6 +161,8 @@
 </template>
 
 <script setup>
+import LibraryFilters from '../../../../plug/jiufen/LibraryFilters.vue'
+import { remoteCards, openNativeUnit } from '../../../../plug/jiufen/library.js'
 import MoodMascot from '@/components/mascot/MoodMascot.vue'
 import { moodLabel } from '@/components/mascot/moodFor.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -206,11 +210,8 @@ const icons = {
 // Views are switched from the top nav through the `view` query.
 const LIBRARY_VIEWS = new Set(['overview', 'browse', 'more'])
 
-const typeFilters = [
-  { value: 'all', label: '全部' },
-  { value: 'reading', label: '阅读' },
-  { value: 'listening', label: '听力', hidden: true }
-]
+const onlineReading = remoteCards('reading')
+const sourceFilter = ref('all')
 
 const frequencyFilters = [
   { value: 'high', label: '高频' },
@@ -282,7 +283,9 @@ const questionKind = computed(() => typeof route.query.kind === 'string' ? route
 const questionKindLabel = computed(() => QUESTION_KIND_LABELS[questionKind.value] || questionKind.value)
 
 const filteredReadingAssets = computed(() => {
-  return filterReadingAssets(readingAssets.value, {
+  const local = readingAssets.value.filter(a => !a.id.startsWith('jiufen-reading-'))
+  const cards = customSuiteDraft.value ? local : [...local, ...onlineReading.value].filter(a => sourceFilter.value === 'all' || (a.provider || 'local') === sourceFilter.value)
+  return filterReadingAssets(cards, {
     questionKind: questionKind.value,
     keyword: keyword.value,
     selectedType: selectedType.value,
@@ -445,14 +448,6 @@ function countByCategory(category) {
   return readingAssets.value.filter((asset) => normalizeCategory(asset.category) === category).length
 }
 
-function filterByType(type) {
-  selectedType.value = type === 'reading' ? 'reading' : 'all'
-  if (selectedType.value === 'all') {
-    selectedCategory.value = 'all'
-    return clearQuestionKind()
-  }
-}
-
 function clearQuestionKind() {
   if (!questionKind.value) return
   const { kind, ...query } = route.query
@@ -544,7 +539,22 @@ function startReading(asset) {
   })
 }
 
-function handleBrowsePrimaryAction(asset) {
+let openingRemote = false
+async function handleBrowsePrimaryAction(asset) {
+  if (asset.provider === 'jiufen') {
+    if (openingRemote) return
+    openingRemote = true
+    const origin = route.fullPath
+    try {
+      const target = await openNativeUnit(asset)
+      if (route.fullPath === origin) await router.push(target)
+    } catch (failure) {
+      showLocalMessage(failure?.message || String(failure))
+    } finally {
+      openingRemote = false
+    }
+    return
+  }
   if (customSuiteDraft.value) {
     selectCustomSuiteAsset(asset)
     return

@@ -2,13 +2,13 @@ use std::collections::BTreeMap;
 
 use ielts_domain::{
     is_user_note_key, validate_explicit_preference, ActiveMemorySummary, Activity,
-    ExplicitPreference, ExplicitPreferenceDelete, ExplicitPreferenceIssue, ExplicitPreferenceUpsert,
-    MemoryCandidateActiveSummary, MemoryCandidateInput, MemoryCandidateObservationSummary,
-    MemoryCandidatePreferenceSummary,
-    MemoryCandidateBatchReceipt, MemoryCandidatePersistenceInput, MemoryCandidateReceipt,
+    ExplicitPreference, ExplicitPreferenceDelete, ExplicitPreferenceIssue,
+    ExplicitPreferenceUpsert, MemoryArchiveCommand, MemoryCandidateActiveSummary,
+    MemoryCandidateBatchReceipt, MemoryCandidateInput, MemoryCandidateObservationSummary,
+    MemoryCandidatePersistenceInput, MemoryCandidatePreferenceSummary, MemoryCandidateReceipt,
     MemoryCatalog, MemoryCatalogEntry, MemoryCatalogQuery, MemoryConfidenceBand,
     MemoryContextEntry, MemoryContextPreview, MemoryContextQuery, MemoryContextSource,
-    MemoryArchiveCommand, MemoryForgetCommand, MemoryHorizon, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
+    MemoryForgetCommand, MemoryHorizon, MemoryMutationProposal, MemoryMutationReceipt, MemoryNamespace,
     MemoryObservationEvidence, MemoryPromotionCommand, MemoryProposalDisposition, MemoryScope,
     MemorySourceClass, MemoryStatus, MemoryValidationSnapshot, RefutedMemorySummary, MAX_ACTIVE_MEMORY_PER_SCOPE,
     MAX_DERIVED_PREFERENCE_MEMORIES_PER_SCOPE,
@@ -21,6 +21,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::coach::RememberedPreference;
 use crate::cognitive_read::{observation_snapshot, observations_by_ids};
 use crate::sqlite::{DbError, DbResult};
 
@@ -37,38 +38,49 @@ pub fn prepare_memory_candidate_input(
             "maxCandidates must be between 1 and {MAX_MEMORY_PROPOSALS}"
         )));
     }
-    let namespaces = activity_observation_namespaces(activity)
-        .iter()
-        .map(|value| (*value).to_owned())
-        .collect();
-    let snapshot = observation_snapshot(
-        conn,
-        &ielts_domain::ObservationSnapshotQuery {
-            namespaces,
-            since,
-            limit: MAX_MEMORY_CANDIDATE_OBSERVATIONS,
-            ..Default::default()
-        },
-    )?;
-    let observations = snapshot
-        .observations
-        .into_iter()
-        .filter(|item| item.user_id == user_id)
-        .map(|item| {
-            let statement = item
-                .value_text
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| item.payload.to_string());
-            MemoryCandidateObservationSummary {
-                id: item.id,
-                namespace: memory_namespace_for_observation(&item.namespace),
-                activity,
-                normalized_label: format!("{} {}", item.observation_type, item.scope_key),
-                statement: truncate_utf8(statement, MAX_MEMORY_STATEMENT_BYTES),
-                canonical_key: None,
-            }
-        })
-        .collect();
+    let observation_namespaces = activity_observation_namespaces(activity);
+    let observations: Vec<MemoryCandidateObservationSummary> = if observation_namespaces.is_empty()
+    {
+        // This activity has no observation namespaces yet (W3-2/W3-3), so the
+        // correct candidate input is the empty set. `observation_snapshot`
+        // treats an empty namespace list as "no filter", so calling it here
+        // would read every reading/writing/coach observation and relabel it as
+        // this activity. Do not rely on that global semantic; choose no rows.
+        Vec::new()
+    } else {
+        let namespaces = observation_namespaces
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect();
+        let snapshot = observation_snapshot(
+            conn,
+            &ielts_domain::ObservationSnapshotQuery {
+                namespaces,
+                since,
+                limit: MAX_MEMORY_CANDIDATE_OBSERVATIONS,
+                ..Default::default()
+            },
+        )?;
+        snapshot
+            .observations
+            .into_iter()
+            .filter(|item| item.user_id == user_id)
+            .map(|item| {
+                let statement = item
+                    .value_text
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| item.payload.to_string());
+                MemoryCandidateObservationSummary {
+                    id: item.id,
+                    namespace: memory_namespace_for_observation(&item.namespace),
+                    activity,
+                    normalized_label: format!("{} {}", item.observation_type, item.scope_key),
+                    statement: truncate_utf8(statement, MAX_MEMORY_STATEMENT_BYTES),
+                    canonical_key: None,
+                }
+            })
+            .collect()
+    };
     let task_scope = MemoryScope::Activity { key: activity };
     let active_memory = load_active_memory(conn, user_id)?
         .into_iter()
@@ -122,6 +134,8 @@ fn activity_observation_namespaces(activity: Activity) -> &'static [&'static str
             "writing.evaluation.criterion_score",
             "writing.evaluation.degraded",
         ],
+        // No listening/vocabulary observation namespaces exist yet (W3-2/W3-3).
+        Activity::Listening | Activity::Vocabulary => &[],
     }
 }
 
@@ -185,7 +199,13 @@ pub fn load_memory_validation_snapshot(
         .observations
         .into_iter()
         .map(|observation| {
-            let activity = parse_observation_activity(&observation.namespace)?;
+            let activity_name = if observation.namespace == "coach" {
+                let thread = observation.payload["threadId"].as_str().ok_or_else(|| DbError::Validation("coach observation has no thread".into()))?;
+                crate::coach::coach_thread_activity(conn, thread)?
+            } else {
+                observation.namespace.clone()
+            };
+            let activity = parse_observation_activity(&activity_name)?;
             // Security validation must see both the scalar projection and its
             // bounded structured payload. Choosing only value_text would hide
             // prompt-injection markers carried in otherwise valid metadata.
@@ -408,14 +428,16 @@ pub fn promote_memory_candidate(
         .map_err(|error| DbError::Validation(format!("candidate proposal is invalid: {error}")))?;
     let new_evidence_ids = verify_new_lifecycle_evidence(&tx, &proposal, &candidate.evidence_snapshot)?;
     let now = chrono::Utc::now().to_rfc3339();
-    let (memory_id, memory_status, memory_version, before, after) = apply_proposal(
+    let (memory_id, memory_status, memory_version, before, after) =
+        apply_proposal(&tx, &proposal, &candidate, command, &now)?;
+    attach_evidence(
         &tx,
+        &memory_id,
         &proposal,
-        &candidate,
-        command,
+        &candidate.evidence_snapshot,
+        &new_evidence_ids,
         &now,
     )?;
-    attach_evidence(&tx, &memory_id, &proposal, &candidate.evidence_snapshot, &new_evidence_ids, &now)?;
     let changed = tx.execute(
         "UPDATE memory_candidates
          SET disposition='promoted',resolved_memory_id=?1,version=version+1,updated_at=?2
@@ -668,6 +690,68 @@ pub fn delete_explicit_preference(conn: &Connection, command: &ExplicitPreferenc
     Ok(removed > 0)
 }
 
+/// The coach noticed a long-term teaching preference the learner stated
+/// explicitly. It becomes a global explicit preference and the thread's frozen
+/// learner profile is cleared so the next turn re-freezes with it. Both writes
+/// commit together: a preference without the cleared profile would not reach
+/// the thread, and a cleared profile without the preference would lose it.
+pub fn remember_teaching_preference(
+    conn: &Connection,
+    thread_id: &str,
+    text: &str,
+) -> DbResult<RememberedPreference> {
+    let text = text.trim();
+    require_text(text, "text")?;
+    let digest = hex::encode(Sha256::digest(text.as_bytes()));
+    let key = format!("coach.teaching.{}", &digest[..12]);
+    let tx = conn.unchecked_transaction()?;
+    upsert_explicit_preference(
+        &tx,
+        &ExplicitPreferenceUpsert {
+            user_id: "local".into(),
+            preference_key: key.clone(),
+            scope: "global".into(),
+            value: json!(text),
+            source: "user".into(),
+        },
+    )?;
+    tx.execute(
+        "UPDATE coach_threads SET learner_profile_json=NULL WHERE id=?1",
+        [thread_id],
+    )?;
+    tx.commit()?;
+    Ok(RememberedPreference {
+        key,
+        scope: "global".into(),
+        text: text.into(),
+    })
+}
+
+/// Undo one remembered teaching preference and clear the thread's frozen
+/// learner profile so the next turn stops using it. Returns whether a row was
+/// actually removed; an unknown thread simply clears nothing.
+pub fn forget_coach_preference(
+    conn: &Connection,
+    thread_id: &str,
+    preference_key: &str,
+) -> DbResult<bool> {
+    let tx = conn.unchecked_transaction()?;
+    let removed = delete_explicit_preference(
+        &tx,
+        &ExplicitPreferenceDelete {
+            user_id: "local".into(),
+            preference_key: preference_key.into(),
+            scope: "global".into(),
+        },
+    )?;
+    tx.execute(
+        "UPDATE coach_threads SET learner_profile_json=NULL WHERE id=?1",
+        [thread_id],
+    )?;
+    tx.commit()?;
+    Ok(removed)
+}
+
 pub fn memory_context_preview(
     conn: &Connection,
     query: &MemoryContextQuery,
@@ -693,7 +777,11 @@ pub fn memory_context_preview(
     load_explicit_context(conn, &query.user_id, scope, &mut entries)?;
     load_active_context(conn, &query.user_id, scope, &mut entries)?;
     load_candidate_context(conn, &query.user_id, scope, &mut entries)?;
-    entries.sort_by(|left, right| left.priority.cmp(&right.priority).then(left.key.cmp(&right.key)));
+    entries.sort_by(|left, right| {
+        left.priority
+            .cmp(&right.priority)
+            .then(left.key.cmp(&right.key))
+    });
     let truncated = entries.len() > limit;
     entries.truncate(limit);
     Ok(MemoryContextPreview {
@@ -1013,7 +1101,13 @@ fn verify_snapshot_in_transaction(tx: &Transaction<'_>, snapshot: &MemoryValidat
             .query_row(
                 "SELECT user_id,status,version FROM memory_items WHERE id=?1",
                 [&memory.id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
             )
             .optional()?;
         if current != Some((memory.user_id.clone(), "active".into(), memory.version as i64)) {
@@ -1219,23 +1313,26 @@ fn load_pending_candidate(tx: &Transaction<'_>, id: &str) -> DbResult<PendingCan
     )
     .optional()?
     .ok_or_else(|| DbError::Validation("candidate not found".into()))
-    .and_then(|(user_id, source, proposal, evidence, target_version, version, disposition)| {
-        if disposition != "pending" {
-            return Err(DbError::Validation("candidate is not pending".into()));
-        }
-        Ok(PendingCandidate {
-            user_id,
-            source_class: MemorySourceClass::parse(&source)
-                .ok_or_else(|| DbError::Validation("invalid candidate source class".into()))?,
-            proposal_json: proposal
-                .ok_or_else(|| DbError::Validation("pending candidate has no proposal".into()))?,
-            evidence_snapshot: serde_json::from_str(&evidence).map_err(|error| {
-                DbError::Validation(format!("candidate evidence is invalid: {error}"))
-            })?,
-            expected_target_version: target_version.map(|value| value as u64),
-            version: version as u64,
-        })
-    })
+    .and_then(
+        |(user_id, source, proposal, evidence, target_version, version, disposition)| {
+            if disposition != "pending" {
+                return Err(DbError::Validation("candidate is not pending".into()));
+            }
+            Ok(PendingCandidate {
+                user_id,
+                source_class: MemorySourceClass::parse(&source)
+                    .ok_or_else(|| DbError::Validation("invalid candidate source class".into()))?,
+                proposal_json: proposal.ok_or_else(|| {
+                    DbError::Validation("pending candidate has no proposal".into())
+                })?,
+                evidence_snapshot: serde_json::from_str(&evidence).map_err(|error| {
+                    DbError::Validation(format!("candidate evidence is invalid: {error}"))
+                })?,
+                expected_target_version: target_version.map(|value| value as u64),
+                version: version as u64,
+            })
+        },
+    )
 }
 
 fn verify_candidate_evidence(tx: &Transaction<'_>, evidence: &[Value]) -> DbResult<()> {
@@ -1293,11 +1390,19 @@ fn verify_new_lifecycle_evidence(
     )?;
     let prior_times = statement.query_map([target_id], |row| row.get::<_, Option<String>>(0))?
         .collect::<Result<Vec<_>, _>>()?;
-    let latest = prior_times.into_iter().map(|value| {
-        let value = value.ok_or_else(|| DbError::Validation(
-            "previous lifecycle evidence is unavailable; rebuild the projection".into()))?;
-        evidence_observed_at(&value)
-    }).collect::<DbResult<Vec<_>>>()?.into_iter().max()
+    let latest = prior_times
+        .into_iter()
+        .map(|value| {
+            let value = value.ok_or_else(|| {
+                DbError::Validation(
+                    "previous lifecycle evidence is unavailable; rebuild the projection".into(),
+                )
+            })?;
+            evidence_observed_at(&value)
+        })
+        .collect::<DbResult<Vec<_>>>()?
+        .into_iter()
+        .max()
         .ok_or_else(|| DbError::Validation("target memory has no lifecycle evidence".into()))?;
 
     let mut new_evidence_ids = Vec::new();
@@ -1772,11 +1877,7 @@ fn load_explicit_context(
          ORDER BY preference_key,scope",
     )?;
     let rows = statement.query_map(params![user_id, scope], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-        ))
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
     for row in rows {
         let (key, value, pref_scope) = row?;
@@ -1804,7 +1905,11 @@ fn load_active_context(
          ORDER BY importance DESC,confidence DESC,updated_at DESC,id",
     )?;
     let rows = statement.query_map(params![user_id, scope], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
     })?;
     for row in rows {
         let (id, key, content) = row?;
@@ -1903,12 +2008,10 @@ fn hash_only_tombstone_json(conn: &Connection, memory_id: &str) -> DbResult<Stri
 
 fn parse_observation_activity(namespace: &str) -> DbResult<Activity> {
     match namespace {
-        // The coach only exists on reading attempts (its ledger events are
-        // written with activity `reading`), so a coach observation is reading
-        // evidence. Without this a memory could not cite the learner message a
-        // teaching note came from, and the whole validation snapshot failed.
-        "reading" | "coach" => Ok(Activity::Reading),
+        "reading" => Ok(Activity::Reading),
         "writing" => Ok(Activity::Writing),
+        "listening" => Ok(Activity::Listening),
+        "vocabulary" => Ok(Activity::Vocabulary),
         _ => Err(DbError::Validation(format!(
             "unsupported observation activity namespace {namespace}"
         ))),
@@ -1998,7 +2101,139 @@ impl From<serde_json::Error> for DbError {
 
 #[cfg(test)]
 mod tests {
-    use super::{require_safe_statement, valid_until, MemoryHorizon, MemorySourceClass};
+    use super::*;
+    use crate::coach::{ensure_coach_thread, EnsureCoachThreadCommand};
+    use crate::migrate::migrate;
+
+    fn open() -> (tempfile::TempDir, Connection) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = Connection::open(dir.path().join("memory.db")).unwrap();
+        migrate(&mut conn).unwrap();
+        (dir, conn)
+    }
+
+    fn thread(conn: &Connection, id: &str) -> String {
+        ensure_coach_thread(
+            conn,
+            &EnsureCoachThreadCommand {
+                thread_id: Some(id.into()),
+                attempt_id: None,
+                asset_id: None,
+                kind: "chat".into(),
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn freeze(conn: &Connection, thread_id: &str) {
+        conn.execute(
+            "UPDATE coach_threads SET learner_profile_json='{}' WHERE id=?1",
+            [thread_id],
+        )
+        .unwrap();
+    }
+
+    fn profile_is_frozen(conn: &Connection, thread_id: &str) -> bool {
+        conn.query_row(
+            "SELECT learner_profile_json IS NOT NULL FROM coach_threads WHERE id=?1",
+            [thread_id],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn stored_rows(conn: &Connection, key: &str) -> i64 {
+        conn.query_row(
+            "SELECT COUNT(*) FROM explicit_user_preferences
+             WHERE user_id='local' AND preference_key=?1 AND scope='global' AND status='active'",
+            [key],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_remembered_preference_is_global_hashed_and_clears_the_frozen_profile() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+        freeze(&conn, &thread_id);
+
+        let remembered = remember_teaching_preference(&conn, &thread_id, "  先给我看例句  ").unwrap();
+
+        assert_eq!(remembered.scope, "global");
+        assert_eq!(remembered.text, "先给我看例句");
+        assert!(remembered.key.starts_with("coach.teaching."));
+        let hash = &remembered.key["coach.teaching.".len()..];
+        assert_eq!(hash.len(), 12);
+        assert!(hash.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
+        assert_eq!(stored_rows(&conn, &remembered.key), 1);
+        assert!(!profile_is_frozen(&conn, &thread_id));
+        let (value, source): (String, String) = conn
+            .query_row(
+                "SELECT value_json,source FROM explicit_user_preferences WHERE preference_key=?1",
+                [&remembered.key],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&value).unwrap(), json!("先给我看例句"));
+        assert_eq!(source, "user");
+    }
+
+    #[test]
+    fn the_same_text_twice_stays_one_row() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+        let first = remember_teaching_preference(&conn, &thread_id, "Explain in Chinese first.").unwrap();
+        let second = remember_teaching_preference(&conn, &thread_id, "Explain in Chinese first.").unwrap();
+        assert_eq!(first, second);
+        assert_eq!(stored_rows(&conn, &first.key), 1);
+    }
+
+    #[test]
+    fn a_teaching_preference_uses_the_full_120_character_budget() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+
+        let at_limit = "例".repeat(120);
+        let remembered = remember_teaching_preference(&conn, &thread_id, &at_limit).unwrap();
+        assert_eq!(stored_rows(&conn, &remembered.key), 1);
+        assert_eq!(remembered.text, at_limit);
+
+        assert!(remember_teaching_preference(&conn, &thread_id, &"例".repeat(121)).is_err());
+    }
+
+    #[test]
+    fn forgetting_removes_the_row_and_clears_the_frozen_profile() {
+        let (_dir, conn) = open();
+        let thread_id = thread(&conn, "coach-t1");
+        let remembered = remember_teaching_preference(&conn, &thread_id, "Explain in Chinese first.").unwrap();
+        freeze(&conn, &thread_id);
+
+        assert!(forget_coach_preference(&conn, &thread_id, &remembered.key).unwrap());
+        assert_eq!(stored_rows(&conn, &remembered.key), 0);
+        assert!(!profile_is_frozen(&conn, &thread_id));
+
+        // Already gone: nothing to remove, still no error.
+        assert!(!forget_coach_preference(&conn, &thread_id, &remembered.key).unwrap());
+    }
+
+    #[test]
+    fn an_unknown_thread_does_not_create_rows() {
+        let (_dir, conn) = open();
+
+        // The preference row itself is global, not thread-owned; the thread
+        // update is a no-op. Nothing invents a coach thread.
+        let remembered = remember_teaching_preference(&conn, "coach-missing", "Explain in Chinese first.").unwrap();
+        assert_eq!(stored_rows(&conn, &remembered.key), 1);
+        let threads: i64 = conn
+            .query_row("SELECT COUNT(*) FROM coach_threads", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(threads, 0);
+        // Forgetting still removes the global row; the missing thread is a no-op.
+        assert!(forget_coach_preference(&conn, "coach-missing", &remembered.key).unwrap());
+        assert_eq!(stored_rows(&conn, &remembered.key), 0);
+    }
 
     #[test]
     fn the_memory_write_refuses_unsafe_statements() {

@@ -452,6 +452,16 @@ impl<'c> AssetBook<'c> {
 
 fn load_asset_info(conn: &Connection, asset: &str) -> AssetInfo {
     let mut info = AssetInfo { title: asset.to_owned(), key: BTreeMap::new(), display: BTreeMap::new() };
+    if let Ok(index) = crate::get_practice_asset(conn, asset) {
+        info.title = index.title;
+        if let Some(metadata) = index.metadata {
+            for q in metadata["remoteQuestions"].as_array().into_iter().flatten() {
+                if let (Some(id),Some(number)) = (q["key"].as_str(),q["number"].as_str()) {
+                    info.display.insert(id.into(),number.into());
+                }
+            }
+        }
+    }
     if let Ok(loaded) = crate::reading::load_practice_asset_payload(conn, asset) {
         info.title = loaded.asset.title.clone();
         let normalized = |(id, value): (&String, &Value)| (normalize_question_id(id), value.clone());

@@ -62,6 +62,7 @@ export default defineConfig({
         }
     },
     resolve: {
+        dedupe: ['vue', 'vue-router'],
         alias: {
             '@': resolve(__dirname, 'src')
         }

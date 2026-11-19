@@ -5,6 +5,7 @@
     <div class="header-left">
       <div class="ielts-brand">IELTS</div>
       <div class="candidate-details">
+        <slot name="heading">
         <button
           v-if="showTimer"
           id="timer"
@@ -15,6 +16,7 @@
           data-reading-timer
           @click="$emit('toggle-timer')"
         >{{ timerText }}</button>
+        </slot>
       </div>
       <div style="display: none;">
         <h1 id="exam-title">{{ title }}</h1>
@@ -22,6 +24,7 @@
       </div>
     </div>
     <div class="header-right">
+      <slot name="controls">
       <!-- Connection + diagnostics exist only for the opensource host bridge;
            rendered as inert status marks for visual parity. -->
       <div class="header-status" id="connection-indicator" role="status" aria-label="Connected">
@@ -56,6 +59,7 @@
       >
         <svg class="header-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
+      </slot>
     </div>
   </header>
   <div class="sub-header-bar">

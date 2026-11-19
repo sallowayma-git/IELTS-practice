@@ -69,7 +69,7 @@ export function filterReadingAssets(readingAssets, options = {}) {
   const filtered = (Array.isArray(readingAssets) ? readingAssets : []).filter((asset) => {
     if (questionKind && !(asset?.questionKinds || []).includes(questionKind)) return false
     if (selectedType !== 'all' && asset?.activity !== selectedType) return false
-    if (selectedCategory !== 'all' && normalizeCategory(asset?.category) !== selectedCategory) return false
+    if (selectedCategory !== 'all' && !(asset.parts?.length ? asset.parts : [normalizeCategory(asset.category)]).includes(selectedCategory)) return false
     if (frequencyFilter !== 'all' && normalizeFrequency(asset) !== frequencyFilter) return false
     if (!query) return true
     return [

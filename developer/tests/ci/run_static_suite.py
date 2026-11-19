@@ -261,6 +261,8 @@ def main() -> int:
         run_command("Reading notes dialog focus trap", ["node", "--test", "developer/tests/js/readingNotesFocusTrap.test.mjs"]),
         run_command("Reading AI review is opt-in",["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
+        run_command("Vocabulary list view model", ["node", "developer/tests/js/vocabListView.test.mjs"]),
+        run_command("Vocabulary session queue core", ["node", "developer/tests/js/vocabSessionCore.test.mjs"]),
         run_command("Vue production build", [NPM, "--prefix", "apps/writing-vue", "run", "build"]),
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),
         run_command(
@@ -327,17 +329,28 @@ def main() -> int:
                 #   consolidation    — M8 memory lifecycle: user feedback and
                 #                      the stale sweep archive (never delete)
                 #                      and propagate to dependent supports.
-                #   context_snapshot — M5-08 snapshot identity: two identical
-                #                      renders must both persist, and one id
-                #                      must never be written twice.
+                #   cross_module     — W3-4 weekly promotion from activity
+                #                      scopes to global memory, idempotent and
+                #                      capacity-safe.
+                #   writing_coach_context — W3-3b host-resolved writing
+                #                      evidence: completed attempt + evaluation,
+                #                      no cross-scene fallback.
                 "--test",
                 "consolidation",
                 "--test",
-                "context_snapshot",
+                "cross_module",
+                "--test",
+                "writing_coach_context",
                 # Startup recovery must survive duplicate windows and must
                 # not reset terminal retry budgets on every reboot.
                 "--test",
                 "background_jobs",
+                # W3-2 listening data layer: pack seeding/index/audio and the
+                # draft/submit/ledger pipeline.
+                "--test",
+                "listening_assets",
+                "--test",
+                "listening_attempt",
             ],
         ),
         run_command(

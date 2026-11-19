@@ -2,6 +2,10 @@
 
 use std::collections::BTreeSet;
 
+use ielts_domain::{
+    Activity, AttemptMode, AttemptRecord, AttemptStatus, EvaluationStatus, WritingFeedbackV4,
+    WritingTaskType,
+};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -13,6 +17,9 @@ use crate::{history::load_attempt, load_answer_key, load_practice_asset_payload}
 
 #[derive(Debug, Clone)]
 pub struct ResolvedCoachContext {
+    /// The scene that owns this evidence and this thread. It decides the task
+    /// rules and which activity-scoped memories the frozen profile may carry.
+    pub activity: Activity,
     /// Stable evidence: byte-identical for every turn of one attempt
     /// (`identity`, `result`, `source`, `evidenceLimitations`). Prompt builders
     /// put it first so the provider can cache the prefix.
@@ -55,10 +62,48 @@ struct Selection {
     question_ids: Vec<String>,
     #[serde(default)]
     question_numbers: Vec<String>,
+    #[serde(default)]
+    paragraph_labels: Vec<String>,
+}
+
+const MAX_PARAGRAPH_LABELS: usize = 8;
+const MAX_PARAGRAPH_LABEL_CHARS: usize = 16;
+
+/// Trim, drop empty or over-long labels, then cap the count.
+fn sanitize_paragraph_labels(raw: &[String]) -> Vec<String> {
+    raw.iter()
+        .map(|label| label.trim())
+        .filter(|label| !label.is_empty() && label.chars().count() <= MAX_PARAGRAPH_LABEL_CHARS)
+        .take(MAX_PARAGRAPH_LABELS)
+        .map(str::to_string)
+        .collect()
+}
+
+/// Paragraph labels are only meaningful alongside a quote they describe.
+fn selection_paragraphs(quote: &str, selection: Option<&Selection>) -> Option<Vec<String>> {
+    let labels = sanitize_paragraph_labels(&selection?.paragraph_labels);
+    (!quote.is_empty() && !labels.is_empty()).then_some(labels)
 }
 
 fn invalid(message: impl Into<String>) -> DbError {
     DbError::Validation(format!("coach.context_invalid: {}", message.into()))
+}
+
+/// Parse the client selector once, then hand the exact same selector to the
+/// scene it names. Anything that does not explicitly say "writing" keeps the
+/// reading gate: a writing-bound thread can never silently borrow reading
+/// evidence, and a reading-bound thread cannot borrow writing evidence.
+pub fn resolve_coach_context(
+    conn: &Connection,
+    thread_id: &str,
+    raw: Option<&Value>,
+) -> DbResult<ResolvedCoachContext> {
+    let selector = parse_selector(raw)?;
+    if selector.activity.as_deref() == Some("writing") {
+        resolve_writing_selector(conn, thread_id, selector)
+    } else {
+        resolve_reading_selector(conn, thread_id, selector)
+    }
 }
 
 /// One SQLite read snapshot, plus fingerprint-verified asset payload. No write
@@ -68,7 +113,40 @@ pub fn resolve_reading_coach_context(
     thread_id: &str,
     raw: Option<&Value>,
 ) -> DbResult<ResolvedCoachContext> {
-    let selector = parse_selector(raw)?;
+    resolve_reading_selector(conn, thread_id, parse_selector(raw)?)
+}
+
+fn resolve_reading_selector(
+    conn: &Connection,
+    thread_id: &str,
+    selector: Selector,
+) -> DbResult<ResolvedCoachContext> {
+    resolve_practice_selector(conn, thread_id, selector, None)
+}
+
+/// Host-only provider adapter. The caller authenticates and verifies the remote receipt.
+/// This function still owns thread identity, local scores, selectors and context limits.
+pub fn resolve_provider_coach_context(
+    conn: &Connection,
+    thread_id: &str,
+    raw: Option<&Value>,
+    payload: &Value,
+    fingerprint: &str,
+) -> DbResult<ResolvedCoachContext> {
+    resolve_practice_selector(
+        conn,
+        thread_id,
+        parse_selector(raw)?,
+        Some((payload, fingerprint)),
+    )
+}
+
+fn resolve_practice_selector(
+    conn: &Connection,
+    thread_id: &str,
+    selector: Selector,
+    provider: Option<(&Value, &str)>,
+) -> DbResult<ResolvedCoachContext> {
     let tx = conn.unchecked_transaction()?;
     let thread = get_thread(&tx, thread_id)?;
     let attempt_id = thread
@@ -81,7 +159,7 @@ pub fn resolve_reading_coach_context(
             params![attempt_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )?;
-    if activity != "reading"
+    if (activity != "reading" && !(provider.is_some() && activity == "listening"))
         || status != "completed"
         || !matches!(mode.as_str(), "single" | "suite" | "endless")
     {
@@ -97,10 +175,42 @@ pub fn resolve_reading_coach_context(
     if thread.asset_id.as_deref().is_some_and(|id| id != asset_id) {
         return Err(invalid("thread asset conflicts with its bound attempt"));
     }
-    validate_identity(&selector, attempt_id, asset_id, &mode)?;
-    let (source, focus, limitations, correct_answers) = if let Some(fingerprint) =
-        fingerprint.as_deref()
+    validate_identity(&selector, attempt_id, asset_id, &mode, &activity)?;
+    let (source, focus, limitations, correct_answers) = if let Some((payload, revision)) = provider
     {
+        let asset = crate::get_practice_asset(&tx, asset_id)?;
+        if asset
+            .metadata
+            .as_ref()
+            .is_none_or(|m| m["remoteProvider"] != "jiufen")
+            || fingerprint.as_deref() != Some(revision)
+            || asset.fingerprint != revision
+            || payload["examId"] != asset_id
+        {
+            return Err(invalid(
+                "provider evidence revision conflicts with bound attempt",
+            ));
+        }
+        let key = load_answer_key(payload);
+        if key.len() != attempt.answers.len()
+            || attempt
+                .answers
+                .iter()
+                .any(|a| !key.contains_key(&a.question_id))
+        {
+            return Err(invalid("provider evidence is missing official answers"));
+        }
+        let source = json!({"passage":payload["passage"],"questionGroups":payload["questionGroups"],
+            "questionDisplayMap":payload["questionDisplayMap"],"reviewExplanations":payload["reviewExplanations"],
+            "transcript": provider_transcript(payload, &activity),
+            "answerLocations": payload["studyMaterial"]["questions"]});
+        (
+            source,
+            resolve_focus(&selector, payload)?,
+            json!([]),
+            Some(key),
+        )
+    } else if let Some(fingerprint) = fingerprint.as_deref() {
         let source = load_practice_asset_payload(&tx, asset_id)?;
         if source.asset.fingerprint != fingerprint {
             return Err(invalid(
@@ -161,18 +271,9 @@ pub fn resolve_reading_coach_context(
     };
     let answers = evidence_answers(&attempt.answers, correct_answers.as_ref())?;
     let selection = selector.selected_context.as_ref();
-    let quote = if selector.selected_text.is_empty() {
-        selection
-            .map(|selected| selected.text.as_str())
-            .unwrap_or("")
-    } else {
-        &selector.selected_text
-    };
-    if quote.chars().count() > 500 {
-        return Err(invalid("selection quote exceeds 500 characters"));
-    }
+    let quote = selection_quote(&selector)?;
     let metadata = json!({
-        "activity": "reading", "sessionId": attempt.id, "assetId": asset_id,
+        "activity": activity, "sessionId": attempt.id, "assetId": asset_id,
         "mode": mode, "locale": selector.locale, "surface": selector.surface,
         "action": selector.action, "promptKind": selector.prompt_kind,
         "focusQuestionIds": focus,
@@ -192,17 +293,214 @@ pub fn resolve_reading_coach_context(
             "scoreScale": attempt.score_scale, "correctCount": attempt.correct_count,
             "questionCount": attempt.question_count, "answers": answers},
     });
-    let request =
+    let mut request =
         json!({"controls": metadata, "selectionQuote": quote, "selectionIsEvidence": false});
-    if evidence.to_string().len() + request.to_string().len() > 64 * 1024 {
-        return Err(invalid("canonical context exceeds 64 KiB"));
+    if let Some(labels) = selection_paragraphs(quote, selection) {
+        request["selectionParagraphs"] = json!(labels);
     }
+    ensure_context_bounded(&evidence, &request)?;
     tx.commit()?;
     Ok(ResolvedCoachContext {
+        activity: attempt.activity,
         evidence,
         request,
         message_metadata: metadata,
     })
+}
+
+fn provider_transcript(payload: &Value, activity: &str) -> Value {
+    if activity != "listening" {
+        return Value::Null;
+    }
+    let mut parts = payload["studyMaterial"]["parts"].clone();
+    for part in parts.as_array_mut().into_iter().flatten() {
+        for paragraph in part["paragraphs"].as_array_mut().into_iter().flatten() {
+            for sentence in paragraph["sentences"].as_array_mut().into_iter().flatten() {
+                if let Some(row) = sentence.as_object_mut() {
+                    row.remove("words");
+                }
+            }
+        }
+    }
+    parts
+}
+
+/// A writing thread replays the canonical attempt plus its persisted
+/// evaluation. Selectors may narrow identity and carry a quote; they can never
+/// supply scores, raw evaluation JSON or annotations.
+fn resolve_writing_selector(
+    conn: &Connection,
+    thread_id: &str,
+    selector: Selector,
+) -> DbResult<ResolvedCoachContext> {
+    let tx = conn.unchecked_transaction()?;
+    let thread = get_thread(&tx, thread_id)?;
+    let attempt_id = thread
+        .attempt_id
+        .as_deref()
+        .ok_or_else(|| invalid("thread has no retained attempt evidence"))?;
+    let attempt = load_attempt(&tx, attempt_id)?;
+    if attempt.activity != Activity::Writing || attempt.status != AttemptStatus::Completed {
+        return Err(invalid(
+            "writing coach requires a completed writing attempt",
+        ));
+    }
+    if let (Some(thread_asset), Some(attempt_asset)) = (&thread.asset_id, &attempt.asset_id) {
+        if thread_asset != attempt_asset {
+            return Err(invalid("thread asset conflicts with its bound attempt"));
+        }
+    }
+    let mode = attempt_mode_str(attempt.mode);
+    validate_writing_identity(&selector, &attempt, mode)?;
+    let evaluation = crate::writing::load_evaluation_for_attempt(&tx, attempt_id)?
+        .ok_or_else(|| invalid("writing coach requires a completed evaluation with band scores"))?;
+    if !matches!(
+        evaluation.status,
+        EvaluationStatus::Completed | EvaluationStatus::Degraded
+    ) {
+        return Err(invalid(
+            "writing coach requires a completed evaluation with band scores",
+        ));
+    }
+    let score = evaluation
+        .score
+        .as_ref()
+        .ok_or_else(|| invalid("writing coach requires a completed evaluation with band scores"))?;
+    let Some(essay) = attempt
+        .content_text
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+    else {
+        return Err(invalid("writing attempt has no retained essay text"));
+    };
+    let task_type = attempt.task_type.map(writing_task_type_str);
+    let feedback = evaluation.feedback.as_ref();
+    let limitations = if evaluation.status == EvaluationStatus::Degraded {
+        json!([{
+            "code": "evaluation_degraded",
+            "message": "The evaluation was degraded; use only the persisted scores and essay."
+        }])
+    } else {
+        json!([])
+    };
+    let evidence = json!({
+        "identity": {"attemptId": attempt.id, "assetId": attempt.asset_id,
+            "activity": "writing", "taskType": task_type, "mode": mode,
+            "sessionOwnerId": attempt.suite_id},
+        "source": {"title": attempt.title_snapshot, "prompt": attempt.prompt_snapshot,
+            "essay": essay, "taskType": task_type},
+        "result": {"status": "completed",
+            "score": {"overall": score.overall, "taskResponse": score.task_response,
+                "coherence": score.coherence, "lexical": score.lexical,
+                "grammar": score.grammar},
+            "feedback": {"overall": feedback.and_then(|value| value.overall.clone()),
+                "sentences": capped_sentences(feedback)}},
+        "evidenceLimitations": limitations,
+    });
+    let quote = selection_quote(&selector)?;
+    let metadata = json!({
+        "activity": "writing", "sessionId": attempt.id, "assetId": attempt.asset_id,
+        "mode": mode, "locale": selector.locale, "surface": selector.surface,
+        "action": selector.action, "promptKind": selector.prompt_kind,
+    });
+    let request =
+        json!({"controls": metadata, "selectionQuote": quote, "selectionIsEvidence": false});
+    ensure_context_bounded(&evidence, &request)?;
+    tx.commit()?;
+    Ok(ResolvedCoachContext {
+        activity: Activity::Writing,
+        evidence,
+        request,
+        message_metadata: metadata,
+    })
+}
+
+fn validate_writing_identity(
+    selector: &Selector,
+    attempt: &AttemptRecord,
+    mode: &str,
+) -> DbResult<()> {
+    if selector
+        .activity
+        .as_deref()
+        .is_some_and(|value| value != "writing")
+    {
+        return Err(invalid("request identity conflicts with bound attempt"));
+    }
+    if selector
+        .session_id
+        .as_deref()
+        .is_some_and(|value| value != attempt.id)
+    {
+        return Err(invalid("request identity conflicts with bound attempt"));
+    }
+    if let Some(requested) = selector.asset_id.as_deref().filter(|id| !id.is_empty()) {
+        if attempt.asset_id.as_deref() != Some(requested) {
+            return Err(invalid("request identity conflicts with bound attempt"));
+        }
+    }
+    if selector
+        .mode
+        .as_deref()
+        .is_some_and(|value| value != "review" && value != mode)
+    {
+        return Err(invalid("request mode conflicts with bound attempt"));
+    }
+    Ok(())
+}
+
+fn attempt_mode_str(mode: AttemptMode) -> &'static str {
+    match mode {
+        AttemptMode::Single => "single",
+        AttemptMode::Suite => "suite",
+        AttemptMode::Endless => "endless",
+        AttemptMode::Memorize => "memorize",
+        AttemptMode::Freeform => "freeform",
+        AttemptMode::Bank => "bank",
+    }
+}
+
+fn writing_task_type_str(task_type: WritingTaskType) -> &'static str {
+    match task_type {
+        WritingTaskType::Task1 => "task1",
+        WritingTaskType::Task2 => "task2",
+    }
+}
+
+/// At most 12 sentence notes keep the stable evidence prefix bounded; feedback
+/// serialization failure degrades to no sentences, never to raw JSON.
+fn capped_sentences(feedback: Option<&WritingFeedbackV4>) -> Value {
+    let Some(feedback) = feedback else {
+        return json!([]);
+    };
+    match serde_json::to_value(&feedback.sentences) {
+        Ok(Value::Array(items)) => Value::Array(items.into_iter().take(12).collect()),
+        _ => json!([]),
+    }
+}
+
+/// One rule for both scenes: explicit quote first, then the selection payload.
+fn selection_quote(selector: &Selector) -> DbResult<&str> {
+    let quote = if selector.selected_text.is_empty() {
+        selector
+            .selected_context
+            .as_ref()
+            .map(|selected| selected.text.as_str())
+            .unwrap_or("")
+    } else {
+        &selector.selected_text
+    };
+    if quote.chars().count() > 500 {
+        return Err(invalid("selection quote exceeds 500 characters"));
+    }
+    Ok(quote)
+}
+
+fn ensure_context_bounded(evidence: &Value, request: &Value) -> DbResult<()> {
+    if evidence.to_string().len() + request.to_string().len() > 64 * 1024 {
+        return Err(invalid("canonical context exceeds 64 KiB"));
+    }
+    Ok(())
 }
 
 /// Retained answers plus, when known, the official `correctAnswer` per question.
@@ -293,9 +591,10 @@ fn validate_identity(
     attempt_id: &str,
     asset_id: &str,
     mode: &str,
+    activity: &str,
 ) -> DbResult<()> {
     for (requested, expected) in [
-        (&selector.activity, "reading"),
+        (&selector.activity, activity),
         (&selector.session_id, attempt_id),
         (&selector.asset_id, asset_id),
     ] {
@@ -378,4 +677,62 @@ fn display_to_id(number: &str, payload: &Value, allowed: &BTreeSet<&str>) -> DbR
         )));
     }
     Ok((*matches[0]).to_string())
+}
+
+#[cfg(test)]
+mod paragraph_label_tests {
+    use super::*;
+
+    fn selection_from(value: Value) -> Selection {
+        serde_json::from_value(value).expect("selection parses")
+    }
+
+    #[test]
+    fn paragraph_labels_pass_through_when_quote_present() {
+        let selection = selection_from(json!({"text": "A quote", "paragraphLabels": ["B", "C"]}));
+        assert_eq!(
+            selection_paragraphs("A quote", Some(&selection)),
+            Some(vec!["B".to_string(), "C".to_string()])
+        );
+    }
+
+    #[test]
+    fn paragraph_labels_are_truncated_to_eight() {
+        let labels: Vec<String> = (0..10).map(|index| format!("P{index}")).collect();
+        let selection = selection_from(json!({"text": "q", "paragraphLabels": labels}));
+        let kept = selection_paragraphs("q", Some(&selection)).expect("labels kept");
+        assert_eq!(kept.len(), MAX_PARAGRAPH_LABELS);
+        assert_eq!(kept[0], "P0");
+        assert_eq!(kept[7], "P7");
+    }
+
+    #[test]
+    fn empty_and_over_long_paragraph_labels_are_dropped() {
+        let long = "x".repeat(MAX_PARAGRAPH_LABEL_CHARS + 1);
+        let exact = "y".repeat(MAX_PARAGRAPH_LABEL_CHARS);
+        let selection = selection_from(json!({
+            "text": "q",
+            "paragraphLabels": ["  ", "", long, "  D  ", exact.clone()]
+        }));
+        assert_eq!(
+            selection_paragraphs("q", Some(&selection)),
+            Some(vec!["D".to_string(), exact])
+        );
+    }
+
+    #[test]
+    fn no_paragraphs_emitted_without_quote_or_labels() {
+        let with_labels = selection_from(json!({"paragraphLabels": ["A"]}));
+        assert_eq!(selection_paragraphs("", Some(&with_labels)), None);
+        let without = selection_from(json!({"text": "q"}));
+        assert_eq!(selection_paragraphs("q", Some(&without)), None);
+        assert_eq!(selection_paragraphs("q", None), None);
+    }
+
+    #[test]
+    fn absent_paragraph_field_still_parses() {
+        let selection = selection_from(json!({"text": "q", "questionNumbers": ["3"]}));
+        assert!(selection.paragraph_labels.is_empty());
+        assert_eq!(selection.question_numbers, vec!["3".to_string()]);
+    }
 }

@@ -1,7 +1,7 @@
-//! One host-owned invocation and exact request snapshot per Coach run.
+//! Host-owned Coach invocations retain local requests or remote-material digests.
 //! Terminal run status disambiguates an interrupted invocation; never invent a response.
 use super::{
-    append_coach_message_in_transaction, evaluate_coach_memory_card, AppendCoachMessageCommand, CoachMessage,
+    append_coach_message_in_transaction, AppendCoachMessageCommand, CoachMessage,
 };
 use crate::{begin_agent_run, BeginAgentRunCommand, DbError, DbResult};
 use ielts_domain::{estimate_tokens, rendered_hash, AgentRunKind, CoachFollowupType, CoachStrategyId};
@@ -53,6 +53,9 @@ pub fn begin_coach_trace(
     // ids are the host-owned record of which memories this run used.
     let memory_ids = super::frozen_profile_memory_ids(&tx, thread_id)?;
     let rendered = request.to_string();
+    let transient: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM coach_threads t LEFT JOIN attempts p ON p.id=t.attempt_id JOIN practice_assets a ON a.id=COALESCE(t.asset_id,p.asset_id) WHERE t.id=?1 AND json_extract(a.metadata_json,'$.remoteProvider')='jiufen')",
+        [thread_id], |row|row.get(0))?;
     let used = estimate_tokens(&rendered);
     if used > budget {
         return Err(DbError::Validation(
@@ -63,6 +66,11 @@ pub fn begin_coach_trace(
     let snapshot = format!("context-{id}");
     let invocation = format!("invoke-{id}");
     let hash = rendered_hash(&rendered);
+    let stored_rendered = if transient {
+        json!({"storage":"remote_evidence_digest","requestHash":hash,"usedTokens":used,
+            "threadId":thread_id,"userMessageId":user_message_id}).to_string()
+    } else { rendered.clone() };
+    let stored_hash = rendered_hash(&stored_rendered);
     let now = chrono::Utc::now().to_rfc3339();
     begin_agent_run(
         &tx,
@@ -78,10 +86,10 @@ pub fn begin_coach_trace(
     let plan = json!({"kind":"canonical_coach", "threadId":thread_id, "userMessageId":user_message_id, "invocationId":invocation});
     tx.execute("INSERT INTO agent_context_snapshots (id,run_id,planner_version,scope,query_plan_json,token_budget,used_tokens,rendered_context,content_hash,created_at)
         VALUES (?1,?2,'canonical-coach-v1',?3,?4,?5,?6,?7,?8,?9)",
-        params![snapshot,id,format!("coach:{thread_id}"),plan.to_string(),budget,used,rendered,hash,now])?;
+        params![snapshot,id,format!("coach:{thread_id}"),plan.to_string(),budget,used,stored_rendered,stored_hash,now])?;
     tx.execute("INSERT INTO agent_context_items (snapshot_id,item_type,item_id,rank,score,estimated_tokens,inclusion_reason,provenance_json)
-        VALUES (?1,'CURRENT_TASK',?2,0,1,?3,'exact host assembled request',?4)",
-        params![snapshot,user_message_id,used,json!({"sourceKind":"coach_request", "sourceId":user_message_id,"contentHash":hash,"sensitivity":"normal"}).to_string()])?;
+        VALUES (?1,'CURRENT_TASK',?2,0,1,?3,'host request snapshot or remote evidence digest',?4)",
+        params![snapshot,user_message_id,used,json!({"sourceKind":"coach_request", "sourceId":user_message_id,"contentHash":stored_hash,"requestHash":hash,"sensitivity":"normal"}).to_string()])?;
     for (rank, memory_id) in memory_ids.iter().enumerate() {
         tx.execute("INSERT INTO agent_context_items (snapshot_id,item_type,item_id,rank,score,estimated_tokens,inclusion_reason,provenance_json)
             VALUES (?1,'ACTIVE_MEMORY',?2,?3,1,0,'frozen coach learner profile',?4)",
@@ -146,7 +154,8 @@ pub fn complete_traced_coach(
             object.remove(untrusted);
         }
     }
-    if let Some(card) = evaluate_coach_memory_card(&tx, &payload, None, chrono::Utc::now())? {
+    let activity = super::coach_thread_activity(&tx, thread_id)?;
+    if let Some(card) = super::cards::evaluate_coach_memory_card_for_activity(&tx, &payload, None, chrono::Utc::now(), &activity)? {
         payload["memoryCard"] = json!(card);
     }
     let message = append_coach_message_in_transaction(

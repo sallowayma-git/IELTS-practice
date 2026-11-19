@@ -156,6 +156,81 @@ function buildReadingPayloads(assets) {
   return out
 }
 
+// -------------------------------------------------------------- listening ---
+
+/**
+ * One minimal listening pack, mirroring
+ * crates/ielts-db/tests/listening_fixture::sample_payload: six questions over
+ * four sections, including a multi_choice set with two required answers so the
+ * weighted scoring path is real. Static literal only: seed.js also runs in the
+ * browser (VITE_TAURI_MOCK) and through the CommonJS loader.
+ */
+const LISTENING_PAYLOAD = {
+  schemaVersion: 1,
+  examId: 'l1-test',
+  meta: {
+    title: 'Listening Test 1',
+    category: 'Section 1-4',
+    difficulty: 'medium',
+    frequency: 'high',
+    audio: 'audio/exam.wav',
+    durationSeconds: 1800,
+  },
+  questionCount: 6,
+  questionOrder: ['q1', 'q2', 'q3', 'q4', 'q5', 'q6'],
+  questionGroups: [
+    { groupId: 'g1', section: 1, kind: 'form_completion', questionIds: ['q1', 'q2'], leadHtml: '<p>Complete the form.</p>', bodyHtml: '<p>1 <input name="q1" data-answer="waterproof"></p><p>2 <input name="q2" data-answer="silk"></p>' },
+    { groupId: 'g2', section: 2, kind: 'single_choice', questionIds: ['q3'], leadHtml: '<p>Choose one.</p>', bodyHtml: '<p>3 A B C</p>' },
+    { groupId: 'g3', section: 3, kind: 'multi_choice', questionIds: ['q4'], leadHtml: '<p>Choose two.</p>', bodyHtml: '<p>4 A B C</p>' },
+    { groupId: 'g4', section: 4, kind: 'matching', questionIds: ['q5', 'q6'], leadHtml: '<p>Match each item.</p>', bodyHtml: '<p>5 A B</p>' },
+  ],
+  interactionModel: { q3: { control: 'radio' }, q4: { control: 'checkbox' } },
+  answerKey: { q1: ['waterproof', 'water proof'], q2: 'silk', q3: 'B', q4: ['A', 'C'], q5: 'A', q6: 'B' },
+  questionDisplayMap: {},
+  reviewExplanations: {},
+}
+
+/** AssetIndexEntry wire shape; questionKinds in classify_question_kinds order. */
+const LISTENING_ASSET = {
+  id: 'l1-test',
+  title: 'Listening Test 1',
+  category: 'Section 1-4',
+  difficulty: 'medium',
+  frequency: 'high',
+  fingerprint: 'fp-l1-test',
+  schemaVersion: 2,
+  contentRef: null,
+  payloadRef: 'dev-mock://l1-test',
+  activity: 'listening',
+  pdfOnly: false,
+  questionKinds: ['form_completion', 'single_choice', 'multi_choice', 'matching'],
+}
+
+/** The Rust fixture's 48-byte RIFF/WAVE: header plus four bytes of silence. */
+export const LISTENING_AUDIO_DATA_URL = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQQAAAAAAAAA'
+
+/** Index of { asset, payload } envelopes, keyed by asset id, like reading. */
+function buildListeningPayloads() {
+  return {
+    [LISTENING_ASSET.id]: {
+      asset: {
+        schemaVersion: 2,
+        id: LISTENING_ASSET.id,
+        activity: 'listening',
+        sourceKind: 'builtin',
+        title: LISTENING_ASSET.title,
+        category: LISTENING_ASSET.category,
+        difficulty: LISTENING_ASSET.difficulty,
+        frequency: LISTENING_ASSET.frequency,
+        fingerprint: LISTENING_ASSET.fingerprint,
+        pdfOnly: LISTENING_ASSET.pdfOnly,
+        contentRef: null,
+      },
+      payload: LISTENING_PAYLOAD,
+    },
+  }
+}
+
 // ---------------------------------------------------------------- writing ---
 
 const TASK2_PROMPTS = [
@@ -675,6 +750,14 @@ export function createSeedState(now = Date.now()) {
     reading: {
       assets,
       payloads: buildReadingPayloads(assets),
+      drafts: {},
+    },
+    // One real fixture so the mock scores, replays and serves audio exactly like
+    // the bundled-pack command. Drafts and submissions are created by the
+    // handlers, exactly like reading.
+    listening: {
+      assets: [LISTENING_ASSET],
+      payloads: buildListeningPayloads(),
       drafts: {},
     },
     history: { items: history.items, details: history.details, retention: { maxTerminalAttempts: 200 }, clearTokens: {} },

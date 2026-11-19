@@ -57,6 +57,11 @@ function install() {
     }
     try {
       const data = await handler(args ?? {})
+      // Some Rust commands (plug/jiufen) return bare values via
+      // Result<T, String>; their JS callers invoke core invoke directly and
+      // never unwrap the CommandResponse envelope. Handlers mark such
+      // payloads with bare() and they go out untouched.
+      if (data && typeof data === 'object' && data.__bareInvoke) return data.payload
       return { ok: true, data: data === undefined ? null : data }
     } catch (error) {
       if (error?.envelope) return { ok: false, error: error.envelope }

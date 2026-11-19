@@ -12,14 +12,12 @@ use ielts_domain::dto::{
 
 use crate::attempts::upsert_attempt;
 use crate::history::prune_terminal_attempts_in_transaction;
-use crate::learning_events::project_reading_attempt_events_if_enabled;
+use crate::attempts::persist_completed_attempt;
 use crate::modes::timer::{
     load_reading_timer_state, save_reading_timer_state, TimerOwnerScope, TimerState,
 };
 use crate::reading::analysis::analyze_reading_attempt;
-use crate::reading::assets::{
-    load_answer_key, load_controls, load_kinds, load_practice_asset_payload,
-};
+use crate::reading::assets::{load_answer_key, load_controls, load_kinds};
 use crate::reading::scoring::{score_attempt, AnswerComparison, ScoreSummary};
 use crate::sqlite::{DbError, DbResult};
 
@@ -147,6 +145,7 @@ pub(crate) fn save_reading_draft_in_scope(
     let loaded = load_answerable_asset(
         conn,
         &cmd.asset_id,
+        Activity::Reading,
         cmd.asset_revision,
         cmd.asset_fingerprint.as_deref(),
     )?;
@@ -262,6 +261,7 @@ pub(crate) fn submit_reading_attempt_in_scope(
     let loaded = load_answerable_asset(
         conn,
         &cmd.asset_id,
+        Activity::Reading,
         cmd.asset_revision,
         cmd.asset_fingerprint.as_deref(),
     )?;
@@ -327,12 +327,8 @@ pub(crate) fn submit_reading_attempt_in_scope(
         annotations: vec![],
     };
 
-    upsert_attempt(conn, &attempt)?;
-    // All mode adapters share this authority and its caller-owned transaction.
-    conn.execute(
-        "UPDATE attempts SET submitted_asset_fingerprint = ?1 WHERE id = ?2",
-        params![loaded.asset.fingerprint, cmd.attempt_id],
-    )?;
+    persist_completed_attempt(conn, &attempt, &loaded.asset.fingerprint)?;
+
     let result = ReadingSubmitResult {
         attempt: attempt.clone(),
         score: summary.clone(),
@@ -353,7 +349,6 @@ pub(crate) fn submit_reading_attempt_in_scope(
         "DELETE FROM settings WHERE namespace = 'reading_draft' AND key = ?1",
         params![cmd.attempt_id],
     )?;
-    project_reading_attempt_events_if_enabled(conn, &attempt)?;
     Ok(result)
 }
 
@@ -553,8 +548,11 @@ fn get_open_reading_draft_for_identity(
         params![attempt_id],
         |row| {
             let activity = match row.get::<_, String>(1)?.as_str() {
+                "reading" => Activity::Reading,
                 "writing" => Activity::Writing,
-                _ => Activity::Reading,
+                "listening" => Activity::Listening,
+                "vocabulary" => Activity::Vocabulary,
+                value => return Err(crate::sqlite::invalid_column_value(1, value, "activity")),
             };
             let mode = match row.get::<_, String>(3)?.as_str() {
                 "suite" => AttemptMode::Suite,
@@ -658,7 +656,7 @@ fn lookup_submit_response(
     }
 }
 
-fn value_to_map(v: &Value) -> serde_json::Map<String, Value> {
+pub(crate) fn value_to_map(v: &Value) -> serde_json::Map<String, Value> {
     match v {
         Value::Object(m) => m
             .iter()
@@ -673,7 +671,7 @@ fn value_to_map(v: &Value) -> serde_json::Map<String, Value> {
     }
 }
 
-fn answers_to_vec(
+pub(crate) fn answers_to_vec(
     answers: &Value,
     marked: &[String],
     timeline: &[ReadingQuestionProgress],
@@ -709,7 +707,7 @@ fn answers_to_vec(
     out
 }
 
-fn progress_by_question(
+pub(crate) fn progress_by_question(
     timeline: &[ReadingQuestionProgress],
 ) -> std::collections::HashMap<String, &ReadingQuestionProgress> {
     timeline
@@ -724,32 +722,37 @@ fn progress_by_question(
 fn load_answerable_asset(
     conn: &Connection,
     asset_id: &str,
+    expected_activity: Activity,
     expected_revision: Option<u32>,
     expected_fingerprint: Option<&str>,
 ) -> DbResult<ielts_domain::dto::PracticeAssetV2Payload> {
-    let loaded = load_practice_asset_payload(conn, asset_id)?;
+    let loaded =
+        crate::reading::assets::load_practice_asset_payload_for_activity(conn, asset_id, expected_activity)?;
+    let label = crate::reading::assets::activity_name(expected_activity);
     if loaded.asset.pdf_only {
         return Err(DbError::Validation(format!(
-            "reading asset is not answerable: {asset_id}"
+            "{label} asset is not answerable: {asset_id}"
         )));
     }
     if let Some(revision) = expected_revision {
         if revision != loaded.asset.schema_version {
             return Err(DbError::Validation(format!(
-                "reading asset revision mismatch: {asset_id}"
+                "{label} asset revision mismatch: {asset_id}"
             )));
         }
     }
     if let Some(fingerprint) = expected_fingerprint {
         if fingerprint.trim() != loaded.asset.fingerprint {
             return Err(DbError::Validation(format!(
-                "reading asset fingerprint mismatch: {asset_id}"
+                "{label} asset fingerprint mismatch: {asset_id}"
             )));
         }
     }
-    if load_answer_key(&loaded.payload).is_empty() {
+    if load_answer_key(&loaded.payload).is_empty()
+        && !(loaded.asset.id.starts_with("jiufen-native-") && loaded.asset.metadata.as_ref().and_then(|m| m["jiufenOwner"].as_str()).is_some())
+    {
         return Err(DbError::Validation(format!(
-            "reading asset is not answerable: {asset_id}"
+            "{label} asset is not answerable: {asset_id}"
         )));
     }
     Ok(loaded)

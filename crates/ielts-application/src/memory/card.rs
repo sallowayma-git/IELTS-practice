@@ -12,8 +12,8 @@
 //! from the pair, so a repeat (or a retry after a crash between the memory and the
 //! decision) finds the memory that is already there and only records the decision.
 
-use ielts_db::{memory_card_key, MemoryCardSource, CARD_CONFIRMED, CARD_DISMISSED};
-use ielts_domain::{is_safe_for_prompt, Activity, MemoryNamespace, MemoryScope};
+use ielts_db::{memory_card_key_for_activity, MemoryCardSource, CARD_CONFIRMED, CARD_DISMISSED};
+use ielts_domain::{is_safe_for_prompt, MemoryNamespace, MemoryScope};
 use sha2::{Digest, Sha256};
 
 use crate::ApplicationError;
@@ -54,7 +54,7 @@ impl<'a> MemoryCardService<'a> {
     pub fn confirm(&self, user_id: &str, message_id: &str, note_index: usize, text: &str) -> Result<String, ApplicationError> {
         let text = card_text(text)?;
         let card = self.card(user_id, message_id, note_index)?;
-        let key = memory_card_key(message_id, note_index);
+        let key = memory_card_key_for_activity(message_id, note_index, card.activity);
         let memory_id = match self.cards.active_card_memory(user_id, &key)? {
             Some(existing) => existing,
             None => self.create(user_id, message_id, note_index, &key, &text, card)?,
@@ -106,7 +106,7 @@ impl<'a> MemoryCardService<'a> {
                 user_id: user_id.to_owned(),
                 namespace: MemoryNamespace::Preference,
                 canonical_key: key.to_owned(),
-                scope: MemoryScope::Activity { key: Activity::Reading },
+                scope: MemoryScope::Activity { key: card.activity },
                 statement: text.to_owned(),
                 evidence_observation_ids: vec![evidence],
                 actor_id: "coach_memory_card".into(),

@@ -271,3 +271,45 @@ fn completing_a_run_attaches_the_card_and_ignores_a_forged_one() {
     // The window arithmetic uses a real clock here; sanity-check the constant it rests on.
     assert_eq!((now() - Duration::days(CARD_WINDOW_DAYS)).to_rfc3339(), "2026-10-05T12:00:00+00:00");
 }
+
+#[test]
+fn traced_cards_count_difficulties_and_deduplicate_memories_within_the_activity() {
+    for activity in ["writing", "listening"] {
+        let (_dir, conn, reading_thread) = fixture();
+        conn.execute(
+            "INSERT INTO practice_assets
+             (id,activity,source_kind,title,schema_version,fingerprint,created_at,updated_at)
+             VALUES ('asset',?1,'builtin','Practice',1,'fp',?2,?2)",
+            params![activity, Utc::now().to_rfc3339()],
+        ).unwrap();
+        let thread = ensure_coach_thread(&conn, &EnsureCoachThreadCommand {
+            thread_id: None, attempt_id: None, asset_id: Some("asset".into()), kind: "chat".into(),
+        }).unwrap();
+        let skill = format!("{activity}.detail");
+        let note = difficulty(Some(&skill), "先核对细节");
+        stored(&conn, &reading_thread, json!([note.clone()]), &Utc::now().to_rfc3339());
+        add_memory(&conn, "mem-reading", "先核对细节", "active");
+
+        let complete = |note: Value| {
+            let user = append_coach_message(&conn, &AppendCoachMessageCommand {
+                thread_id: thread.id.clone(), role: "user".into(), content: "请解释".into(),
+                structured_payload: None, status: "completed".into(),
+            }).unwrap();
+            let run = begin_coach_trace(&conn, &thread.id, &user.id, &json!({"messages": []}), "p", "m", 30_000).unwrap();
+            complete_traced_coach(&conn, &run, &thread.id, "好的", json!({
+                "answer": "好的", "teachingNotes": [note],
+            }), &json!({"content":"{}", "model":"m", "latencyMs":1, "retryCount":0}))
+                .unwrap().structured_payload.unwrap()
+        };
+
+        let first = complete(note.clone());
+        assert!(first.get("memoryCard").is_none(), "reading history must not count for {activity}");
+        let second = complete(note.clone());
+        assert_eq!(second["memoryCard"]["text"], "先核对细节", "{activity} history must count");
+
+        conn.execute("UPDATE memory_items SET scope=?1 WHERE id='mem-reading'", [format!("activity:{activity}")]).unwrap();
+        assert!(complete(note.clone()).get("memoryCard").is_none(), "same-activity memory suppresses duplicates");
+        conn.execute("UPDATE memory_items SET scope='global' WHERE id='mem-reading'", []).unwrap();
+        assert!(complete(note).get("memoryCard").is_none(), "global memory suppresses duplicates");
+    }
+}

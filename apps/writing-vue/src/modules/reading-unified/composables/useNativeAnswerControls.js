@@ -97,7 +97,7 @@ export function useNativeAnswerControls(options) {
         input.checked = String(input.value || '').trim() === expected
         setReadOnly(input)
       })
-      document.querySelectorAll(`input[type="text"][name="${escaped}"], textarea[name="${escaped}"]`).forEach((input) => {
+      document.querySelectorAll(`input[type="text"][name="${escaped}"], textarea[name="${escaped}"], select[name="${escaped}"]`).forEach((input) => {
         input.value = String(explicitValue || '')
         setReadOnly(input)
       })

@@ -414,6 +414,57 @@ fn archive_stale_applies_the_per_namespace_policy_window() {
     assert!(report.skipped_kinds.contains(&"preference".to_string()));
 }
 
+/// W3-5: the worker runs the sweep at most once per local day. The day guard is
+/// a setting in the same transaction as the archive, so the second call of the
+/// day is a no-op rather than a second sweep.
+#[test]
+fn the_daily_stale_archive_sweeps_once_per_day_and_only_archives() {
+    let (_dir, conn) = open_db();
+    insert_memory_aged(&conn, "mem-strategy", "strategy", "2026-01-01T00:00:00+00:00");
+    insert_memory_aged(&conn, "mem-behavior", "behavior", "2026-01-01T00:00:00+00:00");
+    insert_memory_aged(&conn, "mem-pref", "preference", "2020-01-01T00:00:00+00:00");
+
+    let first = ielts_db::archive_stale_once_per_day(&conn, NOW, "2026-08-16")
+        .unwrap()
+        .expect("the first call of a day sweeps");
+    assert_eq!(first.archived_count, 2);
+    for id in ["mem-strategy", "mem-behavior"] {
+        assert_eq!(status_of(&conn, id), "archived", "{id}");
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM memory_items WHERE id=?1", [id], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 1, "{id} is archived, never deleted");
+    }
+    assert_eq!(
+        status_of(&conn, "mem-pref"),
+        "active",
+        "never_auto kinds are never swept, at any age"
+    );
+
+    let archived_rows = |conn: &rusqlite::Connection| -> i64 {
+        conn.query_row("SELECT COUNT(*) FROM memory_items WHERE status='archived'", [], |row| row.get(0))
+            .unwrap()
+    };
+    let after_first = archived_rows(&conn);
+    assert!(ielts_db::archive_stale_once_per_day(&conn, NOW, "2026-08-16")
+        .unwrap()
+        .is_none(), "the same day key must not sweep again");
+    assert_eq!(archived_rows(&conn), after_first, "the second call archived nothing");
+
+    // A new day sweeps again: a row that went stale in between is picked up.
+    insert_memory_aged(&conn, "mem-later", "behavior", "2026-07-01T00:00:00+00:00");
+    let next = ielts_db::archive_stale_once_per_day(&conn, NOW, "2026-08-17")
+        .unwrap()
+        .expect("a new day key sweeps");
+    assert_eq!(next.archived_count, 1);
+    assert_eq!(status_of(&conn, "mem-later"), "archived");
+    assert_eq!(
+        ielts_db::get_setting(&conn, "memory", "last_stale_archive_day").unwrap().unwrap().value,
+        json!("2026-08-17"),
+        "the guard records the day that just ran"
+    );
+}
+
 /// "不准确" is a promise the weekly pass must keep: the validation snapshot
 /// carries every memory the learner refuted, so a proposal restating it is
 /// rejected (`user_marked_inaccurate`). Other feedback is not a refutation, and
@@ -447,3 +498,18 @@ fn the_validation_snapshot_remembers_what_the_learner_marked_inaccurate() {
 // reference anywhere in the workspace, and `ForbiddenStatementContent` was
 // never constructed.
 // ---------------------------------------------------------------------------
+
+#[test]
+fn stale_sweep_preserves_user_policy_foreign_and_recalled_memories() {
+    let (_dir, conn) = open_db();
+    for (id, source) in [("mem-owned", "user_explicit"), ("mem-policy", "system_policy"), ("mem-foreign", "inferred"), ("mem-recalled", "inferred")] {
+        insert_memory(&conn, id, source, "activity:reading", "asset", "active");
+    }
+    conn.execute("UPDATE memory_items SET created_at='2025-01-01T00:00:00Z',updated_at='2025-01-01T00:00:00Z' WHERE id IN ('mem-owned','mem-policy','mem-foreign','mem-recalled')", []).unwrap();
+    conn.execute("UPDATE memory_items SET user_id='other' WHERE id='mem-foreign'", []).unwrap();
+    conn.execute("UPDATE memory_items SET last_recalled_at=?1 WHERE id='mem-recalled'", [NOW]).unwrap();
+    ielts_db::archive_stale(&conn, NOW).unwrap();
+    for id in ["mem-owned", "mem-policy", "mem-foreign", "mem-recalled"] {
+        assert_eq!(memory_state(&conn, id).0, "active", "{id}");
+    }
+}

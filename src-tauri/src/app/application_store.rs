@@ -19,11 +19,19 @@ use super::state::AppDb;
 
 pub(crate) struct ApplicationStore<'a> {
     db: &'a AppDb,
+    coach_context: Option<ielts_db::ResolvedCoachContext>,
 }
 
 impl<'a> ApplicationStore<'a> {
     pub(crate) fn new(db: &'a AppDb) -> Self {
-        Self { db }
+        Self { db, coach_context: None }
+    }
+
+    pub(crate) fn with_coach_context(
+        db: &'a AppDb,
+        context: Option<ielts_db::ResolvedCoachContext>,
+    ) -> Self {
+        Self { db, coach_context: context }
     }
 }
 
@@ -92,7 +100,8 @@ impl CoachStore for ApplicationStore<'_> {
         thread_id: &str,
         selector: Option<&Value>,
     ) -> Result<ielts_db::ResolvedCoachContext, ApplicationError> {
-        self.db.with_conn(|conn| ielts_db::resolve_reading_coach_context(conn, thread_id, selector))
+        if let Some(context) = &self.coach_context { return Ok(context.clone()); }
+        self.db.with_conn(|conn| ielts_db::resolve_coach_context(conn, thread_id, selector))
             .map_err(enrichment_error)
     }
 
@@ -149,9 +158,23 @@ impl CoachStore for ApplicationStore<'_> {
     fn learner_profile(
         &self,
         thread_id: &str,
+        activity: ielts_domain::Activity,
     ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError> {
         self.db
-            .with_conn(|conn| ielts_db::freeze_coach_learner_profile(conn, thread_id))
+            .with_conn(|conn| {
+                ielts_db::learner_projections_refresh(conn)?;
+                ielts_db::freeze_coach_learner_profile_for_activity(conn, thread_id, activity)
+            })
+            .map_err(enrichment_error)
+    }
+
+    fn remember_teaching_preference(
+        &self,
+        thread_id: &str,
+        text: &str,
+    ) -> Result<ielts_db::RememberedPreference, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::remember_teaching_preference(conn, thread_id, text))
             .map_err(enrichment_error)
     }
 }

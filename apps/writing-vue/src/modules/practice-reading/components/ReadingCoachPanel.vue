@@ -222,6 +222,10 @@
           />
         </template>
       </div>
+      <div v-if="coachRemembered" class="reading-coach-remembered" data-reading-coach-remembered>
+        <span>已记住 {{ coachRemembered.text }}</span>
+        <button class="btn-text" type="button" data-reading-coach-forget @click="$emit('forget-remembered')">撤销</button>
+      </div>
       <div v-if="showJump" class="reading-coach-panel__jump" data-reading-coach-jump>
         <button class="reading-coach-chip" type="button" @click="scrollToLatest">↓ 查看最新</button>
       </div>
@@ -314,6 +318,8 @@ const props = defineProps({
   coachRetryKind: { type: String, default: '' },
   selectedContext: { type: Object, default: null },
   coachTranscript: { type: Array, default: () => [] },
+  coachResponse: { type: Object, default: null },
+  coachRemembered: { type: Object, default: null },
   coachQuickActions: { type: Array, default: () => [] },
   coachSelectionActions: { type: Array, default: () => [] },
   coachFollowUps: { type: Array, default: () => [] },
@@ -338,6 +344,7 @@ const emit = defineEmits([
   'reask',
   'retry',
   'reload-history',
+  'forget-remembered',
   'update:coach-query',
   'refresh-selected-context',
   'ask'
@@ -531,3 +538,29 @@ watch(() => props.coachLoading, (loading, wasLoading) => {
   if (!active || active === document.body) focusInput()
 })
 </script>
+
+<style scoped>
+.reading-coach-remembered {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--soft-line);
+  border-radius: 3px;
+  background: var(--intro-bg);
+  color: var(--muted-ink);
+  font-size: 12px;
+}
+
+.reading-coach-remembered span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reading-coach-remembered .btn-text {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+</style>

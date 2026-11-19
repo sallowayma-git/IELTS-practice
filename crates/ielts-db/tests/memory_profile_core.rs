@@ -2,7 +2,8 @@ use ielts_db::{
     create_backup_package, forget_memory, learning_observations_rebuild, load_memory_catalog,
     load_memory_validation_snapshot,
     memory_context_preview, migrate, open_connection, persist_memory_candidate_batch,
-    promote_memory_candidate, upsert_explicit_preference, DbOpenOptions,
+    prepare_memory_candidate_input, promote_memory_candidate, upsert_explicit_preference,
+    DbOpenOptions,
 };
 use ielts_domain::{
     Activity, ExplicitPreferenceUpsert, MemoryCandidatePersistenceInput, MemoryContextQuery,
@@ -74,6 +75,34 @@ fn observation_id_for_event(conn: &Connection, event_id: &str) -> String {
         |row| row.get(0),
     )
     .unwrap()
+}
+
+#[test]
+fn activity_without_observation_namespaces_yields_no_observations() {
+    let (_dir, conn) = open_db();
+    insert_reading_event(&conn, "event-listening-empty-set", "2026-08-13T00:00:00Z");
+    // Rebuild the projection so the store really holds reading observations
+    // that the old empty-namespace branch would have leaked into this input.
+    first_observation_id(&conn);
+    let stored: i64 = conn
+        .query_row("SELECT COUNT(*) FROM learner_observations", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert!(stored > 0, "fixture must store observations to leak");
+
+    let input =
+        prepare_memory_candidate_input(&conn, "local", Activity::Listening, None, 8).unwrap();
+    assert!(
+        input.observations.is_empty(),
+        "an activity without observation namespaces must yield the empty set, not every observation"
+    );
+    assert_eq!(
+        input.task_scope,
+        MemoryScope::Activity {
+            key: Activity::Listening
+        }
+    );
 }
 
 fn pending_input(

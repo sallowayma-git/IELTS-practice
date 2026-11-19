@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-listening-save-draft"
+description = "Enables the listening_save_draft command without any pre-configured scope."
+commands.allow = ["listening_save_draft"]
+
+[[permission]]
+identifier = "deny-listening-save-draft"
+description = "Denies the listening_save_draft command without any pre-configured scope."
+commands.deny = ["listening_save_draft"]

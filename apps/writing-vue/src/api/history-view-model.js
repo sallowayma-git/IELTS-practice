@@ -24,6 +24,9 @@ function clamp(value, lower, upper) {
 }
 
 const PASSTHROUGH_ACTIVITIES = new Set(['reading', 'listening'])
+// Reading and listening both score as a 0..1 ratio; the history UI shows both
+// as a percentage, so the clamp and the label rule are shared.
+const RATIO_ACTIVITIES = new Set(['reading', 'listening'])
 
 function historyActivity(value) {
   const activity = String(value || '').trim().toLowerCase()
@@ -44,7 +47,7 @@ export function normalizeHistoryViewModel(raw) {
   const submittedAt = text(item.submittedAt ?? item.submitted_at)
   const durationMs = nonNegativeInteger(item.durationMs ?? item.duration_ms)
   const sourceScore = nullableNumber(item.scoreValue ?? item.score_value)
-  const scoreValue = activity === 'reading' && sourceScore !== null
+  const scoreValue = RATIO_ACTIVITIES.has(activity) && sourceScore !== null
     ? clamp(sourceScore, 0, 1)
     : sourceScore
   const assetId = text(item.assetId ?? item.asset_id)
@@ -57,11 +60,11 @@ export function normalizeHistoryViewModel(raw) {
 
   const scoreLabel = text(
     item.scoreLabel ?? item.score_label,
-    activity === 'reading' ? 'Accuracy' : 'Overall Band'
+    RATIO_ACTIVITIES.has(activity) ? 'Accuracy' : 'Overall Band'
   )
   const defaultScoreDisplay = scoreValue === null
     ? '—'
-    : activity === 'reading'
+    : RATIO_ACTIVITIES.has(activity)
       ? `${Math.round(scoreValue * 100)}%`
       : scoreValue.toFixed(1)
 
@@ -91,6 +94,16 @@ export function normalizeHistoryViewModel(raw) {
       examId: assetId,
       accuracy: scoreValue ?? 0,
       taskType: 'reading'
+    }
+  }
+
+  if (activity === 'listening') {
+    return {
+      ...viewModel,
+      examId: assetId,
+      accuracy: scoreValue ?? 0,
+      // Task type is a writing classification; listening never carries one.
+      taskType: null
     }
   }
 

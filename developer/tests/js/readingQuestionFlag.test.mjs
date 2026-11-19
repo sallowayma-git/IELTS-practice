@@ -320,9 +320,9 @@ test('the page owns marks through useMarkedQuestions and wires them to the nav a
   assert.match(page, /:flags-read-only="readOnlyMode"/)
   assert.match(page, /@toggle-marked-question="toggleMarkedQuestion"/)
   assert.doesNotMatch(page, /markedQuestions\.value\s*=[^=]/, 'all writes go through restore / clear / toggle')
-  assert.match(page, /if \(marked\.length\) restoreMarkedQuestions\(marked\)/, 'draft hydration')
-  assert.match(page, /restoreMarkedQuestions\(loadedSubmission\?\.markedQuestions\)/, 'submission hydration')
-  assert.match(page, /clearMarkedQuestions\(\)/, 'reset')
+  assert.match(page, /hydrateFromDraftAnswers\(attempt.answers\)/, 'draft timeline restores flags')
+  assert.match(page, /hydrateFromSubmission\(loadedSubmission\)/, 'submission hydration')
+  assert.match(page, /resetQuestionTimeline\(\)/, 'reset')
   const saves = (page.match(/markedQuestions: markedQuestions\.value\.slice\(\)/g) || []).length
   assert.ok(saves >= 3, 'suite, endless and single drafts all carry the marks')
   assert.match(page, /markedQuestions,\n/, 'the submit path still receives the list')

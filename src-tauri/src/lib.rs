@@ -8,6 +8,8 @@ pub(crate) mod ai;
 pub(crate) mod cognitive_runtime;
 pub mod app;
 pub mod commands;
+#[path = "../../plug/jiufen/host.rs"]
+mod jiufen;
 #[cfg(test)]
 mod ipc_acl_tests;
 
@@ -89,6 +91,7 @@ pub fn run() {
         .manage(paths)
         .manage(db)
         .manage(vault)
+        .manage(jiufen::service::Account::default())
         .manage(agent::WorkspaceGrants::default())
         .manage(agent::AgentCancelRegistry::default())
         .manage(commands::backup::BackupImportGrants::default())
@@ -268,6 +271,18 @@ pub fn run() {
             commands::writing::writing_prompt_activate,
             commands::writing::writing_prompt_delete,
             commands::reading::reading_list_assets,
+            jiufen::service::jiufen_send_code,
+            jiufen::service::jiufen_login,
+            jiufen::service::jiufen_restore,
+            jiufen::service::jiufen_disconnect,
+            jiufen::service::jiufen_is_connected,
+            jiufen::catalog::jiufen_library,
+            jiufen::practice::jiufen_open_unit,
+            jiufen::practice::jiufen_asset_payload,
+            jiufen::practice::jiufen_submit,
+            jiufen::practice::jiufen_review,
+            jiufen::practice::jiufen_listening_audio,
+            jiufen::practice::jiufen_study_material,
             commands::reading::reading_pick_practice_asset,
             commands::reading::reading_get_asset_payload,
             commands::reading::reading_get_pdf_data_url,
@@ -277,6 +292,12 @@ pub fn run() {
             commands::reading::reading_get_open_draft,
             commands::reading::reading_patch_answer,
             commands::reading::reading_submit_attempt,
+            commands::listening::listening_list_assets,
+            commands::listening::listening_get_asset_payload,
+            commands::listening::listening_get_audio_data_url,
+            commands::listening::listening_save_draft,
+            commands::listening::listening_get_open_draft,
+            commands::listening::listening_submit_attempt,
             commands::modes::suite_create,
             commands::modes::suite_get,
             commands::modes::suite_submit_passage,
@@ -305,6 +326,7 @@ pub fn run() {
             commands::enrichment::coach_ensure_thread,
             commands::enrichment::coach_list_messages,
             commands::enrichment::coach_run,
+            commands::enrichment::coach_forget_preference,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_feedback,
             #[cfg(feature = "learning-observation-v1")]
@@ -333,8 +355,32 @@ pub fn run() {
             });
             let paths = app.state::<app::state::AppPaths>();
             let db = app.state::<app::state::AppDb>();
+            if let Err(error) = jiufen::practice::migrate_local_records(&db) {
+                tracing::error!(%error, "jiufen local record migration failed");
+            }
             // Bundled packs, or a newer signed content pack installed by OTA.
             commands::ota::seed_content_at_startup(app.handle(), &paths, &db)?;
+            // The listening pack is optional: a build without it stays usable,
+            // and a bad pack is logged instead of aborting startup.
+            let listening_pack = app.path().resource_dir()?.join("listening");
+            if listening_pack.join("manifest.json").is_file() {
+                match db
+                    .with_conn(|conn| ielts_db::seed_builtin_listening_pack(conn, &listening_pack))
+                {
+                    Ok(assets) => tracing::info!(
+                        assets,
+                        "validated and indexed bundled listening resources"
+                    ),
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to seed bundled listening resources")
+                    }
+                }
+            } else {
+                tracing::info!(
+                    path = %listening_pack.display(),
+                    "listening resource pack absent; skipping seed"
+                );
+            }
             match db.with_conn(|conn| ielts_db::recover_interrupted_sessions(conn)) {
                 Ok(n) if n > 0 => {
                     tracing::warn!(count = n, "marked interrupted evaluation sessions")

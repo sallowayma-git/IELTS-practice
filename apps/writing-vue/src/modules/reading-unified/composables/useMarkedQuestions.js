@@ -11,8 +11,7 @@
  */
 import { ref } from 'vue'
 
-export function useMarkedQuestions({ normalizeId, isReadOnly = () => false, onUserChange = () => {} }) {
-  const markedQuestions = ref([])
+export function useMarkedQuestions({ normalizeId, isReadOnly = () => false, onUserChange = () => {}, markedQuestions = ref([]) }) {
 
   function uniqueIds(ids) {
     const seen = new Set()

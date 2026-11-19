@@ -24,6 +24,8 @@ MIGRATIONS = ROOT / "crates/ielts-db/migrations"
 # backend mocks. Each entry must say why it is allowed.
 SKILL_KEY_ALLOWLIST = {
     ("packaged_tauri_flow.py", "reading.question.outcome"): "observation_type in scored-evidence SQL, not a skill key",
+    ("packaged_tauri_flow.py", "listening.submit"): "attempt_idempotency scope value written by Rust, not a skill key",
+    ("packaged_tauri_flow.py", "listening.error"): "listening command error code returned by Rust, not a skill key",
     ("test_packaged_weekly.py", "reading.question.outcome"): "observation_type fixture for scored-evidence SQL",
     ("test_packaged_weekly.py", "reading.attempt.score"): "negative observation_type fixture: attempt totals are not scored question outcomes",
     ("notebookPhrasing.test.mjs", "writing.new_criterion"): "deliberate ASCII-label fallback: a real label would not exercise bracketing",
@@ -50,7 +52,7 @@ COMMAND_PATTERNS = (
     re.compile(r"""invoke_data\(\s*\w+\s*,\s*['"]([a-z][a-z0-9_]*)['"]"""),
     re.compile(r"""case\s+['"]([a-z][a-z0-9_]*)['"]\s*:"""),
 )
-SKILL_KEY = re.compile(r"""['"]((?:reading|writing)\.[a-z][a-z0-9_.]*)['"]""")
+SKILL_KEY = re.compile(r"""['"]((?:reading|writing|listening)\.[a-z][a-z0-9_.]*)['"]""")
 PROBE_KIND = re.compile(r"""probeKind['"]?\s*:\s*['"]([a-z_]+)['"]""")
 PRIORITY_BAND = re.compile(r"""priority(?:Band|_band)['"]?\s*:\s*['"]([a-z]+)['"]""")
 REASON_LIST = re.compile(r"""(?:reasonCodes|reason_codes|REASON_CODES)\b[^\[\n]*\[([^\]]*)\]""")
@@ -87,7 +89,7 @@ def skill_catalog() -> set[str]:
     for path in MIGRATIONS.glob("*.sql"):
         text = read(path)
         for match in re.finditer(r"INSERT\s+(?:OR\s+\w+\s+)?INTO\s+skill_catalog\b.*?;", text, re.S):
-            keys.update(re.findall(r"""\('((?:reading|writing)\.[a-z0-9_.]+)'""", match.group(0)))
+            keys.update(re.findall(r"""\('((?:reading|writing|listening)\.[a-z0-9_.]+)'""", match.group(0)))
     if not keys:
         raise SystemExit("no skill_catalog rows found in migrations")
     return keys

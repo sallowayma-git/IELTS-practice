@@ -58,8 +58,9 @@ function testVueRoutesAndShell() {
   }
   // 题库 owns a secondary row (阅读 / 写作); 写作 no longer claims /topics.
   has(nav, "label: '阅读', match: ['/'], view: 'browse'", 'reading sub-entry under 题库')
-  has(nav, "to: '/topics', label: '写作', match: ['/topics']", 'writing sub-entry under 题库')
-  has(nav, "match: ['/writing', '/evaluating/', '/result/'] }", 'writing top entry without /topics')
+  has(nav, "to: '/topics', label: '写作', match: ['/topics', '/writing', '/evaluating/', '/result/']", 'writing sub-entry under 题库')
+  has(nav, "key: 'listening', to: '/listening'", 'listening sub-entry under 题库')
+  lacks(nav, "key: 'writing', to: '/writing'", 'duplicate primary writing tab')
   has(nav, 'aria-label="题库分类"', 'library sub-row landmark')
   lacks(nav, "'/result/', '/topics'", 'top-level writing must not match /topics')
   lacks(nav, "label: '智能体'", 'agent workbench is not a learner nav entry')

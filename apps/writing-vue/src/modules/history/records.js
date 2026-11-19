@@ -91,14 +91,25 @@ export const ACTIVITIES = {
       plot: (value) => value
     }
   },
-  // Label only: no records, no adapter, no filter semantics yet.
+  // Listening scores exactly like reading (0..1 ratio -> percentage), so it
+  // shares the score filter and the summary metric wording.
   listening: {
     label: '听力',
-    score: null,
+    scoreLabel: '正确率',
+    score: {
+      scale: 'ratio',
+      label: '听力正确率范围（%）',
+      unit: '正确率（%）',
+      min: 0,
+      max: 100,
+      step: 1,
+      divisor: 100,
+      error: '听力正确率必须在 0–100% 之间'
+    },
     kinds: [],
-    summary: { unit: '套', metric: null, format: null },
-    empty: '还没有听力记录。',
-    start: null,
+    summary: { unit: '套', metric: '平均正确率', format: percent },
+    empty: '还没有听力记录。完成一套听力后，成绩会出现在这里。',
+    start: { label: '去做一套听力', to: '/listening' },
     trend: null
   }
 }
@@ -121,6 +132,14 @@ function readingReviewRoute(item) {
   return route
 }
 
+function listeningReviewRoute(item) {
+  if (!item.assetId || !item.sessionId) return null
+  return {
+    name: 'PracticeListeningReview',
+    params: { assetId: item.assetId, attemptId: item.sessionId }
+  }
+}
+
 const WRITING_KINDS = {
   task1: 'Task 1',
   task2: 'Task 2'
@@ -139,6 +158,12 @@ const adapters = {
     subtitle: WRITING_KINDS[item.taskType] || '未标注',
     detailRoute: { name: 'Result', params: { sessionId: item.id } },
     meta: []
+  }),
+  listening: (item) => ({
+    kind: 'listening',
+    subtitle: '听力',
+    detailRoute: listeningReviewRoute(item),
+    meta: [['Session', item.sessionId || ''], ['Asset', item.assetId || '']]
   })
 }
 
@@ -301,6 +326,7 @@ export function summarizeRecords(records, scopeLabel = '全部记录') {
 // Score tone floors: a score at or above `success` is good, at or above `warning` is fair.
 const TONE_FLOORS = {
   reading: { success: 0.75, warning: 0.5 }, // ratio, 0–1
+  listening: { success: 0.75, warning: 0.5 }, // ratio, 0–1
   writing: { success: 6.5, warning: 5.5 } // Band
 }
 

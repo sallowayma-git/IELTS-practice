@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-coach-forget-preference"
+description = "Enables the coach_forget_preference command without any pre-configured scope."
+commands.allow = ["coach_forget_preference"]
+
+[[permission]]
+identifier = "deny-coach-forget-preference"
+description = "Denies the coach_forget_preference command without any pre-configured scope."
+commands.deny = ["coach_forget_preference"]

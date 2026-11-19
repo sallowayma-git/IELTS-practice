@@ -34,6 +34,15 @@ function resolvePayload(source?: MaybeRefOrGetter<ReadingPayload | null | undefi
   return unref(source)
 }
 
+/**
+ * `readOnlySource` is declared as a ref *or* a getter, and callers use both
+ * shapes. `unref` alone would hand back the getter itself — always truthy — and
+ * silently turn every write into a no-op, so resolve both shapes here.
+ */
+function resolveReadOnly(source?: MaybeRefOrGetter<boolean | undefined>) {
+  return Boolean(typeof source === 'function' ? source() : unref(source))
+}
+
 function getQuestionOrder(readingPayload?: ReadingPayload | null): string[] {
   return Array.isArray(readingPayload?.questionOrder) ? readingPayload.questionOrder : []
 }
@@ -133,14 +142,14 @@ export function useReadingAnswers(options: ReadingAnswersOptions = {}) {
   }
 
   function setAnswer(questionId: string, value: unknown, setOptions: AnswerMutationOptions = {}) {
-    if (unref(options.readOnlySource)) {
+    if (resolveReadOnly(options.readOnlySource)) {
       return false
     }
     return assignAnswer(questionId, value, { ...setOptions, track: true })
   }
 
   function toggleAnswerOption(questionId: string, optionValue: unknown, checked: boolean, toggleOptions: AnswerMutationOptions = {}) {
-    if (unref(options.readOnlySource)) {
+    if (resolveReadOnly(options.readOnlySource)) {
       return false
     }
     const normalizedQuestionId = String(questionId || '').trim()

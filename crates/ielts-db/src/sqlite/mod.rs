@@ -21,6 +21,16 @@ pub enum DbError {
 
 pub type DbResult<T> = Result<T, DbError>;
 
+/// Report an unrecognized text value read from a SQLite column instead of
+/// silently coercing it to a default domain variant.
+pub(crate) fn invalid_column_value(index: usize, value: &str, field: &str) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        index,
+        rusqlite::types::Type::Text,
+        format!("invalid {field}: {value}").into(),
+    )
+}
+
 #[derive(Debug, Clone)]
 pub struct DbOpenOptions {
     pub path: PathBuf,

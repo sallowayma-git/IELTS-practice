@@ -18,7 +18,7 @@ mod trace;
 pub use cards::*;
 pub use profile::*;
 pub use trace::*;
-pub use context::{resolve_reading_coach_context, ResolvedCoachContext};
+pub use context::{resolve_provider_coach_context, resolve_coach_context, resolve_reading_coach_context, ResolvedCoachContext};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -102,11 +102,21 @@ pub struct RunCoachCommand {
     pub question_context: Option<Value>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RememberedPreference {
+    pub key: String,
+    pub scope: String,
+    pub text: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoachRunResult {
     pub user_message: CoachMessage,
     pub assistant_message: CoachMessage,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remembered: Option<RememberedPreference>,
 }
 
 fn default_true() -> bool {
@@ -276,7 +286,7 @@ fn append_coach_message_in_transaction(
                 event_type,
                 source_kind: "coach_message".into(),
                 source_id: Some(message.id.clone()),
-                activity: Some("reading".into()),
+                activity: Some(coach_thread_activity(conn, &thread.id)?),
                 asset_id: thread.asset_id,
                 attempt_id: thread.attempt_id,
                 question_id: None,
@@ -295,6 +305,15 @@ fn append_coach_message_in_transaction(
         )?;
     }
     Ok(message)
+}
+
+pub fn coach_thread_activity(conn: &Connection, thread_id: &str) -> DbResult<String> {
+    conn.query_row(
+        "SELECT COALESCE(a.activity,p.activity,'reading') FROM coach_threads t
+         LEFT JOIN attempts a ON a.id=t.attempt_id
+         LEFT JOIN practice_assets p ON p.id=COALESCE(t.asset_id,a.asset_id)
+         WHERE t.id=?1", [thread_id], |row| row.get(0)
+    ).map_err(Into::into)
 }
 
 pub fn list_coach_messages(
@@ -359,6 +378,7 @@ pub fn find_completed_review(conn: &Connection, thread_id: &str) -> DbResult<Opt
         Some(row) => Ok(Some(CoachRunResult {
             user_message: message_from_row(row, 0)?,
             assistant_message: message_from_row(row, 8)?,
+            remembered: None,
         })),
         None => Ok(None),
     }

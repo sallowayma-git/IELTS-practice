@@ -520,7 +520,7 @@ fn load_source_observations(conn: &Connection) -> DbResult<Vec<SourceObservation
          JOIN learner_observation_evidence oe
            ON oe.observation_id = lo.id AND oe.evidence_role = 'support'
          JOIN learning_events e ON e.id = oe.event_id
-         WHERE lo.observation_type = 'reading.question.outcome'
+         WHERE lo.observation_type IN ('reading.question.outcome', 'listening.question.outcome')
            AND lo.value_num IS NOT NULL
            AND e.sensitivity = 'normal'
          ORDER BY e.occurred_at ASC, e.id ASC, lo.id ASC",
@@ -679,7 +679,7 @@ fn mapping_priority(source: &str) -> u8 {
 
 fn deterministic_skill_key(conn: &Connection, source: &SourceObservation) -> Option<String> {
     if let Some(hint) = source.skill_key_hint.as_deref() {
-        if hint.starts_with("reading.")
+        if (hint.starts_with("reading.") || hint.starts_with("listening."))
             && conn
                 .query_row(
                     "SELECT 1 FROM skill_catalog WHERE skill_key = ?1 AND active = 1",
@@ -693,6 +693,7 @@ fn deterministic_skill_key(conn: &Connection, source: &SourceObservation) -> Opt
         {
             return Some(hint.to_string());
         }
+        if hint.starts_with("listening.") { return None; }
     }
     let skill_key = canonical_reading_skill_key(source.question_kind.as_deref()?);
     // Only catalogued skills are learned; an unknown kind maps to nothing.
@@ -1403,7 +1404,7 @@ pub fn canonical_reading_skill_key(question_kind: &str) -> String {
     let canonical = match kind {
         "tfng" | "true_false_not_given" => "tfng",
         "yng" | "yes_no_not_given" => "yng",
-        "mcq" | "multi_choice" | "multiple_choice" => "multi_choice",
+        "mcq" | "multi_choice" | "multiple_choice" | "multiple_choice_multiple" => "multi_choice",
         "headings" | "matching_headings" => "matching_headings",
         "sentence_endings" | "matching_sentence_endings" => "matching_sentence_endings",
         "" => "unknown",

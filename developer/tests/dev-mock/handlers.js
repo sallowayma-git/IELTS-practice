@@ -11,6 +11,7 @@ import {
   APP_DATA_PATHS,
   APP_INFO,
   EVAL_EVENT_TEMPLATE,
+  LISTENING_AUDIO_DATA_URL,
   buildWritingEvaluation,
   writingDetail,
 } from './seed.js'
@@ -23,6 +24,11 @@ function fail(code, message) {
   const error = new Error(message)
   error.envelope = { code, message, retryable: false }
   return error
+}
+
+/** Mark a handler payload as a bare command result (no CommandResponse envelope). */
+function bare(payload) {
+  return { __bareInvoke: true, payload }
 }
 
 const clone = (value) => JSON.parse(JSON.stringify(value ?? null))
@@ -268,6 +274,187 @@ function emitEvaluation(state, host, evaluationId, attemptId, channel, taskType)
   })
 }
 
+// ------------------------------------------------------------ listening ----
+
+/** Mirrors TimerState::elapsed_ms (anchor, paused offset, current pause). */
+function timerElapsedMs(timer, nowMs) {
+  if (!timer) return 0
+  let elapsed = Math.max(0, nowMs - (Number(timer.anchorMs) || 0))
+  elapsed = Math.max(0, elapsed - (Number(timer.pausedOffsetMs) || 0))
+  if (!timer.running && timer.pausedAtMs != null && nowMs > timer.pausedAtMs) {
+    elapsed = Math.max(0, elapsed - (nowMs - timer.pausedAtMs))
+  }
+  return elapsed
+}
+
+/** Lowercase trimmed tokens of an answer value, mirroring scoring.rs split_answer_tokens. */
+const normalizedTokens = (value) => answerTokens(value).map((token) => token.toLowerCase())
+
+/** Case-insensitive set equality, mirroring scoring.rs compare_token_sets. */
+function sameTokenSet(left, right) {
+  const a = new Set(normalizedTokens(left))
+  const b = new Set(normalizedTokens(right))
+  return a.size === b.size && [...a].every((token) => b.has(token))
+}
+
+/** Mirrors scoring.rs compare_answer -> is_correct. */
+function listeningAnswerIsCorrect(user, correct, control) {
+  const actual = normalizedTokens(user)
+  const expected = normalizedTokens(correct)
+  if (!actual.length || !expected.length) return false
+  switch (matchModeOf(correct, control)) {
+    case 'set':
+      return sameTokenSet(actual, expected)
+    case 'alternatives':
+      return actual.length === 1 ? expected.includes(actual[0]) : sameTokenSet(actual, expected)
+    default:
+      return actual.length > 1 || expected.length > 1 ? sameTokenSet(actual, expected) : actual[0] === expected[0]
+  }
+}
+
+/** Mirrors scoring.rs question_weight: a checkbox set is worth its required answers. */
+const listeningQuestionWeight = (correct, control) => (Array.isArray(correct) && control === 'checkbox'
+  ? Math.max(1, answerTokens(correct).length)
+  : 1)
+
+/** Mirrors listening::question_kinds::load_kinds: questionId -> group kind. */
+function listeningQuestionKinds(payload) {
+  const kinds = {}
+  for (const group of payload?.questionGroups || []) {
+    if (!group?.kind) continue
+    for (const questionId of group.questionIds || []) {
+      if (questionId) kinds[questionId] = group.kind
+    }
+  }
+  return kinds
+}
+
+/** Mirrors listening::attempt::match_control: only multi_choice is a checkbox set. */
+const listeningControl = (kind) => (kind === 'multi_choice' ? 'checkbox' : undefined)
+
+/** Mirrors reading::attempt::answers_to_vec: keyed answers plus marked/timeline ids. */
+function listeningDraftAnswers(cmd) {
+  const given = cmd.answers && typeof cmd.answers === 'object' && !Array.isArray(cmd.answers) ? cmd.answers : {}
+  const progress = new Map()
+  for (const entry of cmd.questionTimeline || []) {
+    const questionId = String(entry?.questionId || '').trim()
+    if (questionId) progress.set(questionId, entry)
+  }
+  const questionIds = Object.keys(given)
+  for (const questionId of [...(cmd.markedQuestions || []), ...progress.keys()]) {
+    if (!questionIds.includes(questionId)) questionIds.push(questionId)
+  }
+  return questionIds.map((questionId) => {
+    const entry = progress.get(questionId)
+    return {
+      questionId,
+      answer: hasOwn(given, questionId) ? given[questionId] : null,
+      weight: 1,
+      changeCount: entry?.changeCount ?? 0,
+      visitCount: entry?.visitCount ?? 0,
+      elapsedMs: entry?.elapsedMs ?? 0,
+      marked: (cmd.markedQuestions || []).includes(questionId),
+      ...(entry?.answeredAt ? { answeredAt: entry.answeredAt } : {}),
+    }
+  })
+}
+
+/**
+ * Mirrors crates/ielts-db save_listening_draft -> AttemptRecord. The wire
+ * record has no timerSnapshot and no idempotencyKey: the timer is folded into
+ * durationMs here, exactly like the Rust command. One record is stored and
+ * returned by both save and get_open so the two commands cannot drift.
+ */
+function listeningDraftRecord(state, cmd) {
+  const previous = ownOf(state.listening.drafts, cmd.attemptId)
+  const asset = state.listening.assets.find((entry) => entry.id === cmd.assetId)
+  const nowMs = Date.now()
+  return {
+    schemaVersion: 1,
+    id: cmd.attemptId,
+    activity: 'listening',
+    assetId: cmd.assetId,
+    mode: 'single',
+    status: 'draft',
+    startedAt: previous?.startedAt || new Date(nowMs).toISOString(),
+    durationMs: timerElapsedMs(cmd.timerSnapshot, nowMs),
+    titleSnapshot: cmd.titleSnapshot || asset?.title || null,
+    answers: listeningDraftAnswers(cmd),
+    annotations: [],
+  }
+}
+
+/**
+ * Mirrors crates/ielts-db ListeningSubmitResult and the AttemptRecord wire
+ * shape: weighted scoring over questionOrder, an empty string for a blank slot,
+ * and the kind plus timeline fields on every answer row.
+ */
+function recordListeningSubmission(state, cmd) {
+  const entry = ownOf(state.listening.payloads, cmd.assetId)
+  if (!entry) throw fail('listening.error', `listening asset not found: ${cmd.assetId}`)
+  const payload = entry.payload
+  const key = payload.answerKey || {}
+  const kinds = listeningQuestionKinds(payload)
+  const questionIds = Array.isArray(payload.questionOrder) ? payload.questionOrder : Object.keys(key)
+  const progress = new Map()
+  for (const item of cmd.questionTimeline || []) {
+    const questionId = String(item?.questionId || '').trim()
+    if (questionId) progress.set(questionId, item)
+  }
+  const marked = cmd.markedQuestions || []
+  const attemptId = cmd.attemptId || idFrom('listening')
+  const submittedAt = new Date().toISOString()
+  let correctCount = 0
+  let questionCount = 0
+  const answers = questionIds.map((questionId) => {
+    const kind = kinds[questionId] || null
+    const correct = ownOf(key, questionId)
+    const control = listeningControl(kind)
+    const answer = hasOwn(cmd.answers, questionId) ? cmd.answers[questionId] : ''
+    const weight = listeningQuestionWeight(correct, control)
+    const isCorrect = listeningAnswerIsCorrect(answer, correct, control)
+    questionCount += weight
+    if (isCorrect) correctCount += weight
+    const timeline = progress.get(questionId)
+    return {
+      questionId,
+      answer,
+      isCorrect,
+      weight,
+      questionKind: kind,
+      changeCount: timeline?.changeCount ?? 0,
+      visitCount: timeline?.visitCount ?? 0,
+      elapsedMs: timeline?.elapsedMs ?? 0,
+      marked: marked.includes(questionId),
+      answeredAt: timeline?.answeredAt || submittedAt,
+    }
+  })
+  const scoreValue = questionCount ? correctCount / questionCount : 0
+  const startedAt = new Date(Date.parse(submittedAt) - (cmd.durationMs ?? 0)).toISOString()
+  const attempt = {
+    schemaVersion: 1,
+    id: attemptId,
+    activity: 'listening',
+    mode: 'single',
+    suiteId: null,
+    status: 'completed',
+    startedAt,
+    submittedAt,
+    completedAt: submittedAt,
+    durationMs: cmd.durationMs ?? 0,
+    scoreValue,
+    scoreScale: 'ratio',
+    correctCount,
+    questionCount,
+    assetId: cmd.assetId,
+    titleSnapshot: cmd.titleSnapshot || entry.asset?.title || 'Listening practice',
+    answers,
+    annotations: [],
+  }
+  state.listening.drafts[attemptId] = { ...attempt }
+  return { attempt, scoreValue, correctCount, questionCount, idempotentReplay: false }
+}
+
 // ------------------------------------------------------------ handlers ----
 
 export function createHandlers(state, host) {
@@ -282,6 +469,17 @@ export function createHandlers(state, host) {
   const sessionStub = (kind) => (args) => ({ id: `${kind}-mock`, kind, status: 'active', ...args?.cmd, startedAt: new Date().toISOString() })
 
   return {
+    // plug/jiufen commands. Rust returns bare values (Result<bool, String>,
+    // Vec<Entry>) and src/api/jiufen.js consumes core invoke directly without
+    // unwrapping the CommandResponse envelope, so these payloads must go out
+    // bare via bare() — an envelope here is truthy garbage that breaks
+    // plug/jiufen/library.js (rows becomes the envelope, remoteCards crashes
+    // and the overview renders blank). Mocked as "no account connected":
+    // restore/is_connected -> false, library -> [] (service.rs / catalog.rs).
+    jiufen_restore: () => bare(false),
+    jiufen_is_connected: () => bare(false),
+    jiufen_library: () => bare([]),
+    jiufen_disconnect: () => bare(null),
     reading_list_assets: () => clone(state.reading.assets),
     reading_get_asset_payload: ({ assetId }) => {
       const entry = ownOf(state.reading.payloads, assetId)
@@ -310,6 +508,30 @@ export function createHandlers(state, host) {
       return true
     },
     reading_submit_attempt: ({ cmd }) => recordReadingSubmission(state, cmd),
+    listening_list_assets: () => clone(state.listening.assets),
+    listening_get_asset_payload: ({ assetId }) => {
+      const entry = ownOf(state.listening.payloads, assetId)
+      if (!entry) throw fail('listening.error', `listening asset not found: ${assetId}`)
+      return clone(entry.payload)
+    },
+    listening_get_audio_data_url: ({ assetId }) => {
+      if (!ownOf(state.listening.payloads, assetId)) throw fail('listening.error', `listening asset not found: ${assetId}`)
+      return LISTENING_AUDIO_DATA_URL
+    },
+    listening_save_draft: ({ cmd }) => {
+      const attempt = listeningDraftRecord(state, cmd)
+      state.listening.drafts[cmd.attemptId] = attempt
+      return clone(attempt)
+    },
+    // Same query as crates/ielts-db get_open_listening_draft: newest open
+    // (draft/active) single attempt for the asset, or null.
+    listening_get_open_draft: ({ assetId }) => {
+      const open = Object.values(state.listening.drafts)
+        .filter((entry) => entry.assetId === assetId && (entry.status === 'draft' || entry.status === 'active'))
+        .sort((left, right) => String(right.startedAt || '').localeCompare(String(left.startedAt || '')))
+      return open.length ? clone(open[0]) : null
+    },
+    listening_submit_attempt: ({ cmd }) => recordListeningSubmission(state, cmd),
     suite_create: sessionStub('suite'),
     suite_get: ({ suiteId }) => ({ id: suiteId, kind: 'suite', status: 'active', passages: [] }),
     suite_submit_passage: () => ({ status: 'completed' }),

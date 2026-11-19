@@ -764,7 +764,9 @@ fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
     snapshot_tables_before_digests(schema_version)
         .iter()
         .copied()
-        .filter(|table| *table != "weekly_digests" || schema_version >= WEEKLY_DIGESTS_SCHEMA_VERSION)
+        .filter(|table| {
+            *table != "weekly_digests" || schema_version >= WEEKLY_DIGESTS_SCHEMA_VERSION
+        })
         .filter(|table| {
             !CONTEXT_SNAPSHOT_TABLES.contains(table)
                 || schema_version >= CONTEXT_SNAPSHOTS_SCHEMA_VERSION
@@ -780,10 +782,20 @@ fn is_weekly_snapshot_package(package: &BackupPackage) -> bool {
         && package.manifest.database_schema_version == 33
         && has("soul_revisions")
         && !CONTEXT_SNAPSHOT_TABLES.iter().any(|name| has(name))
-        && package.database.iter().any(|table| table.name == "practice_assets"
-            && table.columns.iter().any(|column| column == "question_kinds_json"))
-        && package.database.iter().any(|table| table.name == "coach_threads"
-            && !table.columns.iter().any(|column| column == "learner_profile_json"))
+        && package.database.iter().any(|table| {
+            table.name == "practice_assets"
+                && table
+                    .columns
+                    .iter()
+                    .any(|column| column == "question_kinds_json")
+        })
+        && package.database.iter().any(|table| {
+            table.name == "coach_threads"
+                && !table
+                    .columns
+                    .iter()
+                    .any(|column| column == "learner_profile_json")
+        })
 }
 
 fn snapshot_tables_for_package(package: &BackupPackage) -> Vec<&'static str> {
@@ -1007,7 +1019,11 @@ pub fn import_backup(
 /// Per-class record counts of the live database, for the restore preview.
 fn data_class_counts_in_db(conn: &Connection) -> DbResult<DataClassCounts> {
     let count = |table: &str| -> DbResult<u32> {
-        Ok(conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))?)
+        Ok(
+            conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })?,
+        )
     };
     Ok(DataClassCounts {
         attempts: count("attempts")?,
@@ -1179,6 +1195,26 @@ const NULLABLE_COLUMN_ADDITIONS: &[(&str, &str, i64)] = &[
     ("practice_assets", "question_kinds_json", 34),
 ];
 
+// Pre-0037 canonical backups use the original review table. Apply the same conversion as 0037,
+// before schema validation and insertion, keeping modern snapshots strictly checked.
+fn review_table_for_restore(table: &BackupTable, schema: i64) -> DbResult<std::borrow::Cow<'_, BackupTable>> {
+    const OLD: &[&str] = &["item_id", "ease", "interval_days", "repetitions", "due_at", "last_reviewed_at", "lapses"];
+    if schema >= 37 || table.name != "vocabulary_review_state"
+        || !table.columns.iter().map(String::as_str).eq(OLD.iter().copied()) {
+        return Ok(std::borrow::Cow::Borrowed(table));
+    }
+    let mut upgraded = table.clone();
+    upgraded.columns = ["item_id", "ease_factor", "interval_days", "repetitions", "intra_cycles",
+        "correct_count", "lapses", "due_at", "last_reviewed_at"].map(String::from).to_vec();
+    upgraded.rows = table.rows.iter().map(|row| {
+        if row.len() != OLD.len() { return Err(DbError::Validation("invalid legacy vocabulary review row".into())); }
+        Ok(vec![row[0].clone(), if matches!(row[5], BackupSqlValue::Null) {BackupSqlValue::Null} else {row[1].clone()},
+            row[2].clone(), row[3].clone(), BackupSqlValue::Integer(0), BackupSqlValue::Integer(0),
+            row[6].clone(), row[4].clone(), row[5].clone()])
+    }).collect::<DbResult<_>>()?;
+    Ok(std::borrow::Cow::Owned(upgraded))
+}
+
 fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResult<()> {
     let target_version = current_version(conn)?;
     if target_version < package.manifest.database_schema_version as i64 {
@@ -1191,6 +1227,7 @@ fn validate_target_schema(conn: &Connection, package: &BackupPackage) -> DbResul
         if DROPPED_TABLES.contains(&table.name.as_str()) {
             continue;
         }
+        let table = review_table_for_restore(table, package.manifest.database_schema_version as i64)?;
         let target_columns = table_columns(conn, &table.name)?;
         // Some migrations add only a nullable column. Historical snapshots
         // cannot invent it; INSERT with the old columns leaves NULL. Keep every
@@ -1257,7 +1294,7 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
             // written; skip any that are absent rather than panicking.
             continue;
         };
-        let table = *table;
+        let table = review_table_for_restore(table, package.manifest.database_schema_version as i64)?;
         let columns = table
             .columns
             .iter()
@@ -1325,7 +1362,12 @@ fn restore_snapshot(tx: &Transaction<'_>, package: &BackupPackage) -> DbResult<(
     // regenerated from the restored `learning_events` while this transaction is
     // still open -- after commit would be too late for the deferred check below.
     crate::learning_observations::learning_observations_rebuild_in_transaction(tx)?;
-    if tables.get("practice_assets").is_some_and(|table| !table.columns.iter().any(|column| column == "question_kinds_json")) {
+    if tables.get("practice_assets").is_some_and(|table| {
+        !table
+            .columns
+            .iter()
+            .any(|column| column == "question_kinds_json")
+    }) {
         crate::reading::assets::backfill_question_kinds_in_transaction(tx)?;
     }
     resolve_references_to_unrestored_tables(tx, &source_tables)?;
@@ -2140,8 +2182,11 @@ fn load_all_attempt_summaries(conn: &Connection) -> DbResult<Vec<AttemptRecord>>
             schema_version: row.get::<_, i64>(17)? as u32,
             id: row.get(0)?,
             activity: match row.get::<_, String>(1)?.as_str() {
+                "reading" => Activity::Reading,
                 "writing" => Activity::Writing,
-                _ => Activity::Reading,
+                "listening" => Activity::Listening,
+                "vocabulary" => Activity::Vocabulary,
+                value => return Err(crate::sqlite::invalid_column_value(1, value, "activity")),
             },
             asset_id: row.get(2)?,
             mode: match row.get::<_, String>(3)?.as_str() {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-listening-audio"
+description = "Enables the jiufen_listening_audio command without any pre-configured scope."
+commands.allow = ["jiufen_listening_audio"]
+
+[[permission]]
+identifier = "deny-jiufen-listening-audio"
+description = "Denies the jiufen_listening_audio command without any pre-configured scope."
+commands.deny = ["jiufen_listening_audio"]
