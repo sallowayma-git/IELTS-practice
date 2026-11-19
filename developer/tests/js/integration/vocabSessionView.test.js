@@ -209,6 +209,9 @@ function createElementStub(tag = 'div', overrides = {}) {
             return [];
         },
         closest(selector) {
+            if (selector === '[inert]') {
+                return attributes.has('inert') ? this : this.parentNode?.closest(selector) ?? null;
+            }
             if (selector === '[data-action]' && this.dataset && this.dataset.action) {
                 return this;
             }
@@ -862,6 +865,9 @@ async function run() {
     await record('rating shortcuts use default and saved bindings only on an active recognition card', async () => {
         const container = createElementStub('div');
         container.classList.add('active');
+        const background = createElementStub('main');
+        background.appendChild(container);
+        container.appendChild(elements.sessionCard);
         hooks.setContainer(container);
         hooks.resetSessionState();
         hooks.state.session.stage = 'recognition';
@@ -871,6 +877,7 @@ async function run() {
         for (const rating of ['easy', 'good', 'hard']) {
             const button = createElementStub('button');
             button.dataset.action = `recognize-${rating}`;
+            elements.sessionCard.appendChild(button);
             button.addEventListener('click', (event) => hooks.handleCardAction({ ...event, preventDefault() {} }));
             elements.sessionCard.__queryMap[`[data-action="recognize-${rating}"]`] = button;
         }
@@ -882,6 +889,15 @@ async function run() {
             });
             return prevented;
         };
+        background.setAttribute('inert', '');
+        assert.equal(press('1'), false);
+        assert.equal(hooks.state.session.stage, 'recognition');
+        background.removeAttribute('inert');
+
+        assert.equal(press('&', { code: 'Digit1' }), false);
+        assert.equal(press('1', { code: 'Digit1', shiftKey: true }), true);
+        assert.equal(hooks.state.session.recognitionQuality, 'easy');
+
         for (const [key, rating] of Object.entries({ 1: 'easy', 2: 'good', 3: 'hard' })) {
             hooks.state.session.stage = 'recognition';
             assert.equal(press(key), true);
@@ -897,7 +913,7 @@ async function run() {
         } };
         const preferences = windowStub.VocabShortcutPreferences;
         await assert.rejects(preferences.save({ easy: 'A', good: 'A', hard: 'D' }));
-        await preferences.save({ easy: 'A', good: 'S', hard: 'D' });
+        await preferences.save({ easy: 'A', good: 'S', hard: '9' });
         await preferences.load();
         hooks.state.session.stage = 'recognition';
         hooks.renderCard();
@@ -905,6 +921,11 @@ async function run() {
         assert.equal(press('1'), false);
         assert.equal(press('a', { repeat: true }), false);
         assert.equal(press('a', { ctrlKey: true }), false);
+        assert.equal(press('A', { shiftKey: true }), false);
+        assert.equal(press('9', { code: 'Digit9', shiftKey: true, altKey: true }), false);
+        assert.equal(press('9', { code: 'Digit9', shiftKey: true }), true);
+        assert.equal(hooks.state.session.recognitionQuality, 'hard');
+        hooks.state.session.stage = 'recognition';
         documentStub.activeElement = createElementStub('textarea', { closest: () => true });
         assert.equal(press('a'), false);
         documentStub.activeElement = null;

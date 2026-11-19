@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:6d12d40f67f03e640228414060549bfb6b9295f8db8ec6f179c7a5a95004e943",
+  "buildId": "sha256:936cc525acc1e47ddfec5e048b4954b1d714061bbbc520b74c7eb80e2ad31667",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -618,7 +618,7 @@
     },
     {
       "path": "js/bundles/vocabulary.bundle.js",
-      "sha256": "c6172be90d9ba6053ae8a5b2de6cf32891c51539bf2fa33b8b9857d7ebd5396d"
+      "sha256": "7acbe20519815a2783bdd6ccf522d8e5bf08c8ecc469a8868e84b6437d05ed61"
     },
     {
       "path": "js/diagnostics/bootstrapCollector.js",
@@ -1906,7 +1906,7 @@
       {
         "source": "js/components/vocabSessionView.js",
         "startLine": 2672,
-        "endLine": 5248,
+        "endLine": 5250,
         "sourceStartLine": 1
       }
     ],

@@ -3256,15 +3256,17 @@
     function handleRatingShortcut(event) {
         if (state.session.stage !== 'recognition' || !isSessionVisible() || state.menuOpen || isListModalPending()
             || event.defaultPrevented || event.repeat || event.isComposing
-            || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+            || event.altKey || event.ctrlKey || event.metaKey) return false;
         if (document.activeElement?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
             || document.querySelector('#practice-settings-modal.show')) return false;
         const key = event.key?.toUpperCase();
+        // Some keyboard layouts require Shift to type digits.
+        if (event.shiftKey && !/^[0-9]$/.test(key)) return false;
         const bindings = shortcutPreferences.read();
         const rating = Object.keys(shortcutPreferences.ratings).find((name) => bindings[name] === key);
         if (!rating) return false;
         const button = state.elements.sessionCard.querySelector(`[data-action="recognize-${rating}"]`);
-        if (!button || button.disabled) return false;
+        if (!button || button.disabled || button.closest('[inert]')) return false;
         event.preventDefault();
         button.click();
         return true;
