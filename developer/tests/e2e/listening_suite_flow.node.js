@@ -103,6 +103,41 @@ async function start(page, mode, fromOverview = false) {
 }
 
 function activeFrame(suite) { return suite.frameLocator('iframe:not([hidden])'); }
+async function reloadSuite(page, suite) {
+    await activeFrame(suite).locator('#timer[data-timer-mode="countdown"]').waitFor();
+    const running = await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning);
+    // Flush pagehide before reloading so the test always exercises its saved draft.
+    const hiddenAt = await suite.evaluate(() => {
+        const timestamp = Date.now();
+        window.dispatchEvent(new PageTransitionEvent('pagehide'));
+        return timestamp;
+    });
+    await page.waitForFunction((timestamp) => {
+        const session = window.app.currentSuiteSession;
+        return session.draftsByExam[session.activeExamId]?.updatedAt >= timestamp;
+    }, hiddenAt);
+    assert.equal(await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning), running,
+        'saving the pagehide draft must preserve the timer state');
+    await suite.reload();
+    await suite.waitForSelector('.listening-suite-toolbar');
+    await suite.waitForFunction(() => Array.from(document.querySelectorAll('iframe')).every((frame) =>
+        frame.contentWindow.__listeningBridgeGetState?.().initialized
+    ) && document.querySelector('iframe:not([hidden])')?.contentDocument.querySelector('#timer[data-timer-mode="countdown"]'));
+}
+async function assertRunningCountdown(page, suite) {
+    assert.equal(await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning), true,
+        'the host must retain the running timer state');
+    const timer = activeFrame(suite).locator('#timer[data-timer-mode="countdown"]');
+    await timer.waitFor();
+    assert.equal(await timer.evaluate((el) => el.classList.contains('paused')), false,
+        'the restored timer must remain running');
+    const before = await timer.innerText();
+    await suite.waitForFunction((previous) => {
+        const text = document.querySelector('iframe:not([hidden])')?.contentDocument.querySelector('#timer')?.textContent;
+        const seconds = (value) => value.split(':').reduce((total, part) => total * 60 + Number(part), 0);
+        return text && seconds(text) < seconds(previous);
+    }, before, { timeout: 5000 });
+}
 async function records(page) { return page.evaluate(() => window.AppData.practice.list({ projection: 'detail' })); }
 async function waitForRecord(page) {
     const deadline = Date.now() + 15000;
@@ -121,6 +156,8 @@ try {
         await suite.waitForFunction(() => Array.from(document.querySelectorAll('iframe')).length === 4
             && Array.from(document.querySelectorAll('iframe')).every((f) => f.contentWindow.__listeningBridgeGetState?.().initialized));
         assert.match(await activeFrame(suite).locator('#timer').innerText(), /^39:|^40:/);
+        await reloadSuite(page, suite);
+        await assertRunningCountdown(page, suite);
         await activeFrame(suite).locator('input').fill('answer1');
         await activeFrame(suite).locator('#notes').fill('Remember this part');
         await activeFrame(suite).locator('audio').evaluate(async (audio) => {
@@ -140,11 +177,13 @@ try {
         assert.equal(await activeFrame(suite).locator('#timer').innerText(), paused);
         await activeFrame(suite).locator('input').fill('wrong');
         await suite.waitForTimeout(1400);
-        await suite.reload();
-        await suite.waitForSelector('.listening-suite-toolbar');
-        await suite.waitForFunction(() => Array.from(document.querySelectorAll('iframe')).length === 4
-            && Array.from(document.querySelectorAll('iframe')).every((f) => f.contentWindow.__listeningBridgeGetState?.().initialized));
+        await reloadSuite(page, suite);
         assert.equal(await suite.locator('[aria-current="step"]').innerText(), 'Part 3', 'reload resumes the active part');
+        assert.equal(await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning), false,
+            'reload must preserve an explicit user pause');
+        assert.equal(await activeFrame(suite).locator('#timer').evaluate((el) => el.classList.contains('paused')), true);
+        await suite.waitForTimeout(1400);
+        assert.equal(await activeFrame(suite).locator('#timer').innerText(), paused, 'a paused timer must stay frozen after reload');
         await suite.locator('[data-suite-part="1"]').click();
         assert.equal(await activeFrame(suite).locator('input').inputValue(), 'answer1', 'reload restores P1');
         assert.ok(await activeFrame(suite).locator('audio').evaluate((audio) => audio.currentTime) >= 1, 'reload restores audio position');
@@ -186,6 +225,8 @@ try {
     for (const mode of ['classic', 'stationary']) {
         const { context, page } = await setup();
         const suite = await start(page, mode);
+        await reloadSuite(page, suite);
+        await assertRunningCountdown(page, suite);
         for (let part = 1; part <= 4; part++) {
             await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
                 && window.__listeningBridgeGetState().examId === expected, exams[part - 1].id);
@@ -201,6 +242,7 @@ try {
                 await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
                     && window.__listeningBridgeGetState().examId === expected, exams[1].id);
                 assert.equal(await activeFrame(suite).locator('input').inputValue(), 'Unsubmitted P2 draft', 'returning from review restores the current draft');
+                await assertRunningCountdown(page, suite);
             }
             await activeFrame(suite).locator('input').fill('answer' + part);
             if (mode === 'stationary' && part === 2) {

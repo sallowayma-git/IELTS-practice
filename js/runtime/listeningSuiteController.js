@@ -296,7 +296,7 @@
             draftInterval = global.setInterval(syncDraft, 1200);
             global.addEventListener('pagehide', () => {
                 if (!activeSlot()?.submitted && !pendingSubmission && !finished) {
-                    api.updateClockPause(false);
+                    // Saving a recovery draft preserves the user's running/paused choice.
                     syncDraft();
                 }
                 slots.forEach(pauseMedia);
