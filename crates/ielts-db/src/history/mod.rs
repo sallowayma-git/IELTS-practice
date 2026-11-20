@@ -159,7 +159,7 @@ fn resolve_score_filter_scale(filter: &HistoryFilter) -> DbResult<Option<ScoreSc
 
 fn score_scale_for_activity(activity: Activity) -> ScoreScale {
     match activity {
-        Activity::Reading => ScoreScale::Ratio,
+        Activity::Reading | Activity::Listening | Activity::Vocabulary => ScoreScale::Ratio,
         Activity::Writing => ScoreScale::Band9,
     }
 }
@@ -805,6 +805,8 @@ fn delete_attempt_graph_gated(conn: &Connection, attempt_id: &str) -> DbResult<b
         "DELETE FROM reading_timer_states WHERE scope = 'attempt' AND owner_id = ?1",
         params![attempt_id],
     )?;
+    conn.execute("DELETE FROM settings WHERE namespace='jiufen.online' AND key IN (?1,?2,?3)",
+        params![format!("receipt-v2-{attempt_id}"),format!("review-v1-{attempt_id}"),format!("submit-v1-{attempt_id}")])?;
     delete_mode_idempotency_replays_for_attempt(conn, attempt_id)?;
     // The ledger rows of this attempt go with it, deliberately: 0028 made the
     // foreign key RESTRICT, so nothing else can erase them as a side effect.
@@ -1058,7 +1060,7 @@ fn map_attempt_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AttemptRecord> {
     Ok(AttemptRecord {
         schema_version: row.get::<_, i64>(17)? as u32,
         id: row.get(0)?,
-        activity: parse_activity(&row.get::<_, String>(1)?),
+        activity: parse_activity(&row.get::<_, String>(1)?)?,
         asset_id: row.get(2)?,
         mode: parse_mode(&row.get::<_, String>(3)?),
         suite_id: row.get(4)?,
@@ -1157,6 +1159,8 @@ fn activity_str(activity: Activity) -> &'static str {
     match activity {
         Activity::Reading => "reading",
         Activity::Writing => "writing",
+        Activity::Listening => "listening",
+        Activity::Vocabulary => "vocabulary",
     }
 }
 
@@ -1171,10 +1175,13 @@ fn mode_str(mode: AttemptMode) -> &'static str {
     }
 }
 
-fn parse_activity(raw: &str) -> Activity {
+fn parse_activity(raw: &str) -> rusqlite::Result<Activity> {
     match raw {
-        "writing" => Activity::Writing,
-        _ => Activity::Reading,
+        "reading" => Ok(Activity::Reading),
+        "writing" => Ok(Activity::Writing),
+        "listening" => Ok(Activity::Listening),
+        "vocabulary" => Ok(Activity::Vocabulary),
+        value => Err(crate::sqlite::invalid_column_value(1, value, "activity")),
     }
 }
 
@@ -1200,5 +1207,24 @@ fn parse_status(raw: &str) -> AttemptStatus {
         "failed" => Failed,
         "interrupted" => Interrupted,
         _ => Completed,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_activity_accepts_known_values_and_rejects_unknown() {
+        for (raw, expected) in [
+            ("reading", Activity::Reading),
+            ("writing", Activity::Writing),
+            ("listening", Activity::Listening),
+            ("vocabulary", Activity::Vocabulary),
+        ] {
+            assert_eq!(parse_activity(raw).unwrap(), expected);
+        }
+        assert!(parse_activity("speaking").is_err());
+        assert!(parse_activity("").is_err());
     }
 }

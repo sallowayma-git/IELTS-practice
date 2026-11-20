@@ -453,12 +453,14 @@ fn validate_evidence(
                 "observation belongs to another user",
             ));
         }
-        if observation.activity != scope.activity() {
-            issues.push(issue(
-                "observation_scope_mismatch",
-                Some("evidenceObservationIds"),
-                "observation activity does not match proposal scope",
-            ));
+        if let Some(activity) = scope.activity() {
+            if observation.activity != activity {
+                issues.push(issue(
+                    "observation_scope_mismatch",
+                    Some("evidenceObservationIds"),
+                    "observation activity does not match proposal scope",
+                ));
+            }
         }
         if observation.sensitivity != "normal" {
             issues.push(issue(
@@ -906,5 +908,66 @@ mod tests {
             &snapshot(),
         );
         assert_eq!(report.decisions[0].disposition, MemoryProposalDisposition::Quarantined);
+    }
+
+    #[test]
+    fn global_scope_accepts_evidence_from_every_activity() {
+        let report = validator().validate(
+            &batch(vec![MemoryMutationProposal::Add {
+                namespace: MemoryNamespace::Strategy,
+                canonical_key: "strategy.global.cross_activity_evidence".into(),
+                scope: MemoryScope::Global,
+                horizon: None,
+                statement: "Check evidence before committing across activities.".into(),
+                evidence_observation_ids: vec![
+                    "obs-reading-1".into(),
+                    "obs-writing-1".into(),
+                ],
+            }]),
+            MemoryProposalOrigin::CognitiveRuntime {
+                source_class: MemorySourceClass::Inferred,
+            },
+            &snapshot(),
+        );
+        assert!(report.batch_issues.is_empty());
+        let decision = &report.decisions[0];
+        assert_eq!(
+            decision.disposition,
+            MemoryProposalDisposition::Pending,
+            "{decision:?}"
+        );
+        assert!(
+            !decision
+                .issues
+                .iter()
+                .any(|item| item.code == "observation_scope_mismatch"),
+            "{decision:?}"
+        );
+    }
+
+    #[test]
+    fn global_scope_only_relaxes_the_activity_match() {
+        let report = validator().validate(
+            &batch(vec![MemoryMutationProposal::Add {
+                namespace: MemoryNamespace::Strategy,
+                canonical_key: "strategy.global.injected_evidence".into(),
+                scope: MemoryScope::Global,
+                horizon: None,
+                statement: "Check evidence before committing across activities.".into(),
+                evidence_observation_ids: vec!["obs-injection".into()],
+            }]),
+            MemoryProposalOrigin::CognitiveRuntime {
+                source_class: MemorySourceClass::Inferred,
+            },
+            &snapshot(),
+        );
+        assert_eq!(
+            report.decisions[0].disposition,
+            MemoryProposalDisposition::Quarantined
+        );
+        assert!(report.decisions[0]
+            .issues
+            .iter()
+            .any(|item| item.code == "security_injection_marker"));
     }
 }

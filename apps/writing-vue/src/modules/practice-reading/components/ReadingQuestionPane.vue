@@ -39,7 +39,15 @@
                 :data-reading-official-question-explanation="normalizeQuestionId(item.questionId || item.questionNumber)"
               >
                 <div class="reading-explanation-card__label">Q{{ item.questionNumber }} 讲解</div>
-                <div class="reading-explanation-card__text">{{ item.text }}</div>
+                <template v-if="payload.studyMaterial?.questions?.[item.questionId]?.analyses?.length">
+                  <div v-for="(analysis, index) in payload.studyMaterial.questions[item.questionId].analyses" :key="index" class="reading-explanation-card__text">
+                    <strong v-if="analysis.label">{{ analysis.label }}</strong>
+                    <p>{{ analysis.text }}</p>
+                  </div>
+                </template>
+                <div v-else class="reading-explanation-card__text">{{ item.text }}</div>
+                <button v-if="payload.studyMaterial?.questions?.[item.questionId]?.sentenceIds?.length" type="button" class="btn-text"
+                  :data-locate-answer="item.questionId" @click="$emit('locate-answer', item.questionId)">定位原文</button>
               </div>
             </template>
           </article>
@@ -80,5 +88,5 @@ defineProps({
   formatReviewAnswer: { type: Function, required: true }
 })
 
-defineEmits(['question-input'])
+defineEmits(['question-input', 'locate-answer'])
 </script>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-submit"
+description = "Enables the jiufen_submit command without any pre-configured scope."
+commands.allow = ["jiufen_submit"]
+
+[[permission]]
+identifier = "deny-jiufen-submit"
+description = "Denies the jiufen_submit command without any pre-configured scope."
+commands.deny = ["jiufen_submit"]

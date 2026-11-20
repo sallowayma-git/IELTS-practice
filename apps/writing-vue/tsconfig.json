@@ -23,6 +23,7 @@
     "src/modules/practice-reading/contracts.ts",
     "src/modules/practice-reading/api.ts",
     "src/modules/practice-reading/readingQuestionIds.ts",
+    "src/modules/practice-reading/useQuestionTimeline.ts",
     "src/modules/practice-reading/useReadingAnswers.ts",
     "src/modules/practice-reading/useReadingAsset.ts",
     "src/modules/practice-reading/useReadingAttempt.ts",

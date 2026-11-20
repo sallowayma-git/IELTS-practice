@@ -95,6 +95,10 @@ TAURI_AGENT_MOCK = """
   window.__agentShouldFail = false;
   const invokeMock = async (command, args = {}) => {
     window.__agentCommandLog.push({ command, args });
+    if (command === 'jiufen_restore' || command === 'jiufen_is_connected') {
+      if (Object.keys(args).length) throw new Error('unexpected account startup arguments');
+      return false;
+    }
     if (command === 'memory_context_preview') {
       return { ok: true, data: { userId: 'local', activity: 'reading', entries: [], truncated: false }, error: null };
     }
@@ -289,6 +293,7 @@ def run_checks(base_url):
                         "memory_catalog_list", "background_job_status", "agent_approval_list",
                         "agent_thread_list", "study_plan_get_latest", "journal_get_daily",
                         "agent_get_workspace",
+                        "jiufen_restore",
                     ]
                     expected_commands = [
                         "agent_get_workspace", "agent_run", "agent_get_run",
@@ -296,7 +301,8 @@ def run_checks(base_url):
                     ]
                     # Independent mount reads may resolve in either order. User actions
                     # must automatically renew, then hydrate each failed/successful run once.
-                    if sorted(commands[:7]) != sorted(expected_initialization) or commands[7:] != expected_commands:
+                    initialization_count = len(expected_initialization)
+                    if sorted(commands[:initialization_count]) != sorted(expected_initialization) or commands[initialization_count:] != expected_commands:
                         raise AssertionError(f"mobile: unexpected Agent command sequence {commands}")
                     geometry["interaction"] = {
                         "selected": page.locator(".agent-file-row").nth(0).evaluate(

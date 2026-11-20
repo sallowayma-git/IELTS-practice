@@ -656,6 +656,7 @@ mod pick_tests {
             activity: "reading".into(),
             pdf_only: false,
             question_kinds: Vec::new(),
+            parts: Vec::new(),
         }
     }
 

@@ -25,6 +25,7 @@ async function flushVue() {
 // The router, preference store, repository and DOM are external test doubles.
 async function browseState(t, {
   query = { view: 'browse', kind: 'judgement', from: 'weekly-report' },
+  remote = [],
   savedPreferences = {}
 } = {}) {
   const route = reactive({ query: { ...query } })
@@ -34,6 +35,7 @@ async function browseState(t, {
   let mounted
   const deps = {
     ...browseFilters,
+    remoteCards: () => ref(remote),
     QUESTION_KIND_LABELS,
     ref, computed, watch, nextTick,
     onMounted: callback => { mounted = callback }, onBeforeUnmount: () => {},
@@ -53,8 +55,8 @@ async function browseState(t, {
   }
   const state = scope.run(() => new Function(...Object.keys(deps), `${script}
     return { readingAssets, filteredReadingAssets, questionKind, questionKindLabel,
-      selectedType, selectedCategory, frequencyFilter, keyword, sortMode,
-      filterByType, clearQuestionKind, clearSearch, loadAssets, activeView };
+      selectedType, selectedCategory, frequencyFilter, hotlistOnly, keyword, sortMode,
+      sourceFilter, clearQuestionKind, clearSearch, loadAssets, activeView };
   `)(...Object.values(deps)))
   await mounted()
   await flushVue()
@@ -71,10 +73,10 @@ test('weekly judgement link can return to all and search a completion-only asset
   state.keyword.value = 'River restoration'
   assert.deepEqual(ids(state), [])
 
-  await state.filterByType('all')
+  state.selectedCategory.value = 'all'
+  await state.clearQuestionKind()
   await flushVue()
 
-  assert.equal(state.selectedType.value, 'all')
   assert.equal(state.selectedCategory.value, 'all')
   assert.equal(state.questionKindLabel.value, '')
   assert.deepEqual(state.route.query, { view: 'browse', from: 'weekly-report' })
@@ -110,7 +112,7 @@ test('clear question kind removes only the targeted filter and keeps other brows
 test('reading type and search clear preserve the visible question-kind constraint', async t => {
   const state = await browseState(t)
   state.keyword.value = 'River'
-  await state.filterByType('reading')
+  state.selectedType.value = 'reading'
   assert.equal(state.questionKindLabel.value, '判断')
   assert.deepEqual(ids(state), [])
   state.clearSearch()
@@ -142,10 +144,10 @@ test('saved browse position restores once per visit and cannot override user fil
   assert.equal(state.keyword.value, 'Animal')
   assert.deepEqual(ids(state), ['judgement-1'])
 
-  await state.filterByType('all')
+  state.selectedCategory.value = 'all'
+  await state.clearQuestionKind()
   state.keyword.value = 'River'
   await flushVue()
-  assert.equal(state.selectedType.value, 'all')
   assert.equal(state.selectedCategory.value, 'all')
   assert.equal(state.keyword.value, 'River')
   assert.equal(state.questionKindLabel.value, '')
@@ -166,4 +168,39 @@ test('saved browse position restores once per visit and cannot override user fil
   assert.equal(state.selectedCategory.value, 'P1')
   assert.equal(state.keyword.value, 'Animal')
   assert.deepEqual(ids(state), ['judgement-1'])
+})
+
+test('source and Part filters combine across local and synced cards', async t => {
+  const remote = [{id: 'jiufen:reading:9', title: 'Online practice', provider: 'jiufen', activity: 'reading', parts:['P2'],category:'P2'}]
+  const state = await browseState(t,{remote,query:{view:'browse'}})
+  state.selectedCategory.value = 'P2'
+  assert.equal(ids(state).length,2)
+  state.sourceFilter.value='jiufen'
+  assert.deepEqual(ids(state),['jiufen:reading:9'])
+  state.selectedCategory.value = 'P3'
+  assert.deepEqual(ids(state),[])
+})
+
+test('hotlist combines with source, Part, frequency and search and clears independently', async t => {
+  const remote = [
+    { id:'hot', title:'Online hot article', provider:'jiufen', activity:'reading', parts:['P1','P2'],
+      category:'P1 / P2', frequency:'high', hotlist:[{part:'P2',rank:2}] },
+    { id:'plain', title:'普通高频热榜标题', provider:'jiufen', activity:'reading', parts:['P2'], category:'P2', frequency:'high' }
+  ]
+  const state = await browseState(t, {remote,query:{view:'browse'}})
+  state.hotlistOnly.value = true
+  assert.deepEqual(ids(state), ['hot'])
+  state.selectedCategory.value = 'P1'
+  assert.deepEqual(ids(state), [], 'only the ranked Part matches')
+  state.selectedCategory.value = 'P2'
+  state.frequencyFilter.value = 'high'
+  assert.deepEqual(ids(state), ['hot'])
+  state.sourceFilter.value = 'local'
+  assert.deepEqual(ids(state), [])
+  state.sourceFilter.value = 'jiufen'
+  state.keyword.value = 'missing'
+  assert.deepEqual(ids(state), [])
+  state.keyword.value = ''
+  state.hotlistOnly.value = false
+  assert.deepEqual(new Set(ids(state)), new Set(['hot','plain']))
 })

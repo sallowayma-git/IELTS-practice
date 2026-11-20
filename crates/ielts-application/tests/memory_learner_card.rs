@@ -647,3 +647,29 @@ fn a_recent_memory_leaves_the_coach_profile_when_it_expires_and_the_weekly_sweep
         .unwrap();
     assert_eq!(reason, "expired");
 }
+
+#[test]
+fn coach_cards_and_events_follow_writing_and_listening_threads() {
+    for activity in [Activity::Writing, Activity::Listening] {
+        let fx = fixture();
+        let scope = MemoryScope::Activity { key: activity }.storage_key();
+        let activity_name = scope.trim_start_matches("activity:");
+        fx.conn().execute("UPDATE practice_assets SET activity=?1 WHERE id='P1'", [activity_name]).unwrap();
+        fx.conn().execute("UPDATE attempts SET activity=?1 WHERE id='a1'", [activity_name]).unwrap();
+        let user = say(fx.conn(), "t1", "user", json!({"promptKind":"freeform"}));
+        let answer = say(fx.conn(), "t1", "assistant", json!({
+            "teachingNotes":[{"kind":"preference","text":"先给具体例子","remember":true,"horizon":"durable"}],
+            "memoryCard":{"noteIndex":0,"text":"先给具体例子"}
+        }));
+        let event_activity: String = fx.conn().query_row(
+            "SELECT activity FROM learning_events WHERE source_id=?1 AND event_type='coach_question_asked'", [&user], |row| row.get(0)
+        ).unwrap();
+        assert_eq!(event_activity, activity_name);
+        let memory = fx.cards().confirm("local", &answer, 0, "先给具体例子").unwrap();
+        assert_eq!(memory_row(fx.conn(), &memory).1, scope);
+        assert_eq!(fx.cards().confirm("local", &answer, 0, "再次点击").unwrap(), memory);
+        assert!(!build_coach_system_context(fx.conn(), "local").unwrap().memory_ids().contains(&memory));
+        let profile = ielts_db::select_learner_profile_for_scene(fx.conn(), &ielts_db::CoachScene { activity }).unwrap();
+        assert!(profile.memory_ids().contains(&memory));
+    }
+}

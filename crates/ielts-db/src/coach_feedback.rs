@@ -117,6 +117,16 @@ pub(crate) fn record_coach_feedback_in_transaction(
                 sensitivity: "normal".into(),
             },
         )?;
+        // A negative reaction invalidates the thread's frozen learner profile:
+        // the next turn re-freezes it once with the learner's latest reaction
+        // in view. A missing thread simply clears nothing.
+        if command.feedback_kind != CoachFeedbackKind::ThumbsUp {
+            conn.execute(
+                "UPDATE coach_threads SET learner_profile_json=NULL
+                 WHERE id=(SELECT thread_id FROM coach_messages WHERE id=?1)",
+                params![command.coach_message_id],
+            )?;
+        }
     }
     load_coach_feedback(conn, &command.coach_message_id, command.feedback_kind)?
         .ok_or_else(|| DbError::Message("coach feedback insert did not hydrate".into()))

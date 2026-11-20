@@ -240,7 +240,7 @@ def capture(base: str) -> tuple[list[str], dict]:
 
 
 def style_drift(name: str) -> list[dict]:
-    before = json.loads((BASELINE / f"{name}.json").read_text(encoding="utf-8"))
+    before = json.loads((baseline_directory(name) / f"{name}.json").read_text(encoding="utf-8"))
     after = json.loads((CURRENT / f"{name}.json").read_text(encoding="utf-8"))
     if len(before) != len(after):
         return [{"element": "*", "detail": f"element count {len(before)} -> {len(after)}"}]
@@ -306,8 +306,17 @@ def encode(path: Path) -> str:
     return base64.b64encode(path.read_bytes()).decode("ascii")
 
 
+def baseline_directory(name: str) -> Path:
+    # Suite summaries use system CJK fonts. Windows 11 and the Windows Server
+    # 2022 CI runner have distinct glyph metrics even for the unchanged base.
+    # Keep a strict snapshot for each supported environment.
+    if name.startswith("suite-") and platform.platform().startswith("Windows-11-"):
+        return BASELINE / "windows-11"
+    return BASELINE
+
+
 def pixel_diff(page, name: str) -> dict:
-    raw = page.evaluate(PIXEL_DIFF, {"before": encode(BASELINE / f"{name}.png"),
+    raw = page.evaluate(PIXEL_DIFF, {"before": encode(baseline_directory(name) / f"{name}.png"),
                                      "after": encode(CURRENT / f"{name}.png"),
                                      "tolerance": PIXEL_CHANNEL_TOLERANCE})
     if "size" in raw:
@@ -319,7 +328,7 @@ def pixel_diff(page, name: str) -> dict:
 
 
 def compare_shot(page, name: str) -> dict:
-    if not all((BASELINE / f"{name}.{ext}").is_file() for ext in ("json", "png")):
+    if not all((baseline_directory(name) / f"{name}.{ext}").is_file() for ext in ("json", "png")):
         return {"name": name, "status": "missing-baseline"}
     drift = style_drift(name)
     pixels = pixel_diff(page, name)
@@ -367,8 +376,11 @@ def update_baseline(names: list[str], results: list[dict], env: dict) -> dict:
     rewritten = [result for result in results if result["status"] != "identical"]
     removed = stale_baseline(names)
     for result in rewritten:
+        destination = baseline_directory(result['name'])
+        destination.mkdir(parents=True, exist_ok=True)
         for ext in ("json", "png"):
-            shutil.copyfile(CURRENT / f"{result['name']}.{ext}", BASELINE / f"{result['name']}.{ext}")
+            shutil.copyfile(CURRENT / f"{result['name']}.{ext}", destination / f"{result['name']}.{ext}")
+        shutil.copyfile(CURRENT / "meta.json", destination / "meta.json")
     for stem in removed:
         for ext in ("json", "png"):
             (BASELINE / f"{stem}.{ext}").unlink(missing_ok=True)

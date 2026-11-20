@@ -11,7 +11,8 @@ use crate::ai::load_runtime;
 use crate::app::application_store::ApplicationStore;
 use crate::app::state::{AppDb, AppVault};
 use ielts_db::{
-    delete_annotation, delete_vocab, ensure_coach_thread, import_dictionary, list_annotations,
+    delete_annotation, delete_vocab, ensure_coach_thread, forget_coach_preference,
+    import_dictionary, list_annotations,
     list_coach_messages, list_vocab, lookup_term_with_bundled, revalidate_annotations,
     review_vocab, upsert_annotation, upsert_vocab, AnnotationRecord, BundledDictionary,
     CoachMessage, CoachRunResult, CoachThread, DictionaryEntry, EnsureCoachThreadCommand,
@@ -250,12 +251,17 @@ pub enum CoachStreamEvent {
 
 #[tauri::command]
 pub async fn coach_run(
+    account: State<'_, crate::jiufen::service::Account>,
     db: State<'_, AppDb>,
     vault: State<'_, AppVault>,
     cmd: RunCoachCommand,
     on_delta: OptionalChannel<CoachStreamEvent>,
 ) -> Result<CommandResponse<CoachRunResult>, ErrorEnvelope> {
-    let store = ApplicationStore::new(&db);
+    let context = match crate::jiufen::practice::prepare_coach_context(&account, &db, &cmd).await {
+        Ok(context) => context,
+        Err(error) => return Ok(CommandResponse::failure(ErrorEnvelope::new("coach.remote_unavailable", error, true))),
+    };
+    let store = ApplicationStore::with_coach_context(&db, context);
     let load_model = || {
         load_runtime(&db, &vault)
             .map_err(|error| ApplicationError::new("enrichment.error", error.to_string(), false))
@@ -285,5 +291,17 @@ mod coach_stream_tests {
     fn delta_events_keep_the_frontend_wire_shape() {
         let event = serde_json::to_value(CoachStreamEvent::Delta { text: "你好".into() }).unwrap();
         assert_eq!(event, serde_json::json!({"event": "delta", "data": {"text": "你好"}}));
+    }
+}
+
+#[tauri::command]
+pub fn coach_forget_preference(
+    db: State<'_, AppDb>,
+    thread_id: String,
+    preference_key: String,
+) -> CommandResponse<bool> {
+    match db.with_conn(|conn| forget_coach_preference(conn, &thread_id, &preference_key)) {
+        Ok(v) => CommandResponse::success(v),
+        Err(e) => CommandResponse::failure(map_err(e)),
     }
 }

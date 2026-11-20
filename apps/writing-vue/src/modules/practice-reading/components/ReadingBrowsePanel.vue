@@ -30,25 +30,7 @@
           <span class="browse-preference-text">列表位置记录</span>
         </label>
       </div>
-      <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group shui-segmented-control segmented">
-        <span class="shui-segmented-indicator" aria-hidden="true"></span>
-        <button
-          v-for="filter in typeFilters"
-          :key="filter.value"
-          class="shui-segmented-btn shui-filter-btn"
-          :class="{ active: selectedType === filter.value }"
-          type="button"
-          :aria-pressed="selectedType === filter.value ? 'true' : 'false'"
-          :hidden="filter.hidden ? true : null"
-          :data-filter-type="filter.value"
-          data-index-action="filter-exams"
-          :data-action-value="filter.value"
-          data-action="filter-exam-type"
-          @click="$emit('filter-by-type', filter.value)"
-        >
-          {{ filter.label }}
-        </button>
-      </div>
+      <slot />
     </div>
 
     <div v-if="questionKindLabel" class="browse-question-kind" data-reading-question-kind>
@@ -113,6 +95,16 @@
             {{ filter.label }}
           </button>
         </div>
+        <div class="segmented" aria-label="热榜筛选">
+          <button
+            type="button"
+            class="segmented-item browse-frequency-chip"
+            :class="{ active: hotlistOnly }"
+            :aria-pressed="hotlistOnly"
+            data-hotlist-filter
+            @click="$emit('update:hotlistOnly', !hotlistOnly)"
+          >热榜</button>
+        </div>
         <div class="browse-sort-wrapper">
           <select
             :value="sortMode"
@@ -170,6 +162,9 @@
           <div class="reading-card__body">
             <div class="reading-card__tags">
               <span class="tag tag-neutral">{{ categoryOf(asset) }}</span>
+              <span v-if="asset.provider" class="tag tag-info">九分学长</span>
+              <span v-if="asset.hotlist?.length" class="tag tag-accent" title="九分学长7天热榜" data-hotlist-tag>热榜</span>
+              <span v-for="tag in asset.sourceTags || []" :key="tag" class="tag tag-neutral reading-card__source" data-source-tag>{{ tag }}</span>
               <span
                 v-if="frequencyTagOf(asset)"
                 class="tag"
@@ -213,12 +208,13 @@
               <button
                 class="btn btn-primary btn-sm"
                 type="button"
+                :disabled="asset.available === false"
                 data-action="start"
                 :data-exam-id="asset.id"
                 :aria-label="`${customSuiteDraft ? '选择' : '开始练习'} ${asset.title}`"
                 @click="$emit('browse-primary-action', asset)"
               >
-                {{ customSuiteDraft ? '选择此题' : '开始练习' }}
+                {{ asset.available === false ? '暂无权限' : customSuiteDraft ? '选择此题' : '开始练习' }}
               </button>
             </template>
           </footer>
@@ -281,12 +277,11 @@ defineProps({
   browsePreferencePanelOpen: { type: Boolean, default: false },
   browseRememberPosition: { type: Boolean, default: true },
   browseTitle: { type: String, required: true },
-  typeFilters: { type: Array, required: true },
-  selectedType: { type: String, required: true },
   questionKindLabel: { type: String, default: '' },
   keyword: { type: String, default: '' },
   frequencyFilters: { type: Array, required: true },
   frequencyFilter: { type: String, required: true },
+  hotlistOnly: { type: Boolean, default: false },
   sortMode: { type: String, required: true },
   error: { type: String, default: '' },
   suiteError: { type: String, default: '' },
@@ -308,7 +303,7 @@ const FREQUENCY_TAGS = {
 }
 
 function categoryOf(asset) {
-  return normalizeCategory(asset?.category)
+  return asset.parts?.length ? asset.parts.join(' / ') : normalizeCategory(asset?.category)
 }
 
 function frequencyTagOf(asset) {
@@ -319,9 +314,9 @@ const emit = defineEmits([
   'update:browseRememberPosition',
   'update:keyword',
   'update:sortMode',
+  'update:hotlistOnly',
   'toggle-browse-preference',
   'persist-browse-preference',
-  'filter-by-type',
   'clear-question-kind',
   'clear-search',
   'toggle-frequency-filter',
@@ -380,6 +375,7 @@ function handleBrowseRememberPositionChange(event) {
 }
 
 .reading-card__tags { display: flex; flex-wrap: wrap; gap: var(--anth-space-1); min-width: 0; }
+.reading-card__source { max-width: 100%; min-height: 20px; height: auto; padding: 2px 8px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
 
 /* Serif prose, two lines at most; the title is the only thing that grows. */
 .reading-card__title {

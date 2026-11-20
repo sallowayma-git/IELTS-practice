@@ -1,13 +1,22 @@
 <template>
   <main id="left" class="pane reading-pane passage-panel">
-    <article class="reading-html passage-html">
-      <section
-        v-for="block in passageBlocks"
-        :key="block.blockId"
-        class="passage-block"
-        v-html="block.html"
-      />
+    <p v-if="materialError" data-study-extra role="alert">{{ materialError }} <button type="button" class="btn-text" @click="$emit('retry-material')">重试</button></p>
+    <article class="reading-html passage-html" ref="original">
+      <section v-for="block in safeBlocks" :key="block.blockId" class="passage-block" v-html="block.html" />
     </article>
+    <details v-if="material?.parts?.length" class="reading-html study-translations" data-study-transcript data-study-extra>
+      <summary>逐句翻译</summary>
+      <section v-for="part in material.parts" :key="part.id">
+        <h2 v-if="part.title">{{ part.title }}</h2>
+        <p v-for="paragraph in part.paragraphs" :key="paragraph.id">
+          <span v-for="sentence in paragraph.sentences" :key="sentence.id" class="study-sentence"
+            :data-translated-sentence="sentence.id" :class="{ 'is-located': locatedSentences.includes(sentence.id) }">
+            {{ sentence.text }}{{ ' ' }}
+            <span v-if="sentence.translation" class="study-translation">{{ sentence.translation }}</span>
+          </span>
+        </p>
+      </section>
+    </details>
     <section
       v-if="officialPassageNotes.length"
       class="reading-explanation-panel reading-passage-explanations"
@@ -26,8 +35,53 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed, nextTick, ref, watch } from 'vue'
+
+const props = defineProps({
   passageBlocks: { type: Array, default: () => [] },
-  officialPassageNotes: { type: Array, default: () => [] }
+  officialPassageNotes: { type: Array, default: () => [] },
+  material: { type: Object, default: null },
+  materialError: { type: String, default: '' },
+  locatedSentences: { type: Array, default: () => [] }
 })
+defineEmits(['retry-material'])
+const original = ref(null)
+watch(() => props.locatedSentences, async ids => {
+  await nextTick()
+  original.value?.querySelectorAll('[data-study-sentence]').forEach(node => {
+    node.classList.toggle('is-located', ids.includes(node.dataset.studySentence))
+  })
+})
+
+// Legacy exam exports embed the old standalone page skeleton in the passage
+// html — e.g. a trailing `<div id="divider"></div>`. Those ids are owned by
+// this app's layout, so `.runified #divider::after` would paint the splitter
+// badge (and `#left`/`#right` would pick up pane styles) inside the passage.
+// Drop only EMPTY reserved-id elements: real content is never touched.
+const RESERVED_LAYOUT_IDS = new Set(['divider', 'left', 'right'])
+
+function stripLegacySkeleton(html) {
+  if (typeof html !== 'string' || !/id\s*=/i.test(html)) return html
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  let removed = false
+  doc.body.querySelectorAll('[id]').forEach((el) => {
+    // NBSP counts as content; true whitespace-only shells still go.
+    if (RESERVED_LAYOUT_IDS.has(el.id) && !el.children.length && !el.textContent.replace(/\u00a0/g, ' ').trim()) {
+      el.remove()
+      removed = true
+    }
+  })
+  return removed ? doc.body.innerHTML : html
+}
+
+const safeBlocks = computed(() =>
+  props.passageBlocks.map((block) => ({ ...block, html: stripLegacySkeleton(block.html) }))
+)
 </script>
+
+<style scoped>
+.study-translations { margin-top: 24px; }
+.study-translations summary { cursor: pointer; }
+.study-translation { display: block; margin: 4px 0 12px; color: var(--muted-ink); font-size: 0.92em; }
+.study-sentence.is-located, :deep([data-study-sentence].is-located) { background: var(--highlight, #fff0a8); }
+</style>

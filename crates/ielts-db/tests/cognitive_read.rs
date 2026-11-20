@@ -41,7 +41,7 @@ fn snapshot_rebuilds_stale_rows_and_keeps_a_bounded_versioned_contract() {
     .unwrap();
     assert_eq!(first.freshness, ProjectionFreshness::Fresh);
     assert_eq!(first.schema_version, 1);
-    assert_eq!(first.projector_version, 2);
+    assert_eq!(first.projector_version, ielts_db::LEARNING_OBSERVATION_PROJECTOR_VERSION);
     assert!(!first.ledger_input_hash.is_empty());
     assert!(!first.observation_output_hash.is_empty());
     assert!(!first.generated_at.is_empty());

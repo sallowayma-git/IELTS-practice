@@ -10,6 +10,35 @@ use ielts_domain::dto::AttemptRecord;
 use crate::safety::with_delete_gate;
 use crate::sqlite::{DbError, DbResult};
 
+/// Complete a scored attempt inside its caller-owned transaction.
+/// Provider adapters supply verified grades and keep their receipt in that same transaction.
+pub fn persist_completed_attempt(
+    conn: &Connection,
+    attempt: &AttemptRecord,
+    fingerprint: &str,
+) -> DbResult<()> {
+    if conn.is_autocommit()
+        || attempt.status != ielts_domain::AttemptStatus::Completed
+        || !matches!(attempt.activity, Activity::Reading | Activity::Listening)
+        || fingerprint.is_empty()
+    {
+        return Err(DbError::Validation(
+            "completed practice requires a transaction and revision".into(),
+        ));
+    }
+    upsert_attempt(conn, attempt)?;
+    conn.execute(
+        "UPDATE attempts SET submitted_asset_fingerprint = ?1 WHERE id = ?2",
+        params![fingerprint, attempt.id],
+    )?;
+    match attempt.activity {
+        Activity::Reading => crate::project_reading_attempt_events_if_enabled(conn, attempt)?,
+        Activity::Listening => crate::project_listening_attempt_events_if_enabled(conn, attempt)?,
+        _ => unreachable!(),
+    };
+    Ok(())
+}
+
 pub fn upsert_attempt(conn: &Connection, attempt: &AttemptRecord) -> DbResult<()> {
     ensure_attempt_identity(conn, attempt)?;
     ensure_task_type_scope(attempt)?;
@@ -202,6 +231,8 @@ fn activity_str(activity: Activity) -> &'static str {
     match activity {
         Activity::Reading => "reading",
         Activity::Writing => "writing",
+        Activity::Listening => "listening",
+        Activity::Vocabulary => "vocabulary",
     }
 }
 

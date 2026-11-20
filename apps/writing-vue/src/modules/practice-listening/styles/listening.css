@@ -1,0 +1,392 @@
+/*
+ * Listening library and the shared computer-based exam surface.
+ *
+ * Every selector is rooted at `.listening-*` so this file can be imported by
+ * the library and practice views without touching unified.css / exam-frozen.css
+ * or anything under assets/generated/.
+ *
+ * Library uses the Atlas paper tokens. Practice inherits the reading exam tokens.
+ */
+
+/* ───────────────────────────── Library ───────────────────────────── */
+
+.listening-library {
+  display: flex;
+  flex-direction: column;
+  gap: var(--anth-space-5);
+  min-width: 0;
+}
+
+.listening-library__header {
+  display: grid;
+  gap: var(--anth-space-2);
+}
+
+.listening-library__title {
+  margin: 0;
+}
+
+.listening-library__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--anth-space-4);
+  padding-bottom: var(--anth-space-3);
+  border-bottom: 1px solid var(--anth-rule);
+}
+
+.listening-library__filter {
+  display: grid;
+  gap: var(--anth-space-1);
+  min-width: 160px;
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-caption-size);
+  letter-spacing: var(--anth-tracking-caps);
+  text-transform: uppercase;
+}
+
+.listening-library__filter .input {
+  min-height: 36px;
+}
+
+.listening-library__count {
+  margin: 0 0 var(--anth-space-1) auto;
+  color: var(--anth-ink-faint);
+  font-size: var(--anth-text-small-size);
+}
+
+.listening-library__status {
+  margin: 0;
+  padding: var(--anth-space-6) 0;
+  color: var(--anth-ink-muted);
+  text-align: center;
+}
+
+.listening-library__state {
+  min-height: 200px;
+}
+
+.listening-library__list {
+  display: grid;
+  gap: var(--anth-space-3);
+}
+
+.listening-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--anth-space-4);
+  padding: var(--anth-space-4) var(--anth-space-5);
+  border: 1px solid var(--anth-card-border);
+  border-radius: var(--anth-radius-lg);
+  background: var(--anth-surface-raised);
+  box-shadow: var(--anth-shadow-1);
+  transition: box-shadow var(--anth-duration-fast) var(--anth-ease),
+    border-color var(--anth-duration-fast) var(--anth-ease);
+}
+
+.listening-card:hover {
+  border-color: var(--anth-rule-strong);
+  box-shadow: var(--anth-shadow-2);
+}
+
+.listening-card__main {
+  display: grid;
+  gap: var(--anth-space-2);
+  min-width: 0;
+}
+
+.listening-card__title {
+  margin: 0;
+  color: var(--anth-ink);
+  font-size: var(--anth-text-h3-size);
+  line-height: var(--anth-text-h3-line);
+}
+
+.listening-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--anth-space-1) var(--anth-space-3);
+  margin: 0;
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-small-size);
+}
+
+.listening-card__meta span + span::before {
+  content: "·";
+  margin-right: var(--anth-space-3);
+  color: var(--anth-ink-faint);
+}
+
+.listening-card__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--anth-space-1);
+}
+
+.listening-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--anth-space-2);
+  border: 1px solid var(--anth-accent-soft);
+  border-radius: var(--anth-radius-pill);
+  background: var(--anth-accent-subtle);
+  color: var(--anth-accent-ink);
+  font-size: var(--anth-text-caption-size);
+  line-height: var(--anth-text-caption-line);
+  white-space: nowrap;
+}
+
+.listening-card__start {
+  flex: 0 0 auto;
+}
+
+.listening-card .listening-card__source {
+  max-width: 100%;
+  min-height: 20px;
+  height: auto;
+  padding: 2px 8px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Practice shares the reading exam shell, typography and answer controls. */
+.runified.listening-exam {
+  grid-template-rows: var(--header-height) auto minmax(0, 1fr) var(--footer-height);
+  overflow: hidden;
+}
+.runified.listening-exam button { min-height: 0; }
+
+.runified.listening-exam .listening-exam__title {
+  max-width: 60vw;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runified.listening-exam .candidate-details { min-width: 0; }
+.runified.listening-exam .listening-exam__back {
+  margin: 0 16px;
+  color: var(--ink);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.runified.listening-exam .listening-exam__workspace {
+  display: flex;
+  flex-direction: column;
+  grid-row: 3;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The audio transport stays visible while either pane scrolls. */
+.runified.listening-exam .listening-audio {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-height: 56px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 14px;
+}
+.runified.listening-exam .listening-audio__element { display: none; }
+.runified.listening-exam .listening-audio__play {
+  display: grid;
+  flex: 0 0 34px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--control-bg);
+  font-size: 16px;
+}
+.runified.listening-exam .listening-audio__play:hover:not(:disabled) { background: var(--control-hover); }
+.runified.listening-exam .listening-audio__play:disabled { opacity: 0.4; cursor: default; }
+.runified.listening-exam .listening-audio__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.runified.listening-exam .listening-audio__time > span { color: var(--muted-ink); }
+.runified.listening-exam .listening-audio__seek { flex: 1 1 120px; min-width: 80px; }
+.runified.listening-exam .listening-audio__volume { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.runified.listening-exam .listening-audio__volume input { width: 90px; }
+.runified.listening-exam .listening-audio input[type="range"] { height: 24px; accent-color: var(--focus); cursor: pointer; }
+.runified.listening-exam .listening-audio__status { color: var(--muted-ink); }
+.runified.listening-exam .listening-audio__error { color: var(--incorrect); }
+
+.runified.listening-exam .listening-score {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+  padding: 9px 24px;
+  border-bottom: 1px solid var(--soft-line);
+  background: var(--intro-bg);
+  font-size: 14px;
+}
+.runified.listening-exam .listening-score__value { display: flex; align-items: baseline; gap: 6px; }
+.runified.listening-exam .listening-score__value strong { font-size: 20px; }
+.runified.listening-exam .listening-score__value span, .runified.listening-exam .listening-score__time, .runified.listening-exam .listening-score__note { color: var(--muted-ink); }
+.runified.listening-exam .listening-score__percent { font-weight: 700; }
+
+.runified.listening-exam .listening-exam__content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+.runified.listening-exam .listening-exam__content.shell {
+  display: grid;
+  grid-template-columns: minmax(280px, var(--reading-left-pane-width)) var(--splitter-width) minmax(300px, 1fr);
+}
+.runified.listening-exam .listening-exam__pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--panel);
+}
+.runified.listening-exam #left, .runified.listening-exam #right { width: auto; padding: 0; overflow: hidden; }
+.runified.listening-exam .listening-exam__pane-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--soft-line);
+}
+.runified.listening-exam #listening-transcript-heading { margin: 0; font-size: 16px; }
+.runified.listening-exam .listening-exam__pane-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 24px 24px 48px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+.runified.listening-exam:not(.is-review) .listening-exam__pane-body {
+  padding: 28px max(32px, calc((100% - 1040px) / 2)) 48px;
+}
+.runified.listening-exam .listening-exam__view-switch { justify-content: flex-start; gap: 24px; }
+.runified.listening-exam .listening-exam__view-switch button { align-self: stretch; border-bottom: 3px solid transparent; font-size: 15px; }
+.runified.listening-exam .listening-exam__view-switch button[aria-pressed="true"] { border-bottom: 3px solid var(--focus); color: var(--focus); font-weight: 700; }
+
+.runified.listening-exam .listening-group { margin: 0 0 32px; }
+.runified.listening-exam .listening-group__head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.runified.listening-exam .listening-group__range { font-weight: 700; }
+.runified.listening-exam .listening-group__kind { font-size: 13px; color: var(--muted-ink); }
+.runified.listening-exam .listening-group__lead { margin-bottom: 20px; line-height: 1.55; }
+.runified.listening-exam .listening-group__body { line-height: 1.8; overflow-wrap: anywhere; }
+.runified.listening-exam .listening-group__body :is(ul, ol) { padding-left: 24px; }
+.runified.listening-exam .listening-group__body img { max-width: 100%; height: auto; }
+.runified.listening-exam .listening-group__body table { width: 100%; border-collapse: collapse; }
+.runified.listening-exam .listening-group__body :is(td, th) { padding: 8px; border: 1px solid var(--line); }
+.runified.listening-exam .listening-group__body :is(input[type="text"], select) { max-width: 100%; border-radius: 0; }
+.runified.listening-exam .listening-group__body select { padding: 3px 7px; border: 1px solid var(--line); background: var(--control-bg); color: var(--ink); font: inherit; }
+.runified.listening-exam .listening-group__body input:is([type="radio"], [type="checkbox"]) { accent-color: var(--focus); }
+.runified.listening-exam .listening-group__body label:has(input:is([type="radio"], [type="checkbox"])) {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+/* Transcript timestamps are sentence playback controls. */
+.runified.listening-exam .listening-transcript__toggle { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+.runified.listening-exam .listening-transcript__toggle input { accent-color: var(--focus); }
+.runified.listening-exam .listening-transcript__paragraph { margin-bottom: 18px; }
+.runified.listening-exam #left .listening-transcript__speaker { margin: 0 0 6px; color: var(--muted-ink); font-size: 13px; font-weight: 700; }
+.runified.listening-exam .listening-transcript__sentence { display: flex; align-items: flex-start; gap: 12px; padding: 8px 8px 8px 4px; line-height: 1.65; scroll-margin-block: 24px; }
+.runified.listening-exam .listening-transcript__play {
+  display: flex;
+  flex: 0 0 62px;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  color: var(--muted-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.runified.listening-exam .listening-transcript__play:hover { color: var(--focus); text-decoration: underline; }
+.runified.listening-exam .listening-transcript__text { min-width: 0; overflow-wrap: anywhere; }
+.runified.listening-exam #left .listening-transcript__translation { margin: 6px 0 0; color: var(--muted-ink); font-size: 14px; line-height: 1.65; }
+.runified.listening-exam .listening-transcript__sentence.is-located { background: var(--partial-bg); }
+.runified.listening-exam .listening-transcript__sentence.is-playing { box-shadow: inset 3px 0 var(--accent); background: var(--focus-soft); }
+
+.runified.listening-exam .listening-review__group + .listening-review__group { margin-top: 28px; }
+.runified.listening-exam .listening-review__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.runified.listening-exam .listening-review__title { font-size: 16px; }
+.runified.listening-exam #right .listening-review__range { margin: 0; color: var(--muted-ink); font-size: 13px; }
+.runified.listening-exam .listening-review__row { display: grid; gap: 12px; padding: 20px 12px; border-bottom: 1px solid var(--soft-line); scroll-margin-block: 20px; }
+.runified.listening-exam .listening-review__row.is-active { box-shadow: inset 3px 0 var(--accent); }
+.runified.listening-exam .listening-review__row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.runified.listening-exam .listening-review__question { color: var(--focus); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.runified.listening-exam .listening-review__verdict { font-size: 13px; }
+.runified.listening-exam .listening-review__row.is-correct .listening-review__verdict { color: var(--correct); }
+.runified.listening-exam .listening-review__row.is-wrong .listening-review__verdict { color: var(--incorrect); }
+.runified.listening-exam .listening-review__answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.runified.listening-exam .listening-review__answers dt { margin-bottom: 5px; color: var(--muted-ink); font-size: 13px; }
+.runified.listening-exam .listening-review__answers dd { overflow-wrap: anywhere; }
+.runified.listening-exam .listening-review__row.is-correct .listening-review__answers dd { color: var(--correct); }
+.runified.listening-exam .listening-review__row.is-wrong .listening-review__answers > div:first-child dd { color: var(--incorrect); }
+.runified.listening-exam .listening-review__explanation { padding-top: 12px; border-top: 1px solid var(--soft-line); font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.runified.listening-exam #right .listening-review__explanation p { margin: 4px 0 12px; white-space: pre-line; }
+.runified.listening-exam #right .listening-review__explanation section:last-child p { margin-bottom: 0; }
+.runified.listening-exam .listening-review__locate { justify-self: start; padding: 5px 10px; border: 1px solid var(--line); color: var(--focus); font-size: 14px; }
+.runified.listening-exam .listening-review__locate:hover { background: var(--control-hover); }
+
+.runified.listening-exam .listening-practice__status { padding: 24px; color: var(--muted-ink); }
+.runified.listening-exam .listening-practice__notice { margin-bottom: 20px; color: var(--muted-ink); font-size: 14px; }
+.runified.listening-exam .listening-practice__error { margin-bottom: 16px; color: var(--incorrect); }
+.runified.listening-exam .listening-state { display: grid; gap: 16px; justify-items: start; padding: 24px; }
+.runified.listening-exam .listening-state button, .runified.listening-exam .listening-practice__error button { padding: 4px 12px; border: 1px solid var(--line); }
+
+.runified.listening-exam .practice-nav { position: relative; overflow-x: auto; }
+.runified.listening-exam .part-nav-section:not(.active) { flex: 0 0 110px; }
+.runified.listening-exam .part-nav-section.active { flex: 1 1 auto; min-width: 0; gap: 24px; }
+.runified.listening-exam .part-nav-questions { overflow-x: auto; scrollbar-width: none; }
+.runified.listening-exam .listening-section-nav__item { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 44px; }
+.runified.listening-exam .listening-section-nav__item:disabled { opacity: 0.4; cursor: default; }
+.runified.listening-exam .listening-section-nav__item .part-nav-status { display: block; }
+
+/* Keep both independently scrollable panes visible in compact desktop windows. */
+@media (min-width: 701px) {
+  .runified.listening-exam #divider { display: block; }
+}
+@media (max-width: 700px) {
+  .runified.listening-exam .listening-exam__content.shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(160px, 42%) minmax(0, 1fr); }
+  .runified.listening-exam #divider { display: none; }
+  .runified.listening-exam #left { border-bottom: 1px solid var(--line); }
+  .runified.listening-exam .listening-exam__pane-header { min-height: 40px; padding-inline: 16px; }
+  .runified.listening-exam .listening-exam__pane-body { padding: 16px; }
+  .runified.listening-exam .listening-exam__title { max-width: 42vw; }
+  .runified.listening-exam .listening-audio { padding: 8px 16px; gap: 8px; }
+  .runified.listening-exam .listening-audio__volume { gap: 6px; font-size: 12px; }
+  .runified.listening-exam .listening-audio__volume input { width: 56px; }
+  .runified.listening-exam .listening-score { padding: 6px 16px; }
+  .runified.listening-exam .listening-score__value strong { font-size: 16px; }
+  .runified.listening-exam .part-nav-section { padding-right: 8px; padding-left: 8px; }
+  .runified.listening-exam .part-nav-section.active { gap: 8px; }
+  .runified.listening-exam .part-nav-section:not(.active) { flex-basis: 56px; }
+  .runified.listening-exam .part-nav-section:not(.active) .part-nav-info { padding-inline: 4px; }
+  .runified.listening-exam .part-nav-section:not(.active) .part-nav-status { display: none; }
+  .listening-card { align-items: stretch; flex-direction: column; }
+  .listening-card__start { align-self: flex-start; }
+}

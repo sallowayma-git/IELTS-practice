@@ -147,22 +147,27 @@ assert.equal(toRecord(writingUnknown).kind, 'unlabeled')
 // A reading record without review identifiers has no route (the page reports it).
 assert.equal(toRecord(normalizeHistoryViewModel({ id: 'orphan', activity: 'reading' })).detailRoute, null)
 
-// Listening needs no adapter code: the view model passes the activity through,
-// and the generic fallback keeps the row readable until an adapter exists.
+// Listening is a ratio activity like reading: the view model clamps 0..1 and
+// labels the score as accuracy, and its adapter opens the listening review.
 const listening = normalizeHistoryViewModel({
   id: 'attempt-listening-1',
   activity: 'listening',
   title: 'Section 1',
-  scoreValue: 31,
-  scoreScale: 'raw40',
-  scoreDisplay: '31/40',
+  scoreValue: 0.78,
+  scoreScale: 'ratio',
+  assetId: 'l1-test',
   submittedAt: '2026-07-16T08:00:00.000Z'
 })
 assert.equal(listening.activity, 'listening')
+assert.equal(listening.accuracy, 0.78)
 const listeningRecord = toRecord(listening)
 assert.equal(listeningRecord.subtitle, '听力')
-assert.equal(listeningRecord.detailRoute, null)
-assert.equal(listeningRecord.score.display, '31/40')
+assert.deepEqual(listeningRecord.detailRoute, {
+  name: 'PracticeListeningReview',
+  params: { assetId: 'l1-test', attemptId: 'attempt-listening-1' }
+})
+assert.equal(listeningRecord.score.display, '78%')
+assert.equal(listeningRecord.score.label, '正确率')
 assert.equal(ACTIVITIES.listening.trend, null)
 
 // Trend: grouped by the activity's own scale, oldest first, unscored records skipped.
@@ -227,8 +232,8 @@ assert.equal(
 assert.equal(summarizeRecords([], '全部记录'), '', 'no records, no sentence')
 assert.equal(
   summarizeRecords([listeningRecord], '全部记录'),
-  '全部记录：听力 1 套。',
-  'listening is worded by its own table entry; unscored activities count only'
+  '全部记录：听力 1 套，平均正确率 78%。',
+  'listening is worded by its own table entry and averaged like reading'
 )
 assert.equal(
   summarizeRecords([{ ...readingRecord, score: { ...readingRecord.score, value: null } }], '全部记录'),
@@ -284,8 +289,8 @@ assert.deepEqual(
 assert.deepEqual(summaryStats([]), [], 'no records, no chips')
 assert.deepEqual(
   summaryStats([listeningRecord]),
-  [{ activity: 'listening', label: '听力 1 套', detail: '' }],
-  'an activity without a metric has a count chip only'
+  [{ activity: 'listening', label: '听力 1 套', detail: '平均正确率 78%' }],
+  'listening counts sets and averages their accuracy'
 )
 assert.equal(scoreTone(readingRecord), 'success', 'reading 92% is a success tone')
 assert.equal(scoreTone({ ...readingRecord, score: { ...readingRecord.score, value: 0.6 } }), 'warning')

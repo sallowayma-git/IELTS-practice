@@ -12,6 +12,7 @@ pub mod history;
 pub mod journal;
 pub mod learning;
 pub mod learner;
+pub mod listening;
 #[cfg(feature = "memory-core-v1")]
 pub mod memory;
 #[cfg(feature = "memory-core-v1")]

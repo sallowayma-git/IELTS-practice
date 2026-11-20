@@ -1,0 +1,209 @@
+{
+  "code": "200",
+  "data": {
+    "id": "unit-01",
+    "channel": "reading",
+    "title": "A Brief History of Humans and Food",
+    "parts": [
+      {
+        "id": "part-01",
+        "channel": "reading",
+        "label": "Part 1",
+        "title": "A Brief History of Humans and Food",
+        "partDescription": "You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.",
+        "articleJson": "{\"segments\": [{\"sentences\": [{\"sentence_index\": 0, \"text\": \"(A) During the journey from our hunter-gatherer ancestors to the present day, there have been three seismic changes that have impacted the food we eat: the discovery of cooking, the emergence of agriculture, and the invention of methods of preserving food.\"}, {\"sentence_index\": 1, \"text\": \"The 19th-century scientist Charles Darwin thought that cooking, after language, was the greatest discovery made by man.\"}, {\"sentence_index\": 2, \"text\": \"All of us eat some raw food, such as fruit and vegetables, but the great majority of food we consume is cooked.\"}, {\"sentence_index\": 3, \"text\": \"Cooking can turn plants that are inedible into edible food by destroying toxic chemicals that plants often manufacture to protect themselves against attack by insects or other herbivorous animals.\"}, {\"sentence_index\": 4, \"text\": \"These toxic chemicals are referred to as “plant secondary compounds” because they are not directly involved in the plant's normal growth, development, and reproduction, and are produced purely as chemical defenses.\"}, {\"sentence_index\": 5, \"text\": \"They give many of the plants we consume, such as coffee or Brussels sprouts, their bitter taste.\"}]}, {\"sentences\": [{\"sentence_index\": 6, \"text\": \"(B) Cooked food is often more digestible because heat breaks down tough cellulose cell walls in plants or tough connective tissue in animals.\"}, {\"sentence_index\": 7, \"text\": \"Chewing raw turnip, a plate of uncooked rice, or a raw leg of lamb is much harder work than eating the cooked equivalent.\"}, {\"sentence_index\": 8, \"text\": \"The energy expended in chewing to break down the tough material is replaced by energy from the fuel used in cooking the food, so the ratio of energy gained to energy expended by the body is greater when food is cooked.\"}]}, {\"sentences\": [{\"sentence_index\": 9, \"text\": \"(C) Until the development of agriculture, hunter-gatherers spent up to seven hours a day gathering food.\"}, {\"sentence_index\": 10, \"text\": \"This all began to change around 10,500 years ago with the advent of farming, which led to dramatic changes in human societies.\"}, {\"sentence_index\": 11, \"text\": \"People began to create a variety of new tools to aid survival, and in turn, populations increased in size.\"}, {\"sentence_index\": 12, \"text\": \"These changes led to the possibility of specialization of different tasks within society.\"}, {\"sentence_index\": 13, \"text\": \"Around this time, writing became more sophisticated and allowed people to maintain records of the harvest and taxes.\"}, {\"sentence_index\": 14, \"text\": \"Eventually, formalized structures of government were established as people settled in one area.\"}]}, {\"sentences\": [{\"sentence_index\": 15, \"text\": \"(D) The arrival of agriculture meant that, for the first time, our ancestors had more food than they could eat immediately.\"}, {\"sentence_index\": 16, \"text\": \"This, combined with the seasonality of production, led them to discover methods of preserving food: smoking, drying, adding acid by fermentation, or adding salt.\"}, {\"sentence_index\": 17, \"text\": \"These four methods all share one feature in common—they make the food a more hostile environment for bacteria that can cause it to spoil.\"}, {\"sentence_index\": 18, \"text\": \"They also tend to slow down natural chemical reactions in the food that would cause decay.\"}]}, {\"sentences\": [{\"sentence_index\": 19, \"text\": \"(E) Although foods today are still preserved in these ancient ways, two more recent methods of preserving food have become more common: canning and freezing.\"}, {\"sentence_index\": 20, \"text\": \"Canning was invented by a Frenchman, Nicolas Appert, in the early 19th century.\"}, {\"sentence_index\": 21, \"text\": \"He sealed food in bottles fabricated from glass and then heated them in boiling water to cook the contents.\"}, {\"sentence_index\": 22, \"text\": \"Appert's method had great advantages over older methods of food preservation: it could be applied to a wide range of foods, and the flavor and texture were similar to freshly cooked products.\"}, {\"sentence_index\": 23, \"text\": \"His idea was soon copied by an Englishman, Peter Durand.\"}, {\"sentence_index\": 24, \"text\": \"Until this point, containers had been too heavy to be widely used, but Durand produced the first ones which were lightweight and resistant to damage.\"}, {\"sentence_index\": 25, \"text\": \"Two years later, in 1812, two Englishmen, Bryan Donkin and John Hall, started the commercial canning of food, although the real rise in popularity of canning had to wait until the invention of the can opener in 1855.\"}, {\"sentence_index\": 26, \"text\": \"Until then, cans were opened with a chisel and hammer.\"}, {\"sentence_index\": 27, \"text\": \"Canning is an extremely effective way of preserving food: one can containing meat, dating back to 1824, was opened in 1939, and the contents were still in good condition.\"}]}, {\"sentences\": [{\"sentence_index\": 28, \"text\": \"(F) In the 21st century, the dominance of canning as a method of food preservation has been overtaken by freezing.\"}, {\"sentence_index\": 29, \"text\": \"Chilling food to keep it fresh is an old idea.\"}, {\"sentence_index\": 30, \"text\": \"The earliest mentions of icehouses, thick-walled buildings, half underground, date back to 1700 BC in northwest Iran.\"}, {\"sentence_index\": 31, \"text\": \"In early 16th-century Italy, water was mixed with chemicals to lower its freezing point to -18 degrees Celsius.\"}, {\"sentence_index\": 32, \"text\": \"Several centuries later, frozen fish and other goods were transported by ship from Australia to England.\"}, {\"sentence_index\": 33, \"text\": \"However, the modern frozen food industry was started in the 1920s by an American, Clarence Birdseye.\"}, {\"sentence_index\": 34, \"text\": \"While on a fishing trip with the Inuit in the Canadian Arctic, Birdseye observed that rapid freezing creates smaller ice crystals and therefore causes less damage to food—a discovery he had not expected.\"}, {\"sentence_index\": 35, \"text\": \"Nevertheless, the major growth in demand for frozen food came with the arrival of freezers in ordinary people's homes.\"}, {\"sentence_index\": 36, \"text\": \"The advantages of frozen over canned food include the fact that the flavor and consistency are often identical to the fresh product, and freezing can be used to preserve a wide variety of foods.\"}]}]}",
+        "groups": [
+          {
+            "id": "part-01-g1",
+            "type": "single-choice",
+            "questionSubtype": "judgment_true_false_not_given",
+            "qRange": "Questions 1–5",
+            "description": "Do the following statements agree with the information given in Reading Passage 1?<br>In boxes 1–5 on your answer sheet, write:",
+            "contentHtml": null,
+            "questions": [
+              {
+                "id": "item-1",
+                "type": "single-choice",
+                "qNumber": "1",
+                "question": "According to Darwin, cooking was the most significant development in human history.",
+                "rightAnswer": null,
+                "options": [
+                  {
+                    "optionNum": "A",
+                    "optionContent": "TRUE"
+                  },
+                  {
+                    "optionNum": "B",
+                    "optionContent": "FALSE"
+                  },
+                  {
+                    "optionNum": "C",
+                    "optionContent": "NOT GIVEN"
+                  }
+                ]
+              },
+              {
+                "id": "item-2",
+                "type": "single-choice",
+                "qNumber": "2",
+                "question": "The process of cooking gets rid of some plant poisons.",
+                "rightAnswer": null,
+                "options": [
+                  {
+                    "optionNum": "A",
+                    "optionContent": "TRUE"
+                  },
+                  {
+                    "optionNum": "B",
+                    "optionContent": "FALSE"
+                  },
+                  {
+                    "optionNum": "C",
+                    "optionContent": "NOT GIVEN"
+                  }
+                ]
+              },
+              {
+                "id": "item-3",
+                "type": "single-choice",
+                "qNumber": "3",
+                "question": "Eating cooked food is more energy efficient than eating raw food.",
+                "rightAnswer": null,
+                "options": [
+                  {
+                    "optionNum": "A",
+                    "optionContent": "TRUE"
+                  },
+                  {
+                    "optionNum": "B",
+                    "optionContent": "FALSE"
+                  },
+                  {
+                    "optionNum": "C",
+                    "optionContent": "NOT GIVEN"
+                  }
+                ]
+              },
+              {
+                "id": "item-4",
+                "type": "single-choice",
+                "qNumber": "4",
+                "question": "Clarence Birdseye had previously worked in the Australian food industry.",
+                "rightAnswer": null,
+                "options": [
+                  {
+                    "optionNum": "A",
+                    "optionContent": "TRUE"
+                  },
+                  {
+                    "optionNum": "B",
+                    "optionContent": "FALSE"
+                  },
+                  {
+                    "optionNum": "C",
+                    "optionContent": "NOT GIVEN"
+                  }
+                ]
+              },
+              {
+                "id": "item-5",
+                "type": "single-choice",
+                "qNumber": "5",
+                "question": "Birdseye's trip with the Inuit confirmed what he already believed about rapid freezing.",
+                "rightAnswer": null,
+                "options": [
+                  {
+                    "optionNum": "A",
+                    "optionContent": "TRUE"
+                  },
+                  {
+                    "optionNum": "B",
+                    "optionContent": "FALSE"
+                  },
+                  {
+                    "optionNum": "C",
+                    "optionContent": "NOT GIVEN"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "part-01-g2",
+            "type": "fill-in-the-blank",
+            "questionSubtype": null,
+            "qRange": "Questions 6–13",
+            "description": "Complete the notes below.<br>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.<br>Write your answers in boxes 6–13 on your answer sheet.",
+            "contentHtml": "<table border=\"0\" cellspacing=\"0\" cellpadding=\"6\" style=\"border-collapse: collapse; width: auto table-layout: fixed; margin-top: 20px; line-height: 2.2; text-align: left;\">\n  <tr>\n    <td colspan=\"2\" style=\"text-align: center; font-weight: bold;\">The Development of Agriculture and Food Preservation</td>\n  </tr>\n  <tr>\n    <td colspan=\"2\" style=\"font-weight: bold; vertical-align: middle; padding: 6px;\">The changes agriculture brought about were:</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left;\">• the development of equipment and larger <input placeholder=\"6\"> </td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left;\">• the ability to keep <input placeholder=\"7\"> as writing developed</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left;\">• the setting up of organised government</td>\n  </tr>\n  <tr>\n    <td colspan=\"2\" style=\"font-weight: bold; vertical-align: middle; padding: 6px;\">Food preservation</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left;\">• early methods of food preservation included: smoking, drying and combining food with acid or <input placeholder=\"8\">.</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left;\">• canning</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left; padding-left: 20px;\">– Nicolas Appert put food into containers made of <input placeholder=\"9\">.</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left; padding-left: 20px;\">– Appert's method resulted in preserved food that had the same taste and <input placeholder=\"10\"> as fresh food.</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left; padding-left: 20px;\">– Peter Durand introduced cans which had the advantage of being <input placeholder=\"11\"> and hard to break.</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left; padding-left: 20px;\">– In 1855, the metal can opener replaced the <input placeholder=\"12\"> which had been used with a hammer to open cans.</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left; padding-left: 20px;\">– some food was still found to be edible after more than a hundred years, e.g. an old can of <input placeholder=\"13\">.</td>\n  </tr>\n  <tr>\n    <td style=\"vertical-align: middle; padding: 6px; text-align: left;\">• freezing</td>\n  </tr>\n</table>",
+            "questions": [
+              {
+                "id": "item-6",
+                "type": "fill-in-the-blank",
+                "qNumber": "6",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              },
+              {
+                "id": "item-7",
+                "type": "fill-in-the-blank",
+                "qNumber": "7",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              },
+              {
+                "id": "item-8",
+                "type": "fill-in-the-blank",
+                "qNumber": "8",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              },
+              {
+                "id": "item-9",
+                "type": "fill-in-the-blank",
+                "qNumber": "9",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              },
+              {
+                "id": "item-10",
+                "type": "fill-in-the-blank",
+                "qNumber": "10",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              },
+              {
+                "id": "item-11",
+                "type": "fill-in-the-blank",
+                "qNumber": "11",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              },
+              {
+                "id": "item-12",
+                "type": "fill-in-the-blank",
+                "qNumber": "12",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              },
+              {
+                "id": "item-13",
+                "type": "fill-in-the-blank",
+                "qNumber": "13",
+                "question": null,
+                "rightAnswer": null,
+                "options": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

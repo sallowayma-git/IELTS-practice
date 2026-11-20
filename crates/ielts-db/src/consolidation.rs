@@ -96,7 +96,14 @@ pub(crate) fn propagate_support_change_in_transaction(
 /// insert-side fix below cannot reach.
 pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveReport> {
     let tx = conn.unchecked_transaction()?;
-    let conn = &*tx;
+    let report = archive_stale_in_transaction(&tx, now)?;
+    tx.commit()?;
+    Ok(report)
+}
+
+/// The sweep itself, for a caller that already owns the transaction (and so can
+/// make its day guard and the sweep one atomic write). No commit here.
+fn archive_stale_in_transaction(conn: &Connection, now: &str) -> DbResult<StaleArchiveReport> {
     let now_ts = chrono::DateTime::parse_from_rfc3339(now)
         .map(|dt| dt.timestamp())
         .unwrap_or(0);
@@ -139,8 +146,11 @@ pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveRepor
                 let ids = conn
                     .prepare(
                         "SELECT id FROM memory_items
-                     WHERE namespace=?2 AND status='active'
-                       AND COALESCE(last_observed_at, updated_at, created_at) < ?3",
+                     WHERE user_id='local' AND namespace=?2 AND status='active'
+                       AND source_class NOT IN ('user_explicit','system_policy')
+                       AND namespace != 'goal' AND recall_count < 3
+                       AND MAX(julianday(COALESCE(last_observed_at, updated_at, created_at)),
+                               COALESCE(julianday(last_recalled_at),0)) < julianday(?3)",
                     )?
                     .query_map(params![now, kind, cutoff_iso], |row| {
                         row.get::<_, String>(0)
@@ -165,12 +175,37 @@ pub fn archive_stale(conn: &Connection, now: &str) -> DbResult<StaleArchiveRepor
         [],
         |row| row.get(0),
     )?;
-    tx.commit()?;
     Ok(StaleArchiveReport {
         archived_count: (archived_after - archived_before) as usize,
         skipped_kinds: skipped,
         policy_by_kind,
     })
+}
+
+const MEMORY_NS: &str = "memory";
+const LAST_STALE_ARCHIVE_DAY: &str = "last_stale_archive_day";
+
+/// Run the stale sweep at most once per local calendar day.
+///
+/// The day guard is read and written in the same transaction as the sweep, so a
+/// crash between them cannot leave the day marked without the archive (or the
+/// archive done twice). A day that already ran returns `Ok(None)`: the caller
+/// learns "nothing to do", not "nothing was stale".
+pub fn archive_stale_once_per_day(
+    conn: &Connection,
+    now: &str,
+    day_key: &str,
+) -> DbResult<Option<StaleArchiveReport>> {
+    let tx = conn.unchecked_transaction()?;
+    let last_day = crate::settings::get_setting(&tx, MEMORY_NS, LAST_STALE_ARCHIVE_DAY)?
+        .and_then(|entry| entry.value.as_str().map(str::to_owned));
+    if last_day.as_deref() == Some(day_key) {
+        return Ok(None);
+    }
+    let report = archive_stale_in_transaction(&tx, now)?;
+    crate::settings::upsert_setting(&tx, MEMORY_NS, LAST_STALE_ARCHIVE_DAY, &json!(day_key))?;
+    tx.commit()?;
+    Ok(Some(report))
 }
 
 /// M8-09: record user feedback against a stable memory_id. `inaccurate` is

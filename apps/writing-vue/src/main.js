@@ -42,6 +42,11 @@ const router = createRouter({
             component: () => import('./views/NotebookPage.vue')
         },
         {
+            path: '/vocabulary',
+            name: 'Vocabulary',
+            component: () => import('./views/VocabularyPage.vue')
+        },
+        {
             path: '/memory-center',
             name: 'MemoryCenter',
             redirect: { name: 'Notebook' }
@@ -79,6 +84,23 @@ const router = createRouter({
             path: '/reading/:assetId/review/:sessionId',
             name: 'PracticeReadingReview',
             component: () => import('./views/PracticeReadingPage.vue'),
+            props: true
+        },
+        {
+            path: '/listening',
+            name: 'ListeningLibrary',
+            component: () => import('./views/ListeningLibraryPage.vue')
+        },
+        {
+            path: '/listening/:assetId',
+            name: 'PracticeListening',
+            component: () => import('./views/PracticeListeningPage.vue'),
+            props: true
+        },
+        {
+            path: '/listening/:assetId/review/:attemptId',
+            name: 'PracticeListeningReview',
+            component: () => import('./views/PracticeListeningPage.vue'),
             props: true
         },
         {
@@ -127,6 +149,12 @@ router.beforeEach((to) => {
         const sessionId = String(to.params.sessionId || '').trim()
         if (!isValidSessionId(sessionId)) {
             return { name: 'Compose' }
+        }
+    }
+    if (to.name === 'PracticeListeningReview') {
+        const attemptId = String(to.params.attemptId || '').trim()
+        if (!isValidSessionId(attemptId)) {
+            return { name: 'ListeningLibrary' }
         }
     }
     return true

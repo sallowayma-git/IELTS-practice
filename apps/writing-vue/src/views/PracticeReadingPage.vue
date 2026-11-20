@@ -117,10 +117,13 @@
     <UnifiedSelectionBar
       :visible="selectionToolbarVisible"
       :position="selectionToolbarStyle"
+      :can-remove="selectionHasMark"
       @hold="keepSelectionToolbar = $event"
       @note="applySelectionNote"
       @remove="removeSelectionHighlight"
+      :can-ask-coach="canAskCoachFromSelection"
       @highlight="applySelectionHighlight('highlight')"
+      @ask-coach="askCoachFromSelection"
     />
 
     <ReadingDictionaryBubble
@@ -168,6 +171,10 @@
         ref="readingPassagePane"
         :passage-blocks="payload.passage.blocks"
         :official-passage-notes="officialPassageNotes"
+        :material="reviewMode ? payload.studyMaterial : null"
+        :material-error="materialError"
+        :located-sentences="locatedSentences"
+        @retry-material="loadStudyMaterial"
       />
 
       <div
@@ -194,6 +201,7 @@
         :get-display-label="getDisplayLabel"
         :format-review-answer="formatReviewAnswer"
         @question-input="handleQuestionInput"
+        @locate-answer="locateAnswer"
       >
         <ReadingReviewPanel
           :submission="submission"
@@ -248,6 +256,8 @@
       :coach-retry-kind="coachRetryKind"
       :selected-context="selectedContext"
       :coach-transcript="coachTranscript"
+      :coach-response="coachResponse"
+      :coach-remembered="coachRemembered"
       :coach-quick-actions="coachQuickActions"
       :coach-selection-actions="coachSelectionActions"
       :coach-follow-ups="coachFollowUps"
@@ -269,6 +279,7 @@
       @reask="reaskCoachMessage"
       @retry="retryCoachQuery"
       @reload-history="reloadCoachHistory"
+      @forget-remembered="forgetRememberedPreference"
       @update:coach-query="coachQuery = $event"
       @refresh-selected-context="refreshSelectedContext"
       @ask="askCoach"
@@ -302,7 +313,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
 import { learningRepository } from '@/api/learning-repository.js'
@@ -324,6 +335,7 @@ import { useUnifiedDisplay } from '@/modules/reading-unified/composables/useUnif
 import { useUnifiedDivider } from '@/modules/reading-unified/composables/useUnifiedDivider.js'
 import { useNativeAnswerControls } from '@/modules/reading-unified/composables/useNativeAnswerControls.js'
 import { applyResultsToQuestionArea } from '@/modules/reading-unified/reviewMarks.js'
+import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
 import { useReadingAsset } from '@/modules/practice-reading/useReadingAsset'
 import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
 import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
@@ -334,6 +346,7 @@ import { applyMemorizeLocatorHighlights, clearMemorizeLocatorHighlights } from '
 import { readSelectedContext } from '@/modules/practice-reading/selectionContext.js'
 import { canSnapshotReadingAnswers, readingDraftOwnerMatches } from '@/modules/practice-reading/readingModeFlowCore.js'
 import { useReadingTimer } from '@/modules/practice-reading/useReadingTimer'
+import { useQuestionTimeline } from '@/modules/practice-reading/useQuestionTimeline'
 import { useReadingAttempt } from '@/modules/practice-reading/useReadingAttempt'
 import { useReadingUiPreferences } from '@/modules/practice-reading/useReadingUiPreferences'
 import { useReadingInteractions } from '@/modules/practice-reading/useReadingInteractions'
@@ -406,20 +419,6 @@ const attemptReviewError = ref('')
 const attemptReviewContent = ref('')
 const attemptReviewToolCalls = ref([])
 const suiteSession = ref(null)
-const answerTimeline = reactive({})
-// Flag toggles are user edits and autosave like answers; hydration and reset
-// go through restore/clear, which never save.
-const {
-  markedQuestions,
-  isMarkedQuestion,
-  toggleMarkedQuestion,
-  restoreMarkedQuestions,
-  clearMarkedQuestions
-} = useMarkedQuestions({
-  normalizeId: normalizeQuestionId,
-  isReadOnly: () => readOnlyMode.value,
-  onUserChange: () => scheduleDraftAutosave()
-})
 const interactionCount = ref(0)
 const endlessCountdown = ref(0)
 const endlessNextAssetId = ref('')
@@ -447,12 +446,69 @@ const {
   setDarkMode,
   setQuestionNavCollapsed
 } = useUnifiedDisplay()
-const activeQuestionVisit = {
-  questionId: '',
-  startedAtMs: 0
-}
-const activeQuestionId = ref('')
+// Answer timeline, visits and marks: one shared tracker for every practice
+// surface, so a submitted ledger row always carries real change/visit/elapsed
+// numbers instead of zeros.
+const {
+  answerTimeline,
+  markedQuestions,
+  activeQuestionId,
+  flushActiveQuestionVisit,
+  recordQuestionVisit,
+  recordAnswerTimeline,
+  hydrateFromDraftAnswers,
+  hydrateFromSubmission,
+  reset: resetQuestionTimeline,
+  buildQuestionTimelineLite,
+  buildPersistedQuestionTimeline
+} = useQuestionTimeline({
+  payloadSource: () => payload.value,
+  readOnlySource: () => readOnlyMode.value,
+  getRawAnswer: (questionId) => getRawAnswer(questionId),
+  getDisplayLabel: (questionId) => getDisplayLabel(questionId),
+  onInteraction: () => recordInteraction()
+})
+
+const { isMarkedQuestion, toggleMarkedQuestion } = useMarkedQuestions({
+  markedQuestions,
+  normalizeId: normalizeQuestionId,
+  isReadOnly: () => readOnlyMode.value,
+  onUserChange: () => scheduleDraftAutosave()
+})
 const readingPassagePane = ref(null)
+const materialError = ref('')
+const locatedSentences = ref([])
+
+async function loadStudyMaterial() {
+  const id = asset.value?.id
+  if (!isJiufenAsset(id) || !reviewMode.value) return
+  materialError.value = ''
+  try {
+    const attempt = submission.value?.attemptId || submission.value?.sessionId || props.sessionId || tauriAttemptId
+    const material = await jiufen.studyMaterial(id, 'reading', attempt)
+    if (asset.value?.id === id) payload.value.studyMaterial = material
+  } catch (failure) {
+    if (asset.value?.id === id) materialError.value = failure?.message || String(failure)
+  }
+}
+
+async function locateAnswer(questionId) {
+  locatedSentences.value = payload.value?.studyMaterial?.questions?.[questionId]?.sentenceIds || []
+  await nextTick()
+  const target = [...document.querySelectorAll('#left [data-study-sentence]')]
+    .find(node => locatedSentences.value.includes(node.dataset.studySentence))
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  } else {
+    const translated = [...document.querySelectorAll('#left [data-translated-sentence]')]
+      .find(node => locatedSentences.value.includes(node.dataset.translatedSentence))
+    if (translated) {
+      translated.closest('details').open = true
+      translated.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+}
+
 const readingAttempt = useReadingAttempt()
 let tauriAttemptId = ''
 let nativeControls = null
@@ -548,6 +604,7 @@ const returnRoute = computed(() => (
 ))
 const returnLabel = computed(() => (activeSuiteSessionId.value ? '返回套题进度' : '返回练习库'))
 const reviewMode = computed(() => Boolean(submission.value))
+watch(reviewMode, ready => { if (ready) void loadStudyMaterial() })
 const readOnlyMode = computed(() => reviewMode.value || isMemorizeMode.value)
 const {
   answeredCount,
@@ -558,8 +615,7 @@ const {
   getRawAnswer,
   getAnswerEntries,
   hasAnswer,
-  snapshotAnswers: snapshotAnswerMap,
-  getAnswerFingerprint
+  snapshotAnswers: snapshotAnswerMap
 } = useReadingAnswers({
   payloadSource: () => payload.value,
   readOnlySource: readOnlyMode,
@@ -643,6 +699,9 @@ const {
 const {
   coachQuery,
   coachLoading,
+  coachError,
+  coachResponse,
+  coachRemembered,
   selectedContext,
   readingCoachOpen,
   llmReviewStatus,
@@ -674,7 +733,8 @@ const {
   dismissCoachMemoryCard,
   runCoachQuickAction,
   runCoachSelectionAction,
-  runAutomaticReviewCoach
+  runAutomaticReviewCoach,
+  forgetRememberedPreference
 } = useReadingCoach({
   submissionSource: () => submission.value,
   setSubmission: (nextSubmission) => {
@@ -702,9 +762,12 @@ const {
     syncDomAnswers()
   }
 })
+// Same gate as the coach panel/FAB: a submitted attempt with the coach enabled.
+const canAskCoachFromSelection = computed(() => Boolean(submission.value) && readingCoachEnabled.value)
 const {
   selectionToolbarVisible,
   selectionToolbarStyle,
+  selectionHasMark,
   keepSelectionToolbar,
   highlightSnapshot,
   highlightRestoreWarning,
@@ -737,8 +800,18 @@ const {
   },
   onInteraction: () => recordInteraction(),
   notesText,
-  toggleNotesPanel
+  toggleNotesPanel,
+  contextMenuEnabledSource: () => canAskCoachFromSelection.value
 })
+
+// Capture the selection first: it is lost once focus moves to the coach panel.
+function askCoachFromSelection() {
+  if (!canAskCoachFromSelection.value) return
+  const captured = readSelectedContext(getDisplayLabel)
+  if (!captured?.text) return
+  setReadingCoachOpen(true)
+  void runCoachSelectionAction('explain_selection', captured, 'selection_bar')
+}
 const canSubmit = computed(() => Boolean(
   asset.value
   && payload.value
@@ -834,11 +907,26 @@ const officialPassageNotes = computed(() => {
 })
 const officialQuestionExplanationSections = computed(() => {
   const sections = officialReviewExplanations.value?.questionExplanations
-  return Array.isArray(sections)
+  const normalized = Array.isArray(sections)
     ? sections
         .map((section, index) => normalizeOfficialQuestionExplanationSection(section, index))
         .filter(Boolean)
     : []
+  if (!reviewMode.value) return normalized
+  const existing = new Set(normalized.flatMap(section => section.items.map(item => item.questionId)))
+  const recovered = Object.entries(payload.value?.studyMaterial?.questions || {})
+    .filter(([id, item]) => !existing.has(id) && item.analyses?.length)
+    .map(([questionId, item]) => ({
+      questionId,
+      questionNumber: getQuestionOfficialNumber(questionId),
+      text: item.analyses.map(analysis => analysis.text).join('\n')
+    }))
+  if (recovered.length) {
+    const official = normalized.find(section => section.sectionTitle === '官方解析')
+    if (official) official.items.push(...recovered)
+    else normalized.push({ sectionTitle: '官方解析', items: recovered, text: '', mode: '' })
+  }
+  return normalized
 })
 const suiteSequence = computed(() => (
   Array.isArray(suiteSession.value?.sequence) ? suiteSession.value.sequence : []
@@ -1092,6 +1180,8 @@ async function loadAsset() {
   submitError.value = ''
   clearSnapshotMessage()
   submission.value = null
+  materialError.value = ''
+  locatedSentences.value = []
   resetAttemptReviewState()
   suiteSession.value = null
   resetAttemptMetadata()
@@ -1140,7 +1230,7 @@ async function loadAsset() {
     syncDomAnswers()
     if (isTauriRuntime()) {
       const attemptScope = tauriAttemptId || replaySessionId || null
-      const passageDocument = String(readingPassagePane.value?.$el?.textContent || '').trim()
+      const passageDocument = getTextNodes(readingPassagePane.value?.$el).map(node => node.textContent || '').join('').trim()
       await hydrateHighlightsFromStore(asset.value.id, attemptScope, passageDocument || null, RESTORED_ANNOTATION_KINDS)
     }
     restoreHighlightsFromRecords(highlightSnapshot.value)
@@ -1175,6 +1265,9 @@ async function loadSubmittedSession(sessionId) {
   const actualAssetId = String(loadedSubmission.assetId || loadedSubmission.examId || '').trim()
   if (expectedAssetId && actualAssetId && expectedAssetId !== actualAssetId) {
     throw new Error('阅读回放记录与当前题目不匹配')
+  }
+  if (isJiufenAsset(expectedAssetId)) {
+    Object.assign(payload.value, await jiufen.review(expectedAssetId, sessionId))
   }
   submission.value = loadedSubmission
   // Field contraction: store may omit correctAnswer; fill from asset answerKey for review UI.
@@ -1231,25 +1324,15 @@ async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null
     tauriAttemptId = String(attempt.id)
     if (timer) applyPracticeTimerState(timer)
     const answers = {}
-    const marked = []
     for (const entry of attempt.answers || []) {
       const questionId = String(entry.questionId || entry.question_id || '').trim()
       if (!questionId) continue
       if (entry.answer != null) answers[questionId] = entry.answer
-      if (entry.marked) marked.push(questionId)
-      answerTimeline[questionId] = {
-        firstAnsweredAt: entry.answeredAt || entry.answered_at || null,
-        lastAnsweredAt: entry.answeredAt || entry.answered_at || null,
-        changeCount: Math.max(0, Number(entry.changeCount ?? entry.change_count) || 0),
-        visitCount: Math.max(0, Number(entry.visitCount ?? entry.visit_count) || 0),
-        elapsedMs: Math.max(0, Number(entry.elapsedMs ?? entry.elapsed_ms) || 0),
-        lastFingerprint: getAnswerFingerprint(entry.answer)
-      }
     }
+    hydrateFromDraftAnswers(attempt.answers)
     Object.entries(answers).forEach(([questionId, value]) => {
       assignAnswer(questionId, value)
     })
-    if (marked.length) restoreMarkedQuestions(marked)
     showSnapshotMessage('已恢复未提交草稿。')
     return timer
   } catch (draftError) {
@@ -1283,14 +1366,7 @@ function restoreSubmittedViewport(loadedSubmission) {
 }
 
 function resetAttemptMetadata() {
-  flushActiveQuestionVisit()
-  activeQuestionVisit.questionId = ''
-  activeQuestionVisit.startedAtMs = 0
-  activeQuestionId.value = ''
-  Object.keys(answerTimeline).forEach((key) => {
-    delete answerTimeline[key]
-  })
-  clearMarkedQuestions()
+  resetQuestionTimeline()
   interactionCount.value = 0
 }
 
@@ -1350,24 +1426,7 @@ async function updateReadingCoachEnabled(enabled) {
 }
 
 function restoreSubmittedMetadata(loadedSubmission) {
-  restoreMarkedQuestions(loadedSubmission?.markedQuestions)
-  Object.keys(answerTimeline).forEach((key) => {
-    delete answerTimeline[key]
-  })
-  const timeline = Array.isArray(loadedSubmission?.questionTimelineLite) ? loadedSubmission.questionTimelineLite : []
-  timeline.forEach((entry) => {
-    const questionId = normalizeQuestionId(entry?.questionId)
-    if (!questionId) return
-    const elapsedMs = Math.max(0, Number(entry.elapsedMs ?? entry.durationMs) || 0)
-    answerTimeline[questionId] = {
-      firstAnsweredAt: entry.firstAnsweredAt || null,
-      lastAnsweredAt: entry.lastAnsweredAt || null,
-      changeCount: Math.max(0, Number(entry.changeCount) || 0),
-      visitCount: Math.max(0, Number(entry.visitCount) || 0),
-      elapsedMs,
-      lastFingerprint: getAnswerFingerprint(loadedSubmission.answers?.[questionId])
-    }
-  })
+  hydrateFromSubmission(loadedSubmission)
 }
 
 function resetAnswers() {
@@ -1528,7 +1587,13 @@ const modeFlow = useReadingModeFlow({
   getAttemptId: () => tauriAttemptId,
   setAttemptId: (id) => { tauriAttemptId = id },
   newAttemptId: () => readingAttempt.newAttemptId(),
-  submitSingleAttempt: (input) => readingAttempt.submit(input),
+  submitSingleAttempt: async (input) => {
+    const result = await readingAttempt.submit(input)
+    if (isJiufenAsset(input.assetId) && result.raw?.review) {
+      Object.assign(payload.value, result.raw.review)
+    }
+    return result
+  },
   snapshotAnswerMap,
   markedQuestions,
   interactionCount,
@@ -1692,112 +1757,10 @@ function getSeverityLabel(severity) {
   return labels[severity] || '提示'
 }
 
-function getOrCreateQuestionTimelineEntry(questionId) {
-  const normalized = normalizeQuestionId(questionId)
-  if (!normalized) return null
-  const current = answerTimeline[normalized] || {
-    firstAnsweredAt: null,
-    lastAnsweredAt: null,
-    changeCount: 0,
-    visitCount: 0,
-    elapsedMs: 0,
-    lastFingerprint: getAnswerFingerprint(getRawAnswer(normalized))
-  }
-  current.changeCount = Math.max(0, Number(current.changeCount) || 0)
-  current.visitCount = Math.max(0, Number(current.visitCount) || 0)
-  current.elapsedMs = Math.max(0, Number(current.elapsedMs) || 0)
-  answerTimeline[normalized] = current
-  return current
-}
-
-function flushActiveQuestionVisit(nowMs = Date.now()) {
-  const questionId = activeQuestionVisit.questionId
-  const startedAtMs = Number(activeQuestionVisit.startedAtMs) || 0
-  if (!questionId || !startedAtMs || nowMs <= startedAtMs) {
-    return
-  }
-  const entry = getOrCreateQuestionTimelineEntry(questionId)
-  if (!entry) return
-  entry.elapsedMs = Math.max(0, Number(entry.elapsedMs) || 0) + Math.max(0, nowMs - startedAtMs)
-  activeQuestionVisit.startedAtMs = nowMs
-}
-
-function recordQuestionVisit(questionId) {
-  if (readOnlyMode.value) {
-    return
-  }
-  const normalized = normalizeQuestionId(questionId)
-  if (!normalized) return
-  activeQuestionId.value = normalized
-  const nowMs = Date.now()
-  if (activeQuestionVisit.questionId && activeQuestionVisit.questionId !== normalized) {
-    flushActiveQuestionVisit(nowMs)
-  }
-  const entry = getOrCreateQuestionTimelineEntry(normalized)
-  if (!entry) return
-  if (activeQuestionVisit.questionId !== normalized) {
-    entry.visitCount += 1
-    activeQuestionVisit.questionId = normalized
-  }
-  activeQuestionVisit.startedAtMs = nowMs
-}
-
 function recordInteraction() {
   if (!readOnlyMode.value) {
     interactionCount.value += 1
   }
-}
-
-function recordAnswerTimeline(questionId, previousFingerprint, nextFingerprint) {
-  const changed = previousFingerprint !== nextFingerprint
-  if (!changed) {
-    return
-  }
-  recordInteraction()
-  const now = new Date().toISOString()
-  recordQuestionVisit(questionId)
-  const current = getOrCreateQuestionTimelineEntry(questionId)
-  if (!current) return
-  if (nextFingerprint && !current.firstAnsweredAt) {
-    current.firstAnsweredAt = now
-  }
-  if (nextFingerprint) {
-    current.lastAnsweredAt = now
-  }
-  if (current.lastFingerprint && current.lastFingerprint !== nextFingerprint) {
-    current.changeCount += 1
-  }
-  current.lastFingerprint = nextFingerprint
-  answerTimeline[questionId] = current
-}
-
-function buildQuestionTimelineLite() {
-  flushActiveQuestionVisit()
-  const order = Array.isArray(payload.value?.questionOrder) ? payload.value.questionOrder : []
-  return order.map((questionId) => {
-    const entry = answerTimeline[questionId] || {}
-    const elapsedMs = Math.max(0, Math.round(Number(entry.elapsedMs) || 0))
-    return {
-      questionId,
-      displayLabel: getDisplayLabel(questionId),
-      firstAnsweredAt: entry.firstAnsweredAt || null,
-      lastAnsweredAt: entry.lastAnsweredAt || null,
-      changeCount: Math.max(0, Number(entry.changeCount) || 0),
-      visitCount: Math.max(0, Number(entry.visitCount) || 0),
-      elapsedMs,
-      durationMs: elapsedMs
-    }
-  })
-}
-
-function buildPersistedQuestionTimeline(timeline = buildQuestionTimelineLite()) {
-  return timeline.map((entry) => ({
-    questionId: entry.questionId,
-    changeCount: entry.changeCount,
-    visitCount: entry.visitCount,
-    elapsedMs: entry.elapsedMs,
-    answeredAt: entry.lastAnsweredAt || entry.firstAnsweredAt || null
-  }))
 }
 
 function normalizeOfficialQuestionExplanationSection(section, index) {

@@ -1920,11 +1920,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "dom_query",
  "hex",
  "ielts-application",
  "ielts-db",
  "ielts-domain",
  "ielts-ota",
+ "keyring",
  "reqwest",
  "rusqlite",
  "semver",

@@ -207,7 +207,7 @@ pub(crate) fn weekly_pack_value(
         pack["facts"] = serde_json::to_value(&report.facts)
             .map_err(|error| ielts_db::DbError::Message(error.to_string()))?;
         pack["soul"] = Value::Object(ielts_db::soul::soul_profile(conn, "local")?);
-        pack["persona"] = json!(ielts_db::soul::SOUL_PERSONA);
+        pack["persona"] = json!(ielts_db::soul::weekly_persona());
         pack["previousDigest"] =
             ielts_db::previous_weekly_digest(conn, "local", window.start)?.unwrap_or(Value::Null);
         Ok(pack)

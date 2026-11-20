@@ -4,6 +4,7 @@
       v-if="historyData.length > 0"
       class="line-chart"
       viewBox="0 0 600 240"
+      @mouseleave="hoverIndex = null"
     >
       <!-- Grid Lines -->
       <g class="chart-grid">
@@ -46,19 +47,44 @@
           :cy="point.y"
           r="3"
           class="data-point"
+          :class="{ 'is-active': hoverIndex === index }"
+          @mouseenter="hoverIndex = index"
         >
           <title>{{ visibleHistoryData[index].date }}: {{ formatPointValue(visibleHistoryData[index].score) }}</title>
         </circle>
+        <!-- Wider invisible hit targets: r=3 is hard to aim at. -->
+        <circle
+          v-for="(point, index) in points"
+          :key="'hit-' + index"
+          :cx="point.x"
+          :cy="point.y"
+          r="12"
+          class="data-point-hit"
+          @mouseenter="hoverIndex = index"
+        />
       </g>
     </svg>
-    <div v-else class="empty-chart">
+    <!-- Hover score tip: positioned by viewBox ratio, so it tracks the point. -->
+    <div
+      v-if="hoverIndex !== null && points[hoverIndex]"
+      class="chart-tip"
+      :style="tipStyle"
+      role="status"
+    >
+      <span class="chart-tip__date">{{ visibleHistoryData[hoverIndex].date }}</span>
+      <span class="chart-tip__value">{{ formatPointValue(visibleHistoryData[hoverIndex].score) }}</span>
+    </div>
+    <div v-if="historyData.length === 0" class="empty-chart">
       <span>缺乏足够的数据绘制趋势图</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+
+const containerRef = ref(null)
+const hoverIndex = ref(null)
 
 const props = defineProps({
   historyData: {
@@ -97,6 +123,10 @@ const props = defineProps({
   }
 })
 
+// Data swaps (dashboard series toggle) must not leave a stale hoverIndex
+// pointing at a series the pointer is not over.
+watch(() => props.historyData, () => { hoverIndex.value = null })
+
 const width = 600
 const height = 240
 const padding = { top: 20, right: 20, bottom: 30, left: 40 }
@@ -125,6 +155,32 @@ const formatAxisLabel = (value) => Number(value || 0).toFixed(Math.max(0, Number
 const formatPointValue = (value) => `${props.scorePrefix}${Number(value || 0).toFixed(Math.max(0, Number(props.axisLabelDecimals || 0)))}${props.scoreSuffix}`
 
 const visibleHistoryData = computed(() => props.historyData.slice(-15))
+
+// SVG has no layout engine, so the tip anchors by percentage of the container
+// (viewBox units / 600x240) with a fixed pixel offset for the stem. The tip
+// pops above the point; when the point sits in the top band (high score) the
+// tip would cross the container top, so it flips below. The band is measured
+// from the real container height — no viewport-dependent magic numbers.
+const TIP_STEM_PX = 12
+const TIP_HEIGHT_PX = 34
+
+const tipStyle = computed(() => {
+  const point = points.value[hoverIndex.value]
+  if (!point) return {}
+  const leftPct = (point.x / width) * 100
+  const topPct = (point.y / height) * 100
+  const containerH = containerRef.value?.getBoundingClientRect().height || 0
+  const aboveBandPct = containerH > 0 ? ((TIP_STEM_PX + TIP_HEIGHT_PX) / containerH) * 100 : 20
+  const below = topPct < aboveBandPct
+  const flip = leftPct > 72
+  return {
+    left: `${leftPct}%`,
+    top: `calc(${topPct}% - ${TIP_STEM_PX}px)`,
+    transform: flip
+      ? `translate(calc(-100% - 10px), ${below ? `${TIP_STEM_PX + 6}px` : '-100%'})`
+      : `translate(10px, ${below ? `${TIP_STEM_PX + 6}px` : '-100%'})`
+  }
+})
 
 const points = computed(() => {
   if (visibleHistoryData.value.length === 0) return []
@@ -218,9 +274,44 @@ const areaD = computed(() => {
   vector-effect: non-scaling-stroke;
 }
 
-.data-points .data-point:hover {
+.data-points .data-point:hover,
+.data-points .data-point.is-active {
   fill: var(--anth-accent);
   stroke: var(--anth-accent);
+}
+
+/* Invisible aiming halo over each point; keeps the visible r=3 dot. */
+.data-points .data-point-hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
+.chart-tip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 5px 10px;
+  border: 1px solid var(--anth-ink);
+  border-radius: var(--anth-radius-xs, 3px);
+  background: var(--anth-surface-raised, #fff);
+  box-shadow: var(--anth-shadow-1, 0 1px 4px rgba(0, 0, 0, 0.14));
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chart-tip__date {
+  color: var(--anth-ink-muted);
+  font-size: var(--anth-text-xs, 11px);
+}
+
+.chart-tip__value {
+  color: var(--anth-ink);
+  font-size: var(--anth-text-sm, 13px);
+  font-weight: var(--anth-weight-medium);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .empty-chart {

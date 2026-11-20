@@ -16,7 +16,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::coach::ProfileStatement;
-use crate::coach_signal_digest::{coach_signal_digest, COACH_SIGNAL_WINDOWS};
+use crate::coach_signal_digest::{digest_notes, read_coach_notes_for_activity, NoteRange, COACH_SIGNAL_WINDOWS, RECENT_SIGNAL_DURABLE_DAYS};
 use crate::sqlite::DbResult;
 
 /// Most signals one profile carries.
@@ -27,7 +27,13 @@ pub const RECENT_SIGNAL_MAX: usize = 4;
 /// newest note, which never starts with `mem-`, so a signal is not a recalled
 /// memory; the statement is that note's text.
 pub fn recent_signals(conn: &rusqlite::Connection, now: DateTime<Utc>) -> DbResult<Vec<ProfileStatement>> {
-    let digest = coach_signal_digest(conn, now, COACH_SIGNAL_WINDOWS)?;
+    recent_signals_for_activity(conn, now, "reading")
+}
+
+pub(crate) fn recent_signals_for_activity(conn: &rusqlite::Connection, now: DateTime<Utc>, activity: &str) -> DbResult<Vec<ProfileStatement>> {
+    let since = (now - chrono::Duration::days(RECENT_SIGNAL_DURABLE_DAYS)).to_rfc3339();
+    let notes = read_coach_notes_for_activity(conn, NoteRange::since(&since), activity)?;
+    let digest = digest_notes(&notes, now, COACH_SIGNAL_WINDOWS);
     Ok(digest
         .into_iter()
         .take(RECENT_SIGNAL_MAX)

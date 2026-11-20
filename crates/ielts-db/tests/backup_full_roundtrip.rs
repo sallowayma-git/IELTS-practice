@@ -368,7 +368,7 @@ fn seed_complete_user_state(conn: &Connection) {
         );
 
         INSERT INTO vocabulary_review_state (
-          item_id, ease, interval_days, repetitions, due_at, last_reviewed_at, lapses
+          item_id, ease_factor, interval_days, repetitions, due_at, last_reviewed_at, lapses
         ) VALUES ('vocab-1', 2.6, 3, 2, '2026-01-09T00:00:00Z', '2026-01-06T00:00:00Z', 1);
 
         INSERT INTO dictionary_entries (
@@ -422,6 +422,42 @@ fn rechecksum(package: &mut BackupPackage) {
     package.manifest.checksum_sha256.clear();
     let bytes = serde_json::to_vec(package).unwrap();
     package.manifest.checksum_sha256 = hex::encode(Sha256::digest(bytes));
+}
+
+#[test]
+fn schema35_backup_restores_reviewed_and_new_words_with_the_sm2_conversion() {
+    let dir = tempdir().unwrap();
+    let source = open_v2(dir.path().join("source-v35.db"));
+    seed_complete_user_state(&source);
+    source.execute_batch("INSERT INTO vocabulary_items(id,term,normalized_term,created_at,updated_at)
+        VALUES ('fresh','Fresh','fresh','created','updated');
+        INSERT INTO vocabulary_review_state(item_id,interval_days,due_at)
+        VALUES ('fresh',0,'2026-01-06T00:00:00Z');").unwrap();
+    let modern = create_backup_package(&source,"v35-fixture").unwrap();
+    let mut legacy = modern.clone();
+    legacy.manifest.database_schema_version = 35;
+    let state = legacy.database.iter_mut().find(|t| t.name == "vocabulary_review_state").unwrap();
+    state.columns = ["item_id","ease","interval_days","repetitions","due_at","last_reviewed_at","lapses"]
+        .map(String::from).to_vec();
+    state.rows = state.rows.iter().map(|row| vec![row[0].clone(),
+        if matches!(row[1], BackupSqlValue::Null) {BackupSqlValue::Real(2.5)} else {row[1].clone()},
+        row[2].clone(),row[3].clone(),row[7].clone(),row[8].clone(),row[6].clone()]).collect();
+    rechecksum(&mut legacy);
+    let target = open_v2(dir.path().join("restore-v35.db"));
+    assert!(import_backup(&target,&legacy,true).unwrap().ok);
+    let report = import_backup(&target,&legacy,false).unwrap();
+    assert!(report.ok,"{:?}",report.errors);
+    assert_eq!(create_backup_package(&target,"restored").unwrap().database,modern.database);
+    assert!(target.execute("DELETE FROM vocabulary_review_state WHERE item_id='fresh'",[]).is_err());
+
+    // A modern snapshot carrying old columns is malformed, rather than a legacy exception.
+    legacy.manifest.database_schema_version = 36;
+    rechecksum(&mut legacy);
+    assert!(import_backup(&target, &legacy, false).unwrap().ok);
+    legacy.manifest.database_schema_version = 37;
+    rechecksum(&mut legacy);
+    assert!(!import_backup(&target,&legacy,false).unwrap().ok);
+    assert_eq!(create_backup_package(&target,"unchanged").unwrap().database,modern.database);
 }
 
 #[test]

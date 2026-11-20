@@ -721,6 +721,30 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
         _run(bridge)
         self.assertEqual([m["action"] for m in bridge.submitted()["mutations"]], ["ARCHIVE", "SUPERSEDE"])
 
+    def test_weekly_mutations_only_accept_reading_and_writing(self) -> None:
+        # Nine mutations against MAX_MUTATIONS=8: the three off-scope ones must
+        # be dropped HERE, not kept to consume slots the host later rejects.
+        off_scope = [
+            _add(scope={"type": "activity", "key": "listening"},
+                 canonicalKey="strategy.listening.signpost"),
+            _add(scope={"type": "activity", "key": "vocabulary"},
+                 canonicalKey="strategy.vocabulary.word_family"),
+            _add(scope={"type": "activity", "key": "listening"},
+                 canonicalKey="strategy.listening.lecture_notes"),
+        ]
+        reading = [_add(canonicalKey=f"strategy.reading.topic_{i}") for i in range(6)]
+        bridge = FakeHostBridge(content=_answer(mutations=off_scope + reading))
+        _run(bridge)
+        submitted = bridge.submitted()
+        self.assertEqual(
+            [mutation["canonicalKey"] for mutation in submitted["mutations"]],
+            [f"strategy.reading.topic_{i}" for i in range(6)],
+        )
+        self.assertTrue(
+            all(mutation["scope"]["key"] == "reading" for mutation in submitted["mutations"])
+        )
+        self.assertEqual(submitted["droppedMutations"], 3)
+
     def test_unknown_actions_extra_fields_and_bad_shapes_are_dropped(self) -> None:
         mutations = [
             _add(action="REFINE"),
@@ -730,7 +754,7 @@ class WeeklyDreamOrchestratorTests(unittest.TestCase):
             _add(namespace="astrology", canonicalKey="astrology.reading.x"),
             _add(canonicalKey="strategy.Reading.Caps"),
             _add(canonicalKey="language.reading.wrong_namespace"),
-            _add(scope={"type": "activity", "key": "listening"}),
+            _add(scope={"type": "activity", "key": "speaking"}),
             _add(scope={"type": "global", "key": "reading"}),
             _add(scope={"type": "activity", "key": ["reading"]}),
             _add(statement=""),

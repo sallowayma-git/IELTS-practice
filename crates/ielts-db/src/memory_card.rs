@@ -25,6 +25,7 @@ pub const CARD_DISMISSED: &str = "dismissed";
 /// A card's note, as far as the confirm flow needs to know it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryCardSource {
+    pub activity: ielts_domain::Activity,
     /// `memoryCardState` of the message, if the learner already decided.
     pub state: Option<String>,
     /// The `coach.question.asked` observation of the learner message this answer
@@ -36,8 +37,13 @@ pub struct MemoryCardSource {
 /// The identity of the memory a card becomes: one card, one memory, whatever the
 /// learner edits the text to. The hash keeps message ids out of the key's alphabet.
 pub fn memory_card_key(message_id: &str, note_index: usize) -> String {
+    memory_card_key_for_activity(message_id, note_index, ielts_domain::Activity::Reading)
+}
+
+pub fn memory_card_key_for_activity(message_id: &str, note_index: usize, activity: ielts_domain::Activity) -> String {
     let digest = Sha256::digest(format!("{message_id}:{note_index}").as_bytes());
-    format!("preference.reading.card_{}", hex::encode(&digest[..8]))
+    let scope = ielts_domain::MemoryScope::Activity { key: activity }.storage_key();
+    format!("preference.{}.card_{}", scope.trim_start_matches("activity:"), hex::encode(&digest[..8]))
 }
 
 /// The card under note `note_index` of an assistant message; `None` when there is
@@ -61,7 +67,11 @@ pub fn load_memory_card(conn: &Connection, user_id: &str, message_id: &str, note
         return Ok(None);
     }
     ensure_observations_fresh(conn)?;
+    let thread_id: String = conn.query_row("SELECT thread_id FROM coach_messages WHERE id=?1", [message_id], |row| row.get(0))?;
+    let activity_name = crate::coach::coach_thread_activity(conn, &thread_id)?;
+    let activity = serde_json::from_value(serde_json::json!(activity_name))?;
     Ok(Some(MemoryCardSource {
+        activity,
         state: payload["memoryCardState"].as_str().map(str::to_owned),
         evidence_observation_id: answered_learner_observation(conn, user_id, message_id),
     }))
@@ -71,7 +81,7 @@ pub fn load_memory_card(conn: &Connection, user_id: &str, message_id: &str, note
 pub fn active_card_memory(conn: &Connection, user_id: &str, canonical_key: &str) -> DbResult<Option<String>> {
     conn.query_row(
         "SELECT id FROM memory_items
-          WHERE user_id = ?1 AND canonical_key = ?2 AND scope = 'activity:reading'
+          WHERE user_id = ?1 AND canonical_key = ?2
             AND source_class = 'user_explicit' AND status = 'active'
           ORDER BY id LIMIT 1",
         params![user_id, canonical_key],

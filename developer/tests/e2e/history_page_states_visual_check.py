@@ -142,8 +142,8 @@ def assert_geometry(name, state, data):
     if state == "empty":
         hrefs = sorted(item["href"] for item in data["links"])
         min_target = 44 if width <= 640 else 24
-        if hrefs != ["#/", "#/writing"] or any(item["rect"]["height"] + 0.5 < min_target for item in data["links"]):
-            raise AssertionError(f"{name}/{state}: empty state must offer both ways to start practising: {data['links']}")
+        if hrefs != ["#/", "#/listening", "#/writing"] or any(item["rect"]["height"] + 0.5 < min_target for item in data["links"]):
+            raise AssertionError(f"{name}/{state}: empty state must offer all three practice subjects: {data['links']}")
     elif data["links"]:
         raise AssertionError(f"{name}/{state}: only the empty state links to practice")
     if len(data["gatedDisabled"]) != 2 or not all(data["gatedDisabled"]):

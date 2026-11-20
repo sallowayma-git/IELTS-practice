@@ -507,6 +507,12 @@ fn apply_weekly_submission(
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         report.memory_changes = ielts_db::weekly_memory_changes(&tx, &query.user_id)?;
+        // The promotions run in this same transaction and only write
+        // memory_items/memory_relations, so they are not in that read. Append
+        // them before the report (and its hash) is stored and committed.
+        let cross_module =
+            ielts_db::promote_cross_module_memories(&tx, &query.user_id, now_iso)?;
+        report.memory_changes.extend(cross_module.changes);
         let applied = ielts_db::soul::soul_apply_edits_in_transaction(&tx, &query.user_id, run_id, &profile_edits, &facts)?;
         report.profile_edits = applied
             .into_iter()
@@ -827,6 +833,62 @@ mod tests {
             let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
             Ok(rows.collect::<Result<Vec<_>, _>>()?)
         }).unwrap()
+    }
+
+    /// A pair of active activity memories sharing one canonical key: rule A's
+    /// minimum input, independent of any model proposal.
+    fn seed_cross_scope_pair(db: &AppDb) {
+        db.with_conn(|conn| {
+            for (id, scope, content) in [
+                ("mem-read", "activity:reading", "Read the stem first."),
+                ("mem-write", "activity:writing", "Plan before writing."),
+            ] {
+                conn.execute(
+                    "INSERT INTO memory_items (
+                       id,user_id,namespace,scope,memory_type,canonical_key,normalized_label,
+                       content,status,source_class,confidence,importance,source_trust,sensitivity,
+                       improvement_state,first_observed_at,last_observed_at,version,created_by,
+                       content_hash,created_at,updated_at
+                     ) VALUES (?1,'local','strategy',?2,'procedural','strategy.skim_stem',
+                               'skim stem',?3,'active','inferred',0.7,0.5,0.7,'normal','baseline',
+                               '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z',1,'test',?4,
+                               '2026-01-01T00:00:00Z','2026-01-01T00:00:00Z')",
+                    rusqlite::params![id, scope, content, format!("hash-{id}")],
+                )?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// W3-4 audit: the promotion runs after the report's `memory_changes` were
+    /// read and only writes memory_items/memory_relations, so the report (and
+    /// the hash computed from it) must receive the promotion explicitly.
+    #[test]
+    fn a_weekly_run_reports_the_cross_module_promotion_it_made() {
+        let (dir, db) = temp_db();
+        import_passage(&db, dir.path(), "P1");
+        submit(&db, "a1", "P1", serde_json::json!({"q1": "FALSE", "q2": "FALSE", "q3": "B"}), "2026-10-05T09:00:00Z");
+        seed_cross_scope_pair(&db);
+        let query = WeeklyDreamQuery { user_id: "local".into(), journal_id: seed_journal(&db, "local") };
+
+        run_weekly_consolidation(&db, &query, model_submission(serde_json::json!({})), &saturday()).unwrap();
+
+        let promoted: String = db.with_conn(|conn| {
+            Ok(conn.query_row(
+                "SELECT id FROM memory_items
+                 WHERE scope='global' AND canonical_key='strategy.skim_stem' AND status='active'",
+                [],
+                |row| row.get(0),
+            )?)
+        }).unwrap();
+        let reports = db.with_conn(|conn| ielts_db::list_weekly_reports(conn, "local", 8)).unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(changes(&reports[0]), vec![("ADD".to_owned(), promoted)]);
+        assert_eq!(
+            reports[0].memory_changes[0].statement,
+            "Read the stem first. / Plan before writing."
+        );
     }
 
     /// Review on #243: a report that cannot be stored after memory changed must

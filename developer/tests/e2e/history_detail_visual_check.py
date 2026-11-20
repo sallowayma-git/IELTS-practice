@@ -147,7 +147,7 @@ def main():
                 page.wait_for_selector(".result-page")
                 if page.locator("[data-history-back]").count() != 0:
                     raise AssertionError(f"{name}: back link shown without a history origin")
-                if [text.strip() for text in page.locator(".nav-item.is-active").all_inner_texts()] != ["写作"]:
+                if [text.strip() for text in page.locator(".nav-item.is-active").all_inner_texts()] != ["题库"]:
                     raise AssertionError(f"{name}: Result keeps its own nav section outside history")
 
                 open_history(page)
