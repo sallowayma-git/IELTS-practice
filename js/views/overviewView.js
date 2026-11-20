@@ -60,7 +60,7 @@
             this.events.delegate('click', `${this.containerSelector} [data-action="start-suite-mode"]`, function (event) {
                 event.preventDefault();
                 if (typeof view.actions.onStartSuite === 'function') {
-                    view.actions.onStartSuite();
+                    view.actions.onStartSuite(this.dataset.examType || 'reading');
                 }
             });
 
@@ -99,16 +99,16 @@
 
             fragment.appendChild(readingSection);
 
-            // [DISABLED] 听力入口已禁用
-            // const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
-            // if (listeningEntries.length > 0) {
-            //     fragment.appendChild(this.createSection({
-            //         title: '听力',
-            //         icon: '🎧',
-            //         entries: listeningEntries,
-            //         style: { gridColumn: '1 / -1', marginTop: '40px' }
-            //     }));
-            // }
+            const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
+            if (listeningEntries.length > 0) {
+                fragment.appendChild(this.createSection({
+                    title: '听力',
+                    icon: '🎧',
+                    entries: listeningEntries,
+                    style: { gridColumn: '1 / -1', marginTop: '40px' },
+                    rightButtons: [this.createSuiteModeButton('listening')]
+                }));
+            }
 
             // [DISABLED] 听力练习 - 频率分类入口已禁用
             // const specialListeningEntries = (stats?.specialListening || []).filter((entry) => entry.total > 0);
@@ -248,12 +248,13 @@
             return span;
         }
 
-        createSuiteModeButton() {
+        createSuiteModeButton(type = 'reading') {
             return this.dom.create('button', {
                 className: 'shui-glass-btn',
                 type: 'button',
                 dataset: {
                     action: 'start-suite-mode',
+                    examType: type,
                     overviewAction: 'suite'
                 },
                 style: {

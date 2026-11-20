@@ -4537,6 +4537,479 @@
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/runtime/listeningSuiteController.js ===== */
+(function (global) {
+    'use strict';
+
+    const controlSelector = 'input:not([type="button"]):not([type="submit"]):not([type="file"]), textarea, select';
+    const slotSelector = '.match-slot, .flow-slot, .map-slot, .drop-zone, .dropzone';
+    const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+
+    function capturePage(frame) {
+        const doc = frame.contentDocument;
+        return {
+            controls: Array.from(doc.querySelectorAll(controlSelector), (el) => ({
+                id: el.id, name: el.name || '', value: el.value, checked: el.checked === true
+            })),
+            slots: Array.from(doc.querySelectorAll(slotSelector), (el) => ({
+                tags: Array.from(el.querySelectorAll('.tag, .token'), (tag) => ({
+                    text: tag.textContent, className: tag.classList.contains('tag') ? 'tag' : 'token',
+                    data: { ...tag.dataset }
+                }))
+            })),
+            audio: Array.from(doc.querySelectorAll('audio, video'), (el) => ({
+                time: Number(el.currentTime) || 0, rate: Number(el.playbackRate) || 1
+            })),
+            scroll: Array.from(doc.querySelectorAll('.shell, .main-content, .questions-container'), (el) => el.scrollTop)
+        };
+    }
+
+    function restorePage(frame, saved) {
+        if (!saved) return;
+        const doc = frame.contentDocument;
+        const win = frame.contentWindow;
+        const controls = Array.from(doc.querySelectorAll(controlSelector));
+        (saved.controls || []).forEach((value, index) => {
+            const el = controls[index];
+            if (!el || el.id !== value.id || (el.name || '') !== value.name) return;
+            if (el.type === 'checkbox' || el.type === 'radio') el.checked = value.checked === true;
+            else el.value = String(value.value == null ? '' : value.value);
+            el.dispatchEvent(new win.Event('input', { bubbles: true }));
+            el.dispatchEvent(new win.Event('change', { bubbles: true }));
+        });
+        const slots = Array.from(doc.querySelectorAll(slotSelector));
+        (saved.slots || []).forEach((value, index) => {
+            const el = slots[index];
+            if (!el) return;
+            el.querySelectorAll('.tag, .token').forEach((tag) => tag.remove());
+            (value.tags || []).forEach((savedTag) => {
+                const tag = doc.createElement('span');
+                tag.className = savedTag.className === 'token' ? 'token' : 'tag';
+                tag.textContent = String(savedTag.text || '');
+                Object.entries(savedTag.data || {}).forEach(([key, val]) => {
+                    if (/^[a-zA-Z][a-zA-Z0-9]*$/.test(key)) tag.dataset[key] = String(val);
+                });
+                el.appendChild(tag);
+            });
+        });
+        Array.from(doc.querySelectorAll('audio, video')).forEach((el, index) => {
+            const value = (saved.audio || [])[index];
+            if (!value) return;
+            const restoreAudio = () => {
+                if (Number.isFinite(value.time) && value.time >= 0) el.currentTime = value.time;
+                if (Number.isFinite(value.rate) && value.rate >= .25 && value.rate <= 4) el.playbackRate = value.rate;
+            };
+            if (el.readyState > 0) restoreAudio();
+            else el.addEventListener('loadedmetadata', restoreAudio, { once: true });
+        });
+        Array.from(doc.querySelectorAll('.shell, .main-content, .questions-container')).forEach((el, index) => {
+            el.scrollTop = Number((saved.scroll || [])[index]) || 0;
+        });
+    }
+
+    function create(api) {
+        const state = api.state;
+        const slots = new Map();
+        let initPayload = null;
+        let sequence = [];
+        let mode = '';
+        let toolbar = null;
+        let notice = '';
+        let reviewContext = null;
+        let pendingReplay = null;
+        let expiredLock = false;
+        let pendingSubmission = null;
+        let finished = false;
+        let draftInterval = null;
+        let draftTimestamp = 0;
+        const completionPayloads = new Map();
+        const retries = [];
+        const activeSlot = () => slots.get(state.examId);
+        const simulation = () => mode === 'simulation';
+
+        function post(type, data) {
+            api.forwardToParent({ type, source: 'listening_record_bridge', data: {
+                ...data, examId: data.examId || state.examId, sessionId: state.sessionId,
+                suiteSessionId: state.suiteSessionId, windowSessionToken: state.windowSessionToken
+            } });
+        }
+
+        function timerPayload() {
+            return {
+                globalTimerAnchorMs: state.startTime, suiteTimerAnchorMs: state.startTime,
+                suiteTimerMode: state.suiteTimerPreferences.mode,
+                suiteTimerLimitSeconds: initPayload.suiteTimerLimitSeconds,
+                suiteTimerPausedOffsetMs: state.pausedOffsetMs, suiteTimerPausedAtMs: state.pausedAtMs,
+                suiteTimerRunning: state.running,
+                timerSnapshot: { anchorMs: state.startTime, pausedOffsetMs: state.pausedOffsetMs,
+                    pausedAtMs: state.pausedAtMs, running: state.running }
+            };
+        }
+
+        function pauseMedia(slot) {
+            slot?.frame.contentDocument?.querySelectorAll('audio, video').forEach((el) => el.pause());
+        }
+
+        function draftFor(slot) {
+            const snapshot = slot.frame.contentWindow.__listeningBridgeSnapshot?.();
+            draftTimestamp = Math.max(Date.now(), draftTimestamp + 1);
+            return {
+                answers: snapshot?.answers || {}, listeningState: capturePage(slot.frame),
+                updatedAt: draftTimestamp
+            };
+        }
+
+        function syncDraft() {
+            const slot = activeSlot();
+            if (!slot?.ready || finished || pendingSubmission || slot.submitted || reviewContext?.readOnly) return;
+            const draft = draftFor(slot);
+            slot.draft = draft;
+            post('SIMULATION_DRAFT_SYNC', { draft, draftUpdatedAt: draft.updatedAt,
+                elapsed: api.elapsedSeconds(), ...timerPayload() });
+        }
+
+        function sendInit(slot) {
+            slot.frame.contentWindow.postMessage({ type: 'INIT_SESSION', source: 'exam_host', data: {
+                ...initPayload, examId: slot.entry.examId, parentOrigin: global.location.origin
+            } }, global.location.origin);
+        }
+
+        function showNotice(message) {
+            notice = message;
+            renderToolbar();
+        }
+
+        function renderToolbar() {
+            if (!initPayload) return;
+            if (!toolbar) {
+                toolbar = global.document.createElement('nav');
+                toolbar.className = 'listening-suite-toolbar';
+                toolbar.setAttribute('aria-label', 'Listening suite');
+                api.getRoot().prepend(toolbar);
+            }
+            toolbar.replaceChildren();
+            sequence.forEach((entry, index) => {
+                const button = global.document.createElement('button');
+                button.type = 'button';
+                button.textContent = 'Part ' + (index + 1);
+                button.dataset.suitePart = String(index + 1);
+                button.title = entry.title || entry.examId;
+                if (entry.examId === state.examId) button.setAttribute('aria-current', 'step');
+                button.disabled = !simulation() || finished || Boolean(pendingSubmission);
+                button.addEventListener('click', () => activate(entry.examId));
+                toolbar.appendChild(button);
+            });
+            if (mode === 'stationary') {
+                ['prev', 'next'].forEach((direction) => {
+                    const button = global.document.createElement('button');
+                    button.type = 'button';
+                    button.dataset.suiteNavigate = direction;
+                    button.textContent = direction === 'prev' ? 'Previous' : (reviewContext?.finalizeOnNext ? 'Finish suite' : 'Next');
+                    button.disabled = finished || !(direction === 'prev' ? reviewContext?.canPrev : reviewContext?.canNext);
+                    button.addEventListener('click', () => {
+                        syncDraft();
+                        pauseMedia(activeSlot());
+                        post('REVIEW_NAVIGATE', { direction, ...timerPayload() });
+                    });
+                    toolbar.appendChild(button);
+                });
+            }
+            if (simulation()) {
+                const submit = global.document.createElement('button');
+                submit.type = 'button';
+                submit.dataset.suiteSubmit = 'true';
+                submit.textContent = pendingSubmission ? 'Retry submit' : 'Submit suite';
+                submit.disabled = finished;
+                submit.addEventListener('click', () => submitSuite());
+                toolbar.appendChild(submit);
+            }
+            const label = global.document.createElement('span');
+            label.className = 'listening-suite-message';
+            label.setAttribute('role', 'status');
+            label.textContent = notice || ({ simulation: '模拟模式 · 四个 Part 统一提交', classic: '经典模式 · 提交后自动进入下一 Part', stationary: '驻足模式 · 提交后回看，再进入下一 Part' })[mode];
+            toolbar.appendChild(label);
+        }
+
+        function activate(examId) {
+            const next = slots.get(examId);
+            if (!next || pendingSubmission || finished || !simulation()) return;
+            const current = activeSlot();
+            if (current === next) return;
+            if (current && current !== next) {
+                syncDraft();
+                current.elapsed += Math.max(0, api.elapsedSeconds() - current.activatedAt);
+                pauseMedia(current);
+                current.frame.hidden = true;
+            }
+            state.examId = examId;
+            state.activeFrame = next.frame;
+            next.activatedAt = api.elapsedSeconds();
+            next.frame.hidden = false;
+            if (next.ready) api.adaptFrameUi();
+            api.setStatus(next.ready ? '' : 'Loading listening part...', next.ready);
+            post('SIMULATION_ACTIVE_EXAM_CHANGE', { examId, elapsed: api.elapsedSeconds() });
+            renderToolbar();
+        }
+
+        function bindFrame(slot) {
+            if (slot.bound || !slot.ready) return;
+            slot.bound = true;
+            const doc = slot.frame.contentDocument;
+            doc.body.classList.add('listening-suite-ui');
+            if (slot.draft?.listeningState) restorePage(slot.frame, slot.draft.listeningState);
+            else {
+                // A new suite must not inherit the native page's saved single-attempt answers.
+                doc.querySelectorAll(controlSelector).forEach((el) => {
+                    if (/^q\d|answer|question/i.test(el.name || el.id || '')) {
+                        if (el.type === 'radio' || el.type === 'checkbox') el.checked = false;
+                        else el.value = '';
+                        el.dispatchEvent(new slot.frame.contentWindow.Event('input', { bubbles: true }));
+                        el.dispatchEvent(new slot.frame.contentWindow.Event('change', { bubbles: true }));
+                    }
+                });
+                doc.querySelectorAll(slotSelector).forEach((el) => el.querySelectorAll('.tag, .token').forEach((tag) => tag.remove()));
+            }
+            if (expiredLock) api.setLocked(doc, true);
+            doc.addEventListener('click', (event) => {
+                const finish = event.target.closest?.('#finish-btn, [data-action="finish"], [data-action="submit"], .finish-btn, .submit-btn');
+                if (finish && simulation()) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    submitSuite();
+                }
+            }, true);
+            doc.addEventListener('submit', (event) => {
+                if (!simulation()) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                submitSuite();
+            }, true);
+            doc.addEventListener('play', (event) => {
+                if (slot !== activeSlot() || finished || pendingSubmission) event.target.pause?.();
+            }, true);
+            if (slot !== activeSlot()) pauseMedia(slot);
+            if (slot === activeSlot() && pendingReplay) showReplay(pendingReplay);
+        }
+
+        function initialize(payload) {
+            if (!payload.suiteSessionId || !Array.isArray(payload.suiteSequence) || !payload.suiteSequence.length) return false;
+            if (initPayload) {
+                // Repeated INIT is a handshake retry, never a draft rollback.
+                initPayload = { ...initPayload, windowSessionToken: payload.windowSessionToken, sessionId: payload.sessionId };
+                slots.forEach(sendInit);
+                return true;
+            }
+            initPayload = clone(payload);
+            mode = payload.suiteFlowMode || 'classic';
+            sequence = payload.suiteSequence;
+            state.suiteTimerPreferences = payload.suiteTimerPreferences || api.readTimerPreferences();
+            state.startTime = Number(payload.suiteTimerAnchorMs || payload.globalTimerAnchorMs) || state.startTime;
+            state.pausedOffsetMs = Math.max(0, Number(payload.suiteTimerPausedOffsetMs) || 0);
+            state.pausedAtMs = payload.suiteTimerPausedAtMs == null ? null : Number(payload.suiteTimerPausedAtMs);
+            state.running = payload.suiteTimerRunning !== false;
+            const initialFrame = api.getFrame();
+            for (const entry of sequence) {
+                const isCurrent = entry.examId === state.examId;
+                if (!simulation() && !isCurrent) continue;
+                let source;
+                try { source = new URL(entry.sourceUrl, global.location.href); } catch (_) { continue; }
+                if (source.origin !== global.location.origin || !/^https?:$/.test(source.protocol)) continue;
+                const frame = isCurrent ? initialFrame : global.document.createElement('iframe');
+                frame.classList.add('listening-suite-frame');
+                const slot = { entry, frame, ready: false, bound: false, draft: payload.suiteDraftsByExam?.[entry.examId] || null,
+                    elapsed: Number(payload.suiteElapsedByExam?.[entry.examId]) || 0, activatedAt: api.elapsedSeconds() };
+                slots.set(entry.examId, slot);
+                if (!isCurrent) {
+                    frame.hidden = true;
+                    frame.title = entry.title || entry.category || 'Listening part';
+                    frame.addEventListener('load', () => api.injectBridge(undefined, frame));
+                    source.searchParams.set('examId', entry.examId);
+                    frame.src = source.href;
+                    api.getRoot().appendChild(frame);
+                } else {
+                    state.activeFrame = frame;
+                    sendInit(slot);
+                }
+            }
+            renderToolbar();
+            if (simulation() && payload.suiteActiveExamId && slots.has(payload.suiteActiveExamId)) activate(payload.suiteActiveExamId);
+            draftInterval = global.setInterval(syncDraft, 1200);
+            global.addEventListener('pagehide', () => {
+                if (!activeSlot()?.submitted && !pendingSubmission && !finished) {
+                    api.updateClockPause(false);
+                    syncDraft();
+                }
+                slots.forEach(pauseMedia);
+                global.clearInterval(draftInterval);
+                retries.forEach(global.clearTimeout);
+            });
+            return true;
+        }
+
+        function submitSuite() {
+            if (finished) return;
+            if (pendingSubmission) {
+                post('SIMULATION_SUBMIT', pendingSubmission);
+                showNotice('正在保存整套听力结果…');
+                return;
+            }
+            const entries = [];
+            for (const entry of sequence) {
+                const slot = slots.get(entry.examId);
+                const snapshot = slot?.ready && slot.frame.contentWindow.__listeningBridgeSnapshot?.();
+                if (!snapshot?.scoreInfo?.total) {
+                    showNotice('Part 尚未加载完成或答案不可用，请等待后重试。');
+                    return;
+                }
+                const draft = draftFor(slot);
+                const duration = slot.elapsed + (slot === activeSlot() ? Math.max(0, api.elapsedSeconds() - slot.activatedAt) : 0);
+                entries.push({ ...snapshot, examId: entry.examId, duration, draft, ...draft });
+            }
+            syncDraft();
+            api.updateClockPause(false);
+            slots.forEach((slot) => { pauseMedia(slot); api.setLocked(slot.frame.contentDocument, true); });
+            const submissionKey = global.crypto?.randomUUID?.()
+                || Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+            pendingSubmission = clone({
+                suiteSubmission: true, submissionId: 'listening-suite-' + submissionKey,
+                suiteEntries: entries, duration: api.elapsedSeconds(), type: 'listening', practiceType: 'listening',
+                ...timerPayload()
+            });
+            post('SIMULATION_SUBMIT', pendingSubmission);
+            showNotice('正在保存整套听力结果…');
+            [1200, 3000, 6000].forEach((delay) => retries.push(global.setTimeout(() => {
+                if (pendingSubmission && !finished) post('SIMULATION_SUBMIT', pendingSubmission);
+            }, delay)));
+        }
+
+        function showReplay(payload) {
+            // INIT restores an unfinished attempt once. Later host handshakes must
+            // not overwrite answers entered since the frame became interactive.
+            if (payload.readOnly === false) return;
+            const slot = activeSlot();
+            if (!slot?.ready) { pendingReplay = payload; return; }
+            if (!payload.entry) return;
+            pendingReplay = null;
+            const entry = payload.entry;
+            restorePage(slot.frame, slot.draft?.listeningState || entry.listeningState || entry.rawData?.draft?.listeningState);
+            const doc = slot.frame.contentDocument;
+            if (payload.readOnly !== false) {
+                api.setLocked(doc, true);
+                let report = doc.getElementById('listening-suite-review');
+                if (report) report.remove();
+                report = doc.createElement('section');
+                report.id = 'listening-suite-review';
+                report.style.cssText = 'padding:16px;overflow:auto;max-height:35vh;background:#fff;color:#0f172a;';
+                const heading = doc.createElement('h3');
+                heading.textContent = 'Part result';
+                report.appendChild(heading);
+                const table = doc.createElement('table');
+                Object.entries(entry.answerComparison || {}).forEach(([questionId, result]) => {
+                    const row = table.insertRow();
+                    [questionId, result.userAnswer || '—', result.correctAnswer || '—', result.isCorrect ? '✓' : '✗'].forEach((value) => {
+                        const cell = row.insertCell();
+                        cell.textContent = String(value);
+                        cell.style.padding = '4px 12px';
+                    });
+                });
+                report.appendChild(table);
+                (doc.querySelector('.shell') || doc.body).prepend(report);
+            }
+        }
+
+        return {
+            handleHostMessage(message) {
+                const payload = message.data || message;
+                if (message.type === 'INIT_SESSION' || message.type === 'init_exam_session') return initialize(payload);
+                if (!initPayload) return false;
+                if (message.type === 'SIMULATION_CONTEXT') return true; // INIT owns all four frames and their drafts.
+                if (message.type === 'REPLAY_PRACTICE_RECORD') { showReplay(payload); return true; }
+                if (message.type === 'REVIEW_CONTEXT') {
+                    reviewContext = payload;
+                    if (payload.readOnly && activeSlot()) {
+                        activeSlot().submitted = true;
+                        api.setLocked(activeSlot().frame.contentDocument, true);
+                        activeSlot().frame.contentDocument.querySelectorAll('#clear-btn, #finish-btn').forEach((button) => { button.disabled = true; });
+                    }
+                    renderToolbar();
+                    return true;
+                }
+                if (message.type === 'PRACTICE_SUBMIT_ACK' || message.type === 'PRACTICE_SUBMIT_FAILED') {
+                    if (pendingSubmission && payload.submissionId === pendingSubmission.submissionId) {
+                        if (message.type === 'PRACTICE_SUBMIT_ACK') {
+                            finished = true;
+                            retries.forEach(global.clearTimeout);
+                            showNotice('整套听力已保存。');
+                            global.close();
+                        } else showNotice('保存失败，进度已保留。请点击 Retry submit 重试。');
+                        return true;
+                    }
+                    if (message.type === 'PRACTICE_SUBMIT_ACK' && mode === 'classic'
+                        && state.examId === sequence[sequence.length - 1].examId) global.close();
+                }
+                if (message.type === 'SUITE_FORCE_CLOSE') { finished = true; global.close(); return true; }
+                return false;
+            },
+            handleFrameMessage(event) {
+                if (!initPayload) return false;
+                const slot = Array.from(slots.values()).find((item) => item.frame.contentWindow === event.source);
+                if (!slot) return false;
+                if (event.origin !== global.location.origin) return true;
+                const message = event.data;
+                const payload = message.data || {};
+                if (message.type === 'REQUEST_INIT' || (message.type === 'SESSION_READY' && payload.initialized !== true)) {
+                    sendInit(slot);
+                    return true;
+                }
+                if (payload.windowSessionToken !== state.windowSessionToken || payload.examId !== slot.entry.examId) return true;
+                if (message.type === 'SESSION_READY') {
+                    slot.ready = true;
+                    bindFrame(slot);
+                    if (slot === activeSlot()) {
+                        api.adaptFrameUi();
+                        api.setStatus('', true);
+                        api.forwardToParent(message);
+                    }
+                    return true;
+                }
+                if (message.type === 'PRACTICE_COMPLETE') {
+                    if (simulation() || reviewContext?.readOnly) return true;
+                    let completion = completionPayloads.get(payload.submissionId);
+                    if (!completion) {
+                        const draft = draftFor(slot);
+                        completion = clone({ ...payload, draft, duration: api.elapsedSeconds(), ...timerPayload() });
+                        delete completion.suiteId; // Sequential suite identity is distinct from legacy page-local suites.
+                        completionPayloads.set(payload.submissionId, completion);
+                        slot.submitted = true;
+                        slot.draft = draft;
+                    }
+                    post(message.type, completion);
+                    return true;
+                }
+                if (slot !== activeSlot()) return true;
+                return false;
+            },
+            syncDraft,
+            submitSuite,
+            handleExpiry(preferences) {
+                if (!initPayload) return false;
+                if (preferences.expiryAction === 'lock') {
+                    expiredLock = true;
+                    slots.forEach((slot) => { if (slot.ready) { api.setLocked(slot.frame.contentDocument, true); pauseMedia(slot); } });
+                    return true;
+                }
+                if (simulation() && preferences.expiryAction === 'auto-submit') { submitSuite(); return true; }
+                return false;
+            },
+            isSimulation: simulation,
+            hasSuite: () => Boolean(initPayload)
+        };
+    }
+
+    global.ListeningSuiteController = { create, capturePage, restorePage };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+
 /* ===== js/listeningUnifiedWrapper.js ===== */
 (function initListeningUnifiedWrapper(global) {
     'use strict';
@@ -4565,11 +5038,14 @@
     var TIMER_INTERVAL_MS = 1000;
     var CANDIDATE_CODE_PATTERN = /^\d{6}$/;
     var candidateCodeCache = { mode: 'auto', customCode: '' };
+    var suiteController = null;
     var state = {
         examId: '',
         sourceUrl: '',
         sessionId: '',
         suiteSessionId: '',
+        suiteTimerPreferences: null,
+        activeFrame: null,
         startTime: Date.now(),
         pausedAtMs: null,
         pausedOffsetMs: 0,
@@ -4612,7 +5088,7 @@
     }
 
     function getFrame() {
-        return global.document.getElementById('listening-practice-frame');
+        return state.activeFrame || global.document.getElementById('listening-practice-frame');
     }
 
     function getFrameWindow() {
@@ -4713,7 +5189,7 @@
         if (preferences.mode === 'custom' && preferences.customCode) {
             return preferences.customCode;
         }
-        return hashCandidateCode([
+        return hashCandidateCode(state.suiteSessionId || [
             state.sessionId,
             state.suiteSessionId,
             state.examId,
@@ -4770,6 +5246,7 @@
     }
 
     function readTimerPreferences() {
+        if (state.suiteTimerPreferences) return state.suiteTimerPreferences;
         var manager = global.PracticeTimerPreferences;
         if (manager && typeof manager.read === 'function') {
             return manager.read('listening');
@@ -4813,6 +5290,7 @@
     }
 
     function handleExpired(doc, preferences) {
+        if (suiteController && suiteController.handleExpiry(preferences)) return;
         if (state.expiryHandled) return;
         state.expiryHandled = true;
         if (preferences.expiryAction === 'auto-submit') {
@@ -5147,7 +5625,7 @@
     function buildPartNavigation(doc) {
         var nav = doc.getElementById('q-nav-container');
         if (!nav) return;
-        nav.classList.add('listening-part-nav');
+        nav.classList.add('q-nav-container', 'listening-part-nav');
         removePlaceholderQuestions(nav);
 
         for (var part = 1; part <= 4; part += 1) {
@@ -5359,7 +5837,9 @@
             '@media (max-width: 1200px) { body.listening-unified-ui .bottom-bar.listening-practice-nav, body.listening-unified-ui .practice-nav.listening-practice-nav { --listening-nav-divider-gap: 10px; gap: 10px; padding-inline: 14px; } body.listening-unified-ui .listening-part-nav-section { gap: 6px; } body.listening-unified-ui .part-nav-info { min-width: 46px; } }',
             '@media (max-width: 980px) { body.listening-unified-ui .bottom-bar.listening-practice-nav, body.listening-unified-ui .practice-nav.listening-practice-nav { flex: 0 0 auto; flex-wrap: wrap; height: auto; max-height: none; overflow: visible; } body.listening-unified-ui .q-nav-container.listening-part-nav { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; order: 1; } body.listening-unified-ui .listening-part-nav-section { border-right: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; } body.listening-unified-ui .nav-controls-right.listening-nav-actions { order: 2; width: 100%; justify-content: flex-end; } }',
             '@media (max-width: 768px) { body.listening-unified-ui .header { padding-inline: 12px !important; } body.listening-unified-ui .candidate-details { gap: 8px !important; padding-left: 10px !important; } body.listening-unified-ui .candidate-id { max-width: 30vw !important; font-size: 13.12px !important; } body.listening-unified-ui #timer { min-width: 104px !important; font-size: 11.84px !important; } body.listening-unified-ui .sub-header-bar { padding-inline: 12px !important; } }',
-            '@media (max-width: 680px) { body.listening-unified-ui .header-right, body.listening-unified-ui .header-controls { gap: 8px; } body.listening-unified-ui .q-nav-container.listening-part-nav { grid-template-columns: minmax(0,1fr); } body.listening-unified-ui .nav-controls-right.listening-nav-actions { justify-content: stretch; } body.listening-unified-ui .nav-controls-right.listening-nav-actions button { flex: 1 1 0; min-width: 0; } }'
+            '@media (max-width: 680px) { body.listening-unified-ui .header-right, body.listening-unified-ui .header-controls { gap: 8px; } body.listening-unified-ui .q-nav-container.listening-part-nav { grid-template-columns: minmax(0,1fr); } body.listening-unified-ui .nav-controls-right.listening-nav-actions { justify-content: stretch; } body.listening-unified-ui .nav-controls-right.listening-nav-actions button { flex: 1 1 0; min-width: 0; } }',
+            'body.listening-suite-ui .bottom-bar.listening-practice-nav { box-sizing: border-box; }',
+            '@media (max-width: 980px) { body.listening-suite-ui .bottom-bar.listening-practice-nav { flex: 0 0 auto !important; flex-wrap: wrap !important; height: auto !important; max-height: none !important; overflow: visible !important; } }'
         ].join('\n');
         (doc.head || doc.documentElement).appendChild(style);
     }
@@ -5377,6 +5857,7 @@
             timer.addEventListener('click', function toggleTimer() {
                 updateClockPause(!state.running);
                 updateTimerDisplay();
+                if (suiteController) suiteController.syncDraft();
             });
         }
         updateTimerDisplay();
@@ -5410,23 +5891,27 @@
         pending.forEach(forwardToIframe);
     }
 
-    function injectBridge(scriptUrl) {
-        var doc = getFrameDocument();
-        if (!doc || (!doc.head && !doc.body) || state.bridgeInjected || iframeBridgeReady()) {
+    function injectBridge(scriptUrl, targetFrame) {
+        var frame = targetFrame || getFrame();
+        var doc = frame && frame.contentDocument;
+        if (!doc || (!doc.head && !doc.body) || frame.dataset.bridgeInjected === 'true'
+            || frame.contentWindow.__listeningBridgeGetState) {
             return;
         }
-        state.bridgeInjected = true;
+        frame.dataset.bridgeInjected = 'true';
         var script = doc.createElement('script');
         script.defer = true;
         script.dataset.listeningRecordBridge = 'true';
         script.src = scriptUrl || BRIDGE_SCRIPT_URL;
         script.onload = function onBridgeLoad() {
-            state.bridgeReady = true;
-            flushPendingMessages();
-            adaptFrameUi();
+            if (frame === getFrame()) {
+                state.bridgeReady = true;
+                flushPendingMessages();
+                adaptFrameUi();
+            }
         };
         script.onerror = function onBridgeError() {
-            state.bridgeInjected = false;
+            delete frame.dataset.bridgeInjected;
             setStatus('Listening bridge failed to load.', false);
         };
         (doc.head || doc.body).appendChild(script);
@@ -5466,7 +5951,9 @@
                 state.parentOriginIsOpaque = true;
             }
             state.windowSessionToken = incomingToken;
-            state.examId = normalizeSafeId(payload.examId, state.examId || 'listening-unknown');
+            if (!suiteController || !suiteController.hasSuite()) {
+                state.examId = normalizeSafeId(payload.examId, state.examId || 'listening-unknown');
+            }
             state.sessionId = normalizeSafeId(payload.sessionId, state.sessionId || (state.examId + '_' + Date.now()));
             state.suiteSessionId = normalizeSafeId(payload.suiteSessionId, state.suiteSessionId || '');
             state.startTime = Number.isFinite(Number(payload.startTime)) ? Number(payload.startTime) : state.startTime;
@@ -5480,6 +5967,7 @@
             if (!state.parentWindow || source !== state.parentWindow || message.source !== 'exam_host'
                 || !originMatches || !state.windowSessionToken || messageToken !== state.windowSessionToken) return;
         }
+        if (suiteController && suiteController.handleHostMessage(message)) return;
         forwardToIframe(message);
     }
 
@@ -5487,6 +5975,7 @@
         if (!event || !event.data) {
             return;
         }
+        if (suiteController && suiteController.handleFrameMessage(event)) return;
         var frameWindow = getFrameWindow();
         if (event.source && frameWindow && event.source === frameWindow) {
             var frameOrigin = sameOrigin();
@@ -5556,6 +6045,14 @@
         var launchConfig = readLaunchConfig();
         state.examId = normalizeSafeId(root.dataset.examId || launchConfig.examId, 'listening-unknown');
         state.sourceUrl = resolveSourceUrl(root.dataset.sourceUrl || launchConfig.sourceUrl);
+        if (global.ListeningSuiteController) {
+            suiteController = global.ListeningSuiteController.create({
+                state: state, getRoot: getRoot, getFrame: getFrame, injectBridge: injectBridge,
+                adaptFrameUi: adaptFrameUi, setStatus: setStatus, setLocked: setLocked,
+                readTimerPreferences: readTimerPreferences, elapsedSeconds: elapsedSeconds,
+                updateClockPause: updateClockPause, forwardToParent: forwardToParent
+            });
+        }
         exposeCompatibilityApi();
         global.addEventListener('message', handleMessage);
         if (!state.sourceUrl) {
@@ -5563,10 +6060,13 @@
             return;
         }
         frame.addEventListener('load', function onFrameLoad() {
-            setStatus('', true);
             state.bridgeInjected = false;
-            injectBridge(BRIDGE_SCRIPT_URL);
-            adaptFrameUi();
+            delete frame.dataset.bridgeInjected;
+            injectBridge(BRIDGE_SCRIPT_URL, frame);
+            if (frame === getFrame()) {
+                setStatus('', true);
+                adaptFrameUi();
+            }
         });
         frame.src = state.sourceUrl;
     }
@@ -5588,6 +6088,7 @@
     "js/data/v2/dataKernel.js",
     "js/data/v2/appData.js",
     "js/utils/practiceTimerPreferences.js",
+    "js/runtime/listeningSuiteController.js",
     "js/listeningUnifiedWrapper.js"
 ]);
     }

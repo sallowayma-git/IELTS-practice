@@ -4555,6 +4555,15 @@
                 suiteSessionId: suiteSessionId || null,
                 suiteFlowMode: info.suiteFlowMode || null,
                 autoAdvanceAfterSubmit,
+                ...(activeSuite && activeSuite.type === 'listening' ? {
+                    suiteTimerPreferences: activeSuite.suiteTimerPreferences,
+                    suiteTimerPausedOffsetMs: activeSuite.suiteTimerPausedOffsetMs,
+                    suiteTimerPausedAtMs: activeSuite.suiteTimerPausedAtMs,
+                    suiteTimerRunning: activeSuite.suiteTimerRunning,
+                    suiteDraftsByExam: activeSuite.draftsByExam || {},
+                    suiteActiveExamId: activeSuite.activeExamId,
+                    suiteElapsedByExam: activeSuite.elapsedByExam || {}
+                } : {}),
                 suiteTimerAnchorMs: timerContext.suiteTimerAnchorMs || null,
                 globalTimerAnchorMs: timerContext.globalTimerAnchorMs || null,
                 suiteTimerMode: timerContext.suiteTimerMode || null,

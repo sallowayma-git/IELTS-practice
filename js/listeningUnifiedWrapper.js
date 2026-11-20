@@ -25,11 +25,14 @@
     var TIMER_INTERVAL_MS = 1000;
     var CANDIDATE_CODE_PATTERN = /^\d{6}$/;
     var candidateCodeCache = { mode: 'auto', customCode: '' };
+    var suiteController = null;
     var state = {
         examId: '',
         sourceUrl: '',
         sessionId: '',
         suiteSessionId: '',
+        suiteTimerPreferences: null,
+        activeFrame: null,
         startTime: Date.now(),
         pausedAtMs: null,
         pausedOffsetMs: 0,
@@ -72,7 +75,7 @@
     }
 
     function getFrame() {
-        return global.document.getElementById('listening-practice-frame');
+        return state.activeFrame || global.document.getElementById('listening-practice-frame');
     }
 
     function getFrameWindow() {
@@ -173,7 +176,7 @@
         if (preferences.mode === 'custom' && preferences.customCode) {
             return preferences.customCode;
         }
-        return hashCandidateCode([
+        return hashCandidateCode(state.suiteSessionId || [
             state.sessionId,
             state.suiteSessionId,
             state.examId,
@@ -230,6 +233,7 @@
     }
 
     function readTimerPreferences() {
+        if (state.suiteTimerPreferences) return state.suiteTimerPreferences;
         var manager = global.PracticeTimerPreferences;
         if (manager && typeof manager.read === 'function') {
             return manager.read('listening');
@@ -273,6 +277,7 @@
     }
 
     function handleExpired(doc, preferences) {
+        if (suiteController && suiteController.handleExpiry(preferences)) return;
         if (state.expiryHandled) return;
         state.expiryHandled = true;
         if (preferences.expiryAction === 'auto-submit') {
@@ -607,7 +612,7 @@
     function buildPartNavigation(doc) {
         var nav = doc.getElementById('q-nav-container');
         if (!nav) return;
-        nav.classList.add('listening-part-nav');
+        nav.classList.add('q-nav-container', 'listening-part-nav');
         removePlaceholderQuestions(nav);
 
         for (var part = 1; part <= 4; part += 1) {
@@ -819,7 +824,9 @@
             '@media (max-width: 1200px) { body.listening-unified-ui .bottom-bar.listening-practice-nav, body.listening-unified-ui .practice-nav.listening-practice-nav { --listening-nav-divider-gap: 10px; gap: 10px; padding-inline: 14px; } body.listening-unified-ui .listening-part-nav-section { gap: 6px; } body.listening-unified-ui .part-nav-info { min-width: 46px; } }',
             '@media (max-width: 980px) { body.listening-unified-ui .bottom-bar.listening-practice-nav, body.listening-unified-ui .practice-nav.listening-practice-nav { flex: 0 0 auto; flex-wrap: wrap; height: auto; max-height: none; overflow: visible; } body.listening-unified-ui .q-nav-container.listening-part-nav { flex: 1 1 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; order: 1; } body.listening-unified-ui .listening-part-nav-section { border-right: 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; } body.listening-unified-ui .nav-controls-right.listening-nav-actions { order: 2; width: 100%; justify-content: flex-end; } }',
             '@media (max-width: 768px) { body.listening-unified-ui .header { padding-inline: 12px !important; } body.listening-unified-ui .candidate-details { gap: 8px !important; padding-left: 10px !important; } body.listening-unified-ui .candidate-id { max-width: 30vw !important; font-size: 13.12px !important; } body.listening-unified-ui #timer { min-width: 104px !important; font-size: 11.84px !important; } body.listening-unified-ui .sub-header-bar { padding-inline: 12px !important; } }',
-            '@media (max-width: 680px) { body.listening-unified-ui .header-right, body.listening-unified-ui .header-controls { gap: 8px; } body.listening-unified-ui .q-nav-container.listening-part-nav { grid-template-columns: minmax(0,1fr); } body.listening-unified-ui .nav-controls-right.listening-nav-actions { justify-content: stretch; } body.listening-unified-ui .nav-controls-right.listening-nav-actions button { flex: 1 1 0; min-width: 0; } }'
+            '@media (max-width: 680px) { body.listening-unified-ui .header-right, body.listening-unified-ui .header-controls { gap: 8px; } body.listening-unified-ui .q-nav-container.listening-part-nav { grid-template-columns: minmax(0,1fr); } body.listening-unified-ui .nav-controls-right.listening-nav-actions { justify-content: stretch; } body.listening-unified-ui .nav-controls-right.listening-nav-actions button { flex: 1 1 0; min-width: 0; } }',
+            'body.listening-suite-ui .bottom-bar.listening-practice-nav { box-sizing: border-box; }',
+            '@media (max-width: 980px) { body.listening-suite-ui .bottom-bar.listening-practice-nav { flex: 0 0 auto !important; flex-wrap: wrap !important; height: auto !important; max-height: none !important; overflow: visible !important; } }'
         ].join('\n');
         (doc.head || doc.documentElement).appendChild(style);
     }
@@ -837,6 +844,7 @@
             timer.addEventListener('click', function toggleTimer() {
                 updateClockPause(!state.running);
                 updateTimerDisplay();
+                if (suiteController) suiteController.syncDraft();
             });
         }
         updateTimerDisplay();
@@ -870,23 +878,27 @@
         pending.forEach(forwardToIframe);
     }
 
-    function injectBridge(scriptUrl) {
-        var doc = getFrameDocument();
-        if (!doc || (!doc.head && !doc.body) || state.bridgeInjected || iframeBridgeReady()) {
+    function injectBridge(scriptUrl, targetFrame) {
+        var frame = targetFrame || getFrame();
+        var doc = frame && frame.contentDocument;
+        if (!doc || (!doc.head && !doc.body) || frame.dataset.bridgeInjected === 'true'
+            || frame.contentWindow.__listeningBridgeGetState) {
             return;
         }
-        state.bridgeInjected = true;
+        frame.dataset.bridgeInjected = 'true';
         var script = doc.createElement('script');
         script.defer = true;
         script.dataset.listeningRecordBridge = 'true';
         script.src = scriptUrl || BRIDGE_SCRIPT_URL;
         script.onload = function onBridgeLoad() {
-            state.bridgeReady = true;
-            flushPendingMessages();
-            adaptFrameUi();
+            if (frame === getFrame()) {
+                state.bridgeReady = true;
+                flushPendingMessages();
+                adaptFrameUi();
+            }
         };
         script.onerror = function onBridgeError() {
-            state.bridgeInjected = false;
+            delete frame.dataset.bridgeInjected;
             setStatus('Listening bridge failed to load.', false);
         };
         (doc.head || doc.body).appendChild(script);
@@ -926,7 +938,9 @@
                 state.parentOriginIsOpaque = true;
             }
             state.windowSessionToken = incomingToken;
-            state.examId = normalizeSafeId(payload.examId, state.examId || 'listening-unknown');
+            if (!suiteController || !suiteController.hasSuite()) {
+                state.examId = normalizeSafeId(payload.examId, state.examId || 'listening-unknown');
+            }
             state.sessionId = normalizeSafeId(payload.sessionId, state.sessionId || (state.examId + '_' + Date.now()));
             state.suiteSessionId = normalizeSafeId(payload.suiteSessionId, state.suiteSessionId || '');
             state.startTime = Number.isFinite(Number(payload.startTime)) ? Number(payload.startTime) : state.startTime;
@@ -940,6 +954,7 @@
             if (!state.parentWindow || source !== state.parentWindow || message.source !== 'exam_host'
                 || !originMatches || !state.windowSessionToken || messageToken !== state.windowSessionToken) return;
         }
+        if (suiteController && suiteController.handleHostMessage(message)) return;
         forwardToIframe(message);
     }
 
@@ -947,6 +962,7 @@
         if (!event || !event.data) {
             return;
         }
+        if (suiteController && suiteController.handleFrameMessage(event)) return;
         var frameWindow = getFrameWindow();
         if (event.source && frameWindow && event.source === frameWindow) {
             var frameOrigin = sameOrigin();
@@ -1016,6 +1032,14 @@
         var launchConfig = readLaunchConfig();
         state.examId = normalizeSafeId(root.dataset.examId || launchConfig.examId, 'listening-unknown');
         state.sourceUrl = resolveSourceUrl(root.dataset.sourceUrl || launchConfig.sourceUrl);
+        if (global.ListeningSuiteController) {
+            suiteController = global.ListeningSuiteController.create({
+                state: state, getRoot: getRoot, getFrame: getFrame, injectBridge: injectBridge,
+                adaptFrameUi: adaptFrameUi, setStatus: setStatus, setLocked: setLocked,
+                readTimerPreferences: readTimerPreferences, elapsedSeconds: elapsedSeconds,
+                updateClockPause: updateClockPause, forwardToParent: forwardToParent
+            });
+        }
         exposeCompatibilityApi();
         global.addEventListener('message', handleMessage);
         if (!state.sourceUrl) {
@@ -1023,10 +1047,13 @@
             return;
         }
         frame.addEventListener('load', function onFrameLoad() {
-            setStatus('', true);
             state.bridgeInjected = false;
-            injectBridge(BRIDGE_SCRIPT_URL);
-            adaptFrameUi();
+            delete frame.dataset.bridgeInjected;
+            injectBridge(BRIDGE_SCRIPT_URL, frame);
+            if (frame === getFrame()) {
+                setStatus('', true);
+                adaptFrameUi();
+            }
         });
         frame.src = state.sourceUrl;
     }

@@ -11,7 +11,7 @@
     function resolveSuitePreferenceForMixin(options = {}) {
         const suitePreferenceUtils = getSuitePreferenceUtils();
         if (suitePreferenceUtils && typeof suitePreferenceUtils.resolveSuitePreference === 'function') {
-            return suitePreferenceUtils.ensurePracticeConfig().suite || {};
+            options = { ...(suitePreferenceUtils.ensurePracticeConfig().suite || {}), ...options };
         }
         let flowMode = String(options && options.flowMode || '').trim().toLowerCase();
         if (!['classic', 'simulation', 'stationary'].includes(flowMode)) {
@@ -48,6 +48,11 @@
     }
 
     const mixin = {
+        _getSuiteType(session = {}) {
+            const first = Array.isArray(session.sequence) ? session.sequence[0] : null;
+            return String(session.type || first?.exam?.type || '').toLowerCase() === 'listening' ? 'listening' : 'reading';
+        },
+
         initializeSuiteMode() {
             if (this._suiteModeReady) {
                 return;
@@ -176,6 +181,7 @@
             const entry = sequence[index] || null;
             return {
                 id: String(session.id),
+                type: this._getSuiteType(session),
                 status: session.status,
                 currentIndex: index,
                 total: sequence.length,
@@ -215,6 +221,7 @@
                 const recoveryAction = String(options.recoveryAction || '').trim().toLowerCase();
                 const recoverySessionId = String(options.recoverySessionId || '').trim();
                 const suitePreference = this._resolveSuitePreference(options);
+                const type = this._getSuiteType(options);
                 const flowMode = suitePreference.flowMode;
                 const frequencyScope = suitePreference.frequencyScope;
 
@@ -236,6 +243,7 @@
 
                 if (frequencyScope === 'custom') {
                     const enteredCustomMode = await this._startCustomSuiteSelection({
+                        type,
                         flowMode,
                         frequencyScope,
                         suiteWindowName
@@ -268,12 +276,12 @@
                         const normalizedCategory = typeof item.category === 'string'
                             ? item.category.trim().toUpperCase()
                             : '';
-                        if (normalizedType !== 'reading') {
+                        if (normalizedType !== type) {
                             return null;
                         }
                         return {
                             ...item,
-                            type: 'reading',
+                            type,
                             category: normalizedCategory
                         };
                     })
@@ -284,7 +292,7 @@
                 ));
                 const practicedExamIds = await this._collectPracticedReadingExamIds();
 
-                const categories = ['P1', 'P2', 'P3'];
+                const categories = this._getCustomSuiteCategories(type);
                 const sequence = [];
                 for (const category of categories) {
                     const pool = frequencyFilteredIndex.filter(item => item.category === category);
@@ -292,7 +300,7 @@
                         const scopeLabel = frequencyScope === 'high'
                             ? '仅高频'
                             : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
-                        window.showMessage && window.showMessage('当前抽题范围（' + scopeLabel + '）缺少 ' + category + ' 阅读题目，无法开启套题练习。', 'warning');
+                        window.showMessage && window.showMessage('当前抽题范围（' + scopeLabel + '）缺少 ' + category + (type === 'listening' ? ' 听力' : ' 阅读') + '题目，无法开启套题练习。', 'warning');
                         return;
                     }
                     const unpracticedPool = pool.filter(item => !practicedExamIds.has(String(item.id)));
@@ -311,6 +319,7 @@
                 }
 
                 const started = await this._launchSuiteSessionFromSequence(sequence, {
+                    type,
                     flowMode,
                     frequencyScope,
                     suiteWindowName,
@@ -807,6 +816,7 @@
                 this._persistSuiteDraftSnapshot(session, entryExamId, {
                     draft: {
                         answers: entryPayload.answers || {},
+                        listeningState: entryPayload.listeningState || entryPayload.draft?.listeningState || null,
                         highlights: Array.isArray(entryPayload.highlights) ? entryPayload.highlights.slice() : [],
                         noteText: typeof entryPayload.noteText === 'string' ? entryPayload.noteText : '',
                         notes: Array.isArray(entryPayload.notes) ? entryPayload.notes.slice() : [],
@@ -948,6 +958,7 @@
                 noteText: noteTextSource,
                 notes: this._cloneSuitePlainObject(notesSource),
                 noteOutlines: this._cloneSuitePlainObject(noteOutlinesSource),
+                listeningState: this._cloneSuitePlainObject(draftSource.listeningState || data.listeningState || null),
                 scrollY: scrollSource,
                 markedQuestions: markedQuestionsSource.slice(),
                 updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now()
@@ -1069,7 +1080,11 @@
                         examId: String(entry.examId),
                         dataKey: dataKey ? String(dataKey) : String(entry.examId),
                         title: entry.title || exam.title || String(entry.examId),
-                        category: entry.category || exam.category || ''
+                        category: entry.category || exam.category || '',
+                        type: exam.type || 'reading',
+                        ...(exam.type === 'listening' && typeof this._buildUnifiedListeningUrl === 'function' ? {
+                            sourceUrl: new URL(this._buildUnifiedListeningUrl(exam), global.location.href).searchParams.get('sourceUrl') || ''
+                        } : {})
                     };
                 })
                 .filter(Boolean);
@@ -1270,7 +1285,7 @@
                 const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
                     ? comparisonEntry.userAnswer
                     : answers[questionId];
-                if (!this._hasMeaningfulSuiteAnswer(userAnswer)) {
+                if (this._getSuiteType(session) !== 'listening' && !this._hasMeaningfulSuiteAnswer(userAnswer)) {
                     return;
                 }
                 filteredComparison[questionId] = comparisonEntry;
@@ -1328,6 +1343,7 @@
                 answers: filteredAnswers,
                 answerComparison: filteredComparison,
                 scoreInfo: (result && result.scoreInfo) || {},
+                listeningState: draft?.listeningState || result?.rawData?.draft?.listeningState || null,
                 markedQuestions,
                 highlights,
                 noteText,
@@ -1437,7 +1453,7 @@
                     && Number(windowInfo.lastMessageAt) >= startedAt
                     && (!windowInfo.suiteSessionId || windowInfo.suiteSessionId === session.id)
                     && (!windowInfo.windowSessionToken || !windowInfo.lastWindowSessionToken || windowInfo.windowSessionToken === windowInfo.lastWindowSessionToken)
-                    && (!windowInfo.pageType || /unified-reading|suite-placeholder|^p[1-4]$|^practice$/i.test(String(windowInfo.pageType)))
+                    && (!windowInfo.pageType || /unified-reading|listening|suite-placeholder|^p[1-4]$|^practice$/i.test(String(windowInfo.pageType)))
                 );
                 if (readyMatches) {
                     return true;
@@ -1481,7 +1497,7 @@
             const pageType = windowInfo && typeof windowInfo.pageType === 'string'
                 ? windowInfo.pageType.toLowerCase()
                 : '';
-            if (pageType && !/unified-reading|suite-placeholder|^p[1-4]$|^practice$/i.test(pageType)) {
+            if (pageType && !/unified-reading|listening|suite-placeholder|^p[1-4]$|^practice$/i.test(pageType)) {
                 return false;
             }
             return true;
@@ -1804,6 +1820,8 @@
                     schema: 'suite-session-v2',
                     version: 2,
                     id: session.id,
+                    type: this._getSuiteType(session),
+                    suiteTimerPreferences: this._cloneSuitePlainObject(session.suiteTimerPreferences || null),
                     status: session.status || 'active',
                     sequence: this._cloneSuitePlainObject(session.sequence || []),
                     suiteSequence: this._buildSuiteSequencePayload(session),
@@ -2061,6 +2079,8 @@
                 const now = Date.now();
                 return {
                     id: String(snapshot.id),
+                    type: this._getSuiteType({ type: snapshot.type, sequence }),
+                    suiteTimerPreferences: this._cloneSuitePlainObject(snapshot.suiteTimerPreferences || null),
                     status,
                     startTime: Number(snapshot.startTime) || now,
                     sequence,
@@ -2913,7 +2933,7 @@
             }
 
             suiteResults.forEach(result => {
-                const errors = result.spellingErrors || [];
+                const errors = result.spellingErrors || result.rawData?.spellingErrors || [];
 
                 errors.forEach(error => {
                     if (!error || !error.word) {
@@ -3115,7 +3135,8 @@
                     id: session.id,
                     examId: 'suite-' + session.id,
                     title: displayTitle,
-                    type: 'reading',
+                    type: this._getSuiteType(session),
+                    spellingErrors: this.aggregateSpellingErrors(session.results),
                     suiteMode: true,
                     date: endTimeIso,
                     startTime: startTimeIso,
@@ -3306,8 +3327,8 @@
             return this._setCustomSuiteDraftState(null);
         },
 
-        _getCustomSuiteCategories() {
-            return ['P1', 'P2', 'P3'];
+        _getCustomSuiteCategories(type = 'reading') {
+            return type === 'listening' ? ['P1', 'P2', 'P3', 'P4'] : ['P1', 'P2', 'P3'];
         },
 
         _buildCustomSuiteExamEntry(exam) {
@@ -3324,11 +3345,12 @@
             };
         },
 
-        _buildCustomSuiteSelectionDraft(flowMode, frequencyScope) {
-            const categories = this._getCustomSuiteCategories();
+        _buildCustomSuiteSelectionDraft(flowMode, frequencyScope, type = 'reading') {
+            const categories = this._getCustomSuiteCategories(type);
             const now = Date.now();
             return {
                 status: 'selecting',
+                type,
                 stageIndex: 0,
                 categories,
                 pickedByCategory: {},
@@ -3341,6 +3363,7 @@
         },
 
         async _startCustomSuiteSelection(options = {}) {
+            const type = this._getSuiteType(options);
             const flowMode = options.flowMode || 'classic';
             const frequencyScope = options.frequencyScope || 'custom';
             const examIndex = await this._fetchSuiteExamIndex();
@@ -3358,27 +3381,27 @@
                     const normalizedCategory = typeof item.category === 'string'
                         ? item.category.trim().toUpperCase()
                         : '';
-                    if (normalizedType !== 'reading') {
+                    if (normalizedType !== type) {
                         return null;
                     }
                     return {
                         ...item,
-                        type: 'reading',
+                        type,
                         category: normalizedCategory
                     };
                 })
                 .filter(Boolean);
 
-            const categories = this._getCustomSuiteCategories();
+            const categories = this._getCustomSuiteCategories(type);
             for (const category of categories) {
                 const pool = normalizedIndex.filter(item => item.category === category);
                 if (!pool.length) {
-                    window.showMessage && window.showMessage('当前题库缺少 ' + category + ' 阅读题目，无法启动自选流程。', 'warning');
+                    window.showMessage && window.showMessage('当前题库缺少 ' + category + (type === 'listening' ? ' 听力' : ' 阅读') + '题目，无法启动自选流程。', 'warning');
                     return false;
                 }
             }
 
-            this._setCustomSuiteDraftState(this._buildCustomSuiteSelectionDraft(flowMode, frequencyScope));
+            this._setCustomSuiteDraftState(this._buildCustomSuiteSelectionDraft(flowMode, frequencyScope, type));
 
             if (typeof global.setBrowseTitle === 'function') {
                 try {
@@ -3388,11 +3411,11 @@
 
             const firstCategory = categories[0];
             if (typeof global.browseCategory === 'function') {
-                global.browseCategory(firstCategory, 'reading');
+                global.browseCategory(firstCategory, type);
             } else if (typeof global.showView === 'function') {
                 global.__pendingBrowseFilter = {
                     category: firstCategory,
-                    type: 'reading',
+                    type,
                     filterMode: null,
                     path: null
                 };
@@ -3425,7 +3448,7 @@
                         return null;
                     }
                     const exam = examMap.get(String(entry.examId));
-                    if (!exam) {
+                    if (!exam || String(exam.type || 'reading').toLowerCase() !== this._getSuiteType(draft)) {
                         return null;
                     }
                     return {
@@ -3439,17 +3462,18 @@
         async confirmCustomSuiteSelection() {
             const draft = this._getCustomSuiteDraftState();
             if (!draft || draft.status !== 'ready') {
-                window.showMessage && window.showMessage('当前尚未完成三篇自选，请继续选择后再确认。', 'warning');
+                window.showMessage && window.showMessage('当前尚未完成全部分段自选，请继续选择后再确认。', 'warning');
                 return false;
             }
 
             const sequence = await this._buildCustomSuiteSequenceFromDraft(draft);
-            if (!sequence.length) {
+            if (sequence.length !== this._getCustomSuiteCategories(this._getSuiteType(draft)).length) {
                 window.showMessage && window.showMessage('自选题目无法启动，请重新选择。', 'warning');
                 return false;
             }
 
             const started = await this._launchSuiteSessionFromSequence(sequence, {
+                type: this._getSuiteType(draft),
                 flowMode: draft.flowMode || 'classic',
                 frequencyScope: draft.frequencyScope || 'custom',
                 suiteWindowName: 'ielts-suite-mode-tab',
@@ -3512,11 +3536,21 @@
                     ? false
                     : true;
                 const timerAnchorMs = Date.now();
-                const suiteTimerMode = 'countdown';
-                const suiteTimerLimitSeconds = 3600;
+                const type = this._getSuiteType({ ...options, sequence: normalizedSequence });
+                const timerManager = global.PracticeTimerPreferences;
+                if (type === 'listening' && timerManager?.ready) await timerManager.ready;
+                const suiteTimerPreferences = type === 'listening'
+                    ? (timerManager?.read('listening') || { mode: 'elapsed', countdownMinutes: 60, limitEnabled: false, limitMinutes: 60, expiryAction: 'warn' })
+                    : null;
+                const suiteTimerMode = suiteTimerPreferences?.mode || 'countdown';
+                const suiteTimerLimitSeconds = suiteTimerPreferences
+                    ? (suiteTimerMode === 'countdown' ? suiteTimerPreferences.countdownMinutes : suiteTimerPreferences.limitMinutes) * 60
+                    : 3600;
                 const firstEntry = normalizedSequence[0];
                 const session = {
                     id: suiteSessionId,
+                    type,
+                    suiteTimerPreferences,
                     status: 'active',
                     startTime: timerAnchorMs,
                     sequence: normalizedSequence,
@@ -3784,7 +3818,7 @@
                 && String(record.sessionId || '') === String(session.id)
                 && sequenceIds.length > 0
                 && record.examId === `suite-${String(session.id)}`
-                && record.type === 'reading'
+                && record.type === this._getSuiteType(session)
                 && record.suiteMode === true
                 && record.frequency === 'suite'
                 && typeof record.title === 'string'

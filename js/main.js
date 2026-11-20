@@ -1411,8 +1411,8 @@ function updateOverview(examIndex = []) {
                         startRandomPractice(category, type, filterMode, path);
                     }
                 },
-                onStartSuite: () => {
-                    startSuitePractice();
+                onStartSuite: (type) => {
+                    startSuitePractice({ type });
                 }
             }
         });
@@ -4864,15 +4864,15 @@ function hideDeveloperTeam() {
 }
 
 // Phase 3: 套题模式 - 已迁移到 app-actions.js
-function startSuitePractice() {
+function startSuitePractice(options = {}) {
     if (window.AppActions && typeof window.AppActions.startSuitePractice === 'function') {
-        return window.AppActions.startSuitePractice();
+        return window.AppActions.startSuitePractice(options);
     }
     // 降级：直接调用 app
     const appInstance = window.app;
     if (appInstance && typeof appInstance.startSuitePractice === 'function') {
         try {
-            return appInstance.startSuitePractice();
+            return appInstance.startSuitePractice(options);
         } catch (error) {
             console.error('[main.js] 套题模式启动失败', error);
             if (typeof showMessage === 'function') {

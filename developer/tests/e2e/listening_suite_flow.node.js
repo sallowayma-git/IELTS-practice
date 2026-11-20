@@ -1,0 +1,239 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const reportDir = path.join(root, 'developer/tests/e2e/reports');
+fs.mkdirSync(reportDir, { recursive: true });
+const exams = [1, 2, 3, 4].map((part) => ({
+    id: `listening-p${part}-suite-fixture`, title: `Listening Part ${part} fixture`,
+    type: 'listening', category: `P${part}`, frequency: 'high', hasHtml: true,
+    path: `ListeningPractice/P${part}/`, filename: 'suite-fixture.html'
+}));
+
+function fixture(part) {
+    const q = (part - 1) * 10 + 1;
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Listening Part ${part}</title>
+    <style>*{box-sizing:border-box}body{margin:0;font-family:system-ui}.header,.bottom-bar{display:flex;gap:16px;padding:16px}.shell{padding:24px}input{padding:10px}.q-nav-container{display:flex}</style></head><body>
+    <header class="header"><h1>Listening Part ${part}</h1><span id="timer">00:00</span><div class="header-controls"></div></header>
+    <main class="shell"><h2>Part ${part}</h2><p>Complete the notes.</p><label>Question ${q} <input name="q${q}" autocomplete="off"></label><textarea id="notes" aria-label="Notes"></textarea>
+    <audio controls src="/__fixture.wav" preload="metadata"></audio><div class="match-slot" data-q="${q + 1}"></div></main>
+    <footer class="bottom-bar"><div id="q-nav-container"><button class="q-nav-item" data-qnum="${q}">${q}</button></div><div class="bb-center"><button id="clear-btn">Reset</button><button id="finish-btn">Finish</button></div></footer>
+    <script>window.App={config:{questionList:[${q}],answerKey:{text:{q${q}:'answer${part}'}}},state:{isReviewing:false},finish(){this.state.isReviewing=true;document.querySelector('input').disabled=true;},generateResultsTable(){const answer=document.querySelector('input').value;return '<table class="results-table"><thead><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody><tr><td>${q}</td><td>'+answer+'</td><td>answer${part}</td><td>'+(answer==='answer${part}'?'Correct':'Incorrect')+'</td></tr></tbody></table>';}};document.getElementById('finish-btn').addEventListener('click',()=>App.finish());document.getElementById('clear-btn').addEventListener('click',()=>{document.querySelector('input').value='';});</script></body></html>`;
+}
+
+const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/__fixture.wav') {
+        const wav = Buffer.alloc(44 + 80000);
+        wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
+        wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+        wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
+        wav.write('data', 36); wav.writeUInt32LE(80000, 40);
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Accept-Ranges', 'bytes');
+        const range = String(req.headers.range || '').match(/^bytes=(\d+)-(\d*)$/);
+        if (range) {
+            const start = Number(range[1]);
+            const end = Math.min(wav.length - 1, range[2] ? Number(range[2]) : wav.length - 1);
+            res.statusCode = 206;
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${wav.length}`);
+            res.setHeader('Content-Length', end - start + 1);
+            res.end(wav.subarray(start, end + 1));
+        } else { res.setHeader('Content-Length', wav.length); res.end(wav); }
+        return;
+    }
+    const match = url.pathname.match(/^\/ListeningPractice\/P([1-4])\/suite-fixture.html$/);
+    if (match) { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(fixture(Number(match[1]))); return; }
+    const target = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
+    if (!target.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
+    try {
+        const data = fs.readFileSync(target);
+        const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+        res.setHeader('Content-Type', (types[path.extname(target)] || 'application/octet-stream') + '; charset=utf-8');
+        res.end(data);
+    } catch { res.writeHead(404).end(); }
+});
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+const origin = `http://127.0.0.1:${server.address().port}`;
+const browser = await chromium.launch({ headless: true });
+const errors = [];
+const results = [];
+
+async function setup() {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    context.on('page', (page) => page.on('pageerror', (error) => errors.push(String(error))));
+    const page = await context.newPage();
+    await page.goto(origin);
+    await page.waitForFunction(() => window.app?.isInitialized && window.AppData, null, { timeout: 60000 });
+    await page.evaluate(async (items) => {
+        await window.AppData.ready;
+        await window.AppEntry.ensureSessionSuiteReady();
+        window.resolveActiveLibraryIndex = async () => items;
+        window.updateOverview(items);
+        await window.PracticeTimerPreferences.save('listening', {
+            mode: 'countdown', countdownMinutes: 40, limitEnabled: false, limitMinutes: 40, expiryAction: 'warn'
+        });
+    }, exams);
+    return { context, page };
+}
+
+async function start(page, mode, fromOverview = false) {
+    const popup = page.waitForEvent('popup');
+    if (fromOverview) {
+        await page.locator('#category-overview [data-action="start-suite-mode"][data-exam-type="listening"]').evaluate((button) => button.click());
+        await page.locator('#suite-mode-selector-modal').waitFor();
+        assert.match(await page.locator('#suite-mode-selector-modal h3').innerText(), /听力/);
+        assert.match(await page.locator('#suite-frequency-scope option[value="custom"]').innerText(), /P4/);
+        await page.locator('#suite-frequency-scope').selectOption('all');
+        await page.locator(`[data-suite-flow-mode="${mode}"]`).click();
+    } else {
+        assert.equal(await page.evaluate((flowMode) => window.app.startSuitePractice({ type: 'listening', flowMode, frequencyScope: 'all' }), mode), true);
+    }
+    const suite = await popup;
+    await suite.waitForSelector('.listening-suite-toolbar');
+    await suite.waitForFunction(() => window.__listeningBridgeGetState?.().initialized === true);
+    return suite;
+}
+
+function activeFrame(suite) { return suite.frameLocator('iframe:not([hidden])'); }
+async function records(page) { return page.evaluate(() => window.AppData.practice.list({ projection: 'detail' })); }
+async function waitForRecord(page) {
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+        const saved = await records(page);
+        if (saved.length === 1) return saved;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error('The suite did not persist one aggregate record.');
+}
+
+try {
+    {
+        const { context, page } = await setup();
+        let suite = await start(page, 'simulation', true);
+        await suite.waitForFunction(() => Array.from(document.querySelectorAll('iframe')).length === 4
+            && Array.from(document.querySelectorAll('iframe')).every((f) => f.contentWindow.__listeningBridgeGetState?.().initialized));
+        assert.match(await activeFrame(suite).locator('#timer').innerText(), /^39:|^40:/);
+        await activeFrame(suite).locator('input').fill('answer1');
+        await activeFrame(suite).locator('#notes').fill('Remember this part');
+        await activeFrame(suite).locator('audio').evaluate(async (audio) => {
+            if (audio.readyState < 1) await new Promise((resolve) => audio.addEventListener('loadedmetadata', resolve, { once: true }));
+            audio.currentTime = 1;
+            await audio.play();
+        });
+        await suite.locator('[data-suite-part="2"]').click();
+        assert.equal(await suite.locator('iframe[hidden]').first().evaluate((frame) => frame.contentDocument.querySelector('audio').paused), true);
+        await activeFrame(suite).locator('input').fill('answer2');
+        await suite.locator('[data-suite-part="1"]').click();
+        assert.equal(await activeFrame(suite).locator('input').inputValue(), 'answer1');
+        assert.equal(await activeFrame(suite).locator('#notes').inputValue(), 'Remember this part');
+        await activeFrame(suite).locator('#timer').click();
+        const paused = await activeFrame(suite).locator('#timer').innerText();
+        await suite.locator('[data-suite-part="3"]').click();
+        assert.equal(await activeFrame(suite).locator('#timer').innerText(), paused);
+        await activeFrame(suite).locator('input').fill('wrong');
+        await suite.waitForTimeout(1400);
+        await suite.reload();
+        await suite.waitForSelector('.listening-suite-toolbar');
+        await suite.waitForFunction(() => Array.from(document.querySelectorAll('iframe')).length === 4
+            && Array.from(document.querySelectorAll('iframe')).every((f) => f.contentWindow.__listeningBridgeGetState?.().initialized));
+        assert.equal(await suite.locator('[aria-current="step"]').innerText(), 'Part 3', 'reload resumes the active part');
+        await suite.locator('[data-suite-part="1"]').click();
+        assert.equal(await activeFrame(suite).locator('input').inputValue(), 'answer1', 'reload restores P1');
+        assert.ok(await activeFrame(suite).locator('audio').evaluate((audio) => audio.currentTime) >= 1, 'reload restores audio position');
+        await suite.locator('[data-suite-part="2"]').click();
+        assert.equal(await activeFrame(suite).locator('input').inputValue(), 'answer2', 'reload restores P2');
+        await suite.locator('[data-suite-part="4"]').click();
+        await activeFrame(suite).locator('input').fill('answer4');
+        await suite.screenshot({ path: path.join(reportDir, 'listening-suite-simulation.png') });
+        await suite.setViewportSize({ width: 390, height: 844 });
+        await suite.screenshot({ path: path.join(reportDir, 'listening-suite-mobile.png') });
+        assert.equal(await activeFrame(suite).locator('#finish-btn').evaluate((button) => {
+            const rect = button.getBoundingClientRect();
+            return rect.bottom <= window.innerHeight && rect.right <= window.innerWidth;
+        }), true, 'mobile submit remains visible');
+        await page.evaluate(() => {
+            const save = window.app._saveSuitePracticeRecord;
+            window.listeningSuiteSaveAttempts = [];
+            window.app._saveSuitePracticeRecord = async function (record) {
+                window.listeningSuiteSaveAttempts.push(JSON.stringify(record));
+                if (window.listeningSuiteSaveAttempts.length === 1) throw new Error('Injected transient suite persistence failure');
+                return save.call(this, record);
+            };
+        });
+        // LAN HTTP deployments do not expose crypto.randomUUID.
+        await suite.evaluate(() => Object.defineProperty(window.crypto, 'randomUUID', { value: undefined, configurable: true }));
+        await suite.locator('[data-suite-submit]').click();
+        const saved = await waitForRecord(page);
+        assert.equal(saved.length, 1);
+        assert.equal(saved[0].type, 'listening');
+        assert.equal(saved[0].suiteEntries.length, 4);
+        assert.equal(saved[0].correctAnswers, 3);
+        assert.equal(saved[0].totalQuestions, 4);
+        const attempts = await page.evaluate(() => window.listeningSuiteSaveAttempts);
+        assert.ok(attempts.length >= 2);
+        assert.equal(attempts[0], attempts[1], 'retry saves the same frozen aggregate');
+        results.push({ mode: 'simulation', recordCount: saved.length, correct: saved[0].correctAnswers, parts: saved[0].suiteEntries.length });
+        await context.close();
+    }
+    for (const mode of ['classic', 'stationary']) {
+        const { context, page } = await setup();
+        const suite = await start(page, mode);
+        for (let part = 1; part <= 4; part++) {
+            await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
+                && window.__listeningBridgeGetState().examId === expected, exams[part - 1].id);
+            if (mode === 'stationary' && part === 2) {
+                await activeFrame(suite).locator('input').fill('Unsubmitted P2 draft');
+                await suite.locator('[data-suite-navigate="prev"]:enabled').click();
+                await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().examId === expected, exams[0].id);
+                await activeFrame(suite).locator('#listening-suite-review').waitFor();
+                assert.equal(await activeFrame(suite).locator('input').inputValue(), 'answer1', 'review restores submitted P1');
+                assert.equal(await activeFrame(suite).locator('input').isDisabled(), true, 'review is read-only');
+                assert.match(await activeFrame(suite).locator('#listening-suite-review').innerText(), /answer1/);
+                await suite.locator('[data-suite-navigate="next"]:enabled').click();
+                await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
+                    && window.__listeningBridgeGetState().examId === expected, exams[1].id);
+                assert.equal(await activeFrame(suite).locator('input').inputValue(), 'Unsubmitted P2 draft', 'returning from review restores the current draft');
+            }
+            await activeFrame(suite).locator('input').fill('answer' + part);
+            if (mode === 'stationary' && part === 2) {
+                await suite.evaluate(() => {
+                    window.__suiteReplayObserved = false;
+                    window.addEventListener('message', ({ data }) => {
+                        if (data.type === 'REPLAY_PRACTICE_RECORD') window.__suiteReplayObserved = true;
+                    });
+                });
+                await page.evaluate(() => window.app._sendSuiteReviewState(
+                    window.app.currentSuiteSession, 'listening-p2-suite-fixture'
+                ));
+                await suite.waitForFunction(() => window.__suiteReplayObserved);
+                assert.equal(await activeFrame(suite).locator('input').inputValue(), 'answer2', 'late replay cannot overwrite a newer answer');
+            }
+            await activeFrame(suite).locator('#finish-btn').click();
+            if (mode === 'stationary') {
+                await suite.locator('[data-suite-navigate="next"]:enabled').waitFor();
+                assert.equal((await records(page)).length, 0, 'stationary keeps review before finishing');
+                await suite.locator('[data-suite-navigate="next"]').click();
+            }
+        }
+        const saved = await waitForRecord(page);
+        assert.equal(saved[0].type, 'listening');
+        assert.equal(saved[0].suiteEntries.length, 4);
+        assert.equal(saved[0].correctAnswers, 4);
+        results.push({ mode, recordCount: saved.length, correct: saved[0].correctAnswers, parts: saved[0].suiteEntries.length });
+        await context.close();
+    }
+    assert.deepEqual(errors, []);
+    console.log(JSON.stringify({ status: 'pass', results }));
+} finally {
+    fs.writeFileSync(path.join(reportDir, 'listening-suite-flow-report.json'), JSON.stringify({ results, errors }, null, 2));
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+}

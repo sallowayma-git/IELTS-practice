@@ -76,6 +76,7 @@
 
         return {
             status,
+            type: value.type === 'listening' ? 'listening' : 'reading',
             stageIndex,
             categories,
             pickedByCategory,
@@ -432,6 +433,7 @@
                     return null;
                 }
 
+                if ((normalizedExam.type || 'reading') !== next.type) return next;
                 const categories = getCustomSuiteCategories(next);
                 const expectedCategory = categories[Math.min(next.stageIndex, categories.length - 1)];
                 const examCategory = typeof normalizedExam.category === 'string' ? normalizedExam.category.trim().toUpperCase() : '';

@@ -714,6 +714,7 @@
 
         const currentCategory = getCustomSuiteCurrentCategory(draft);
         const examCategory = normalizeExamCategory(exam);
+        if ((exam.type || 'reading') !== (draft.type || 'reading')) return false;
         if (currentCategory && examCategory && currentCategory !== examCategory) {
             return false;
         }
@@ -743,7 +744,7 @@
 
         const nextCategory = getCustomSuiteCurrentCategory(updatedDraft);
         if (nextCategory && typeof global.browseCategory === 'function') {
-            global.browseCategory(nextCategory, 'reading');
+            global.browseCategory(nextCategory, updatedDraft.type || 'reading');
         } else {
             renderCustomSuiteSelectionPortal();
         }
@@ -771,7 +772,7 @@
 
         const nextCategory = getCustomSuiteCurrentCategory(updatedDraft);
         if (nextCategory && typeof global.browseCategory === 'function') {
-            global.browseCategory(nextCategory, 'reading');
+            global.browseCategory(nextCategory, updatedDraft.type || 'reading');
         } else {
             refreshCustomSuiteSelectionPortal();
         }

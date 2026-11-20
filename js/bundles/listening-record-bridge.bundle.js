@@ -7655,6 +7655,14 @@
   }
 
   window.__listeningBridgeComplete = onComplete;
+  // Read the current attempt without invoking native finish/review handlers.
+  // Simulation suites use this for one final submission across all four parts.
+  window.__listeningBridgeSnapshot = function () {
+    var details = buildDetailsFromAppState(window);
+    if (!details.length) details = buildDetailsFromInlineConfig(window.document);
+    if (!details.length) return null;
+    return buildBridgePayload(details);
+  };
   window.__listeningBridgeGetState = function () { return state; };
 
   if (window.document.readyState === 'complete' || window.document.readyState === 'interactive') {

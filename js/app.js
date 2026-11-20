@@ -1245,13 +1245,13 @@ class ExamSystemApp {
                             window.showMessage('随机练习模块未就绪', 'warning');
                         }
                     },
-                    onStartSuite() {
+                    onStartSuite(type) {
                         const ensureSuiteReady = window.AppEntry && typeof window.AppEntry.ensureSessionSuiteReady === 'function'
                             ? window.AppEntry.ensureSessionSuiteReady()
                             : Promise.resolve();
                         Promise.resolve(ensureSuiteReady).then(() => {
                             if (window.AppActions && typeof window.AppActions.startSuitePractice === 'function') {
-                                window.AppActions.startSuitePractice();
+                                window.AppActions.startSuitePractice({ type });
                                 return;
                             }
                             if (typeof window.showMessage === 'function') {
