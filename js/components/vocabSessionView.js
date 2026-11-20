@@ -11,6 +11,8 @@
         KeyF: 'reveal',
         Escape: 'escape'
     });
+    const RATING_BUTTON_CLASSES = { easy: 'btn-soft', good: 'btn-primary', hard: 'btn-outline' };
+    const shortcutPreferences = window.VocabShortcutPreferences;
 
     const CONFIG_LIMITS = Object.freeze({
         dailyNew: { min: 0, max: 200 },
@@ -576,6 +578,29 @@
         return false;
     }
 
+    function isSessionVisible() {
+        return state.container?.classList.contains('active') && !state.container.hidden;
+    }
+
+    function handleRatingShortcut(event) {
+        if (state.session.stage !== 'recognition' || !isSessionVisible() || state.menuOpen || isListModalPending()
+            || event.defaultPrevented || event.repeat || event.isComposing
+            || event.altKey || event.ctrlKey || event.metaKey) return false;
+        if (document.activeElement?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
+            || document.querySelector('#practice-settings-modal.show')) return false;
+        const key = event.key?.toUpperCase();
+        // Some keyboard layouts require Shift to type digits.
+        if (event.shiftKey && !/^[0-9]$/.test(key)) return false;
+        const bindings = shortcutPreferences.read();
+        const rating = Object.keys(shortcutPreferences.ratings).find((name) => bindings[name] === key);
+        if (!rating) return false;
+        const button = state.elements.sessionCard.querySelector(`[data-action="recognize-${rating}"]`);
+        if (!button || button.disabled || button.closest('[inert]')) return false;
+        event.preventDefault();
+        button.click();
+        return true;
+    }
+
     function bindEvents() {
         if (!state.container) {
             return;
@@ -671,9 +696,6 @@
                     }
                 }
                 const command = KEY_BINDINGS[event.code];
-                if (!command) {
-                    return;
-                }
                 if (command === 'escape' && isListModalPending()) {
                     event.preventDefault();
                     closeListModal();
@@ -693,6 +715,7 @@
                     }
                     return;
                 }
+                if (handleRatingShortcut(event) || !command) return;
                 const activeTag = document.activeElement?.tagName;
                 const isFieldActive = ['INPUT', 'TEXTAREA'].includes(activeTag);
                 if (isFieldActive && !(command === 'submit' && state.session.stage === 'spelling')) {
@@ -1637,28 +1660,13 @@
             revealMeaning();
             return;
         }
-        if (action === 'recognize-easy') {
-            state.session.recognitionQuality = 'easy';
-            state.session.stage = 'spelling';
-            state.session.meaningVisible = false;
-            state.session.spellingAttempts = 0;
-            state.session.typedAnswer = '';
-            state.ui.sidePanelManual = null;
-            render();
+        if (action === 'speak-word' && state.session.stage === 'recognition') {
+            window.WordPronunciation?.speak(state.session.currentWord?.word);
             return;
         }
-        if (action === 'recognize-good') {
-            state.session.recognitionQuality = 'good';
-            state.session.stage = 'spelling';
-            state.session.meaningVisible = false;
-            state.session.spellingAttempts = 0;
-            state.session.typedAnswer = '';
-            state.ui.sidePanelManual = null;
-            render();
-            return;
-        }
-        if (action === 'recognize-hard') {
-            state.session.recognitionQuality = 'hard';
+        const rating = action.startsWith('recognize-') ? action.slice('recognize-'.length) : '';
+        if (state.session.stage === 'recognition' && Object.hasOwn(shortcutPreferences.ratings, rating)) {
+            state.session.recognitionQuality = rating;
             state.session.stage = 'spelling';
             state.session.meaningVisible = false;
             state.session.spellingAttempts = 0;
@@ -2057,6 +2065,7 @@
         state.session.typedAnswer = '';
         state.session.queueSeed += 1;
         render();
+        if (isSessionVisible()) window.WordPronunciation?.speak(next.word);
     }
 
     async function saveCurrentNote() {
@@ -2207,19 +2216,25 @@
             const revealControl = session.meaningVisible
                 ? ''
                 : '<div class="vocab-card__reveal"><button class="btn btn-soft" type="button" data-action="reveal-meaning">看释义 (F)</button></div>';
+            const pronunciationControl = window.WordPronunciation?.isAvailable()
+                ? '<button class="btn btn-sm btn-ghost" type="button" data-action="speak-word">播放发音</button>'
+                : '';
+            const bindings = shortcutPreferences.read();
+            const ratingControls = Object.entries(shortcutPreferences.ratings).map(([rating, label]) => `
+                <button class="btn ${RATING_BUTTON_CLASSES[rating]}" type="button" data-action="recognize-${rating}"
+                    aria-keyshortcuts="${bindings[rating]}">${label} (${bindings[rating]})</button>`).join('');
             card.innerHTML = `
                 <div class="vocab-card vocab-card--recognition">
                     <div class="vocab-card__wordline">
                         <div class="vocab-card__word">${safeWord}</div>
                         ${phoneticBlock}
+                        ${pronunciationControl}
                     </div>
                     ${meaningBlock}
                     ${revealControl}
                     <p class="vocab-card__instruction">评估你对这个单词的熟悉程度</p>
                     <div class="vocab-card__actions vocab-card__actions--inline">
-                        <button class="btn btn-soft" type="button" data-action="recognize-easy">简单</button>
-                        <button class="btn btn-primary" type="button" data-action="recognize-good">一般</button>
-                        <button class="btn btn-outline" type="button" data-action="recognize-hard">困难</button>
+                        ${ratingControls}
                     </div>
                 </div>
             `;
@@ -2510,7 +2525,7 @@
         state.session.stage = 'loading';
         render();
         try {
-            await state.store.init();
+            await Promise.all([state.store.init(), shortcutPreferences.load()]);
         } catch (error) {
             console.error('[VocabSessionView] 初始化失败:', error);
             if (state.elements.sessionCard) {

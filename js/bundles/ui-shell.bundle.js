@@ -2142,13 +2142,62 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 })(typeof window !== 'undefined' ? window : globalThis);
 
 
+/* ===== js/utils/vocabShortcutPreferences.js ===== */
+(function (global) {
+    'use strict';
+
+    const ratings = Object.freeze({
+        easy: '简单',
+        good: '一般',
+        hard: '困难'
+    });
+    const defaults = Object.freeze({ easy: '1', good: '2', hard: '3' });
+    // F is already the shortcut for revealing the definition.
+    const keys = Object.freeze(Array.from('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ').filter((key) => key !== 'F'));
+    let bindings = defaults;
+    let preferenceTail = Promise.resolve();
+
+    function isValid(value) {
+        if (!value) return false;
+        const assigned = Object.keys(ratings).map((rating) => value[rating]);
+        return assigned.every((key) => keys.includes(key)) && new Set(assigned).size === assigned.length;
+    }
+
+    function enqueue(task) {
+        const result = preferenceTail.then(task);
+        preferenceTail = result.catch(() => undefined);
+        return result;
+    }
+
+    function load() {
+        return enqueue(async () => {
+            try {
+                const stored = await global.AppData.preferences.getVocabShortcuts();
+                bindings = isValid(stored) ? Object.freeze(stored) : defaults;
+            } catch (error) {
+                console.warn('[VocabShortcutPreferences] 加载失败:', error);
+            }
+            return bindings;
+        });
+    }
+
+    function save(next) {
+        return enqueue(async () => {
+            if (!isValid(next)) throw new Error('Invalid vocabulary shortcuts');
+            await global.AppData.preferences.setVocabShortcuts(next);
+            bindings = Object.freeze({ ...next });
+        });
+    }
+
+    global.VocabShortcutPreferences = { ratings, keys, isValid, load, save, read: () => bindings };
+})(window);
+
+
 /* ===== js/components/practiceSettingsPanel.js ===== */
 /**
  * Practice settings panel component.
  *
- * Stacks the practice header-code card and the reading/listening timer cards
- * as expanded siblings (no nested sub-card grouping). Opened from an entry
- * button on the settings page.
+ * Shows header codes, timers, and vocabulary shortcuts in the practice settings.
  *
  * All element ids / classes / data-attributes on the form controls are preserved
  * so setup logic in js/app/main-entry.js keeps working once the modal is in the DOM.
@@ -2159,6 +2208,62 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     var MODAL_ID = 'practice-settings-modal';
     var ENTRY_ID = 'practice-settings-entry-btn';
     var modal = null;
+    var shortcutPreferences = global.VocabShortcutPreferences;
+
+    function buildShortcutCard() {
+        var options = shortcutPreferences.keys.map((key) => `<option value="${key}">${key}</option>`).join('');
+        var fields = Object.entries(shortcutPreferences.ratings).map(([rating, label]) => `
+            <label class="practice-timer-field">
+                <span>${label}</span><select name="${rating}" disabled>${options}</select>
+            </label>`).join('');
+        return `
+            <form class="practice-timer-card" data-vocab-shortcut-settings>
+                <div class="practice-timer-card__header">
+                    <h4>刷词评分快捷键</h4>
+                    <span class="practice-timer-status" role="status"></span>
+                </div>
+                <div class="practice-timer-grid">${fields}</div>
+                <button class="btn data-mgmt-btn practice-timer-save" type="submit" disabled>保存刷词快捷键</button>
+            </form>`;
+    }
+
+    function setShortcutFormDisabled(form, disabled) {
+        for (const control of form.elements) control.disabled = disabled;
+    }
+
+    async function loadShortcutForm(form) {
+        setShortcutFormDisabled(form, true);
+        const bindings = await shortcutPreferences.load();
+        for (const rating of Object.keys(shortcutPreferences.ratings)) {
+            form.elements.namedItem(rating).value = bindings[rating];
+        }
+        setShortcutFormDisabled(form, false);
+    }
+
+    async function saveShortcutForm(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const status = form.querySelector('[role="status"]');
+        const bindings = Object.fromEntries(new FormData(form));
+        if (!shortcutPreferences.isValid(bindings)) {
+            status.dataset.state = 'error';
+            status.textContent = '请为三个评分选择不同的按键';
+            return;
+        }
+        setShortcutFormDisabled(form, true);
+        status.textContent = '';
+        try {
+            await shortcutPreferences.save(bindings);
+            status.dataset.state = 'success';
+            status.textContent = '已保存';
+        } catch (error) {
+            status.dataset.state = 'error';
+            status.textContent = '保存失败，请重试';
+            console.warn('[PracticeSettingsPanel] 保存刷词快捷键失败:', error);
+        } finally {
+            setShortcutFormDisabled(form, false);
+        }
+    }
 
     function buildTimerCard(scope, title, statusId, saveLabel) {
         return [
@@ -2218,6 +2323,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
 
             buildTimerCard('reading', '阅读计时', 'reading-timer-status', '保存阅读设置'),
             buildTimerCard('listening', '听力计时', 'listening-timer-status', '保存听力设置'),
+            buildShortcutCard(),
 
             '            </div>',
             '        </div>',
@@ -2227,8 +2333,9 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
     }
 
     function openModal() {
-        if (modal) {
+        if (modal && !modal.classList.contains('show')) {
             modal.classList.add('show');
+            loadShortcutForm(modal.querySelector('[data-vocab-shortcut-settings]'));
         }
     }
 
@@ -2246,6 +2353,7 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         if (!modal) {
             return;
         }
+        modal.querySelector('[data-vocab-shortcut-settings]').addEventListener('submit', saveShortcutForm);
         var closeBtn = modal.querySelector('.theme-modal-close');
         if (closeBtn) {
             closeBtn.addEventListener('click', closeModal);
@@ -5686,6 +5794,7 @@ function ensureSettings() {
     "js/presentation/message-center.js",
     "js/components/diagnosticSettingsPanel.js",
     "js/utils/practiceTimerPreferences.js",
+    "js/utils/vocabShortcutPreferences.js",
     "js/components/practiceSettingsPanel.js",
     "js/components/libraryManagerPanel.js",
     "js/app/main-entry.js",

@@ -209,6 +209,9 @@ function createElementStub(tag = 'div', overrides = {}) {
             return [];
         },
         closest(selector) {
+            if (selector === '[inert]') {
+                return attributes.has('inert') ? this : this.parentNode?.closest(selector) ?? null;
+            }
             if (selector === '[data-action]' && this.dataset && this.dataset.action) {
                 return this;
             }
@@ -578,6 +581,9 @@ function createVocabContext() {
 
     const context = vm.createContext(sandbox);
     vm.runInContext(readSource('js/core/vocabScheduler.js'), context, { filename: 'js/core/vocabScheduler.js' });
+    for (const file of ['js/utils/vocabShortcutPreferences.js', 'js/utils/wordPronunciation.js']) {
+        vm.runInContext(readSource(file), context, { filename: file });
+    }
     vm.runInContext(patchVocabSessionView(readSource('js/components/vocabSessionView.js')),
         context,
         { filename: 'js/components/vocabSessionView.js' }
@@ -854,6 +860,112 @@ async function run() {
 
         assert.strictEqual(hooks.state.session.stage, 'spelling');
         assert.strictEqual(hooks.state.session.recognitionQuality, 'good');
+    });
+
+    await record('rating shortcuts use default and saved bindings only on an active recognition card', async () => {
+        const container = createElementStub('div');
+        container.classList.add('active');
+        const background = createElementStub('main');
+        background.appendChild(container);
+        container.appendChild(elements.sessionCard);
+        hooks.setContainer(container);
+        hooks.resetSessionState();
+        hooks.state.session.stage = 'recognition';
+        hooks.state.session.currentWord = { id: 'w-1', word: 'alpha', meaning: 'A' };
+        documentStub.activeElement = null;
+
+        for (const rating of ['easy', 'good', 'hard']) {
+            const button = createElementStub('button');
+            button.dataset.action = `recognize-${rating}`;
+            elements.sessionCard.appendChild(button);
+            button.addEventListener('click', (event) => hooks.handleCardAction({ ...event, preventDefault() {} }));
+            elements.sessionCard.__queryMap[`[data-action="recognize-${rating}"]`] = button;
+        }
+        const press = (key, options = {}) => {
+            let prevented = false;
+            documentStub.dispatchEvent({
+                type: 'keydown', key, ...options,
+                preventDefault() { prevented = true; }
+            });
+            return prevented;
+        };
+        background.setAttribute('inert', '');
+        assert.equal(press('1'), false);
+        assert.equal(hooks.state.session.stage, 'recognition');
+        background.removeAttribute('inert');
+
+        assert.equal(press('&', { code: 'Digit1' }), false);
+        assert.equal(press('1', { code: 'Digit1', shiftKey: true }), true);
+        assert.equal(hooks.state.session.recognitionQuality, 'easy');
+
+        for (const [key, rating] of Object.entries({ 1: 'easy', 2: 'good', 3: 'hard' })) {
+            hooks.state.session.stage = 'recognition';
+            assert.equal(press(key), true);
+            assert.equal(hooks.state.session.stage, 'spelling');
+            assert.equal(hooks.state.session.recognitionQuality, rating);
+        }
+        assert.equal(press('1'), false);
+
+        let storedBindings = null;
+        windowStub.AppData = { preferences: {
+            getVocabShortcuts: async () => storedBindings,
+            setVocabShortcuts: async (value) => { storedBindings = value; }
+        } };
+        const preferences = windowStub.VocabShortcutPreferences;
+        await assert.rejects(preferences.save({ easy: 'A', good: 'A', hard: 'D' }));
+        await preferences.save({ easy: 'A', good: 'S', hard: '9' });
+        await preferences.load();
+        hooks.state.session.stage = 'recognition';
+        hooks.renderCard();
+        assert.match(elements.sessionCard.innerHTML, /aria-keyshortcuts="A"/);
+        assert.equal(press('1'), false);
+        assert.equal(press('a', { repeat: true }), false);
+        assert.equal(press('a', { ctrlKey: true }), false);
+        assert.equal(press('A', { shiftKey: true }), false);
+        assert.equal(press('9', { code: 'Digit9', shiftKey: true, altKey: true }), false);
+        assert.equal(press('9', { code: 'Digit9', shiftKey: true }), true);
+        assert.equal(hooks.state.session.recognitionQuality, 'hard');
+        hooks.state.session.stage = 'recognition';
+        documentStub.activeElement = createElementStub('textarea', { closest: () => true });
+        assert.equal(press('a'), false);
+        documentStub.activeElement = null;
+        container.classList.remove('active');
+        assert.equal(press('a'), false);
+        container.classList.add('active');
+        assert.equal(press('a'), true);
+        assert.equal(hooks.state.session.recognitionQuality, 'easy');
+
+        storedBindings = null;
+        await preferences.load();
+        hooks.setContainer(createElementStub('div'));
+    });
+
+    await record('pronunciation plays for each new recognition card and can be replayed', () => {
+        const container = createElementStub('div');
+        container.classList.add('active');
+        hooks.setContainer(container);
+        hooks.resetSessionState();
+        const spoken = [];
+        windowStub.SpeechSynthesisUtterance = function (text) { this.text = text; };
+        windowStub.speechSynthesis = { cancel() {}, speak(utterance) { spoken.push(utterance); } };
+        hooks.state.session.activeQueue = [{ word: 'alpha' }, { word: 'beta' }];
+
+        hooks.moveToNextWord();
+        hooks.renderCard();
+        hooks.renderCard();
+        assert.match(elements.sessionCard.innerHTML, /data-action="speak-word"/);
+        assert.deepEqual(spoken.map(({ text, lang, rate }) => [text, lang, rate]), [['alpha', 'en-US', 0.9]]);
+        hooks.handleCardAction({
+            preventDefault() {},
+            target: { closest: () => ({ dataset: { action: 'speak-word' } }) }
+        });
+        hooks.moveToNextWord();
+        hooks.moveToNextWord();
+        assert.deepEqual(spoken.map(({ text }) => text), ['alpha', 'alpha', 'beta']);
+
+        delete windowStub.speechSynthesis;
+        delete windowStub.SpeechSynthesisUtterance;
+        hooks.setContainer(createElementStub('div'));
     });
 
     await record('submit spelling correct answer', async () => {
