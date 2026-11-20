@@ -8,6 +8,11 @@ export const syncing = ref(false)
 let generation = 0
 let pending
 
+function applyCatalog(catalog) {
+  rows.value = Array.isArray(catalog) ? catalog : catalog.items
+  libraryError.value = catalog.warning || ''
+}
+
 export function resetLibrary() {
   generation++
   connected.value = false
@@ -29,9 +34,9 @@ export function syncLibrary() {
       if (!active) { rows.value = []; return }
       const cached = await jiufen.library(false)
       if (current !== generation) return
-      rows.value = cached
+      applyCatalog(cached)
       const fresh = await jiufen.library(true)
-      if (current === generation) rows.value = fresh
+      if (current === generation) applyCatalog(fresh)
     } catch (e) {
       if (current !== generation) return
       const active = await jiufen.connected().catch(() => false)
@@ -41,7 +46,7 @@ export function syncLibrary() {
       if (!active) rows.value = []
       else if (!rows.value.length) {
         const cached = await jiufen.library(false).catch(() => [])
-        if (current === generation) rows.value = cached
+        if (current === generation) rows.value = Array.isArray(cached) ? cached : cached.items
       }
     } finally {
       if (current === generation) { syncing.value = false; pending = null }
@@ -53,6 +58,7 @@ export function remoteCards(channel) {
   return computed(() => rows.value.filter(row => row.channel === channel).map(row => ({
     ...row, unitId: row.id, id: `jiufen:${channel}:${row.id}`, provider: 'jiufen',
     activity: channel, category: row.parts.join(' / ') || '未分段', source: '九分学长',
+    hotlist: row.hotlist || [],
     sourceTags: [...new Set((row.albums || []).map(album => album.title?.trim()).filter(Boolean))],
   })))
 }

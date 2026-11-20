@@ -77,6 +77,7 @@
       v-model:keyword="keyword"
       :frequency-filters="frequencyFilters"
       :frequency-filter="frequencyFilter"
+      v-model:hotlist-only="hotlistOnly"
       v-model:sort-mode="sortMode"
       :error="error"
       :suite-error="suiteError"
@@ -238,6 +239,7 @@ const activeView = ref('overview')
 const selectedCategory = ref('all')
 const selectedType = ref('all')
 const frequencyFilter = ref('all')
+const hotlistOnly = ref(false)
 const keyword = ref('')
 const sortMode = ref('default')
 const browsePreferencePanelOpen = ref(false)
@@ -291,6 +293,7 @@ const filteredReadingAssets = computed(() => {
     selectedType: selectedType.value,
     selectedCategory: selectedCategory.value,
     frequencyFilter: frequencyFilter.value,
+    hotlistOnly: hotlistOnly.value,
     sortMode: sortMode.value
   })
 })
@@ -777,6 +780,7 @@ function startCustomSuiteSelection() {
   selectedCategory.value = 'P1'
   selectedType.value = 'reading'
   frequencyFilter.value = 'all'
+  hotlistOnly.value = false
   keyword.value = ''
   activeView.value = 'browse'
 }

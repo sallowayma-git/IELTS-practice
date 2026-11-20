@@ -46,6 +46,10 @@
             </option>
           </select>
         </label>
+        <div class="segmented" aria-label="热榜筛选">
+          <button type="button" class="segmented-item" :class="{ active: hotlistOnly }"
+            :aria-pressed="hotlistOnly" data-hotlist-filter @click="hotlistOnly = !hotlistOnly">热榜</button>
+        </div>
         <p class="listening-library__count" role="status">{{ filteredAssets.length }} 套</p>
       </div>
 
@@ -68,7 +72,8 @@
               <span v-if="item.difficulty">{{ difficultyLabel(item.difficulty) }}</span>
               <span v-if="item.frequency">{{ frequencyLabel(item.frequency) }}</span>
             </p>
-            <div v-if="item.sourceTags?.length" class="listening-card__kinds" aria-label="二级题源">
+            <div v-if="item.sourceTags?.length || item.hotlist?.length" class="listening-card__kinds" aria-label="题源标签">
+              <span v-if="item.hotlist?.length" class="tag tag-accent" title="九分学长7天热榜" data-hotlist-tag>热榜</span>
               <span v-for="tag in item.sourceTags" :key="tag" class="tag tag-neutral listening-card__source" data-source-tag>{{ tag }}</span>
             </div>
             <div v-if="listeningKindTags(item).length" class="listening-card__kinds">
@@ -107,6 +112,7 @@ const error = ref('')
 const assets = ref([])
 const categoryFilter = ref('all')
 const frequencyFilter = ref('all')
+const hotlistOnly = ref(false)
 
 const onlineListening = remoteCards('listening')
 const listeningParts = ['P1','P2','P3','P4']
@@ -124,6 +130,7 @@ const filteredAssets = computed(() => allAssets.value.filter((asset) => {
   const frequency = String(asset.frequency || '').trim().toLowerCase()
   if (categoryFilter.value !== 'all' && category !== categoryFilter.value) return false
   if (frequencyFilter.value !== 'all' && frequency !== frequencyFilter.value) return false
+  if (hotlistOnly.value && !asset.hotlist?.some(entry => partFilter.value === 'all' || entry.part === partFilter.value)) return false
   return true
 }))
 

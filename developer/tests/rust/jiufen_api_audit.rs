@@ -2,6 +2,74 @@
 use super::*;
 
 #[tokio::test]
+#[ignore = "Explicit authenticated GET validation of the hotlist catalog"]
+async fn live_hotlist_catalog_contract() {
+    assert_eq!(std::env::var("ATLAS_JIUFEN_READONLY_AUDIT").as_deref(), Ok("1"));
+    let conn = rusqlite::Connection::open_with_flags(
+        crate::app::state::AppPaths::discover().v2_db_path(),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ).unwrap();
+    let install = settings::get_setting(&conn, NS, "installId").unwrap().unwrap();
+    let session = restore_saved(identifier(&install.value).unwrap()).unwrap().expect("Sign in through Atlas first");
+    let response = request(
+        "/practice/v1/high-frequency/albums?includeEntryModes=memory_link,spelling_recall",
+        None, Some(&session), None,
+    ).await.unwrap();
+    let albums = response["data"]["list"].as_array().unwrap();
+    let mut report = Vec::new();
+    for album in albums {
+        let slots = album["slots"].as_array().unwrap();
+        let mut slot_reports = Vec::new();
+        for slot in slots {
+            let rows = slot["list"].as_array().unwrap();
+            slot_reports.push(json!({
+                "key":slot["key"],"channel":slot["channel"],"partNo":slot["partNo"],
+                "totalCount":slot["totalCount"],"hasMore":slot["hasMore"],
+                "publicRowLimit":slot["publicRowLimit"],"maxDisplayRows":slot["maxDisplayRows"],
+                "entries":rows.iter().map(|row| json!({
+                    "id":row["id"],"albumId":row["albumId"],"channel":row["channel"],
+                    "entryMode":row["entryMode"],"partId":row["partId"],"partNo":row["partNo"],
+                    "available":row["available"],"lockedForOrdinaryUsers":row["lockedForOrdinaryUsers"],
+                    "rank":row["rank"],"rankDelta":row["rankDelta"],"heatBand":row["heatBand"],
+                    "sevenDayReportTotal":row["sevenDayReportTotal"]
+                })).collect::<Vec<_>>()
+            }));
+        }
+        report.push(json!({"albumId":album["albumId"],"channel":album["channel"],
+            "title":album["title"],"groupTitle":album["groupTitle"],"slots":slot_reports}));
+    }
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../developer/tests/e2e/reports/jiufen-hotlist-contract.json");
+    std::fs::write(path, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+    for album in report {
+        println!("{}", json!({"channel":album["channel"],"title":album["title"],
+            "slots":album["slots"].as_array().unwrap().iter().map(|slot| json!({
+                "partNo":slot["partNo"],"count":slot["entries"].as_array().unwrap().len(),
+                "totalCount":slot["totalCount"],"hasMore":slot["hasMore"]
+            })).collect::<Vec<_>>()}));
+    }
+    let mut session = Some(session);
+    let entries = crate::jiufen::catalog::fetch_catalog(&mut session).await.unwrap();
+    let catalog = serde_json::to_value(entries).unwrap();
+    assert!(catalog["warning"].is_null());
+    let entries = &catalog["items"];
+    let summary: Vec<_> = ["reading", "listening"].into_iter().map(|channel| {
+        let rows: Vec<_> = entries.as_array().unwrap().iter().filter(|row| row["channel"] == channel).collect();
+        let ranked: Vec<_> = rows.iter().filter(|row| !row["hotlist"].as_array().unwrap().is_empty()).collect();
+        assert!(!ranked.is_empty());
+        json!({"channel":channel,"catalogCount":rows.len(),"hotlistCount":ranked.len(),
+            "parts":(1..=if channel == "reading" {3} else {4}).map(|part| {
+                let label = format!("P{part}");
+                json!({"part":label,"count":ranked.iter().filter(|row| row["hotlist"].as_array().unwrap().iter().any(|entry| entry["part"] == label)).count()})
+            }).collect::<Vec<_>>()})
+    }).collect();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../developer/tests/e2e/reports/jiufen-hotlist-mapping.json");
+    std::fs::write(path, serde_json::to_vec_pretty(&summary).unwrap()).unwrap();
+    println!("{}", json!(summary));
+}
+
+#[tokio::test]
 #[ignore = "Explicit authenticated GET validation of native study material"]
 async fn live_study_material_contract() {
     assert_eq!(

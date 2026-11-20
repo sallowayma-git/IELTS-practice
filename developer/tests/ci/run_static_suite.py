@@ -253,7 +253,7 @@ def main() -> int:
         run_command("Notebook prose composition", ["node", "developer/tests/js/notebookCompose.test.mjs"]),
         run_command("Notebook phrasing bank", ["node", "developer/tests/js/notebookPhrasing.test.mjs"]),
         run_command("Notebook weekly report", ["node", "developer/tests/js/notebookWeekly.test.mjs"]),
-        run_command("Integrated UI and mock contracts", ["node", "--test", "developer/tests/js/integrationContracts.test.mjs", "developer/tests/js/dashboardCore.test.js", "developer/tests/js/readingTags.test.js", "developer/tests/js/moodFor.test.js"]),
+        run_command("Integrated UI and mock contracts", ["node", "--test", "developer/tests/js/integrationContracts.test.mjs", "developer/tests/js/dashboardCore.test.js", "developer/tests/js/readingTags.test.js", "developer/tests/js/moodFor.test.js", "developer/tests/js/jiufenLibraryListening.test.mjs"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading Coach streaming, lifecycle and panel contract", ["node", "--test", "developer/tests/js/readingCoachStreaming.test.mjs", "developer/tests/js/readingCoachLifecycle.test.mjs", "developer/tests/js/readingCoachPanelContract.test.mjs"]),
         run_command("Reading Coach preference card and feedback entry points", ["node", "--test", "developer/tests/js/readingCoachMemoryCard.test.mjs"]),

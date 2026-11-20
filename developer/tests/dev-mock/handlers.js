@@ -470,15 +470,15 @@ export function createHandlers(state, host) {
 
   return {
     // plug/jiufen commands. Rust returns bare values (Result<bool, String>,
-    // Vec<Entry>) and src/api/jiufen.js consumes core invoke directly without
+    // Catalog) and src/api/jiufen.js consumes core invoke directly without
     // unwrapping the CommandResponse envelope, so these payloads must go out
     // bare via bare() — an envelope here is truthy garbage that breaks
     // plug/jiufen/library.js (rows becomes the envelope, remoteCards crashes
     // and the overview renders blank). Mocked as "no account connected":
-    // restore/is_connected -> false, library -> [] (service.rs / catalog.rs).
+    // restore/is_connected -> false, library -> empty Catalog (service.rs / catalog.rs).
     jiufen_restore: () => bare(false),
     jiufen_is_connected: () => bare(false),
-    jiufen_library: () => bare([]),
+    jiufen_library: () => bare({ items: [], warning: null }),
     jiufen_disconnect: () => bare(null),
     reading_list_assets: () => clone(state.reading.assets),
     reading_get_asset_payload: ({ assetId }) => {

@@ -63,6 +63,7 @@ export function filterReadingAssets(readingAssets, options = {}) {
     selectedCategory = 'all',
     questionKind = '',
     frequencyFilter = 'all',
+    hotlistOnly = false,
     sortMode = 'default'
   } = options
   const query = String(keyword || '').trim().toLowerCase()
@@ -71,6 +72,7 @@ export function filterReadingAssets(readingAssets, options = {}) {
     if (selectedType !== 'all' && asset?.activity !== selectedType) return false
     if (selectedCategory !== 'all' && !(asset.parts?.length ? asset.parts : [normalizeCategory(asset.category)]).includes(selectedCategory)) return false
     if (frequencyFilter !== 'all' && normalizeFrequency(asset) !== frequencyFilter) return false
+    if (hotlistOnly && !asset.hotlist?.some(entry => selectedCategory === 'all' || entry.part === selectedCategory)) return false
     if (!query) return true
     return [
       asset?.id,

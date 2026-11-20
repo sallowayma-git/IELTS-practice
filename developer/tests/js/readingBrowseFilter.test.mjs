@@ -55,7 +55,7 @@ async function browseState(t, {
   }
   const state = scope.run(() => new Function(...Object.keys(deps), `${script}
     return { readingAssets, filteredReadingAssets, questionKind, questionKindLabel,
-      selectedType, selectedCategory, frequencyFilter, keyword, sortMode,
+      selectedType, selectedCategory, frequencyFilter, hotlistOnly, keyword, sortMode,
       sourceFilter, clearQuestionKind, clearSearch, loadAssets, activeView };
   `)(...Object.values(deps)))
   await mounted()
@@ -179,4 +179,28 @@ test('source and Part filters combine across local and synced cards', async t =>
   assert.deepEqual(ids(state),['jiufen:reading:9'])
   state.selectedCategory.value = 'P3'
   assert.deepEqual(ids(state),[])
+})
+
+test('hotlist combines with source, Part, frequency and search and clears independently', async t => {
+  const remote = [
+    { id:'hot', title:'Online hot article', provider:'jiufen', activity:'reading', parts:['P1','P2'],
+      category:'P1 / P2', frequency:'high', hotlist:[{part:'P2',rank:2}] },
+    { id:'plain', title:'普通高频热榜标题', provider:'jiufen', activity:'reading', parts:['P2'], category:'P2', frequency:'high' }
+  ]
+  const state = await browseState(t, {remote,query:{view:'browse'}})
+  state.hotlistOnly.value = true
+  assert.deepEqual(ids(state), ['hot'])
+  state.selectedCategory.value = 'P1'
+  assert.deepEqual(ids(state), [], 'only the ranked Part matches')
+  state.selectedCategory.value = 'P2'
+  state.frequencyFilter.value = 'high'
+  assert.deepEqual(ids(state), ['hot'])
+  state.sourceFilter.value = 'local'
+  assert.deepEqual(ids(state), [])
+  state.sourceFilter.value = 'jiufen'
+  state.keyword.value = 'missing'
+  assert.deepEqual(ids(state), [])
+  state.keyword.value = ''
+  state.hotlistOnly.value = false
+  assert.deepEqual(new Set(ids(state)), new Set(['hot','plain']))
 })

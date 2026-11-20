@@ -95,6 +95,16 @@
             {{ filter.label }}
           </button>
         </div>
+        <div class="segmented" aria-label="热榜筛选">
+          <button
+            type="button"
+            class="segmented-item browse-frequency-chip"
+            :class="{ active: hotlistOnly }"
+            :aria-pressed="hotlistOnly"
+            data-hotlist-filter
+            @click="$emit('update:hotlistOnly', !hotlistOnly)"
+          >热榜</button>
+        </div>
         <div class="browse-sort-wrapper">
           <select
             :value="sortMode"
@@ -153,6 +163,7 @@
             <div class="reading-card__tags">
               <span class="tag tag-neutral">{{ categoryOf(asset) }}</span>
               <span v-if="asset.provider" class="tag tag-info">九分学长</span>
+              <span v-if="asset.hotlist?.length" class="tag tag-accent" title="九分学长7天热榜" data-hotlist-tag>热榜</span>
               <span v-for="tag in asset.sourceTags || []" :key="tag" class="tag tag-neutral reading-card__source" data-source-tag>{{ tag }}</span>
               <span
                 v-if="frequencyTagOf(asset)"
@@ -270,6 +281,7 @@ defineProps({
   keyword: { type: String, default: '' },
   frequencyFilters: { type: Array, required: true },
   frequencyFilter: { type: String, required: true },
+  hotlistOnly: { type: Boolean, default: false },
   sortMode: { type: String, required: true },
   error: { type: String, default: '' },
   suiteError: { type: String, default: '' },
@@ -291,7 +303,7 @@ const FREQUENCY_TAGS = {
 }
 
 function categoryOf(asset) {
-  return normalizeCategory(asset?.category)
+  return asset.parts?.length ? asset.parts.join(' / ') : normalizeCategory(asset?.category)
 }
 
 function frequencyTagOf(asset) {
@@ -302,6 +314,7 @@ const emit = defineEmits([
   'update:browseRememberPosition',
   'update:keyword',
   'update:sortMode',
+  'update:hotlistOnly',
   'toggle-browse-preference',
   'persist-browse-preference',
   'clear-question-kind',
