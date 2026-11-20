@@ -7,7 +7,8 @@ const source = fs.readFileSync(new URL('../../../js/app/suitePracticeMixin.js', 
 const stateSource = fs.readFileSync(new URL('../../../js/app/state-service.js', import.meta.url), 'utf8');
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const bank = (type, count) => Array.from({ length: count }, (_, i) => ({
-    id: `${type}-p${i + 1}`, type, category: `P${i + 1}`, title: `${type} ${i + 1}`, hasHtml: true, frequency: 'high'
+    id: `${type}-p${i + 1}`, type, category: `P${i + 1}`, title: `${type} ${i + 1}`, hasHtml: true, frequency: 'high',
+    filename: `part-${i + 1}.html`
 }));
 
 function harness() {
@@ -81,6 +82,58 @@ test('custom listening selection keeps its type and requires all four parts', as
     assert.equal(await app.confirmCustomSuiteSelection(), true);
     assert.equal(chosen.length, 4);
     assert.deepEqual(visits[0], ['P1', 'listening']);
+});
+
+test('listening suites require a playable HTML entry in every part', async () => {
+    for (const invalid of [
+        { hasHtml: false, filename: '', pdfFilename: 'part-4.pdf' },
+        { hasHtml: false, filename: 'part-4.html' },
+        { hasHtml: true, filename: '' },
+        { hasHtml: true, filename: 'part-4.pdf' }
+    ]) {
+        for (const frequencyScope of ['all', 'custom']) {
+            const { app, window, messages } = harness();
+            window.resolveActiveLibraryIndex = async () => bank('listening', 4)
+                .map((exam, index) => index === 3 ? { ...exam, ...invalid } : exam);
+            let opened = false;
+            app.openExam = async () => { opened = true; };
+            assert.equal(Boolean(await app.startSuitePractice({ type: 'listening', frequencyScope })), false);
+            assert.equal(opened, false);
+            assert.equal(window.appStateService.getCustomSuiteDraft(), null);
+            assert.ok(messages.some((message) => message.includes('P4')));
+        }
+    }
+});
+
+test('random listening selection excludes PDF-only alternatives', async () => {
+    const { app, window } = harness();
+    window.resolveActiveLibraryIndex = async () => bank('listening', 4).flatMap((exam) => [
+        { ...exam, id: exam.id + '-pdf', hasHtml: false, filename: '', pdfFilename: 'questions.pdf' }, exam
+    ]);
+    let chosen;
+    app._launchSuiteSessionFromSequence = async (sequence) => { chosen = sequence; return true; };
+    assert.equal(await app.startSuitePractice({ type: 'listening' }), true);
+    assert.equal(chosen.length, 4);
+    assert.ok(chosen.every(({ exam }) => exam.hasHtml && exam.filename.endsWith('.html')));
+});
+
+test('custom selection and launch reject PDF-only and stale listening selections', async () => {
+    const { app, window } = harness();
+    const items = bank('listening', 4);
+    window.resolveActiveLibraryIndex = async () => items;
+    await app.startSuitePractice({ type: 'listening', frequencyScope: 'custom' });
+    const service = window.appStateService;
+    service.selectCustomSuiteExam({ ...items[0], hasHtml: false, filename: '', pdfFilename: 'questions.pdf' });
+    service.selectCustomSuiteExam({ ...items[0], filename: '' });
+    assert.equal(service.getCustomSuiteDraft().stageIndex, 0);
+    items.forEach((exam) => service.selectCustomSuiteExam(exam));
+    assert.equal(service.getCustomSuiteDraft().status, 'ready');
+    Object.assign(items[3], { hasHtml: false, filename: '', pdfFilename: 'part-4.pdf' });
+    let opened = false;
+    app.openExam = async () => { opened = true; };
+    assert.equal(await app.confirmCustomSuiteSelection(), false, 'confirmation rechecks the current index');
+    assert.equal(await app._launchSuiteSessionFromSequence(items.map((exam) => ({ examId: exam.id, exam })), { type: 'listening' }), false);
+    assert.equal(opened, false);
 });
 
 test('listening recovery retains timer preferences, drafts and listening record identity', async () => {

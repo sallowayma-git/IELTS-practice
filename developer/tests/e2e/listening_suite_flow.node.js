@@ -17,15 +17,24 @@ const exams = [1, 2, 3, 4].map((part) => ({
     path: `ListeningPractice/P${part}/`, filename: 'suite-fixture.html'
 }));
 
-function fixture(part) {
+function fixture(part, options = {}) {
     const q = (part - 1) * 10 + 1;
+    const config = !options.scoring ? `config:{questionList:[${q}],answerKey:{text:{q${q}:'answer${part}'}}},` : '';
+    const finishControl = options.finishControl || '<button id="finish-btn">Finish</button>';
+    const tableOnly = options.scoring === 'table' ? `
+        const report=document.createElement('div');report.hidden=true;document.body.appendChild(report);
+        const generate=App.generateResultsTable.bind(App);
+        const updateResults=()=>{report.innerHTML=generate();};
+        document.querySelector('input').addEventListener('input',updateResults);
+        updateResults();
+        delete App.generateResultsTable;` : '';
     return `<!doctype html><html><head><meta charset="utf-8"><title>Listening Part ${part}</title>
     <style>*{box-sizing:border-box}body{margin:0;font-family:system-ui}.header,.bottom-bar{display:flex;gap:16px;padding:16px}.shell{padding:24px}input{padding:10px}.q-nav-container{display:flex}</style></head><body>
     <header class="header"><h1>Listening Part ${part}</h1><span id="timer">00:00</span><div class="header-controls"></div></header>
     <main class="shell"><h2>Part ${part}</h2><p>Complete the notes.</p><label>Question ${q} <input name="q${q}" autocomplete="off"></label><textarea id="notes" aria-label="Notes"></textarea>
     <audio controls src="/__fixture.wav" preload="metadata"></audio><div class="match-slot" data-q="${q + 1}"></div></main>
-    <footer class="bottom-bar"><div id="q-nav-container"><button class="q-nav-item" data-qnum="${q}">${q}</button></div><div class="bb-center"><button id="clear-btn">Reset</button><button id="finish-btn">Finish</button></div></footer>
-    <script>window.App={config:{questionList:[${q}],answerKey:{text:{q${q}:'answer${part}'}}},state:{isReviewing:false},finish(){this.state.isReviewing=true;document.querySelector('input').disabled=true;},generateResultsTable(){const answer=document.querySelector('input').value;return '<table class="results-table"><thead><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody><tr><td>${q}</td><td>'+answer+'</td><td>answer${part}</td><td>'+(answer==='answer${part}'?'Correct':'Incorrect')+'</td></tr></tbody></table>';}};document.getElementById('finish-btn').addEventListener('click',()=>App.finish());document.getElementById('clear-btn').addEventListener('click',()=>{document.querySelector('input').value='';});</script></body></html>`;
+    <footer class="bottom-bar"><div id="q-nav-container"><button class="q-nav-item" data-qnum="${q}">${q}</button></div><div class="bb-center"><button id="clear-btn">Reset</button><span id="fixture-completion-control">${finishControl}</span></div></footer>
+    <script>window.App={${config}state:{isReviewing:false},finishCalls:0,finish(){this.finishCalls++;this.state.isReviewing=true;document.querySelector('input').disabled=true;},generateResultsTable(){const answer=document.querySelector('input').value;return '<table class="results-table"><thead><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody><tr><td>${q}</td><td>'+answer+'</td><td>answer${part}</td><td>'+(answer==='answer${part}'?'Correct':'Incorrect')+'</td></tr></tbody></table>';}};document.querySelector('#fixture-completion-control > *').addEventListener('click',()=>App.finish());document.getElementById('clear-btn').addEventListener('click',()=>{document.querySelector('input').value='';});${tableOnly}</script></body></html>`;
 }
 
 const server = http.createServer((req, res) => {
@@ -66,8 +75,12 @@ const browser = await chromium.launch({ headless: true });
 const errors = [];
 const results = [];
 
-async function setup() {
+async function setup(fixtureOptions = null) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    if (fixtureOptions) await context.route('**/ListeningPractice/P*/suite-fixture.html*', async (route) => {
+        const part = Number(new URL(route.request().url()).pathname.match(/\/P([1-4])\//)[1]);
+        await route.fulfill({ contentType: 'text/html; charset=utf-8', body: fixture(part, fixtureOptions) });
+    });
     context.on('page', (page) => page.on('pageerror', (error) => errors.push(String(error))));
     const page = await context.newPage();
     await page.goto(origin);
@@ -103,26 +116,73 @@ async function start(page, mode, fromOverview = false) {
 }
 
 function activeFrame(suite) { return suite.frameLocator('iframe:not([hidden])'); }
-async function reloadSuite(page, suite) {
-    await activeFrame(suite).locator('#timer[data-timer-mode="countdown"]').waitFor();
-    const running = await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning);
-    // Flush pagehide before reloading so the test always exercises its saved draft.
-    const hiddenAt = await suite.evaluate(() => {
-        const timestamp = Date.now();
-        window.dispatchEvent(new PageTransitionEvent('pagehide'));
-        return timestamp;
-    });
-    await page.waitForFunction((timestamp) => {
-        const session = window.app.currentSuiteSession;
-        return session.draftsByExam[session.activeExamId]?.updatedAt >= timestamp;
-    }, hiddenAt);
-    assert.equal(await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning), running,
-        'saving the pagehide draft must preserve the timer state');
-    await suite.reload();
+async function waitForSuiteReady(suite) {
     await suite.waitForSelector('.listening-suite-toolbar');
     await suite.waitForFunction(() => Array.from(document.querySelectorAll('iframe')).every((frame) =>
         frame.contentWindow.__listeningBridgeGetState?.().initialized
     ) && document.querySelector('iframe:not([hidden])')?.contentDocument.querySelector('#timer[data-timer-mode="countdown"]'));
+}
+async function reloadSuite(suite) {
+    await suite.reload();
+    await waitForSuiteReady(suite);
+}
+async function setDraftDeliveryPaused(page, paused) {
+    await page.evaluate((hold) => {
+        window.__originalSuiteDraftSync ||= window.app._handleSuiteDraftSync;
+        window.app._handleSuiteDraftSync = hold ? () => false : window.__originalSuiteDraftSync;
+    }, paused);
+}
+async function assertImmediateReloadRecovery(page, suite) {
+    await waitForSuiteReady(suite);
+    await activeFrame(suite).locator('input').fill('old saved answer');
+    await page.waitForFunction(() => {
+        const session = window.app.currentSuiteSession;
+        return session.draftsByExam[session.activeExamId]?.answers.q1 === 'old saved answer';
+    });
+    // Hold asynchronous delivery to keep the host stale, then really reload without a pre-flush.
+    await setDraftDeliveryPaused(page, true);
+    await Promise.all([
+        suite.waitForNavigation(),
+        suite.evaluate(() => {
+            const frame = document.querySelector('iframe:not([hidden])');
+            const doc = frame.contentDocument;
+            const input = doc.querySelector('input');
+            input.value = 'new unsaved answer';
+            input.dispatchEvent(new frame.contentWindow.Event('input', { bubbles: true }));
+            doc.querySelector('#timer').click();
+            doc.querySelector('#notes').value = 'Latest notes';
+            window.location.reload();
+        })
+    ]);
+    await waitForSuiteReady(suite);
+    assert.equal(await activeFrame(suite).locator('input').inputValue(), 'new unsaved answer', 'immediate reload keeps the latest answer');
+    assert.equal(await activeFrame(suite).locator('#notes').inputValue(), 'Latest notes', 'pagehide captures edits without an input event');
+    assert.equal(await activeFrame(suite).locator('#timer').evaluate((timer) => timer.classList.contains('paused')), true,
+        'immediate reload keeps the latest pause');
+    const paused = await activeFrame(suite).locator('#timer').innerText();
+    await suite.waitForTimeout(1400);
+    assert.equal(await activeFrame(suite).locator('#timer').innerText(), paused);
+    await setDraftDeliveryPaused(page, false);
+    await page.waitForFunction(() => {
+        const session = window.app.currentSuiteSession;
+        return session.suiteTimerRunning === false
+            && session.draftsByExam[session.activeExamId]?.answers.q1 === 'new unsaved answer';
+    });
+    await setDraftDeliveryPaused(page, true);
+    await Promise.all([
+        suite.waitForNavigation(),
+        suite.evaluate(() => {
+            document.querySelector('iframe:not([hidden])').contentDocument.querySelector('#timer').click();
+            window.location.reload();
+        })
+    ]);
+    await waitForSuiteReady(suite);
+    assert.equal(await activeFrame(suite).locator('#timer').evaluate((timer) => timer.classList.contains('paused')), false,
+        'immediate reload keeps the latest resume even while the host is stale');
+    await setDraftDeliveryPaused(page, false);
+    await page.waitForFunction(() => window.app.currentSuiteSession.suiteTimerRunning === true);
+    await assertRunningCountdown(page, suite);
+    assert.equal(await activeFrame(suite).locator('input').inputValue(), 'new unsaved answer');
 }
 async function assertRunningCountdown(page, suite) {
     assert.equal(await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning), true,
@@ -156,8 +216,9 @@ try {
         await suite.waitForFunction(() => Array.from(document.querySelectorAll('iframe')).length === 4
             && Array.from(document.querySelectorAll('iframe')).every((f) => f.contentWindow.__listeningBridgeGetState?.().initialized));
         assert.match(await activeFrame(suite).locator('#timer').innerText(), /^39:|^40:/);
-        await reloadSuite(page, suite);
+        await reloadSuite(suite);
         await assertRunningCountdown(page, suite);
+        await assertImmediateReloadRecovery(page, suite);
         await activeFrame(suite).locator('input').fill('answer1');
         await activeFrame(suite).locator('#notes').fill('Remember this part');
         await activeFrame(suite).locator('audio').evaluate(async (audio) => {
@@ -177,7 +238,7 @@ try {
         assert.equal(await activeFrame(suite).locator('#timer').innerText(), paused);
         await activeFrame(suite).locator('input').fill('wrong');
         await suite.waitForTimeout(1400);
-        await reloadSuite(page, suite);
+        await reloadSuite(suite);
         assert.equal(await suite.locator('[aria-current="step"]').innerText(), 'Part 3', 'reload resumes the active part');
         assert.equal(await page.evaluate(() => window.app.currentSuiteSession.suiteTimerRunning), false,
             'reload must preserve an explicit user pause');
@@ -225,8 +286,9 @@ try {
     for (const mode of ['classic', 'stationary']) {
         const { context, page } = await setup();
         const suite = await start(page, mode);
-        await reloadSuite(page, suite);
+        await reloadSuite(suite);
         await assertRunningCountdown(page, suite);
+        await assertImmediateReloadRecovery(page, suite);
         for (let part = 1; part <= 4; part++) {
             await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
                 && window.__listeningBridgeGetState().examId === expected, exams[part - 1].id);
@@ -270,6 +332,44 @@ try {
         assert.equal(saved[0].suiteEntries.length, 4);
         assert.equal(saved[0].correctAnswers, 4);
         results.push({ mode, recordCount: saved.length, correct: saved[0].correctAnswers, parts: saved[0].suiteEntries.length });
+        await context.close();
+    }
+    for (const options of [
+        { scoring: 'generated' },
+        { scoring: 'table' },
+        { finishControl: '<button id="finishBtn"><span>Done</span></button>' },
+        { finishControl: '<button data-action="check"><span>Done</span></button>' },
+        { finishControl: '<span role="button" tabindex="0" aria-label="Grade answers"><span>Done</span></span>' }
+    ]) {
+        const { context, page } = await setup(options);
+        const suite = await start(page, 'simulation');
+        await waitForSuiteReady(suite);
+        for (let part = 1; part <= 4; part++) {
+            await suite.locator(`[data-suite-part="${part}"]`).click();
+            await activeFrame(suite).locator('input').fill('answer' + part);
+        }
+        const snapshots = await suite.evaluate(() => Array.from(document.querySelectorAll('iframe'), (frame) => ({
+            snapshot: frame.contentWindow.__listeningBridgeSnapshot(),
+            reviewing: frame.contentWindow.App.state.isReviewing,
+            disabled: frame.contentDocument.querySelector('input').disabled,
+            finishCalls: frame.contentWindow.App.finishCalls
+        })));
+        assert.ok(snapshots.every(({ snapshot }) => snapshot?.scoreInfo.correct === 1 && snapshot.scoreInfo.total === 1),
+            'suite snapshots support native generated and existing result tables');
+        assert.ok(snapshots.every(({ reviewing, disabled, finishCalls }) => !reviewing && !disabled && finishCalls === 0),
+            'scoring snapshots do not enter native review');
+        if (options.finishControl) {
+            const nativeState = await activeFrame(suite).locator('#fixture-completion-control span').last().evaluate((target) => {
+                target.click();
+                return { finishCalls: window.App.finishCalls, reviewing: window.App.state.isReviewing };
+            });
+            assert.deepEqual(nativeState, { finishCalls: 0, reviewing: false },
+                'simulation intercepts native completion before review handlers');
+        } else await suite.locator('[data-suite-submit]').click();
+        const saved = await waitForRecord(page);
+        assert.equal(saved[0].correctAnswers, 4);
+        assert.equal(saved[0].suiteEntries.length, 4);
+        results.push({ compatibility: options.scoring || options.finishControl, recordCount: saved.length, correct: saved[0].correctAnswers });
         await context.close();
     }
     assert.deepEqual(errors, []);

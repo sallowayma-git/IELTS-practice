@@ -17213,6 +17213,10 @@
             if (!normalizedExam || !normalizedExam.examId) {
                 return this.state.customSuiteDraft;
             }
+            if (String(normalizedExam.type).toLowerCase() === 'listening'
+                && (exam.hasHtml === false || typeof exam.filename !== 'string' || !/\.html?$/i.test(exam.filename.trim()))) {
+                return this.state.customSuiteDraft;
+            }
 
             return this.updateCustomSuiteDraft((current) => {
                 const next = current ? normalizeCustomSuiteDraft(current) : normalizeCustomSuiteDraft({

@@ -1098,10 +1098,16 @@
     }, 500);
   }
 
-  function hookButtonFinish() {
+  var finishButtonSelectors = [
+    '.finish-btn', '#finish-btn', '#finishBtn', '[data-action="finish"]',
+    '.submit-btn', '#submit-btn', '#submitBtn', '[data-action="submit"]',
+    '.check-btn', '#check-btn', '[data-action="check"]',
+    '.review-btn', '#review-btn', '[data-action="review"]',
+    'button.finish', 'button.submit', 'button.check-answers'
+  ];
+
+  function findFinishControl(el) {
     var doc = window.document;
-    if (doc.__listeningBridgeFinishDelegated) return;
-    doc.__listeningBridgeFinishDelegated = true;
     var finishPattern = /\b(?:finish|submit|check(?:\s+answers?)?|review|grade|score)\b|完成|提交|交卷|查看答案|批改|评分/i;
     var actionNamePattern = /(?:^|[\s_-])(?:finish|submit|check|review|grade)(?:[\s_-]|$)|(?:finish|submit|check|review|grade)[\s_-]*(?:btn|button)|(?:btn|button)[\s_-]*(?:finish|submit|check|review|grade)/i;
 
@@ -1126,6 +1132,7 @@
     function isFinishLikeElement(el) {
       var node = el;
       while (node && node !== doc && node !== doc.documentElement) {
+        if (typeof node.matches === 'function' && node.matches(finishButtonSelectors.join(', '))) return node;
         if (isActionCandidate(node)) {
           var haystack = [
             node.id,
@@ -1148,14 +1155,15 @@
       }
       return null;
     }
+    return isFinishLikeElement(el);
+  }
 
-    var buttonSelectors = [
-      '.finish-btn', '#finish-btn', '#finishBtn', '[data-action="finish"]',
-      '.submit-btn', '#submit-btn', '#submitBtn', '[data-action="submit"]',
-      '.check-btn', '#check-btn', '[data-action="check"]',
-      '.review-btn', '#review-btn', '[data-action="review"]',
-      'button.finish', 'button.submit', 'button.check-answers'
-    ];
+  function hookButtonFinish() {
+    var doc = window.document;
+    if (doc.__listeningBridgeFinishDelegated) return;
+    doc.__listeningBridgeFinishDelegated = true;
+    var isFinishLikeElement = findFinishControl;
+    var buttonSelectors = finishButtonSelectors;
 
     for (var i = 0; i < buttonSelectors.length; i++) {
       var btns = doc.querySelectorAll(buttonSelectors[i]);
@@ -1372,11 +1380,13 @@
   }
 
   window.__listeningBridgeComplete = onComplete;
+  window.__listeningBridgeFindFinishControl = findFinishControl;
   // Read the current attempt without invoking native finish/review handlers.
   // Simulation suites use this for one final submission across all four parts.
   window.__listeningBridgeSnapshot = function () {
     var details = buildDetailsFromAppState(window);
     if (!details.length) details = buildDetailsFromInlineConfig(window.document);
+    if (!details.length) details = extractAttemptDetails(window, { allowGenerated: true });
     if (!details.length) return null;
     return buildBridgePayload(details);
   };

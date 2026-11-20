@@ -45,6 +45,12 @@
     }
 
     const mixin = {
+        _isPlayableSuiteExam(exam) {
+            if (!exam || typeof exam !== 'object') return false;
+            return String(exam.type || 'reading').toLowerCase() !== 'listening'
+                || (exam.hasHtml !== false && typeof exam.filename === 'string' && /\.html?$/i.test(exam.filename.trim()));
+        },
+
         _getSuiteType(session = {}) {
             const first = Array.isArray(session.sequence) ? session.sequence[0] : null;
             return String(session.type || first?.exam?.type || '').toLowerCase() === 'listening' ? 'listening' : 'reading';
@@ -273,7 +279,7 @@
                         const normalizedCategory = typeof item.category === 'string'
                             ? item.category.trim().toUpperCase()
                             : '';
-                        if (normalizedType !== type) {
+                        if (normalizedType !== type || !this._isPlayableSuiteExam(item)) {
                             return null;
                         }
                         return {
@@ -3378,7 +3384,7 @@
                     const normalizedCategory = typeof item.category === 'string'
                         ? item.category.trim().toUpperCase()
                         : '';
-                    if (normalizedType !== type) {
+                    if (normalizedType !== type || !this._isPlayableSuiteExam(item)) {
                         return null;
                     }
                     return {
@@ -3445,7 +3451,8 @@
                         return null;
                     }
                     const exam = examMap.get(String(entry.examId));
-                    if (!exam || String(exam.type || 'reading').toLowerCase() !== this._getSuiteType(draft)) {
+                    if (!exam || String(exam.type || 'reading').toLowerCase() !== this._getSuiteType(draft)
+                        || !this._isPlayableSuiteExam(exam)) {
                         return null;
                     }
                     return {
@@ -3521,7 +3528,7 @@
                 const normalizedSequence = Array.isArray(sequence)
                     ? sequence.filter(item => item && item.examId && item.exam)
                     : [];
-                if (!normalizedSequence.length) {
+                if (!normalizedSequence.length || normalizedSequence.some(item => !this._isPlayableSuiteExam(item.exam))) {
                     window.showMessage && window.showMessage('未找到可用的套题题目。', 'warning');
                     return false;
                 }

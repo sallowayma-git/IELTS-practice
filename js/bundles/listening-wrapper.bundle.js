@@ -4710,6 +4710,53 @@
         const retries = [];
         const activeSlot = () => slots.get(state.examId);
         const simulation = () => mode === 'simulation';
+        const recoveryKey = () => 'listening-suite-recovery:' + state.suiteSessionId;
+
+        function restoreRecovery(payload) {
+            const restored = clone(payload);
+            try {
+                const saved = JSON.parse(global.sessionStorage.getItem(recoveryKey()));
+                const examIds = payload.suiteSequence.map((entry) => entry.examId);
+                if (!saved || saved.version !== 1 || saved.suiteSessionId !== payload.suiteSessionId
+                    || JSON.stringify(saved.examIds) !== JSON.stringify(examIds)) return restored;
+                const drafts = restored.suiteDraftsByExam || {};
+                const hostUpdatedAt = Math.max(0, ...Object.values(drafts).map((draft) => Number(draft?.updatedAt) || 0));
+                for (const examId of examIds) {
+                    const draft = saved.draftsByExam?.[examId];
+                    if (Number(draft?.updatedAt) > (Number(drafts[examId]?.updatedAt) || 0)) drafts[examId] = draft;
+                }
+                restored.suiteDraftsByExam = drafts;
+                if (Number(saved.updatedAt) >= hostUpdatedAt) {
+                    Object.assign(restored, saved.timer);
+                    restored.suiteElapsedByExam = saved.elapsedByExam;
+                    if (payload.suiteFlowMode === 'simulation' && examIds.includes(saved.activeExamId)) {
+                        restored.suiteActiveExamId = saved.activeExamId;
+                    }
+                }
+            } catch (_) { /* The host recovery path still works when browser storage is unavailable. */ }
+            return restored;
+        }
+
+        function saveRecovery() {
+            const draftsByExam = { ...initPayload.suiteDraftsByExam };
+            const elapsedByExam = { ...initPayload.suiteElapsedByExam };
+            slots.forEach((slot, examId) => {
+                if (slot.draft) draftsByExam[examId] = slot.draft;
+                elapsedByExam[examId] = slot.elapsed + (slot === activeSlot()
+                    ? Math.max(0, api.elapsedSeconds() - slot.activatedAt) : 0);
+            });
+            try {
+                global.sessionStorage.setItem(recoveryKey(), JSON.stringify({
+                    version: 1, suiteSessionId: state.suiteSessionId,
+                    examIds: sequence.map((entry) => entry.examId), activeExamId: state.examId,
+                    draftsByExam, elapsedByExam, timer: timerPayload(), updatedAt: draftTimestamp
+                }));
+            } catch (_) { /* Keep forwarding drafts even if the local recovery cache cannot be written. */ }
+        }
+
+        function clearRecovery() {
+            try { global.sessionStorage.removeItem(recoveryKey()); } catch (_) {}
+        }
 
         function post(type, data) {
             api.forwardToParent({ type, source: 'listening_record_bridge', data: {
@@ -4748,6 +4795,8 @@
             if (!slot?.ready || finished || pendingSubmission || slot.submitted || reviewContext?.readOnly) return;
             const draft = draftFor(slot);
             slot.draft = draft;
+            // sessionStorage survives reload synchronously; postMessage delivery can race INIT.
+            saveRecovery();
             post('SIMULATION_DRAFT_SYNC', { draft, draftUpdatedAt: draft.updatedAt,
                 elapsed: api.elapsedSeconds(), ...timerPayload() });
         }
@@ -4833,6 +4882,7 @@
             api.setStatus(next.ready ? '' : 'Loading listening part...', next.ready);
             post('SIMULATION_ACTIVE_EXAM_CHANGE', { examId, elapsed: api.elapsedSeconds() });
             renderToolbar();
+            syncDraft();
         }
 
         function bindFrame(slot) {
@@ -4854,8 +4904,11 @@
                 doc.querySelectorAll(slotSelector).forEach((el) => el.querySelectorAll('.tag, .token').forEach((tag) => tag.remove()));
             }
             if (expiredLock) api.setLocked(doc, true);
+            ['input', 'change'].forEach((type) => doc.addEventListener(type, () => {
+                if (slot === activeSlot()) syncDraft();
+            }));
             doc.addEventListener('click', (event) => {
-                const finish = event.target.closest?.('#finish-btn, [data-action="finish"], [data-action="submit"], .finish-btn, .submit-btn');
+                const finish = slot.frame.contentWindow.__listeningBridgeFindFinishControl?.(event.target);
                 if (finish && simulation()) {
                     event.preventDefault();
                     event.stopImmediatePropagation();
@@ -4883,7 +4936,10 @@
                 slots.forEach(sendInit);
                 return true;
             }
+            payload = restoreRecovery(payload);
             initPayload = clone(payload);
+            draftTimestamp = Math.max(0, ...Object.values(payload.suiteDraftsByExam || {})
+                .map((draft) => Number(draft?.updatedAt) || 0));
             mode = payload.suiteFlowMode || 'classic';
             sequence = payload.suiteSequence;
             state.suiteTimerPreferences = payload.suiteTimerPreferences || api.readTimerPreferences();
@@ -5022,6 +5078,7 @@
                     if (pendingSubmission && payload.submissionId === pendingSubmission.submissionId) {
                         if (message.type === 'PRACTICE_SUBMIT_ACK') {
                             finished = true;
+                            clearRecovery();
                             retries.forEach(global.clearTimeout);
                             showNotice('整套听力已保存。');
                             global.close();
@@ -5029,9 +5086,12 @@
                         return true;
                     }
                     if (message.type === 'PRACTICE_SUBMIT_ACK' && mode === 'classic'
-                        && state.examId === sequence[sequence.length - 1].examId) global.close();
+                        && state.examId === sequence[sequence.length - 1].examId) {
+                        clearRecovery();
+                        global.close();
+                    }
                 }
-                if (message.type === 'SUITE_FORCE_CLOSE') { finished = true; global.close(); return true; }
+                if (message.type === 'SUITE_FORCE_CLOSE') { finished = true; clearRecovery(); global.close(); return true; }
                 return false;
             },
             handleFrameMessage(event) {
