@@ -13,7 +13,8 @@
     "pdfFilename": "99. P3 - Voynich Manuscript 伏尼契手稿【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/99. P3 - Voynich Manuscript 伏尼契手稿【高】/",
     "legacyFilename": "99. P3 - Voynich Manuscript 伏尼契手稿【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

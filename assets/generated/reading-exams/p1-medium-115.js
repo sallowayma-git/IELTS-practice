@@ -13,7 +13,8 @@
     "pdfFilename": "29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】/",
     "legacyFilename": "29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.html",
-    "questionIntroHtml": "<h3>Questions 1–13</h3>"
+    "questionIntroHtml": "<h3>Questions 1–13</h3>",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

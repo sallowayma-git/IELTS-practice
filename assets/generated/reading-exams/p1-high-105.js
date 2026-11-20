@@ -13,7 +13,8 @@
     "pdfFilename": "2. P1 - A survivor’s story 新西兰猫头鹰【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/2. P1 - A survivor’s story 新西兰猫头鹰【高】/",
     "legacyFilename": "2. P1 - A survivor’s story 新西兰猫头鹰【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

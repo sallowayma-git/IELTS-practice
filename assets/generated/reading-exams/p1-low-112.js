@@ -13,7 +13,8 @@
     "pdfFilename": "26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/",
     "legacyFilename": "26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

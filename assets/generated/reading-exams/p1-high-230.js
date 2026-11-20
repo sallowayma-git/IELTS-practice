@@ -13,7 +13,8 @@
     "pdfFilename": "230. P1 - The History of the Pencil 铅笔的历史.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "230. P1 - The History of the Pencil 铅笔的历史.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

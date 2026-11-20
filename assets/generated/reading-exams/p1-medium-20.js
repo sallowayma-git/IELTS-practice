@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Development of Plastics 塑料的发展史",
     "category": "P1",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "116. P1 - The Development of Plastics 塑料的发展史.pdf",
     "legacyPath": "ReadingPractice/PDF/",
     "legacyFilename": "116. P1 - The Development of Plastics 塑料的发展史.pdf",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

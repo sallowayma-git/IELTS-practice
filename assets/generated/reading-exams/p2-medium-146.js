@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Tasmanian Tiger 袋狼",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "57. P2 - The Tasmanian Tiger 袋狼【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/",
     "legacyFilename": "57. P2 - The Tasmanian Tiger 袋狼【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

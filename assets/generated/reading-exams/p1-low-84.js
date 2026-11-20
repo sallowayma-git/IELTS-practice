@@ -9,11 +9,12 @@
   "meta": {
     "title": "Why good ideas fail TF公司",
     "category": "P1",
-    "frequency": "次高频",
+    "frequency": "medium",
     "pdfFilename": "174. P1 - Why good ideas fail TF公司.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/",
     "legacyFilename": "174. P1 - Why good ideas fail TF公司.html",
-    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+    "questionIntroHtml": "<h3>Questions 1–5</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

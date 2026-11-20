@@ -13,7 +13,8 @@
     "pdfFilename": "8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/",
     "legacyFilename": "8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

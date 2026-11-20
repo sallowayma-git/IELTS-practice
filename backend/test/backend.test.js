@@ -225,9 +225,56 @@ test('deployment serves the current homepage, bundles, and practice resources', 
             const result = await client.request('GET', url);
             assert.equal(result.response.status, 200, `${url} should be served`);
             const expected = await fs.readFile(path.join(repoRoot, relativePath), 'utf8');
-            assert.ok(result.text === expected, `${url} should serve the current repository resource`);
+            assert.equal(result.text, relativePath === 'index.html'
+                ? expected.replace('<head>', '<head><meta name="ielts-backend" content="1">') : expected,
+            `${url} should serve the current repository resource with the backend capability marker`);
         }
     } finally {
         await client.close();
     }
+});
+
+test('sync requires the authenticated account, CSRF, and a current snapshot', async () => {
+    const client = await createClient();
+    try {
+        assert.equal((await client.request('GET', '/api/practice-records/sync')).response.status, 401);
+        assert.equal((await client.request('GET', '/api/auth/registration')).json.allowed, true);
+        const registered = await client.request('POST', '/api/auth/register', { username: 'sync', password: 'StrongPass1' }, { 'X-CSRF-Token': await client.csrf() });
+        assert.equal((await client.request('GET', '/api/auth/registration')).json.allowed, false);
+        const snapshot = (await client.request('GET', '/api/practice-records/sync')).json;
+        assert.equal(snapshot.userId, registered.json.user.id);
+        const body = { userId: snapshot.userId, revision: snapshot.revision, records: [{ id: 'sync-record', answers: { 1: 'A' } }] };
+        assert.equal((await client.request('POST', '/api/practice-records/sync', body)).response.status, 403);
+        const headers = { 'X-CSRF-Token': registered.json.csrfToken };
+        assert.equal((await client.request('POST', '/api/practice-records/sync', { ...body, userId: 'other-account' }, headers)).response.status, 403);
+        const saved = await client.request('POST', '/api/practice-records/sync', body, headers);
+        assert.equal(saved.response.status, 200);
+        assert.deepEqual(saved.json.records, body.records);
+        assert.notEqual(saved.json.revision, snapshot.revision);
+        assert.equal((await client.request('POST', '/api/practice-records/sync', { ...body, records: [] }, headers)).response.status, 409);
+        assert.deepEqual((await client.request('GET', '/api/practice-records')).json.records, body.records);
+        await client.request('DELETE', '/api/practice-records/sync-record', undefined, headers);
+        assert.equal((await client.request('POST', '/api/practice-records/sync', { ...body, revision: saved.json.revision }, headers)).response.status, 409);
+        assert.deepEqual((await client.request('GET', '/api/practice-records')).json.records, []);
+    } finally { await client.close(); }
+});
+
+test('concurrent device snapshots cannot silently replace each other', async () => {
+    const authStore = new MemoryAuthStore();
+    const practiceStore = new MemoryPracticeRecordStore();
+    const first = await createClient({ authStore, practiceStore });
+    const second = await createClient({ authStore, practiceStore });
+    try {
+        const credentials = { username: 'concurrent', password: 'StrongPass1' };
+        const registered = await first.request('POST', '/api/auth/register', credentials, { 'X-CSRF-Token': await first.csrf() });
+        const loggedIn = await second.request('POST', '/api/auth/login', credentials, { 'X-CSRF-Token': await second.csrf() });
+        const snapshot = (await first.request('GET', '/api/practice-records/sync')).json;
+        const results = await Promise.all([
+            first.request('POST', '/api/practice-records/sync', { ...snapshot, records: [{ id: 'first-device' }] }, { 'X-CSRF-Token': registered.json.csrfToken }),
+            second.request('POST', '/api/practice-records/sync', { ...snapshot, records: [{ id: 'second-device' }] }, { 'X-CSRF-Token': loggedIn.json.csrfToken })
+        ]);
+        assert.deepEqual(results.map(result => result.response.status).sort(), [200, 409]);
+        const winner = results.find(result => result.response.status === 200);
+        assert.deepEqual((await first.request('GET', '/api/practice-records/sync')).json.records, winner.json.records);
+    } finally { await Promise.all([first.close(), second.close()]); }
 });

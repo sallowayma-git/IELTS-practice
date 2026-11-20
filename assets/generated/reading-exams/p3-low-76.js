@@ -9,11 +9,12 @@
   "meta": {
     "title": "Sign, Baby, Sign! 美国手语",
     "category": "P3",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "167. P3 - Sign, Baby, Sign! 美国手语.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/",
     "legacyFilename": "167. P3 - Sign, Baby, Sign! 美国手语.html",
-    "questionIntroHtml": ""
+    "questionIntroHtml": "",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

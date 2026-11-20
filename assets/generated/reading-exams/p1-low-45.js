@@ -9,11 +9,12 @@
   "meta": {
     "title": "Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "high",
     "pdfFilename": "139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究/",
     "legacyFilename": "139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

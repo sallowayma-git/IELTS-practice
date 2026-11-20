@@ -13,7 +13,8 @@
     "pdfFilename": "113. P2 - Herbal Medicines 新西兰草药【高】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/",
     "legacyFilename": "113. P2 - Herbal Medicines 新西兰草药【高】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

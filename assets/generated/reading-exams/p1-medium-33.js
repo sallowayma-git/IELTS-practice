@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Pyramid of Cestius 罗马金字塔",
     "category": "P1",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "128. P1 - The Pyramid of Cestius 罗马金字塔【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/128. P1 - The Pyramid of Cestius 罗马金字塔【次】/",
     "legacyFilename": "128. P1 - The Pyramid of Cestius 罗马金字塔【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

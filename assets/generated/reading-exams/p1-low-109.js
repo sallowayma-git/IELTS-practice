@@ -9,11 +9,12 @@
   "meta": {
     "title": "The Origin of Paper 造纸术起源",
     "category": "P1",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "23. P1 - The Origin of Paper 造纸术起源.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/23. P1 - The Origin of Paper 造纸术起源/",
     "legacyFilename": "23. P1 - The Origin of Paper 造纸术起源.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

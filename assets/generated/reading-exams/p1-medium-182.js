@@ -9,11 +9,12 @@
   "meta": {
     "title": "Listening to the Ocean 海洋探测",
     "category": "P1",
-    "frequency": "medium",
+    "frequency": "high",
     "pdfFilename": "9. P1 - Listening to the Ocean 海洋探测【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/",
     "legacyFilename": "9. P1 - Listening to the Ocean 海洋探测【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

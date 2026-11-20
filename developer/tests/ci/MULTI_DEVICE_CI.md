@@ -16,7 +16,7 @@ permissions and do not require repository secrets.
 | `md-quality` | Node.js 22, Python 3.12, Chromium | Bundle drift, JavaScript/IndexedDB tests, Python tests, reading data integrity |
 | `md-backend` | Node.js 24 | Existing backend API and static-resource tests |
 | `md-e2e` | Node.js 22, Python 3.12, Chromium | Unified browser suite, including file-based practice flows |
-| `md-deploy-smoke` | Node.js 24, Docker Compose | Images, PostgreSQL, migrations, authentication, sessions, records, restart |
+| `md-deploy-smoke` | Node.js 24, Chromium, Docker Compose | Images, PostgreSQL, migrations, authentication, sessions, records, restart, and the browser login/migration/sync flow |
 | `md-ci` | Aggregate | Requires all four validation jobs to report `success` |
 
 E2E and deployment diagnostics are uploaded as separate artifacts and retained for

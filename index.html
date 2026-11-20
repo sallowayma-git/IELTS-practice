@@ -776,6 +776,36 @@
                 <div class="hero-panel__header">
                     <h2 class="hero-panel__title">⚙️ 系统设置</h2>
                 </div>
+                <section id="cloud-account-panel" class="hero-panel hero-section" hidden aria-labelledby="cloud-account-title">
+                    <h3 id="cloud-account-title">账号与多设备同步</h3>
+                    <p data-cloud-user>尚未登录</p>
+                    <p data-cloud-status role="status" aria-live="polite">正在连接账号服务…</p>
+                    <form data-cloud-login class="cloud-account-form">
+                        <label>用户名<input name="username" autocomplete="username" maxlength="80" required></label>
+                        <label>密码<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>
+                        <p class="hero-panel__muted">首次注册：密码至少 8 个字符，包含大小写字母和数字。</p>
+                        <div class="hero-settings-actions">
+                            <button class="btn" type="submit">登录</button>
+                            <button class="btn" type="button" data-cloud-register hidden>注册首个账号</button>
+                        </div>
+                    </form>
+                    <div class="hero-settings-actions">
+                        <button class="btn" type="button" data-cloud-connect hidden>备份并合并本地记录，启用同步</button>
+                        <button class="btn" type="button" data-cloud-sync hidden>立即同步</button>
+                        <button class="btn" type="button" data-cloud-refresh>刷新连接</button>
+                        <button class="btn" type="button" data-cloud-logout hidden>退出登录</button>
+                    </div>
+                    <div data-cloud-conflicts hidden>
+                        <p>存在冲突的记录：<span data-cloud-conflict-list></span></p>
+                        <p class="hero-panel__muted">选择的版本会同步到其他设备；若该版本已删除，删除也会同步。</p>
+                        <div class="hero-settings-actions">
+                            <button class="btn" type="button" data-cloud-resolve="local">保留这些记录的本地版本</button>
+                            <button class="btn" type="button" data-cloud-resolve="remote">使用这些记录的云端版本</button>
+                        </div>
+                    </div>
+                    <p data-cloud-time class="hero-panel__muted"></p>
+                    <p class="hero-panel__muted">同步范围：完整练习记录、答案、笔记、标注、套题与删除。题库文件、设置和词汇仍保存在当前设备。断网时继续本地保存，恢复连接后重试。</p>
+                </section>
                 <div class="hero-settings-group">
                     <div
                         class="hero-panel hero-section system-management-panel"
@@ -903,16 +933,16 @@
                                 题库状态: 已加载完整索引
                             </div>
                             <div>
-                                题目总数: <span id="total-exams">234</span>
+                                题目总数: <span id="total-exams">239</span>
                             </div>
                             <div>
-                                HTML题目: <span id="html-exams">232</span>
+                                HTML题目: <span id="html-exams">239</span>
                             </div>
-                            <div>PDF题目: <span id="pdf-exams">207</span></div>
+                            <div>PDF题目: <span id="pdf-exams">220</span></div>
                             <div>
                                 最后更新:
                                 <span id="last-update"
-                                    >2026/08/07 21:12:40</span
+                                    >2026/11/18</span
                                 >
                             </div>
                         </div>

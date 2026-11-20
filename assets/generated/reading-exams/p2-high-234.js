@@ -11,7 +11,8 @@
     "category": "P2",
     "frequency": "high",
     "sourceDoc": "P2 - How do plants talk to each other(2).docx",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

@@ -9,11 +9,12 @@
   "meta": {
     "title": "Intelligent behaviour in birds 鸟类智慧行为",
     "category": "P2",
-    "frequency": "medium",
+    "frequency": "low",
     "pdfFilename": "41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/",
     "legacyFilename": "41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [

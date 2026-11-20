@@ -1,4 +1,5 @@
 const path = require('node:path');
+const fs = require('node:fs/promises');
 const express = require('express');
 const session = require('express-session');
 const connectPgSimple = require('connect-pg-simple');
@@ -70,7 +71,7 @@ function createApp(options = {}) {
         contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false
     }));
-    app.use(express.json({ limit: options.jsonLimit || '1mb' }));
+    app.use(express.json({ limit: options.jsonLimit || '16mb' }));
     app.use(express.urlencoded({ extended: false, limit: options.urlencodedLimit || '100kb' }));
     app.use(session({
         name: cookieName,
@@ -119,8 +120,11 @@ function createApp(options = {}) {
         app.use(`/${dir}`, createStaticBoundary(root), express.static(root, staticOptions));
     }
 
-    app.get(['/', '/index.html'], (_req, res) => {
-        res.sendFile(path.join(repoRoot, 'index.html'));
+    app.get(['/', '/index.html'], noStore, async (_req, res, next) => {
+        try {
+            const html = await fs.readFile(path.join(repoRoot, 'index.html'), 'utf8');
+            res.type('html').send(html.replace('<head>', '<head><meta name="ielts-backend" content="1">'));
+        } catch (error) { next(error); }
     });
 
     app.use('/api', (_req, res) => {

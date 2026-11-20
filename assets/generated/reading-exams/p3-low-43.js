@@ -13,7 +13,8 @@
     "pdfFilename": "137. P3 - What is social history 社会史.pdf",
     "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/137. P3 - What is social history 社会史/",
     "legacyFilename": "137. P3 - What is social history 社会史.html",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-11"
   },
   "passage": {
     "blocks": [

@@ -9,11 +9,12 @@
   "meta": {
     "title": "Coins - the first form of money 硬币起源",
     "category": "P2",
-    "frequency": "low",
+    "frequency": "medium",
     "pdfFilename": "",
     "legacyPath": "/Users/hissin/工程/lelts-new/",
     "legacyFilename": "P2 - Coins.docx",
-    "questionIntroHtml": "<h3>Questions</h3>"
+    "questionIntroHtml": "<h3>Questions</h3>",
+    "frequencyMonth": "2026-10"
   },
   "passage": {
     "blocks": [
