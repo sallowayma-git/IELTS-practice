@@ -19,23 +19,34 @@ const exams = [1, 2, 3, 4].map((part) => ({
 
 function fixture(part, options = {}) {
     const q = (part - 1) * 10 + 1;
+    const tokenControl = options.answerControl === 'token' && part === 4;
+    const accepted = options.alternatives ? ['colour', 'color'] : [tokenControl ? 'A' : `answer${part}`];
+    const answerControl = tokenControl
+        ? `<div class="drop-zone" data-q="${q}" style="min-height:40px"></div>`
+        : `<input ${options.answerControl === 'id' && part === 4 ? 'id' : 'name'}="q${q}" autocomplete="off">`;
+    const readAnswer = tokenControl
+        ? `const token=document.querySelector('.drop-zone .tag, .drop-zone .token');return token?.dataset.value || token?.textContent || '';`
+        : `return document.querySelector('input').value;`;
+    const clearAnswer = tokenControl
+        ? `document.querySelector('.drop-zone').replaceChildren();`
+        : `document.querySelector('input').value='';`;
     const config = !options.scoring ? `config:{questionList:[${q}],answerKey:{text:{q${q}:'answer${part}'}}},` : '';
     const finishControl = options.finishControl || '<button id="finish-btn">Finish</button>';
     const resultTable = options.scoring === 'table' || options.retainedTable ? `
         const report=document.createElement('div');report.hidden=true;report.id='fixture-results';document.body.appendChild(report);
         const generate=App.generateResultsTable.bind(App);
         const updateResults=()=>{report.innerHTML=generate();};
-        ${options.scoring === 'table' ? "document.querySelector('input').addEventListener('input',updateResults);" : ''}
+        ${options.scoring === 'table' ? "document.querySelector('input, .drop-zone').addEventListener('input',updateResults);" : ''}
         updateResults();
         const finish=App.finish.bind(App);App.finish=()=>{updateResults();finish();};
         ${options.scoring === 'table' ? 'delete App.generateResultsTable;' : ''}` : '';
     return `<!doctype html><html><head><meta charset="utf-8"><title>Listening Part ${part}</title>
     <style>*{box-sizing:border-box}body{margin:0;font-family:system-ui}.header,.bottom-bar{display:flex;gap:16px;padding:16px}.shell{padding:24px}input{padding:10px}.q-nav-container{display:flex}</style></head><body>
     <header class="header"><h1>Listening Part ${part}</h1><span id="timer">00:00</span><div class="header-controls"></div></header>
-    <main class="shell"><h2>Part ${part}</h2><p>Complete the notes.</p><label>Question ${q} <input name="q${q}" autocomplete="off"></label><textarea id="notes" aria-label="Notes"></textarea>
+    <main class="shell"><h2>Part ${part}</h2><p>Complete the notes.</p><label>Question ${q} ${answerControl}</label><textarea id="notes" aria-label="Notes"></textarea>
     <audio controls src="/__fixture.wav" preload="metadata"></audio><div class="match-slot" data-q="${q + 1}"></div></main>
     <footer class="bottom-bar"><div id="q-nav-container"><button class="q-nav-item" data-qnum="${q}">${q}</button></div><div class="bb-center"><button id="clear-btn">Reset</button><span id="fixture-completion-control">${finishControl}</span></div></footer>
-    <script>window.App={${config}state:{isReviewing:false},finishCalls:0,finish(){this.finishCalls++;this.state.isReviewing=true;document.querySelector('input').disabled=true;},generateResultsTable(){const answer=document.querySelector('input').value;return '<table class="results-table"><thead><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody><tr><td>${q}</td><td>'+answer+'</td><td>answer${part}</td><td>'+(answer==='answer${part}'?'Correct':'Incorrect')+'</td></tr></tbody></table>';}};document.querySelector('#fixture-completion-control > *').addEventListener('click',()=>App.finish());document.getElementById('clear-btn').addEventListener('click',()=>{document.querySelector('input').value='';});${resultTable}</script></body></html>`;
+    <script>function fixtureAnswer(){${readAnswer}}window.App={${config}state:{isReviewing:false},finishCalls:0,finish(){this.finishCalls++;this.state.isReviewing=true;document.querySelectorAll('input').forEach(input=>input.disabled=true);},generateResultsTable(){const answer=fixtureAnswer();return '<table class="results-table"><thead><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody><tr><td>${q}</td><td>'+answer+'</td><td>${accepted.join(' / ')}</td><td>'+(${JSON.stringify(accepted)}.includes(answer)?'Correct':'Incorrect')+'</td></tr></tbody></table>';}};document.querySelector('#fixture-completion-control > *').addEventListener('click',()=>App.finish());document.getElementById('clear-btn').addEventListener('click',()=>{${clearAnswer}});${resultTable}</script></body></html>`;
 }
 
 const server = http.createServer((req, res) => {
@@ -402,6 +413,10 @@ try {
         { scoring: 'generated', retainedTable: true },
         { scoring: 'table' },
         { scoring: 'table', reset: true },
+        { scoring: 'table', answerControl: 'id' },
+        { scoring: 'table', answerControl: 'token' },
+        { scoring: 'table', alternatives: true },
+        { scoring: 'table', alternatives: true, matchCore: true },
         { finishControl: '<button id="finishBtn"><span>Done</span></button>' },
         { finishControl: '<button data-action="check"><span>Done</span></button>' },
         { finishControl: '<span role="button" tabindex="0" aria-label="Grade answers"><span>Done</span></span>' }
@@ -409,20 +424,86 @@ try {
         const { context, page } = await setup(options);
         const suite = await start(page, 'simulation');
         await waitForSuiteReady(suite);
+        if (options.alternatives && !options.matchCore) {
+            await suite.evaluate(() => document.querySelectorAll('iframe').forEach((frame) => {
+                delete frame.contentWindow.AnswerMatchCore;
+            }));
+        }
         for (let part = 1; part <= 4; part++) {
             await suite.locator(`[data-suite-part="${part}"]`).click();
-            await activeFrame(suite).locator('input').fill('answer' + part);
+            if (options.answerControl === 'token' && part === 4) {
+                await activeFrame(suite).locator('.drop-zone').evaluate((slot) => {
+                    const token = document.createElement('span');
+                    token.className = 'token';
+                    token.dataset.value = 'A';
+                    token.textContent = 'Option A';
+                    slot.appendChild(token);
+                    slot.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+            } else await activeFrame(suite).locator('input').fill(options.alternatives ? (part % 2 ? 'colour' : 'color') : 'answer' + part);
         }
         const snapshots = await suite.evaluate(() => Array.from(document.querySelectorAll('iframe'), (frame) => ({
             snapshot: frame.contentWindow.__listeningBridgeSnapshot(),
             reviewing: frame.contentWindow.App.state.isReviewing,
-            disabled: frame.contentDocument.querySelector('input').disabled,
+            disabled: Boolean(frame.contentDocument.querySelector('input')?.disabled),
             finishCalls: frame.contentWindow.App.finishCalls
         })));
         assert.ok(snapshots.every(({ snapshot }) => snapshot?.scoreInfo.correct === 1 && snapshot.scoreInfo.total === 1),
             'suite snapshots support native generated and existing result tables');
         assert.ok(snapshots.every(({ reviewing, disabled, finishCalls }) => !reviewing && !disabled && finishCalls === 0),
             'scoring snapshots do not enter native review');
+        if (options.answerControl || options.alternatives) {
+            const expected = options.answerControl === 'token' ? 'A' : options.alternatives ? 'color' : 'answer4';
+            assert.equal(snapshots[3].snapshot.answers.q31, expected);
+            assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(3).textContent(), 'Correct');
+            if (options.alternatives) {
+                assert.ok(snapshots.every(({ snapshot }) => Object.values(snapshot.answerComparison).every(
+                    (entry) => JSON.stringify(entry.acceptedAnswers) === JSON.stringify(['colour', 'color'])
+                )), 'displayed alternatives remain separate accepted answers in every part');
+                assert.equal(await activeFrame(suite).locator('body').evaluate(() => Boolean(window.AnswerMatchCore)), Boolean(options.matchCore));
+                const dateScores = await activeFrame(suite).locator('body').evaluate(() => {
+                    const correctCell = document.querySelector('#fixture-results tbody tr').cells[2];
+                    const displayed = correctCell.textContent;
+                    const input = document.querySelector('input');
+                    const answer = input.value;
+                    correctCell.textContent = '10/11/2026';
+                    const scores = ['10', '10/11/2026'].map((value) => {
+                        input.value = value;
+                        return window.__listeningBridgeSnapshot().scoreInfo.correct;
+                    });
+                    correctCell.textContent = displayed;
+                    input.value = answer;
+                    return scores;
+                });
+                assert.deepEqual(dateScores, [0, 1], 'a literal date is not split into accepted alternatives');
+            }
+            if (options.answerControl === 'id') {
+                assert.equal(await activeFrame(suite).locator('#q31').getAttribute('name'), null);
+                assert.equal(await activeFrame(suite).locator('#q31').getAttribute('data-q'), null);
+            }
+            for (const value of ['wrong', '']) {
+                const snapshot = await activeFrame(suite).locator('body').evaluate((_, currentValue) => {
+                    const input = document.querySelector('input');
+                    if (input) input.value = currentValue;
+                    else document.querySelector('.token').dataset.value = document.querySelector('.token').textContent = currentValue;
+                    return window.__listeningBridgeSnapshot();
+                }, value);
+                assert.equal(snapshot.answers.q31, value, 'snapshots read edits that have not refreshed the native report');
+                assert.equal(snapshot.scoreInfo.correct, 0, 'a retained Correct result cannot credit a changed or empty answer');
+            }
+            await activeFrame(suite).locator('body').evaluate((_, answer) => {
+                const input = document.querySelector('input');
+                if (input) input.value = answer;
+                else {
+                    const token = document.querySelector('.token');
+                    delete token.dataset.value;
+                    token.textContent = answer;
+                }
+            }, expected);
+            const restored = await activeFrame(suite).locator('body').evaluate(() => window.__listeningBridgeSnapshot());
+            assert.equal(restored.answers.q31, expected, 'tokens also support text-only values');
+            assert.equal(restored.scoreInfo.correct, 1);
+        }
         if (options.retainedTable) {
             assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(1).textContent(), '',
                 'the live generator scores current inputs even while the retained table is blank');
@@ -447,7 +528,12 @@ try {
         const saved = await waitForRecord(page);
         assert.equal(saved[0].correctAnswers, options.reset ? 3 : 4);
         assert.equal(saved[0].suiteEntries.length, 4);
+        if (options.answerControl || options.alternatives) {
+            assert.equal(saved[0].suiteEntries[3].answers.q31, snapshots[3].snapshot.answers.q31,
+                'the aggregate record preserves the current table-backed answer');
+        }
         results.push({ compatibility: options.scoring || options.finishControl, retainedTable: options.retainedTable, reset: options.reset,
+            answerControl: options.answerControl, alternatives: options.alternatives, matchCore: options.matchCore,
             recordCount: saved.length, correct: saved[0].correctAnswers });
         await context.close();
     }

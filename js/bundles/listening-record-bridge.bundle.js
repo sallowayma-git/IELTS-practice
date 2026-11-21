@@ -6692,6 +6692,12 @@
     return answers.join(' / ');
   }
 
+  function normalizeDisplayedAnswers(value, mode) {
+    // Text alternatives are displayed with " / "; bare slashes may belong to a date or fraction.
+    var values = mode === 'multiple' ? value : String(value || '').split(/\s+\/\s+/);
+    return normalizeAcceptedAnswers(values, mode);
+  }
+
   function compareAgainstAccepted(userAnswer, correctValue, mode) {
     var accepted = normalizeAcceptedAnswers(correctValue, mode);
     if (!accepted.length) return false;
@@ -6926,13 +6932,17 @@
     var questionDataInputs = question ? Array.prototype.slice.call(doc.querySelectorAll('[data-q="' + cssAttr(question) + '"], [data-q="' + cssAttr(directName) + '"]')) : [];
     var multipleName = (question === '11' || question === '12') ? 'q11_12' : '';
     var multipleInputs = multipleName ? Array.prototype.slice.call(doc.querySelectorAll('[name="' + cssAttr(multipleName) + '"]')) : [];
-    return sourceInputs.length
+    var inputs = sourceInputs.length
       ? sourceInputs
       : (directInputs.length
         ? directInputs
         : (sourceDataInputs.length
           ? sourceDataInputs
           : (questionDataInputs.length ? questionDataInputs : multipleInputs)));
+    if (inputs.length) return inputs;
+    return Array.prototype.slice.call(doc.querySelectorAll(
+      '[id="' + cssAttr(rawSourceName || directName) + '"], [id="' + cssAttr(directName) + '"]'
+    )).filter(function (el) { return /^(input|textarea|select)$/i.test(el.tagName); });
   }
 
   function getAnswerInputValue(doc, question, correctAnswer, sourceKey) {
@@ -6954,17 +6964,17 @@
 
   function getSlotAnswerValue(doc, question, sourceKey) {
     var selectors = [
-      '.match-slot[data-q="' + cssAttr(question) + '"] .tag',
-      '.match-slot[data-q="' + cssAttr(sourceKey) + '"] .tag',
-      '.flow-slot[data-q="' + cssAttr(question) + '"] .tag',
-      '.flow-slot[data-q="' + cssAttr(sourceKey) + '"] .tag',
-      '.map-slot[data-q="' + cssAttr(question) + '"] .tag',
-      '.map-slot[data-q="' + cssAttr(sourceKey) + '"] .tag',
-      '[data-q="' + cssAttr(question) + '"] .tag',
-      '[data-q="' + cssAttr(sourceKey) + '"] .tag'
+      '.match-slot[data-q="' + cssAttr(question) + '"]',
+      '.match-slot[data-q="' + cssAttr(sourceKey) + '"]',
+      '.flow-slot[data-q="' + cssAttr(question) + '"]',
+      '.flow-slot[data-q="' + cssAttr(sourceKey) + '"]',
+      '.map-slot[data-q="' + cssAttr(question) + '"]',
+      '.map-slot[data-q="' + cssAttr(sourceKey) + '"]',
+      '[data-q="' + cssAttr(question) + '"]',
+      '[data-q="' + cssAttr(sourceKey) + '"]'
     ];
     for (var i = 0; i < selectors.length; i++) {
-      var slot = doc.querySelector(selectors[i]);
+      var slot = doc.querySelector(selectors[i] + ' .tag, ' + selectors[i] + ' .token');
       var value = String(slot && slot.dataset && slot.dataset.value || slot && slot.textContent || '').trim();
       if (value) return value;
     }
@@ -7167,7 +7177,7 @@
         ? getAnswerInputValue(doc, question, detail.correctAnswer, sourceKey)
         : getSlotAnswerValue(doc, question, sourceKey);
       var multiple = isMultipleAnswerControl(doc, question, sourceKey);
-      var accepted = normalizeAcceptedAnswers(detail.correctAnswer, multiple ? 'multiple' : 'text');
+      var accepted = normalizeDisplayedAnswers(detail.correctAnswer, multiple ? 'multiple' : 'text');
       var isCorrect = accepted.length > 0 && (multiple
         ? arraysEqualSet(String(userAnswer || '').split(',').map(normalizeComparableAnswer).filter(Boolean), accepted.map(normalizeComparableAnswer))
         : compareAgainstAccepted(userAnswer, accepted, 'text'));
