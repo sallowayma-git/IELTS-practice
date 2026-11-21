@@ -61,6 +61,12 @@ Display-generated scoreInfo (`comparison_calculation` or `display`) is never a
 saved grade. DataConsistencyManager captures original aggregate evidence in the
 existing browseScore field on its display clone before synthesizing any legacy
 display fields. AppData already preserves this evidence through projections.
+The denominator fallback uses the same saved candidates: an explicit null in
+`browseScore.possible` cannot fall through to a synthesized `totalQuestions: 0`,
+and display-generated scoreInfo cannot supply a denominator. Empty answers with
+no saved denominator remain unknown. An explicitly saved zero denominator remains
+valid for an empty record, including when earned credit was not saved separately.
+Display preparation retains an explicit denominator before filling display fields.
 
 If a suite lacks a valid parent pair, compatible passage results can supply its
 aggregate. Otherwise weighted detail is the fallback. Missing or unknown detail
@@ -107,12 +113,14 @@ node scripts/verify-diagnostic-release.mjs
 ```
 
 The persistence regression opens the actual static index and shipped bundles,
-saves ten synthetic records through AppData into real IndexedDB, opens both
+saves thirteen synthetic records through AppData into real IndexedDB, opens both
 detail/full projections, downloads Markdown through the modal export entrypoint,
 reopens and reloads, and compares all saved records including annotations and
 the canonical replay snapshot. It uses isolated browser storage and does not
 enable sync. Optional `HISTORY_BROWSER_CHANNEL=chrome` or `msedge` and
 `HISTORY_ACCESS_MODE=file` select additional browser/access-mode coverage.
+The empty-record cases distinguish missing grading evidence, saved 0/0, and a
+saved zero denominator without earned credit through each projection and reopen.
 
 The first four modal assertions fail on opensource baseline
 `5cee8fa324227f4ba15f6df65453db9023e08249` with 1/1/4/0 instead of 3/3/6/3.

@@ -1580,7 +1580,9 @@ class DataConsistencyManager {
             const counts = window.AnswerComparisonUtils.resolveRecordCounts(record);
             enriched.browseScore = {
                 earned: counts.source === 'saved' ? counts.correct : null,
-                possible: counts.source === 'saved' ? counts.total : null
+                // Preserve an explicit denominator even without earned credit;
+                // the count resolver validates it before using it for display.
+                possible: counts.source === 'saved' ? counts.total : (record?.totalQuestions ?? null)
             };
         }
         const numericCorrectCount = typeof enriched.correctAnswers === 'number'

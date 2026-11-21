@@ -151,6 +151,78 @@ test('display enrichment cannot turn missing totals into saved row-count grades'
     assert.equal(counts(context, prepared).missed, 3);
 });
 
+test('empty records without saved totals remain unknown through the normal modal path', () => {
+    const context = load();
+    const manager = new context.DataConsistencyManager();
+    for (const input of [
+        { answers: {} },
+        { realData: { answers: {} } },
+        { answers: {}, totalQuestions: 0, browseScore: { earned: null, possible: null } },
+        ...['display', 'comparison_calculation'].map(source => ({ answers: {}, scoreInfo: { total: 0, source } }))
+    ]) {
+        const original = JSON.stringify(input);
+        const prepared = manager.ensureConsistency(input);
+        assert.equal(prepared.totalQuestions, 0, 'legacy display preparation supplies a zero');
+        for (const candidate of [input, prepared, manager.ensureConsistency(prepared)]) {
+            const result = counts(context, candidate);
+            assert.equal(result.total, null, original);
+            assert.equal(result.correct, null, original);
+            assert.equal(result.missed, null, original);
+            assert.equal(result.detailStatus, 'partial', original);
+        }
+        let rendered;
+        context.document.body.insertAdjacentHTML = (_, html) => { rendered = html; };
+        context.practiceRecordModal.show(input);
+        assert.match(rendered, /score-highlight">未知</);
+        assert.equal(errorCount(rendered), '未知');
+        assert.deepEqual(plain(context.practiceRecordModal.currentRecord), plain(input));
+        context.practiceRecordModal.hide();
+        assert.equal(JSON.stringify(input), original);
+    }
+});
+
+test('explicit zero denominators remain complete when the record has no answer slots', () => {
+    const context = load();
+    const manager = new context.DataConsistencyManager();
+    for (const fields of [
+        { totalQuestions: 0 },
+        { totalQuestions: '0' },
+        { correctAnswers: 0, totalQuestions: 0 },
+        { browseScore: { earned: null, possible: 0 } },
+        { scoreInfo: { total: 0 } },
+        { realData: { scoreInfo: { totalQuestions: 0 } } },
+        { total: 0 }
+    ]) {
+        const input = { answers: {}, ...fields };
+        const original = JSON.stringify(input);
+        for (const candidate of [input, manager.ensureConsistency(input)]) {
+            const result = counts(context, candidate);
+            assert.equal(result.total, 0, original);
+            assert.equal(result.correct, 0, original);
+            assert.equal(result.missed, 0, original);
+            assert.equal(result.detailStatus, 'complete', original);
+            const html = context.practiceRecordModal.createModalHtml(candidate);
+            assert.match(html, /score-highlight">0\/0</);
+            assert.equal(errorCount(html), '0');
+        }
+        assert.equal(JSON.stringify(input), original);
+    }
+});
+
+test('display preparation preserves a saved denominator without manufacturing earned credit', () => {
+    const context = load();
+    for (const totalQuestions of [10, '10']) {
+        const input = { answers: {}, totalQuestions };
+        const prepared = new context.DataConsistencyManager().ensureConsistency(input);
+        const result = counts(context, prepared);
+        assert.equal(result.total, 10);
+        assert.equal(result.correct, null);
+        assert.equal(result.missed, null);
+        assert.equal(result.unknown, 10);
+        assert.match(context.practiceRecordModal.createModalHtml(prepared), /score-highlight">未知\/10</);
+    }
+});
+
 test('unknown weighted results retain their denominator without inventing credit', () => {
     const context = load();
     const input = record('unknown-weighted', { q1: { userAnswer: ['A', 'B'], correctAnswer: '', isCorrect: null, weight: 3 } });

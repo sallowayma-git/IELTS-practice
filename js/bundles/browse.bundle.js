@@ -19385,7 +19385,7 @@ window.BrowseStateManager = BrowseStateManager;
         return Number.isSafeInteger(number) && number >= 0 ? number : null;
     }
 
-    function savedCounts(record, detailTotal) {
+    function savedCountCandidates(record) {
         const candidates = [];
         // AppData captures original evidence before supplying legacy display zeros.
         if (Object.prototype.hasOwnProperty.call(record, 'browseScore')) {
@@ -19398,7 +19398,11 @@ window.BrowseStateManager = BrowseStateManager;
             candidates.push([score.correct, score.total], [score.correct, score.totalQuestions]);
         }
         candidates.push([record.score, record.total]);
-        for (const [earned, possible] of candidates) {
+        return candidates;
+    }
+
+    function savedCounts(record, detailTotal) {
+        for (const [earned, possible] of savedCountCandidates(record)) {
             const correct = countValue(earned);
             const total = countValue(possible);
             if (correct !== null && total !== null && correct <= total && (total > 0 || detailTotal === 0)) {
@@ -19435,9 +19439,9 @@ window.BrowseStateManager = BrowseStateManager;
                 unclassifiedMissed: missed - incorrect - unanswered,
                 detailStatus: !compatible ? 'conflict' : (unknown ? 'partial' : 'complete') };
         }
-        const possible = [record.browseScore?.possible, record.totalQuestions,
-            record.scoreInfo?.total, record.scoreInfo?.totalQuestions, record.realData?.scoreInfo?.total]
-            .map(countValue).find(value => value !== null && value >= detail.total);
+        // Missing saved evidence must also exclude synthesized display totals.
+        const possible = savedCountCandidates(record).map(([, value]) => countValue(value))
+            .find(value => value !== null && value >= detail.total);
         const total = possible ?? (detail.total || null);
         const unknown = detail.unknown + (total === null ? 0 : total - detail.total);
         const complete = total !== null && unknown === 0;

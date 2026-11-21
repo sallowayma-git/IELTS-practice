@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:2bfcb39c5a4e1cd0e35e138476101a3bcc260c535e03f2d0e2ea85ed5b1b128c",
+  "buildId": "sha256:7562da85a13ab245509c75a09ba9f0caf651540e1e1625d7f9250227021cbc9e",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -550,7 +550,7 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "49866a3457e0a5c32189cb1e687325252bd4e22715349bb88dc449d5b050986c"
+      "sha256": "157442b22ed5d1baa6e3337c93c5f963eee6cf340aab3b4d18eea2987eaa7da3"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
@@ -558,7 +558,7 @@
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
-      "sha256": "77e53ca498f2f94c196cabd1a69526c828324af3de49745fe4adb411bbe07eb8"
+      "sha256": "232cd59e31f6a6b03760d814e9c9b63575f4b9b7ceabd5f971d0fea222c098fe"
     },
     {
       "path": "js/bundles/dictionary.bundle.js",
@@ -1068,31 +1068,31 @@
       {
         "source": "js/utils/answerComparisonUtils.js",
         "startLine": 18656,
-        "endLine": 19573,
+        "endLine": 19577,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 19577,
-        "endLine": 20609,
+        "startLine": 19581,
+        "endLine": 20613,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 20613,
-        "endLine": 20874,
+        "startLine": 20617,
+        "endLine": 20878,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 20878,
-        "endLine": 21083,
+        "startLine": 20882,
+        "endLine": 21087,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 21087,
-        "endLine": 26849,
+        "startLine": 21091,
+        "endLine": 26853,
         "sourceStartLine": 1
       }
     ],
@@ -1118,13 +1118,13 @@
       {
         "source": "js/utils/dataConsistencyManager.js",
         "startLine": 1450,
-        "endLine": 1940,
+        "endLine": 1942,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/performance.js",
-        "startLine": 1944,
-        "endLine": 2394,
+        "startLine": 1946,
+        "endLine": 2396,
         "sourceStartLine": 1
       }
     ],
