@@ -6563,14 +6563,20 @@
     }
     async function sync(choices = {}) {
         if (!state.user) return;
+        const userId = state.user.id;
+        const started = generation;
+        const current = () => started === generation && state.user?.id === userId;
         if (running) {
+            // A conflict choice needs its own pass; the active task has different choices.
+            if (Object.keys(choices).length) {
+                await running;
+                if (current()) return sync(choices);
+                return;
+            }
             // A caller may have committed changes after the active pass captured them.
             syncRequested = true;
             return running;
         }
-        const userId = state.user.id;
-        const started = generation;
-        const current = () => started === generation && state.user?.id === userId;
         running = withLock(async () => {
             for (let attempt = 0; attempt < 5 && current(); attempt += 1) {
                 syncRequested = false;

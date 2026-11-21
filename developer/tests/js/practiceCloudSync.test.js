@@ -29,6 +29,7 @@ async function harness({ start = false, readLatency = 0 } = {}) {
     let startListener;
     let heldRead;
     let heldApply;
+    let heldLockReturn;
     const panel = {
         querySelector: () => ({ addEventListener() {} }),
         querySelectorAll: () => []
@@ -67,9 +68,18 @@ async function harness({ start = false, readLatency = 0 } = {}) {
             }
         }
     };
-    const window = { document, AppData: app, addEventListener() {} };
+    const navigator = { locks: {
+        async request(_name, task) {
+            const gate = heldLockReturn;
+            heldLockReturn = null;
+            const result = await task();
+            if (gate) { gate.started.resolve(); await gate.release.promise; }
+            return result;
+        }
+    } };
+    const window = { document, navigator, AppData: app, addEventListener() {} };
     const context = {
-        window, document,
+        window, document, navigator,
         setInterval(callback, delay) { poll = { callback, delay, next: elapsed + delay }; },
         AbortSignal: { timeout: () => undefined },
         CustomEvent: class { constructor(type) { this.type = type; } },
@@ -120,9 +130,74 @@ async function harness({ start = false, readLatency = 0 } = {}) {
             heldApply = gate;
             return gate;
         },
+        holdNextLockReturn() {
+            const gate = { started: deferred(), release: deferred() };
+            heldLockReturn = gate;
+            return gate;
+        },
         snapshot: () => ({ local: clone(local), remote: clone(remote), baseline: clone(binding.baseline), syncReads, syncWrites, syncApplies, elapsed, pollTicks })
     };
 }
+
+async function pendingConflict() {
+    const fixture = await harness();
+    const local = [{ id: 'first', title: 'Local edit' }, ...fixture.initial.slice(1)];
+    const remote = [{ id: 'first', title: 'Remote edit' }, ...fixture.initial.slice(1)];
+    fixture.replaceLocal(local);
+    fixture.replaceRemote(remote);
+    const gate = fixture.holdNextLockReturn();
+    const earlier = fixture.cloud.sync();
+    await gate.started.promise;
+    assert.equal(fixture.cloud.status().phase, 'conflict');
+    const choices = (keep) => ({ first: { keep, local: JSON.stringify(local[0]), remote: JSON.stringify(remote[0]) } });
+    return { fixture, local, remote, gate, earlier, choices };
+}
+
+for (const keep of ['local', 'remote']) {
+    test(`keeping the ${keep} conflict version waits for an earlier lock to finish`, { timeout: 2000 }, async () => {
+        const { fixture, local, remote, gate, earlier, choices } = await pendingConflict();
+        const resolving = fixture.cloud.sync(choices(keep));
+        gate.release.resolve();
+        await Promise.all([earlier, resolving]);
+
+        const expected = keep === 'local' ? local : remote;
+        const saved = fixture.snapshot();
+        assert.equal(fixture.cloud.status().phase, 'ready');
+        assert.deepEqual(saved.local, expected);
+        assert.deepEqual(saved.remote, expected);
+        assert.deepEqual(saved.baseline, expected);
+    });
+}
+
+test('a queued conflict choice does not overwrite a newer remote edit', { timeout: 2000 }, async () => {
+    const { fixture, local, remote, gate, earlier, choices } = await pendingConflict();
+    const resolving = fixture.cloud.sync(choices('local'));
+    const newerRemote = [{ ...remote[0], title: 'Newer remote edit' }, ...remote.slice(1)];
+    fixture.replaceRemote(newerRemote);
+    gate.release.resolve();
+    await Promise.all([earlier, resolving]);
+
+    const saved = fixture.snapshot();
+    assert.equal(fixture.cloud.status().phase, 'conflict');
+    assert.deepEqual(saved.local, local);
+    assert.deepEqual(saved.remote, newerRemote);
+    assert.deepEqual(saved.baseline, fixture.initial);
+    assert.equal(saved.syncWrites, 0);
+});
+
+test('refreshing the account cancels a queued conflict choice', { timeout: 2000 }, async () => {
+    const { fixture, local, remote, gate, earlier, choices } = await pendingConflict();
+    const resolving = fixture.cloud.sync(choices('local'));
+    const refreshing = fixture.cloud.refresh();
+    gate.release.resolve();
+    await Promise.all([earlier, resolving, refreshing]);
+
+    const saved = fixture.snapshot();
+    assert.deepEqual(saved.local, local);
+    assert.deepEqual(saved.remote, remote);
+    assert.deepEqual(saved.baseline, fixture.initial);
+    assert.equal(saved.syncWrites, 0);
+});
 
 for (const direction of ['upload', 'download']) {
     test(`periodic refreshes allow ${direction} when every successful read takes 16 seconds`, { timeout: 2000 }, async () => {
