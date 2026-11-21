@@ -5091,8 +5091,13 @@
                         } else showNotice('保存失败，进度已保留。请点击 Retry submit 重试。');
                         return true;
                     }
+                    // The reused window can receive a previous part's receipt after navigation.
+                    const completion = completionPayloads.get(payload.submissionId);
                     if (message.type === 'PRACTICE_SUBMIT_ACK' && mode === 'classic'
-                        && state.examId === sequence[sequence.length - 1].examId) {
+                        && state.examId === sequence[sequence.length - 1].examId
+                        && completion?.examId === state.examId
+                        && payload.examId === completion.examId
+                        && payload.sessionId === completion.sessionId) {
                         clearRecovery();
                         global.close();
                     }

@@ -200,6 +200,33 @@ async function assertRunningCountdown(page, suite) {
     }, before, { timeout: 5000 });
 }
 async function records(page) { return page.evaluate(() => window.AppData.practice.list({ projection: 'detail' })); }
+async function assertPreviousPartReceiptIgnored(page, suite) {
+    await suite.evaluate((previousExamId) => {
+        window.__lateSuiteReceiptObserved = false;
+        window.__lateSuiteReceiptCloseCalls = 0;
+        const close = window.close;
+        window.close = function (...args) {
+            window.__lateSuiteReceiptCloseCalls++;
+            return close.apply(this, args);
+        };
+        window.addEventListener('message', ({ data }) => {
+            if (data.type === 'PRACTICE_SUBMIT_ACK' && data.data?.examId === previousExamId) {
+                window.__lateSuiteReceiptObserved = true;
+            }
+        });
+    }, exams[2].id);
+    assert.equal(await page.evaluate((previousExamId) => {
+        const completion = window.__listeningSuiteCompletions[previousExamId];
+        return Boolean(completion) && window.app._announcePracticeSubmitOutcome(
+            previousExamId, completion, window.app.currentSuiteSession.windowRef, true
+        );
+    }, exams[2].id), true, 'deliver the actual P3 receipt after P4 is ready');
+    await suite.waitForFunction(() => window.__lateSuiteReceiptObserved);
+    assert.equal(await suite.evaluate(() => window.__lateSuiteReceiptCloseCalls), 0,
+        'a delayed P3 receipt must not close unsubmitted P4');
+    assert.equal(await activeFrame(suite).locator('input').isEnabled(), true);
+    assert.equal((await records(page)).length, 0, 'the suite is still unfinished before submitting P4');
+}
 async function waitForRecord(page) {
     const deadline = Date.now() + 15000;
     while (Date.now() < deadline) {
@@ -286,6 +313,16 @@ try {
     }
     for (const mode of ['classic', 'stationary']) {
         const { context, page } = await setup();
+        if (mode === 'classic') {
+            await page.evaluate(() => {
+                window.__listeningSuiteCompletions = {};
+                window.addEventListener('message', ({ data }) => {
+                    if (data.type === 'PRACTICE_COMPLETE' && data.data?.examId) {
+                        window.__listeningSuiteCompletions[data.data.examId] = data.data;
+                    }
+                });
+            });
+        }
         const suite = await start(page, mode);
         await reloadSuite(suite);
         await assertRunningCountdown(page, suite);
@@ -293,6 +330,7 @@ try {
         for (let part = 1; part <= 4; part++) {
             await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
                 && window.__listeningBridgeGetState().examId === expected, exams[part - 1].id);
+            if (mode === 'classic' && part === 4) await assertPreviousPartReceiptIgnored(page, suite);
             if (mode === 'stationary' && part === 2) {
                 await activeFrame(suite).locator('input').fill('Unsubmitted P2 draft');
                 await suite.locator('[data-suite-navigate="prev"]:enabled').click();
@@ -353,6 +391,9 @@ try {
         assert.equal(saved[0].type, 'listening');
         assert.equal(saved[0].suiteEntries.length, 4);
         assert.equal(saved[0].correctAnswers, 4);
+        if (mode === 'classic' && !suite.isClosed()) {
+            await suite.waitForEvent('close', { timeout: 5000 });
+        }
         results.push({ mode, recordCount: saved.length, correct: saved[0].correctAnswers, parts: saved[0].suiteEntries.length });
         await context.close();
     }
