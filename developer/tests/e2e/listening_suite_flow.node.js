@@ -439,6 +439,13 @@ try {
         { scoring: 'table', answerControl: 'id' },
         { scoring: 'table', answerControl: 'token' },
         ...[
+            ['0.5', '1/2', 'half'],
+            ['10/11/2026', '10/11/26', 'November 10 2026']
+        ].flatMap((alternatives) => [false, true].map((matchCore) => ({
+            scoring: 'table', alternatives, matchCore,
+            invalidAnswers: [alternatives.slice(0, 2).join(' / '), alternatives.slice(0, 2).reverse().join(' / ')]
+        }))),
+        ...[
             ['colour', 'color'],
             ['7.30', '7:30'],
             ['November 10', '10 November'],
@@ -461,11 +468,12 @@ try {
     ]) {
         const literalAnswer = options.literalAnswer || options.alternatives?.find((answer) => answer.includes(' / '));
         const components = literalAnswer ? literalAnswer.split(' / ') : [];
-        const answers = options.partialAnswer ? components
+        const answers = options.invalidAnswers ? [...options.alternatives.slice(0, 2), ...options.invalidAnswers]
+            : options.partialAnswer ? components
             : options.alternatives || (options.literalAnswer ? [options.literalAnswer] : []);
         const answerForPart = (part) => answers.length ? answers[(part - 1) % answers.length]
             : options.answerControl === 'token' && part === 4 ? 'A' : 'answer' + part;
-        const expectedPartScore = options.partialAnswer ? 0 : 1;
+        const expectedPartScore = (part) => options.partialAnswer || options.invalidAnswers?.includes(answerForPart(part)) ? 0 : 1;
         const { context, page } = await setup(options);
         const suite = await start(page, 'simulation');
         await waitForSuiteReady(suite);
@@ -493,14 +501,14 @@ try {
             disabled: Boolean(frame.contentDocument.querySelector('input')?.disabled),
             finishCalls: frame.contentWindow.App.finishCalls
         })));
-        assert.ok(snapshots.every(({ snapshot }) => snapshot?.scoreInfo.correct === expectedPartScore && snapshot.scoreInfo.total === 1),
+        assert.ok(snapshots.every(({ snapshot }, index) => snapshot?.scoreInfo.correct === expectedPartScore(index + 1) && snapshot.scoreInfo.total === 1),
             `suite snapshots score current answers for ${JSON.stringify(options)}: ${JSON.stringify(snapshots.map(({ snapshot }) => snapshot?.scoreInfo))}`);
         assert.ok(snapshots.every(({ reviewing, disabled, finishCalls }) => !reviewing && !disabled && finishCalls === 0),
             'scoring snapshots do not enter native review');
         if (options.answerControl || options.alternatives || options.literalAnswer) {
             const expected = answerForPart(4);
             assert.equal(snapshots[3].snapshot.answers.q31, expected);
-            assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(3).textContent(), expectedPartScore ? 'Correct' : 'Incorrect');
+            assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(3).textContent(), expectedPartScore(4) ? 'Correct' : 'Incorrect');
             if (options.alternatives || options.literalAnswer) {
                 assert.equal(await activeFrame(suite).locator('body').evaluate(() => Boolean(window.AnswerMatchCore)), Boolean(options.matchCore));
             }
@@ -513,6 +521,37 @@ try {
                 assert.ok(snapshots.every(({ snapshot }) => Object.values(snapshot.answerComparison).every(
                     (entry) => JSON.stringify(entry.acceptedAnswers) === JSON.stringify(options.alternatives)
                 )), 'displayed alternatives remain separate accepted answers in every part');
+                if (options.invalidAnswers) {
+                    const probes = await activeFrame(suite).locator('body').evaluate((_, alternatives) => {
+                        const correctCell = document.querySelector('#fixture-results tbody tr').cells[2];
+                        const input = document.querySelector('input');
+                        const displayed = correctCell.textContent;
+                        const answer = input.value;
+                        const spaced = alternatives.find((value) => value.includes('/')).replaceAll('/', ' / ');
+                        const variants = [alternatives, [spaced, ...alternatives.slice(1)]];
+                        const results = variants.flatMap((accepted) => {
+                            const invalid = [accepted.slice(0, 2).join(' / '), accepted.slice(0, 2).reverse().join(' / ')];
+                            const orders = [accepted, accepted.slice().reverse(), [accepted[0], accepted[2], accepted[1]]];
+                            return orders.flatMap((order) => {
+                                correctCell.textContent = order.join(' / ');
+                                return [...accepted, ...invalid].map((value) => {
+                                    input.value = value;
+                                    const snapshot = window.__listeningBridgeSnapshot();
+                                    return { order, value, expected: accepted.includes(value) ? 1 : 0,
+                                        correct: snapshot.scoreInfo.correct, accepted: snapshot.answerComparison.q31.acceptedAnswers };
+                                });
+                            });
+                        });
+                        correctCell.textContent = displayed;
+                        input.value = answer;
+                        return results;
+                    }, options.alternatives);
+                    for (const probe of probes) {
+                        assert.deepEqual(probe.accepted, probe.order, `complete numeric alternatives keep their boundaries: ${JSON.stringify(probe)}`);
+                        assert.equal(probe.correct, probe.expected,
+                            `current numeric and textual answers are scored independently: ${JSON.stringify(probe)}`);
+                    }
+                }
                 const dateScores = await activeFrame(suite).locator('body').evaluate(() => {
                     const correctCell = document.querySelector('#fixture-results tbody tr').cells[2];
                     const displayed = correctCell.textContent;
@@ -533,7 +572,7 @@ try {
                 assert.equal(await activeFrame(suite).locator('#q31').getAttribute('name'), null);
                 assert.equal(await activeFrame(suite).locator('#q31').getAttribute('data-q'), null);
             }
-            for (const value of ['wrong', '', ...components]) {
+            for (const value of ['wrong', '', ...components, ...(options.invalidAnswers || [])]) {
                 const snapshot = await activeFrame(suite).locator('body').evaluate((_, currentValue) => {
                     const input = document.querySelector('input');
                     if (input) input.value = currentValue;
@@ -554,7 +593,7 @@ try {
             }, expected);
             const restored = await activeFrame(suite).locator('body').evaluate(() => window.__listeningBridgeSnapshot());
             assert.equal(restored.answers.q31, expected, 'tokens also support text-only values');
-            assert.equal(restored.scoreInfo.correct, expectedPartScore);
+            assert.equal(restored.scoreInfo.correct, expectedPartScore(4));
         }
         if (options.retainedTable) {
             assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(1).textContent(), '',
@@ -578,7 +617,7 @@ try {
                 'simulation intercepts native completion before review handlers');
         } else await suite.locator('[data-suite-submit]').click();
         const saved = await waitForRecord(page);
-        assert.equal(saved[0].correctAnswers, options.reset ? 3 : 4 * expectedPartScore);
+        assert.equal(saved[0].correctAnswers, options.reset ? 3 : [1, 2, 3, 4].reduce((sum, part) => sum + expectedPartScore(part), 0));
         assert.equal(saved[0].suiteEntries.length, 4);
         if (options.answerControl || options.alternatives || options.literalAnswer) {
             assert.equal(saved[0].suiteEntries[3].answers.q31, snapshots[3].snapshot.answers.q31,
@@ -586,7 +625,7 @@ try {
         }
         results.push({ compatibility: options.scoring || options.finishControl, retainedTable: options.retainedTable, reset: options.reset,
             answerControl: options.answerControl, alternatives: options.alternatives, matchCore: options.matchCore,
-            literalAnswer: options.literalAnswer, partialAnswer: options.partialAnswer,
+            literalAnswer: options.literalAnswer, partialAnswer: options.partialAnswer, invalidAnswers: options.invalidAnswers,
             recordCount: saved.length, correct: saved[0].correctAnswers });
         await context.close();
     }

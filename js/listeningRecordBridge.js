@@ -328,13 +328,14 @@
   function normalizeDisplayedAnswers(value, mode) {
     var values = normalizeAcceptedAnswers(value, mode);
     if (mode === 'multiple') return values;
-    // Adjacent numeric fragments form one fraction/date even among text alternatives.
-    var numericFragment = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:\s*\/\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+))*$/;
+    // Join only slash-free components of a spaced fraction/date. A compact slash
+    // value is already a complete alternative and must keep its own boundaries.
+    var numericComponent = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/;
     return values.reduce(function (answers, displayed) {
       var parts = displayed.split(/(\s+\/\s+)/);
       var current = parts[0];
       for (var i = 2; i < parts.length; i += 2) {
-        if (numericFragment.test(current) && numericFragment.test(parts[i])) {
+        if (numericComponent.test(parts[i - 2]) && numericComponent.test(parts[i])) {
           current += parts[i - 1] + parts[i];
         } else {
           answers.push(current);
