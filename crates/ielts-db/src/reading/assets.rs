@@ -380,6 +380,9 @@ pub fn load_practice_asset_payload_for_view(
 ) -> DbResult<PracticeAssetV2Payload> {
     let mut loaded = load_practice_asset_payload(conn, asset_id)?;
     strip_answer_attributes(&mut loaded.payload);
+    if loaded.payload["idictation"]["subject"] == "reading" {
+        loaded.payload["answerKey"] = serde_json::json!({});
+    }
     Ok(loaded)
 }
 

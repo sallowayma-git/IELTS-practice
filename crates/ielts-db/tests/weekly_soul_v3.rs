@@ -518,7 +518,7 @@ fn a_format_22_backup_carries_the_report_its_facts_and_the_model_revision() {
     let source_snapshot = soul::soul_snapshot(&conn, "local").unwrap();
 
     let package = create_backup_package(&conn, "weekly-soul-v3").unwrap();
-    assert_eq!(package.manifest.schema_version, 22);
+    assert_eq!(package.manifest.schema_version, ielts_db::backup::BACKUP_SCHEMA_VERSION);
     assert!(package.database.iter().any(|table| table.name == "weekly_digests" && !table.rows.is_empty()));
     assert!(package.database.iter().any(|table| table.name == "soul_revisions" && !table.rows.is_empty()));
 

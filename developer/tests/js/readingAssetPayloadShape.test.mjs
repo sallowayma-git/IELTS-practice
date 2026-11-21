@@ -51,3 +51,24 @@ await controller.loadReadingAsset('p1-demo')
 assert.deepEqual(controller.state.asset.payload.meta, { title: 'Demo' })
 
 console.log('reading asset payload shape: ok')
+
+// An old exam response must never replace a newly opened material (or reopen
+// a disposed page), because that would restart the exam initialization path.
+const pending = new Map()
+const concurrent = createReadingAssetController({
+  getAsset: id => new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
+}, String)
+const old = concurrent.loadReadingAsset('old-exam')
+const fresh = concurrent.loadReadingAsset('reader')
+pending.get('reader').resolve({ id:'reader', payload:{practiceKind:'material'} })
+await fresh
+pending.get('old-exam').resolve(canonical)
+assert.equal(await old, null)
+assert.equal(concurrent.state.asset.id, 'reader')
+const disposed = concurrent.loadReadingAsset('disposed')
+concurrent.clearReadingAsset()
+pending.get('disposed').reject(new Error('late network failure'))
+assert.equal(await disposed, null)
+assert.equal(concurrent.state.asset, null)
+assert.equal(concurrent.state.error, '')
+assert.equal(concurrent.state.loading, false)

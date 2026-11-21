@@ -4,7 +4,8 @@
       <p class="page-header-kicker">LISTENING · 听力</p>
       <h1 class="heading-serif listening-library__title">听力题库</h1>
       <p class="page-header-desc">按场景和频率挑选一套听力，逐节作答。</p>
-      <LibraryFilters v-model:source="sourceFilter" v-model:part="partFilter" :parts="listeningParts" />
+      <LibraryFilters v-model:source="sourceFilter" v-model:part="partFilter" :parts="listeningParts" :extra-sources="[{value:'idictation',label:'爱听写精听'}]" />
+      <ArticleFilters v-if="sourceFilter==='idictation'" />
     </header>
 
     <p v-if="openError" role="alert">{{ openError }}</p>
@@ -24,12 +25,12 @@
       v-else-if="!allAssets.length"
       kind="empty"
       class="listening-library__state"
-      title="听力题库还是空的"
-      desc="登录九分学长后可同步在线听力题目。"
+      :title="sourceFilter==='idictation'?'请选择精听书目':'听力题库还是空的'"
+      :desc="sourceFilter==='idictation'?'在上方加载书目并选择，查看可用章节。':'连接题源账号后可加载在线听力内容。'"
     />
 
     <template v-else>
-      <div class="listening-library__toolbar" role="search" aria-label="听力筛选">
+      <div v-if="sourceFilter!=='idictation'" class="listening-library__toolbar" role="search" aria-label="听力筛选">
         <label class="listening-library__filter">
           <span>场景</span>
           <select v-model="categoryFilter" class="input">
@@ -67,7 +68,7 @@
           <div class="listening-card__main">
             <h2 class="heading-serif listening-card__title">{{ item.title || '未命名听力' }}</h2>
             <p class="listening-card__meta">
-              <span v-if="item.provider">九分学长</span>
+              <span v-if="item.provider">{{ item.provider==='idictation'?'爱听写':'九分学长' }}</span>
               <span v-if="item.category">{{ item.category }}</span>
               <span v-if="item.difficulty">{{ difficultyLabel(item.difficulty) }}</span>
               <span v-if="item.frequency">{{ frequencyLabel(item.frequency) }}</span>
@@ -83,7 +84,7 @@
             </div>
           </div>
           <span v-if="item.available === false">暂无权限</span>
-          <button v-else-if="item.provider" class="btn btn-primary listening-card__start" type="button" :disabled="openingRemote" @click="openRemote(item)">开始练习</button>
+          <button v-else-if="item.provider" class="btn btn-primary listening-card__start" type="button" :disabled="openingRemote" @click="openRemote(item)">{{ item.practiceKind==='material'?'打开精听':'开始练习' }}</button>
           <router-link v-else
             class="btn btn-primary listening-card__start"
             :to="{ name: 'PracticeListening', params: { assetId: item.id } }"
@@ -99,6 +100,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { computed, onMounted, ref } from 'vue'
 import { listListeningAssets as listeningListAssets } from '@/api/listening-repository.js'
 import LibraryFilters from '../../../../plug/jiufen/LibraryFilters.vue'
+import ArticleFilters from '../../../../plug/idictation/ArticleFilters.vue'
+import {articleCards,openArticle} from '../../../../plug/idictation/articleLibrary.js'
 import {remoteCards, openNativeUnit} from '../../../../plug/jiufen/library.js'
 import MascotState from '@/components/mascot/MascotState.vue'
 import {
@@ -117,13 +120,14 @@ const hotlistOnly = ref(false)
 const onlineListening = remoteCards('listening')
 const listeningParts = ['P1','P2','P3','P4']
 const sourceFilter = ref('all'), partFilter = ref('all')
-const allAssets = computed(() => [...assets.value, ...onlineListening.value].sort((a,b)=>a.title.localeCompare(b.title)))
+const allAssets = computed(() => [...assets.value, ...onlineListening.value, ...articleCards.value].sort((a,b)=>a.title.localeCompare(b.title)))
 const categories = computed(() => uniqueValues(allAssets.value.map((asset) => asset.category)))
 const frequencies = computed(() => uniqueValues(
   allAssets.value.map((asset) => String(asset.frequency || '').trim().toLowerCase())
 ))
 const filteredAssets = computed(() => allAssets.value.filter((asset) => {
   if (sourceFilter.value !== 'all' && sourceFilter.value !== (asset.provider || 'local')) return false
+  if(asset.practiceKind==='material')return true
   const parts = asset.parts?.length ? asset.parts : [asset.category]
   if (partFilter.value !== 'all' && !parts.includes(partFilter.value)) return false
   const category = String(asset.category || '').trim()
@@ -166,7 +170,7 @@ async function openRemote(item) {
   openError.value = ''
   const origin = route.fullPath
   try {
-    const target = await openNativeUnit(item)
+    const target = await (item.provider==='idictation'?openArticle(item):openNativeUnit(item))
     if (route.fullPath === origin) await router.push(target)
   } catch (failure) {
     openError.value = failure?.message || String(failure)

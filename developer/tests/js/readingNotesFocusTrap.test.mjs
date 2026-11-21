@@ -17,7 +17,7 @@ const compiled = ts.transpileModule(readApp('modules/practice-reading/useReading
 }).outputText
 
 function load() {
-  const vue = { ref: (value) => ({ value }), watch: () => {}, nextTick: async () => {} }
+  const vue = { ref: (value) => ({ value }), watch: () => {}, nextTick: async () => {}, onBeforeUnmount: () => {} }
   const module = { exports: {} }
   new Function('require', 'module', 'exports', compiled)(
     (name) => {

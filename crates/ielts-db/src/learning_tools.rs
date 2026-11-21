@@ -220,12 +220,15 @@ pub fn search_learning_events(
 
 fn load_question_evidence(conn: &Connection, attempt_id: &str) -> DbResult<Vec<QuestionEvidence>> {
     let mut statement = conn.prepare(
-        "SELECT question_id,is_correct,question_kind,change_count,visit_count,elapsed_ms,marked
-         FROM attempt_answers WHERE attempt_id = ?1 ORDER BY question_id",
+        "SELECT q.question_id,q.is_correct,q.question_kind,q.change_count,q.visit_count,q.elapsed_ms,q.marked,
+                q.answered_at,a.asset_id
+         FROM attempt_answers q JOIN attempts a ON a.id=q.attempt_id WHERE q.attempt_id = ?1 ORDER BY q.question_id",
     )?;
     let rows = statement.query_map(params![attempt_id], |row| {
         let is_correct = row.get::<_, Option<i64>>(1)?.map(|value| value != 0);
         let change_count = row.get::<_, i64>(3)?.max(0) as u32;
+        let has_timeline = row.get::<_, Option<String>>(7)?.is_some()
+            || !row.get::<_, Option<String>>(8)?.is_some_and(|id| id.starts_with("idictation-reading-"));
         Ok(QuestionEvidence {
             question_id: row.get(0)?,
             is_correct,
@@ -234,7 +237,7 @@ fn load_question_evidence(conn: &Connection, attempt_id: &str) -> DbResult<Vec<Q
             visit_count: row.get::<_, i64>(4)?.max(0) as u32,
             elapsed_ms: row.get::<_, i64>(5)?.max(0) as u64,
             marked: row.get::<_, i64>(6)? != 0,
-            first_try_correct: is_correct.map(|correct| correct && change_count == 0),
+            first_try_correct: is_correct.filter(|_| has_timeline).map(|correct| correct && change_count == 0),
         })
     })?;
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)

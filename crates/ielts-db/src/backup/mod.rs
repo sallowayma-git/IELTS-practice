@@ -28,7 +28,10 @@ use crate::sqlite::{DbError, DbResult};
 // by structural signature, never by pretending they had the same schema.
 // Format 22 is the schema-35 weekly report v3 build; its payload shape is
 // format 21's, so both are read by the same table set.
-pub const BACKUP_SCHEMA_VERSION: u32 = 22;
+pub const BACKUP_SCHEMA_VERSION: u32 = 23;
+const VOCABULARY_BOOK_TABLES: &[&str] = &[
+    "vocabulary_books", "vocabulary_book_units", "vocabulary_book_entries",
+];
 /// First format whose database payload carries `weekly_digests`.
 const WEEKLY_DIGESTS_SCHEMA_VERSION: u32 = 18;
 /// First format whose database payload carries the context snapshot tables.
@@ -122,6 +125,9 @@ const CANONICAL_TABLES: &[&str] = &[
     "agent_action_approvals",
     "vocabulary_items",
     "vocabulary_review_state",
+    "vocabulary_books",
+    "vocabulary_book_units",
+    "vocabulary_book_entries",
     "dictionary_entries",
     "settings",
     "migration_meta",
@@ -773,6 +779,7 @@ fn snapshot_tables_for_schema(schema_version: u32) -> Vec<&'static str> {
         })
         .filter(|table| !DROPPED_TABLES.contains(table))
         .filter(|table| *table != "soul_revisions" || schema_version >= 21)
+        .filter(|table| !VOCABULARY_BOOK_TABLES.contains(table) || schema_version >= 23)
         .collect()
 }
 
@@ -849,7 +856,11 @@ pub fn create_backup_package(conn: &Connection, app_version: &str) -> DbResult<B
     let attempt_count: u32 = conn.query_row("SELECT COUNT(*) FROM attempts", [], |row| row.get(0))?;
     let settings = list_settings(conn, None)?;
     let secret_refs = list_secret_refs(conn)?;
-    let database = snapshot_database(conn)?;
+    let database_schema_version = current_version(conn)? as u32;
+    // Also used by migration verification to export the previous schema before
+    // upgrading it. A pre-book database cannot emit a format-23 table set.
+    let schema_version = if database_schema_version >= 42 { BACKUP_SCHEMA_VERSION } else { 22 };
+    let database = snapshot_database(conn, schema_version)?;
     let database_rows = database
         .iter()
         .map(|table| table.rows.len() as u64)
@@ -857,8 +868,8 @@ pub fn create_backup_package(conn: &Connection, app_version: &str) -> DbResult<B
 
     let mut package = BackupPackage {
         manifest: BackupManifest {
-            schema_version: BACKUP_SCHEMA_VERSION,
-            database_schema_version: current_version(conn)? as u32,
+            schema_version,
+            database_schema_version,
             created_at: chrono::Utc::now().to_rfc3339(),
             app_version: app_version.to_string(),
             includes_secrets: false,
@@ -1108,16 +1119,16 @@ fn import_legacy_backup(
     Ok(report)
 }
 
-fn snapshot_database(conn: &Connection) -> DbResult<Vec<BackupTable>> {
+fn snapshot_database(conn: &Connection, schema_version: u32) -> DbResult<Vec<BackupTable>> {
     let mut out = Vec::with_capacity(CANONICAL_TABLES.len());
-    for table in CANONICAL_TABLES {
+    for table in snapshot_tables_for_schema(schema_version) {
         let columns = table_columns(conn, table)?;
         let projection = columns
             .iter()
             .map(|column| quote_identifier(column))
             .collect::<Vec<_>>()
             .join(", ");
-        let predicate = if *table == "settings" {
+        let predicate = if table == "settings" {
             " WHERE namespace != 'secret_refs'"
         } else {
             ""
@@ -1752,6 +1763,14 @@ fn validate_logical_references(tables: &HashMap<&str, &BackupTable>) -> DbResult
     require_optional_refs(tables["vocabulary_items"], "source_asset_id", &assets)?;
     require_optional_refs(tables["vocabulary_items"], "source_attempt_id", &attempts)?;
     require_refs(tables["vocabulary_review_state"], "item_id", &vocab)?;
+    if let (Some(books), Some(units), Some(entries)) = (
+        tables.get("vocabulary_books"), tables.get("vocabulary_book_units"),
+        tables.get("vocabulary_book_entries"),
+    ) {
+        require_refs(units, "book_id", &text_set(books, "id")?)?;
+        require_refs(entries, "unit_id", &text_set(units, "id")?)?;
+        require_refs(entries, "item_id", &vocab)?;
+    }
     // M12 Agent Threads / Planner tables. agent_threads is the parent for
     // messages, checkpoints, and approvals; study_plans is the parent for
     // plan items. run_id on checkpoints references agent_runs but is

@@ -119,6 +119,9 @@ def latest_shipping_source_mtime() -> float:
     roots = (
         ROOT / "apps/writing-vue/src",
         ROOT / "src-tauri/src",
+        ROOT / "src-tauri/capabilities",
+        ROOT / "src-tauri/permissions",
+        ROOT / "plug",
         ROOT / "crates/ielts-domain/src",
         ROOT / "crates/ielts-db/src",
         ROOT / "crates/ielts-application/src",
@@ -137,7 +140,8 @@ def latest_shipping_source_mtime() -> float:
     candidates.extend((ROOT / "crates").glob("*/Cargo.toml"))
     for root in roots:
         if root.is_dir():
-            candidates.extend(path for path in root.rglob("*") if path.is_file())
+            candidates.extend(path for path in root.rglob("*") if path.is_file()
+                and (root != ROOT / "plug" or path.suffix.lower() in {".rs", ".js", ".mjs", ".ts", ".vue", ".css", ".json"}))
     return max((path.stat().st_mtime for path in candidates if path.is_file()), default=0.0)
 
 

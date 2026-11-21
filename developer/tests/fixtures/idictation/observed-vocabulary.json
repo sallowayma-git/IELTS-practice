@@ -1,0 +1,403 @@
+{
+  "provenance": {
+    "date": "2026-11-20",
+    "mechanism": "Authenticated product UI; allowlisted word content only; no account, media URL or session data"
+  },
+  "cases": [
+    {
+      "book": {
+        "id": 947263,
+        "name": "号码与编码",
+        "need_buy": 0,
+        "already_buy": false
+      },
+      "chapter": {
+        "id": 2102708,
+        "g_id": 947263,
+        "name": "邮编"
+      },
+      "page": {
+        "total": 6,
+        "data": [
+          {
+            "id": 118803036,
+            "g_id": 947263,
+            "c_id": 2102708,
+            "word": "AL698GQ",
+            "translate": "n. 无对应英文单词，可能为型号、代码或随机字符组合",
+            "phonetic_transcription": "",
+            "example": "The device model is al698gq.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 118803037,
+            "g_id": 947263,
+            "c_id": 2102708,
+            "word": "DG7 4PH",
+            "translate": "该输入内容为邮政编码（英国格式），无对应词性和释义",
+            "phonetic_transcription": "",
+            "example": "The package was sent to dg7 4ph in Kent.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 118803038,
+            "g_id": 947263,
+            "c_id": 2102708,
+            "word": "DW30 7YZ",
+            "translate": "该输入内容为邮政编码格式，无对应词性和中文释义",
+            "phonetic_transcription": "dw30 7yz",
+            "example": "The package was sent to dw30 7yz.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 118803044,
+            "g_id": 947263,
+            "c_id": 2102708,
+            "word": "PE9 7QT",
+            "translate": "phrase. 英国邮政编码（示例：PE9 7QT，对应英格兰彼得伯勒地区）",
+            "phonetic_transcription": "ˌpiː iː ˈnaɪn ˈsevən kjuː ˈtiː",
+            "example": "He lives at PE9 7QT, near the city of Peterborough.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 118803047,
+            "g_id": 947263,
+            "c_id": 2102708,
+            "word": "WC2D 5JB",
+            "translate": "无意义单词，无释义",
+            "phonetic_transcription": "",
+            "example": "This is not a real word; it is just a nonsense string like wc2d 5jb.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 118803048,
+            "g_id": 947263,
+            "c_id": 2102708,
+            "word": "WS6 2YH",
+            "translate": "phrase. 非标准词汇或短语，可能为邮政编码、代号或输入错误，无确切中文释义",
+            "phonetic_transcription": "Not a recognized word or phrase",
+            "example": "The system returned an error for 'ws6 2yh'.",
+            "lexicon_id": 0
+          }
+        ]
+      }
+    },
+    {
+      "book": {
+        "id": 171011,
+        "name": "Ricole14天单词自测",
+        "need_buy": 0
+      },
+      "chapter": {
+        "id": 641567,
+        "g_id": 171011,
+        "name": "DAY9"
+      },
+      "page": {
+        "total": 30,
+        "data": [
+          {
+            "id": 28822632,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "major",
+            "translate": "adj. 主要的；\nn. 大调；主修课；",
+            "phonetic_transcription": "ˈmeɪdʒə(r)",
+            "example": "Math is a major subject in school.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822633,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "timetable",
+            "translate": "n. 时间表；时刻表；课程表；",
+            "phonetic_transcription": "ˈtaɪmteɪb(ə)l",
+            "example": "The school publishes a new timetable every term.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822634,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Economics",
+            "translate": "n. 经济学；经济；",
+            "phonetic_transcription": "iːkəˈnɒmɪks",
+            "example": "He majors in economics at university.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822635,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Literature",
+            "translate": "n. 文学；文学作品；",
+            "phonetic_transcription": "ˈlɪtrətʃə(r)",
+            "example": "He loves reading English literature.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822636,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "History",
+            "translate": "n. 历史；历史学；",
+            "phonetic_transcription": "ˈhɪstri",
+            "example": "He likes to read history books about ancient Rome.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822637,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Linguistics",
+            "translate": "n. 语言学",
+            "phonetic_transcription": "lɪŋˈɡwɪstɪks",
+            "example": "He is studying linguistics at university.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822638,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Statistics",
+            "translate": "n. 统计数字；统计学；",
+            "phonetic_transcription": "stəˈtɪstɪks",
+            "example": "The statistics show a rise in sales last year.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822639,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Botany",
+            "translate": "n. 植物学",
+            "phonetic_transcription": "ˈbɒtəni",
+            "example": "He loves studying botany in the garden.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822640,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Genetics",
+            "translate": "n. 遗传学",
+            "phonetic_transcription": "dʒəˈnetɪks",
+            "example": "He is learning genetics in biology class.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822641,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Astronomy",
+            "translate": "n. 天文学",
+            "phonetic_transcription": "əˈstrɒnəmi",
+            "example": "He loves watching stars and learning astronomy.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822642,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Geography",
+            "translate": "n. 地理学；地理；",
+            "phonetic_transcription": "dʒiˈɒɡrəfi",
+            "example": "He loves geography and learns about countries and rivers.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822643,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Geology",
+            "translate": "n. 地质学",
+            "phonetic_transcription": "dʒiˈɒlədʒi",
+            "example": "He loves studying geology in high school.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822644,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Irrigation",
+            "translate": "n. 灌溉；",
+            "phonetic_transcription": "ˌɪrɪˈɡeɪʃ(ə)n",
+            "example": "Farmers use irrigation to water their crops.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822645,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Nursing",
+            "translate": "n. 护理（工作）；护理行业； v. “nurse”的现在分词；",
+            "phonetic_transcription": "ˈnɜːsɪŋ",
+            "example": "She works in nursing at the local hospital.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822646,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "Agriculture",
+            "translate": "n. 农业",
+            "phonetic_transcription": "ˈæɡrɪkʌltʃə(r)",
+            "example": "Farmers work hard in agriculture.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822647,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "beginner",
+            "translate": "n. 初学者；新手；",
+            "phonetic_transcription": "bɪˈɡɪnə(r)",
+            "example": "He is a beginner in piano lessons.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822648,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "intermediate",
+            "translate": "adj. 中间的；居中的；",
+            "phonetic_transcription": "ˌɪntəˈmiːdiət",
+            "example": "He is an intermediate student in English.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822649,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "certificate",
+            "translate": "n. 证书；",
+            "phonetic_transcription": "səˈtɪfɪkət",
+            "example": "He received a certificate for completing the course.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822650,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "kindergarten",
+            "translate": "n. 幼儿园",
+            "phonetic_transcription": "ˈkɪndəɡɑːt(ə)n",
+            "example": "He goes to kindergarten every morning.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822651,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "sophomore",
+            "translate": "n. （大学）二年级学生",
+            "phonetic_transcription": "ˈsɒfəmɔː(r)",
+            "example": "He is a sophomore at Harvard University.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822652,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "charity",
+            "translate": "n. 慈善团体；慈善；",
+            "phonetic_transcription": "ˈtʃærəti",
+            "example": "The charity helps poor children get food and education.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822653,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "tutorial",
+            "translate": "n. 辅导；教程；",
+            "phonetic_transcription": "tjuːˈtɔːriəl",
+            "example": "He went to a tutorial to understand math better.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822654,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "seminar",
+            "translate": "n. 研讨会；专题讨论；",
+            "phonetic_transcription": "ˈsemɪnɑː(r)",
+            "example": "He attended a seminar on climate change.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822655,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "venue",
+            "translate": "n. 举办地点；（比赛）地点；会场；",
+            "phonetic_transcription": "ˈvenjuː",
+            "example": "The concert will be held at a new venue.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822656,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "slide",
+            "translate": "n. 幻灯片；滑梯；\nv. （使）滑动；下滑；",
+            "phonetic_transcription": "slaɪd",
+            "example": "He showed a slide of his vacation photos.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822657,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "draught",
+            "translate": "n. 通风气流；一口",
+            "phonetic_transcription": "drɑːft",
+            "example": "The open window let in a cool draught.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822658,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "flexible",
+            "translate": "adj. 灵活的；柔韧的；",
+            "phonetic_transcription": "ˈfleksəb(ə)l",
+            "example": "She is flexible with her schedule.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822659,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "quiz",
+            "translate": "n. 知识竞赛；",
+            "phonetic_transcription": "kwɪz",
+            "example": "The students participated in a history quiz at school.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822660,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "plagiarism",
+            "translate": "n. 剽窃；抄袭；",
+            "phonetic_transcription": "ˈpleɪdʒərɪzəm",
+            "example": "He was punished for plagiarism in his essay.",
+            "lexicon_id": 0
+          },
+          {
+            "id": 28822661,
+            "g_id": 171011,
+            "c_id": 641567,
+            "word": "handout",
+            "translate": "n. 讲义；",
+            "phonetic_transcription": "ˈhændaʊt",
+            "example": "The teacher gave us a handout about photosynthesis.",
+            "lexicon_id": 0
+          }
+        ]
+      }
+    }
+  ]
+}

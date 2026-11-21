@@ -7,11 +7,11 @@
             <p class="page-header-kicker">VOCABULARY · 生词</p>
             <h1 class="heading-serif">生词本</h1>
           </div>
-          <div v-if="!sessionOpen" class="page-header-actions">
+          <div v-if="!sessionOpen && !onlineOpen" class="page-header-actions">
             <button
               class="btn btn-primary"
               type="button"
-              :disabled="reviewCount === 0"
+              :disabled="loading || !!error || reviewCount === 0"
               @click="openSession"
             >
               开始复习（{{ reviewCount }}）
@@ -26,10 +26,26 @@
         :items="items"
         @close="closeSession"
         @updated="applyUpdatedItem"
-        @finished="sessionFinished"
       />
+      <VocabularyTraining v-if="onlineOpen" :book-id="bookId" :unit-id="unitId" :mode="onlineMode" :resume="onlineResume" :title="units.find(unit=>unit.id===unitId)?.title || ''" @close="onlineOpen=false" />
 
-      <template v-if="!sessionOpen">
+      <template v-if="!sessionOpen && !onlineOpen">
+        <div v-if="books.length" class="vocabulary-toolbar" role="group" aria-label="词书范围">
+          <select v-model="bookId" class="input" aria-label="选择词书" :disabled="loading" @change="changeBook">
+            <option value="">全部生词</option>
+            <option v-for="book in books" :key="book.id" :value="book.id">{{ book.title }}（{{ book.wordCount }}）</option>
+          </select>
+          <select v-if="bookId" v-model="unitId" class="input" aria-label="选择章节" :disabled="loading" @change="load">
+            <option value="">全部章节</option>
+            <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.title }}（{{ unit.wordCount }}）</option>
+          </select>
+        </div>
+        <div v-if="selectedBook?.provider === 'idictation'" class="vocabulary-toolbar" aria-label="爱听写原站练习">
+          <label>练习模式 <select v-model="onlineMode" class="input"><option :value="1">听写</option><option :value="2">听音选义</option><option :value="3">默写</option><option :value="4">看词选义</option></select></label>
+          <label><input v-model="onlineResume" type="checkbox" /> 继续原站进度</label>
+          <button class="btn btn-secondary" type="button" :disabled="loading || !!error || !unitId" @click="onlineOpen=true">开始爱听写练习</button>
+          <p class="section-meta">选择具体章节后开始。需先在设置中连接爱听写；号码类词书仅支持听写。</p>
+        </div>
         <p v-if="loading" class="section-meta" role="status" aria-live="polite">正在加载生词本…</p>
 
         <MascotState
@@ -114,8 +130,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { listVocab } from '@/api/enrichment-repository.js'
+import { listBooks, listBookUnits, listBookWords } from '@/api/vocabulary-books.js'
+import { loadVocabulary } from '@/modules/vocabulary/loadVocabulary.js'
 import MascotState from '@/components/mascot/MascotState.vue'
 import VocabularySessionPanel from '@/modules/vocabulary/components/VocabularySessionPanel.vue'
+import VocabularyTraining from '../../../../plug/idictation/VocabularyTraining.vue'
 import {
   dueLabel,
   filterVocabRows,
@@ -129,10 +148,17 @@ const PAGE_LIMIT = 500
 const loading = ref(true)
 const error = ref('')
 const items = ref([])
+const books = ref([])
+const units = ref([])
+const bookId = ref('')
+const unitId = ref('')
 const nowMs = ref(0)
 const activeFilter = ref('all')
 const keyword = ref('')
 const sessionOpen = ref(false)
+const onlineOpen=ref(false),onlineMode=ref(1),onlineResume=ref(true)
+const selectedBook=computed(()=>books.value.find(book=>book.id===bookId.value))
+let loadGeneration = 0
 
 const counts = computed(() => vocabCounts(items.value, nowMs.value))
 const tabs = computed(() => [
@@ -149,7 +175,7 @@ const rows = computed(() => filterVocabRows(sortedRows.value, {
 }))
 
 function openSession() {
-  if (reviewCount.value === 0) return
+  if (loading.value || error.value || reviewCount.value === 0) return
   sessionOpen.value = true
 }
 
@@ -158,29 +184,41 @@ function closeSession() {
   load()
 }
 
-async function sessionFinished() {
-  await load()
-}
-
 function applyUpdatedItem(item) {
   if (!item) return
   items.value = items.value.map((row) => (row.id === item.id ? item : row))
 }
 
 async function load() {
+  const generation = ++loadGeneration
+  const selectedBook = bookId.value
+  const selectedUnit = unitId.value
   loading.value = true
   error.value = ''
   try {
-    const { items: loaded } = await listVocab(PAGE_LIMIT, 0)
-    items.value = loaded
+    const loadedBooks = await listBooks()
+    const loadedUnits = selectedBook ? await listBookUnits(selectedBook) : []
+    const loadedItems = await loadVocabulary(async (limit, offset) => selectedBook
+      ? listBookWords(selectedBook, selectedUnit, limit, offset)
+      : (await listVocab(limit, offset)).items, PAGE_LIMIT)
+    if (generation !== loadGeneration) return
+    books.value = loadedBooks
+    units.value = loadedUnits
+    items.value = loadedItems
     nowMs.value = Date.now()
   } catch (err) {
+    if (generation !== loadGeneration) return
     console.error('加载生词本失败:', err)
     items.value = []
     error.value = '加载失败，请稍后重试'
   } finally {
-    loading.value = false
+    if (generation === loadGeneration) loading.value = false
   }
+}
+
+function changeBook() {
+  unitId.value = ''
+  load()
 }
 
 onMounted(load)

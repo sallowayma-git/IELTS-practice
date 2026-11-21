@@ -123,7 +123,7 @@ pub fn save_reading_draft(conn: &Connection, cmd: &ReadingDraftCommand) -> DbRes
     Ok(attempt)
 }
 
-pub(crate) fn save_reading_draft_in_transaction(
+pub fn save_reading_draft_in_transaction(
     conn: &Connection,
     cmd: &ReadingDraftCommand,
 ) -> DbResult<AttemptRecord> {
@@ -266,6 +266,9 @@ pub(crate) fn submit_reading_attempt_in_scope(
         cmd.asset_fingerprint.as_deref(),
     )?;
     let answer_key = load_answer_key(&loaded.payload);
+    if loaded.payload["idictation"]["subject"] == "reading" {
+        return Err(DbError::Validation("爱听写真题需要官方交卷".into()));
+    }
     if answer_key.is_empty() {
         return Err(DbError::Validation(format!(
             "reading asset is not answerable: {}",

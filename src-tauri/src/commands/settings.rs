@@ -25,7 +25,10 @@ pub fn list_settings(
     namespace: Option<String>,
 ) -> CommandResponse<Vec<SettingEntry>> {
     match db.with_conn(|conn| ielts_db::list_settings(conn, namespace.as_deref())) {
-        Ok(v) => CommandResponse::success(v),
+        Ok(mut v) => {
+            v.retain(|entry| entry.namespace != "idictation.reading.pending");
+            CommandResponse::success(v)
+        }
         Err(e) => CommandResponse::failure(map_db_err(e)),
     }
 }

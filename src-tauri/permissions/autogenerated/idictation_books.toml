@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-books"
+description = "Enables the idictation_books command without any pre-configured scope."
+commands.allow = ["idictation_books"]
+
+[[permission]]
+identifier = "deny-idictation-books"
+description = "Denies the idictation_books command without any pre-configured scope."
+commands.deny = ["idictation_books"]

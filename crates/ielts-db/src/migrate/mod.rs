@@ -270,6 +270,12 @@ fn migrations() -> &'static [Migration] {
                 sql: include_str!("../../migrations/0041_listening_skills.sql"),
                 rebuilds: None,
             },
+            Migration {
+                version: 42,
+                name: "vocabulary_books",
+                sql: include_str!("../../migrations/0042_vocabulary_books.sql"),
+                rebuilds: None,
+            },
         ]
     })
 }
@@ -533,7 +539,7 @@ mod tests {
             interval_days,repetitions,0,0,lapses,due_at,last_reviewed_at FROM vocabulary_review_state ORDER BY item_id");
         let trigger: String = conn.query_row("SELECT sql FROM sqlite_master WHERE name='trg_delete_gate_vocabulary_review_state'",
             [], |row| row.get(0)).unwrap();
-        assert_eq!(migrate(&mut conn).unwrap(), vec![36, 37, 38, 39, 40, 41]);
+        assert_eq!(migrate(&mut conn).unwrap(), vec![36, 37, 38, 39, 40, 41, 42]);
         assert_eq!(rows(&conn,"SELECT * FROM vocabulary_review_state ORDER BY item_id"), expected);
         assert_eq!(rows(&conn,"SELECT * FROM vocabulary_items ORDER BY id"), words);
         assert_eq!(conn.query_row("SELECT sql FROM sqlite_master WHERE name='trg_delete_gate_vocabulary_review_state'",
@@ -654,7 +660,7 @@ mod tests {
              PRAGMA foreign_keys = ON;",
         )
         .unwrap();
-        assert_eq!(migrate(&mut conn).unwrap(), vec![36, 37, 38, 39, 40, 41]);
+        assert_eq!(migrate(&mut conn).unwrap(), vec![36, 37, 38, 39, 40, 41, 42]);
         let left: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE sql LIKE '%coach_outcome_links%'",
@@ -906,9 +912,9 @@ mod tests {
             let attempt_columns = column_names(&conn, "attempts");
             let before = snapshot_activity_rows(&conn);
 
-            let expected: Vec<i64> = (start + 1..=41).collect();
+            let expected: Vec<i64> = (start + 1..=latest_version()).collect();
             assert_eq!(migrate(&mut conn).unwrap(), expected, "from v{start}");
-            assert_eq!(current_version(&conn).unwrap(), 41);
+            assert_eq!(current_version(&conn).unwrap(), latest_version());
 
             assert_eq!(column_names(&conn, "practice_assets"), asset_columns);
             assert_eq!(column_names(&conn, "attempts"), attempt_columns);
@@ -1046,8 +1052,8 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(migrate(&mut conn).unwrap(), vec![39, 40, 41]);
-        assert_eq!(current_version(&conn).unwrap(), 41);
+        assert_eq!(migrate(&mut conn).unwrap(), vec![39, 40, 41, 42]);
+        assert_eq!(current_version(&conn).unwrap(), latest_version());
         assert_eq!(foreign_key_check_count(&conn), 0);
     }
 
@@ -1064,7 +1070,7 @@ mod tests {
         assert_eq!(package.manifest.database_schema_version, 38);
 
         migrate(&mut conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 41);
+        assert_eq!(current_version(&conn).unwrap(), latest_version());
         assert_eq!(column_names(&conn, "practice_assets"), asset_columns);
         assert_eq!(column_names(&conn, "attempts"), attempt_columns);
 
@@ -1138,7 +1144,7 @@ mod tests {
 
     #[test]
     fn activity_scope_seeds_thirteen_listening_skills_once() {
-        let mut conn = history_at(41);
+        let mut conn = history_at(latest_version());
         let listening = |conn: &Connection| -> Vec<String> {
             let mut stmt = conn
                 .prepare("SELECT skill_key FROM skill_catalog WHERE activity = 'listening' ORDER BY skill_key")
@@ -1202,7 +1208,7 @@ mod tests {
             let snapshots = tempfile::tempdir().unwrap();
             migrate_with_snapshot(&mut conn, snapshots.path()).unwrap();
             assert!(std::fs::read_dir(snapshots.path()).unwrap().next().is_some());
-            assert_eq!(current_version(&conn).unwrap(), 41);
+            assert_eq!(current_version(&conn).unwrap(), latest_version());
             let after: String = conn.query_row(
                 "SELECT json_group_array(json_object('id',item_id,'ease',ease_factor,'reps',repetitions,'due',due_at)) FROM vocabulary_review_state",
                 [], |row| row.get(0)

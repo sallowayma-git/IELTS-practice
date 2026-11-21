@@ -196,7 +196,7 @@ pub(super) async fn authorized(
         .await
         .map_err(|err| {
             if matches!(err, Failure::Expired) {
-                ielts_db::transient_assets::clear();
+                ielts_db::transient_assets::clear_provider("jiufen");
                 if let Some(previous) = session.take() {
                     let _ = clear_saved(&previous.credential);
                 }
@@ -324,7 +324,7 @@ pub async fn jiufen_login(
     next.credential = install_id(&db)?;
     save_session(&next)?;
     next.renewed = Some(std::time::Instant::now());
-    ielts_db::transient_assets::clear();
+    ielts_db::transient_assets::clear_provider("jiufen");
     *session = Some(next);
     Ok(())
 }
@@ -385,6 +385,7 @@ pub async fn jiufen_restore(
     .await?;
     let mut next = Session::parse(&response["data"])?;
     if next.owner != owner {
+        ielts_db::transient_assets::clear_provider("jiufen");
         clear_saved(&id)?;
         *session = None;
         return Err("账号已改变，请重新登录".into());
@@ -413,7 +414,7 @@ pub async fn jiufen_disconnect(
 ) -> Result<(), String> {
     let mut session = account.0.lock().await;
     clear_saved(&install_id(&db)?)?;
-    ielts_db::transient_assets::clear();
+    ielts_db::transient_assets::clear_provider("jiufen");
     *session = None;
     Ok(())
 }

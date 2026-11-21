@@ -11,7 +11,7 @@
     <UnifiedExamHeader
       :title="pageTitle"
       :subtitle="headerSummary"
-      :show-timer="Boolean(payload)"
+      :show-timer="Boolean(payload) && !materialMode"
       :timer-text="formattedTimer"
       :timer-running="timerRunning"
       :review-mode="reviewMode"
@@ -23,11 +23,18 @@
       @toggle-timer="toggleTimer"
       @toggle-notes="noteDrawerOpen = !noteDrawerOpen"
       @toggle-options="toggleSettingsPanel"
-    />
+    >
+      <template v-if="materialMode" #heading><strong>{{ pageTitle }}</strong></template>
+      <template v-if="materialMode" #controls>
+        <label>字号 <select :value="fontSize" @change="selectFontSize($event.target.value)"><option value="small">小</option><option value="normal">中</option><option value="large">大</option></select></label>
+        <button class="btn-text" type="button" @click="setDarkMode(!darkMode)">{{ darkMode ? '浅色' : '深色' }}</button>
+        <button class="btn-text" type="button" @click="handleLeave">返回阅读题库</button>
+      </template>
+    </UnifiedExamHeader>
 
     <div ref="settingsPanel" @keydown="handleSettingsDialogKeydown">
       <UnifiedOptionsPanel
-        v-if="settingsPanelOpen"
+        v-if="settingsPanelOpen && !materialMode"
         :font-size="fontSize"
         :dark-mode="darkMode"
         :annotations="annotations"
@@ -102,6 +109,7 @@
 
     <div ref="notesPanel" @keydown="handleNotesDialogKeydown">
       <UnifiedNotes
+        v-if="!materialMode"
         v-model:text="notesText"
         :drawer-open="noteDrawerOpen"
         :editor-open="notesPanelOpen"
@@ -115,6 +123,7 @@
     </div>
 
     <UnifiedSelectionBar
+      v-if="!materialMode"
       :visible="selectionToolbarVisible"
       :position="selectionToolbarStyle"
       :can-remove="selectionHasMark"
@@ -169,15 +178,16 @@
     >
       <ReadingPassagePane
         ref="readingPassagePane"
-        :passage-blocks="payload.passage.blocks"
+        :passage-blocks="visiblePassageBlocks"
         :official-passage-notes="officialPassageNotes"
-        :material="reviewMode ? payload.studyMaterial : null"
+        :material="reviewMode || materialMode ? payload.studyMaterial : null"
         :material-error="materialError"
         :located-sentences="locatedSentences"
         @retry-material="loadStudyMaterial"
       />
 
       <div
+        v-if="!materialMode"
         id="divider"
         ref="dividerRef"
         :class="{ 'is-dragging': dividerDragging }"
@@ -193,7 +203,8 @@
       ></div>
 
       <ReadingQuestionPane
-        :payload="payload"
+        v-if="!materialMode"
+        :payload="visibleQuestionPayload"
         :is-memorize-mode="isMemorizeMode"
         :get-group-official-explanations="getGroupOfficialExplanations"
         :get-group-range="getGroupRange"
@@ -246,7 +257,7 @@
     </div>
 
     <ReadingCoachPanel
-      v-if="readingCoachEnabled"
+      v-if="readingCoachEnabled && !materialMode"
       :submission="submission"
       :reading-coach-open="readingCoachOpen"
       :coach-loading="coachLoading"
@@ -286,10 +297,11 @@
     />
 
     <UnifiedPracticeNav
-      v-if="!loading && asset && payload"
-      :question-order="payload.questionOrder || []"
+      v-if="!loading && asset && payload && !materialMode"
+      :question-order="idictationSections?.[idictationPart - 1]?.questionIds || payload.questionOrder || []"
       :display-map="payload.questionDisplayMap || {}"
-      :category="navCategory"
+      :category="idictationExam ? `P${idictationPart}` : navCategory"
+      :sections="idictationSections"
       :has-answer="hasAnswer"
       :answer-comparison="submission?.answerComparison || null"
       :active-question-id="activeQuestionId"
@@ -306,7 +318,7 @@
       @submit="handlePrimaryButton"
       @reset="handleResetButton"
       @leave="handleLeave"
-      @open-part="openSuitePart"
+      @open-part="openReadingPart"
       @toggle-marked-question="toggleMarkedQuestion"
     />
   </div>
@@ -314,7 +326,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
 import { learningRepository } from '@/api/learning-repository.js'
 import { readingCoachSettingsApi } from '@/modules/practice-reading/api'
@@ -336,6 +348,7 @@ import { useUnifiedDivider } from '@/modules/reading-unified/composables/useUnif
 import { useNativeAnswerControls } from '@/modules/reading-unified/composables/useNativeAnswerControls.js'
 import { applyResultsToQuestionArea } from '@/modules/reading-unified/reviewMarks.js'
 import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
+import { idictation, isIdictationMaterial, isIdictationReading } from '@/api/idictation.js'
 import { useReadingAsset } from '@/modules/practice-reading/useReadingAsset'
 import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
 import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
@@ -405,8 +418,41 @@ const {
   loading,
   error,
   loadReadingAsset,
-  clearReadingAssetError
+  clearReadingAssetError,
+  clearReadingAsset
 } = useReadingAsset()
+const materialMode = computed(() => {
+  const current = String(props.assetId || route.params.assetId || '').trim()
+  return isIdictationMaterial(current) || (asset.value?.id === current && payload.value?.practiceKind === 'material')
+})
+const idictationExam = computed(() => isIdictationReading(props.assetId || route.params.assetId))
+const idictationPart = ref(1)
+watch(() => props.assetId, () => { idictationPart.value = 1 })
+const idictationSections = computed(() => idictationExam.value && payload.value
+  ? [1, 2, 3].map(section => ({ section, questionIds: payload.value.questionGroups
+    .filter(group => group.section === section).flatMap(group => group.questionIds) }))
+  : null)
+const visiblePassageBlocks = computed(() => {
+  const blocks = payload.value?.passage?.blocks || []
+  return idictationExam.value ? blocks.filter(block => block.blockId === `part-${idictationPart.value}`) : blocks
+})
+const visibleQuestionPayload = computed(() => idictationExam.value && payload.value
+  ? { ...payload.value,
+    questionOrder: idictationSections.value[idictationPart.value - 1].questionIds,
+    questionGroups: payload.value.questionGroups.filter(group => group.section === idictationPart.value) }
+  : payload.value)
+async function openReadingPart(part) {
+  if (!idictationExam.value) return openSuitePart(part)
+  if (![1, 2, 3].includes(part)) return
+  idictationPart.value = part
+  await nextTick()
+  syncDomAnswers()
+  setReadOnlyDomControls(readOnlyMode.value)
+}
+const pageAlive = ref(true)
+const examReady = ref(false)
+const timerEnabled = computed(() => pageAlive.value && examReady.value && !materialMode.value)
+let assetLoadGeneration = 0
 const submitting = ref(false)
 const leaving = ref(false)
 const submitError = ref('')
@@ -513,6 +559,22 @@ const readingAttempt = useReadingAttempt()
 let tauriAttemptId = ''
 let nativeControls = null
 let draftAutosaveTimer = null
+let idictationDraftInFlight = null
+onBeforeRouteLeave(async () => {
+  if (!idictationExam.value || readOnlyMode.value) return
+  try {
+    if (draftAutosaveTimer) {
+      clearTimeout(draftAutosaveTimer)
+      draftAutosaveTimer = null
+      await persistTauriDraft()
+    } else {
+      await idictationDraftInFlight
+    }
+  } catch (error) {
+    submitError.value = error?.message || String(error)
+    return false
+  }
+})
 let snapshotMessageTimer = null
 
 const {
@@ -534,10 +596,12 @@ const {
   loadReadingNotes,
   clearReadingNotesDraft
 } = useReadingUiPreferences({
-  assetSource: () => asset.value
+  assetSource: () => asset.value,
+  persistenceEnabled: () => pageAlive.value && examReady.value && !materialMode.value
 })
 
 const activeSuiteSessionId = computed(() => {
+  if (materialMode.value || idictationExam.value) return ''
   const fromProp = String(props.suiteSessionId || '').trim()
   const fromQuery = Array.isArray(route.query.suiteSessionId)
     ? route.query.suiteSessionId[0]
@@ -550,6 +614,7 @@ function readRouteQueryValue(key) {
   return Array.isArray(value) ? value[0] : value
 }
 const activeEndlessSessionId = computed(() => {
+  if (materialMode.value || idictationExam.value) return ''
   return String(readRouteQueryValue('endlessSessionId') || '').trim()
 })
 
@@ -558,7 +623,7 @@ function normalizePracticeModeQueryValue(value) {
 }
 
 function shouldNormalizeLegacyMemorizeQuery() {
-  return !String(props.sessionId || route.params.sessionId || '').trim()
+  return !materialMode.value && !String(props.sessionId || route.params.sessionId || '').trim()
     && !activeSuiteSessionId.value
     && normalizePracticeModeQueryValue(readRouteQueryValue('mode')) === 'review'
     && !normalizePracticeModeQueryValue(readRouteQueryValue('practiceMode'))
@@ -579,16 +644,19 @@ function normalizeLegacyMemorizeQuery() {
 }
 
 const isEndlessMode = computed(() => {
+  if (materialMode.value || idictationExam.value) return false
   const mode = normalizePracticeModeQueryValue(readRouteQueryValue('mode'))
   return mode === 'endless' && !activeSuiteSessionId.value
 })
 const isMemorizeMode = computed(() => {
+  if (materialMode.value || idictationExam.value) return false
   const mode = normalizePracticeModeQueryValue(readRouteQueryValue('mode'))
   const practiceMode = normalizePracticeModeQueryValue(readRouteQueryValue('practiceMode'))
   return (mode === 'memorize' || practiceMode === 'memorize') && !props.sessionId
 })
 const activeMemorizeAttemptId = ref(String(readRouteQueryValue('memorizeAttemptId') || '').trim())
 const headerSummary = computed(() => {
+  if (materialMode.value) return '爱听写精读 · 原文与逐句翻译'
   if (!payload.value) return '正在准备阅读练习…'
   const category = payload.value.meta?.category || asset.value?.category || '阅读'
   const questionCount = Number(payload.value.questionCount ?? payload.value.questionOrder?.length) || 0
@@ -605,7 +673,7 @@ const returnRoute = computed(() => (
 const returnLabel = computed(() => (activeSuiteSessionId.value ? '返回套题进度' : '返回练习库'))
 const reviewMode = computed(() => Boolean(submission.value))
 watch(reviewMode, ready => { if (ready) void loadStudyMaterial() })
-const readOnlyMode = computed(() => reviewMode.value || isMemorizeMode.value)
+const readOnlyMode = computed(() => materialMode.value || reviewMode.value || isMemorizeMode.value)
 const {
   answeredCount,
   initializeAnswers: initializeReadingAnswers,
@@ -666,7 +734,7 @@ nativeControls = useNativeAnswerControls({
 })
 // Entering review marks options/dropzones; leaving it (reset) clears them.
 watch(
-  () => [submission.value?.answerComparison || null, payload.value],
+  () => [submission.value?.answerComparison || null, payload.value, idictationPart.value],
   async ([comparison]) => {
     await nextTick()
     applyResultsToQuestionArea(
@@ -691,6 +759,7 @@ const {
   resetPracticeTimerClock,
   setPracticeTimerElapsedSeconds
 } = useReadingTimer({
+  enabled: timerEnabled,
   activeSuiteSessionId,
   reviewMode,
   suiteTimerSource: () => suiteSession.value?.timer,
@@ -746,7 +815,7 @@ const {
     if (isEndlessMode.value) return 'endless'
     return props.sessionId || route.params.sessionId ? 'review' : 'single'
   },
-  readCoachEnabled: () => readingCoachEnabled.value,
+  readCoachEnabled: () => readingCoachEnabled.value && !materialMode.value,
   readSelectedContext: () => readSelectedContext(getDisplayLabel),
   getDisplayLabel,
   formatReviewAnswer,
@@ -787,9 +856,10 @@ const {
   getTextNodes
 } = useReadingHighlights({
   assetIdSource: () => asset.value?.id || props.assetId,
-  reviewModeSource: () => reviewMode.value,
+  reviewModeSource: () => reviewMode.value || materialMode.value,
   getAttemptId: () => tauriAttemptId,
   ensureAttemptId: () => {
+    if (materialMode.value || !examReady.value) return ''
     if (!tauriAttemptId) {
       tauriAttemptId = readingAttempt.newAttemptId()
     }
@@ -819,6 +889,7 @@ const canSubmit = computed(() => Boolean(
   && !submitting.value
   && !leaving.value
   && !readOnlyMode.value
+  && examReady.value
 ))
 const canSnapshot = computed(() => canSnapshotReadingAnswers({
   isTauriRuntime: isTauriRuntime(),
@@ -832,6 +903,7 @@ const canSnapshot = computed(() => canSnapshotReadingAnswers({
 }))
 const canRecycleSubmittedAttempt = computed(() => Boolean(
   reviewMode.value
+  && !idictationExam.value
   && !activeSuiteSessionId.value
   && !isEndlessMode.value
   && !String(props.sessionId || route.params.sessionId || '').trim()
@@ -841,7 +913,8 @@ const readingPageClassList = computed(() => ({
   ...displayClassList.value,
   'reading-memorize-mode': isMemorizeMode.value,
   'reading-pane-resizing': dividerDragging.value,
-  'exam-mode': !reviewMode.value && !isMemorizeMode.value
+  'exam-mode': !readOnlyMode.value,
+  'material-mode': materialMode.value
 }))
 // Suite runs map passage n to Part n; single practice follows the category.
 const navCategory = computed(() => (
@@ -1092,13 +1165,17 @@ async function runAttemptReview() {
 
 onMounted(async () => {
   await initializeReadingPreferences()
+  if (!pageAlive.value) return
   await initializeDisplayPreferences()
-  attachHighlightDocumentListeners()
+  if (!pageAlive.value) return
   await loadReadingCoachPreference()
+  if (!pageAlive.value) return
   await loadAsset()
 })
 
 onBeforeUnmount(() => {
+  pageAlive.value = false
+  assetLoadGeneration++
   // Leaving the page closes the coach stream; a late reply must not land in a
   // transcript nobody is looking at.
   resetReadingCoachState()
@@ -1117,6 +1194,7 @@ onBeforeUnmount(() => {
   }
   clearSnapshotMessage()
   detachHighlightDocumentListeners()
+  clearReadingAsset()
 })
 
 onUpdated(() => {
@@ -1166,6 +1244,13 @@ watch(
 )
 
 async function loadAsset() {
+  if (!pageAlive.value) return
+  const generation = ++assetLoadGeneration
+  const isCurrent = () => pageAlive.value && generation === assetLoadGeneration
+  examReady.value = false
+  detachHighlightDocumentListeners()
+  if (draftAutosaveTimer) { clearTimeout(draftAutosaveTimer); draftAutosaveTimer = null }
+  tauriAttemptId = ''
   const normalizedAssetId = String(props.assetId || route.params.assetId || '').trim()
   const replaySessionId = String(props.sessionId || route.params.sessionId || '').trim()
   if (!normalizedAssetId) {
@@ -1195,14 +1280,23 @@ async function loadAsset() {
   let restoredTimer = null
   try {
     const data = await loadReadingAsset(normalizedAssetId)
-    if (isEndlessMode.value && !(await reconcileEndlessRoute())) {
+    if (!isCurrent() || !data) return
+    if (materialMode.value) {
+      initializeReadingAnswers(data.payload)
       return
     }
+    examReady.value = true
+    attachHighlightDocumentListeners()
+    if (isEndlessMode.value && !(await reconcileEndlessRoute(isCurrent))) {
+      return
+    }
+    if (!isCurrent()) return
     initializeReadingAnswers(data?.payload, { prefillAnswerKey: isMemorizeMode.value })
     loadReadingNotes()
     if (activeSuiteSessionId.value) {
       try {
         suiteSession.value = await practiceReadingSuite.get(activeSuiteSessionId.value)
+        if (!isCurrent()) return
         applySuiteTimerState()
       } catch (suiteLoadError) {
         if (!replaySessionId) {
@@ -1213,25 +1307,30 @@ async function loadAsset() {
       }
     }
     if (replaySessionId) {
-      await loadSubmittedSession(replaySessionId)
+      await loadSubmittedSession(replaySessionId, isCurrent)
     } else if (isTauriRuntime() && !isMemorizeMode.value) {
       restoredTimer = await hydrateOpenDraft(
         normalizedAssetId,
         activeSuiteSessionId.value || null,
-        activeEndlessSessionId.value || null
+        activeEndlessSessionId.value || null,
+        isCurrent
       )
     }
   } catch (loadError) {
+    if (!isCurrent()) return
     console.error('加载阅读资源失败:', loadError)
   }
-  if (asset.value && payload.value) {
-    await ensureMemorizeSession()
+  if (isCurrent() && !materialMode.value && asset.value && payload.value) {
+    await ensureMemorizeSession(isCurrent)
+    if (!isCurrent()) return
     await nextTick()
+    if (!isCurrent()) return
     syncDomAnswers()
     if (isTauriRuntime()) {
       const attemptScope = tauriAttemptId || replaySessionId || null
       const passageDocument = getTextNodes(readingPassagePane.value?.$el).map(node => node.textContent || '').join('').trim()
       await hydrateHighlightsFromStore(asset.value.id, attemptScope, passageDocument || null, RESTORED_ANNOTATION_KINDS)
+      if (!isCurrent()) return
     }
     restoreHighlightsFromRecords(highlightSnapshot.value)
     applyMemorizeStudyLayer()
@@ -1255,8 +1354,9 @@ watch(
   { flush: 'post' }
 )
 
-async function loadSubmittedSession(sessionId) {
+async function loadSubmittedSession(sessionId, isCurrent = () => true) {
   const state = await practiceSessions.getState('reading', sessionId)
+  if (!isCurrent() || materialMode.value) return
   const loadedSubmission = state?.submission || null
   if (!loadedSubmission) {
     throw new Error('未找到可回放的阅读提交记录')
@@ -1267,7 +1367,14 @@ async function loadSubmittedSession(sessionId) {
     throw new Error('阅读回放记录与当前题目不匹配')
   }
   if (isJiufenAsset(expectedAssetId)) {
-    Object.assign(payload.value, await jiufen.review(expectedAssetId, sessionId))
+    const review = await jiufen.review(expectedAssetId, sessionId)
+    if (!isCurrent() || materialMode.value) return
+    Object.assign(payload.value, review)
+  }
+  if (isIdictationReading(expectedAssetId)) {
+    const review = await idictation.readingReview(expectedAssetId, sessionId)
+    if (!isCurrent() || materialMode.value) return
+    Object.assign(payload.value, review)
   }
   submission.value = loadedSubmission
   // Field contraction: store may omit correctAnswer; fill from asset answerKey for review UI.
@@ -1275,6 +1382,7 @@ async function loadSubmittedSession(sessionId) {
   const attemptScope = String(loadedSubmission.sessionId || loadedSubmission.attemptId || sessionId || '').trim()
   if (isTauriRuntime() && asset.value?.id) {
     const persisted = await hydrateHighlightsFromStore(asset.value.id, attemptScope || null, null, RESTORED_ANNOTATION_KINDS)
+    if (!isCurrent() || materialMode.value) return
     if (!persisted.length) {
       highlightSnapshot.value = normalizeHighlightSnapshotState(
         loadedSubmission.highlights || loadedSubmission.analysisArtifacts?.highlights || []
@@ -1298,13 +1406,14 @@ async function loadSubmittedSession(sessionId) {
     })
   }
   await nextTick()
+  if (!isCurrent() || materialMode.value) return
   syncDomAnswers()
   setReadOnlyDomControls(true)
   restoreHighlightsFromRecords(highlightSnapshot.value)
   restoreSubmittedViewport(loadedSubmission)
 }
 
-async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null) {
+async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null, isCurrent = () => true) {
   try {
     const scope = { suiteId, endlessSessionId }
     const { attempt, timer } = await getOpenReadingDraft(
@@ -1312,6 +1421,7 @@ async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null
       String(suiteId || '').trim() || null,
       String(endlessSessionId || '').trim() || null
     )
+    if (!isCurrent() || materialMode.value) return
     if (!attempt?.id) return
     if (!readingDraftOwnerMatches(attempt, scope)) {
       console.warn('忽略不属于当前阅读范围的草稿', {
@@ -1492,20 +1602,21 @@ function syncNativeControl(questionId, explicitValue) {
 }
 
 function scheduleDraftAutosave() {
-  if (!isTauriRuntime() || readOnlyMode.value) {
+  if (!isTauriRuntime() || !examReady.value || readOnlyMode.value) {
     return
   }
   if (draftAutosaveTimer) clearTimeout(draftAutosaveTimer)
   draftAutosaveTimer = setTimeout(() => {
     draftAutosaveTimer = null
     void persistTauriDraft().catch((error) => {
-      console.warn('阅读草稿自动保存失败', error)
+      if (idictationExam.value) submitError.value = error?.message || String(error)
+      else console.warn('阅读草稿自动保存失败', error)
     })
   }, 800)
 }
 
 async function persistTauriDraft() {
-  if (!isTauriRuntime() || !asset.value?.id || readOnlyMode.value) return
+  if (!isTauriRuntime() || !examReady.value || !asset.value?.id || readOnlyMode.value) return
   if (activeSuiteSessionId.value) {
     const { result } = await saveSuitePassageDraft({
       suiteId: activeSuiteSessionId.value,
@@ -1538,7 +1649,7 @@ async function persistTauriDraft() {
     return
   }
   if (!tauriAttemptId) tauriAttemptId = readingAttempt.newAttemptId()
-  await readingAttempt.persistDraft({
+  const saving = readingAttempt.persistDraft({
     attemptId: tauriAttemptId,
     assetId: asset.value.id,
     assetRevision: asset.value.schemaVersion ?? null,
@@ -1549,9 +1660,16 @@ async function persistTauriDraft() {
     titleSnapshot: asset.value.title || asset.value.name || null,
     timerSnapshot: getPracticeTimerSnapshot()
   })
+  if (idictationExam.value) idictationDraftInFlight = saving
+  try {
+    await saving
+  } finally {
+    if (idictationDraftInFlight === saving) idictationDraftInFlight = null
+  }
 }
 
 function toggleTimer() {
+  if (materialMode.value || !examReady.value) return
   togglePracticeTimer()
   if (isTauriRuntime() && !readOnlyMode.value) {
     void persistTauriDraft().catch((error) => {
@@ -1589,7 +1707,7 @@ const modeFlow = useReadingModeFlow({
   newAttemptId: () => readingAttempt.newAttemptId(),
   submitSingleAttempt: async (input) => {
     const result = await readingAttempt.submit(input)
-    if (isJiufenAsset(input.assetId) && result.raw?.review) {
+    if ((isJiufenAsset(input.assetId) || isIdictationReading(input.assetId)) && result.raw?.review) {
       Object.assign(payload.value, result.raw.review)
     }
     return result
@@ -1625,11 +1743,14 @@ function findSuiteReviewNavigationTarget(direction) { return modeFlow.findSuiteR
 function navigateSuiteReview(direction) { return modeFlow.navigateSuiteReview(direction) }
 function goToNextEndlessAsset() { return modeFlow.goToNextEndlessAsset() }
 function stopEndlessMode() { return modeFlow.stopEndlessMode() }
-function handleLeave() { return modeFlow.handleLeave() }
-function reconcileEndlessRoute() { return modeFlow.reconcileEndlessRoute() }
+function handleLeave() {
+  if (materialMode.value) return router.push({ name: 'PracticeLibrary', query: { view: 'browse' } })
+  return modeFlow.handleLeave()
+}
+function reconcileEndlessRoute(isCurrent) { return modeFlow.reconcileEndlessRoute(isCurrent) }
 function handleResetButton() { return modeFlow.handleResetButton() }
 function handlePrimaryButton() { return modeFlow.handlePrimaryButton() }
-function ensureMemorizeSession() { return modeFlow.ensureMemorizeSession() }
+function ensureMemorizeSession(isCurrent) { return modeFlow.ensureMemorizeSession(isCurrent) }
 function finishActiveMemorizeSession() { return modeFlow.finishActiveMemorizeSession() }
 
 function openSuitePart(link) {
@@ -1693,9 +1814,13 @@ function getLegacyResultClass(questionId) {
   return ''
 }
 
-function scrollToQuestion(questionId) {
+async function scrollToQuestion(questionId) {
   const normalized = normalizeQuestionId(questionId)
   if (!normalized) return
+  if (idictationExam.value) {
+    const section = idictationSections.value?.find(part => part.questionIds.includes(normalized))
+    if (section && section.section !== idictationPart.value) await openReadingPart(section.section)
+  }
   recordQuestionVisit(normalized)
   const aliases = resolveAnswerAliases(normalized).map((entry) => escapeCss(entry))
   const directSelectors = aliases.flatMap((alias) => [

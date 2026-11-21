@@ -26,6 +26,8 @@ async function flushVue() {
 async function browseState(t, {
   query = { view: 'browse', kind: 'judgement', from: 'weekly-report' },
   remote = [],
+  readers = [],
+  exams = [],
   savedPreferences = {}
 } = {}) {
   const route = reactive({ query: { ...query } })
@@ -36,6 +38,8 @@ async function browseState(t, {
   const deps = {
     ...browseFilters,
     remoteCards: () => ref(remote),
+    readerCards: ref(readers),
+    examCards: ref(exams),
     QUESTION_KIND_LABELS,
     ref, computed, watch, nextTick,
     onMounted: callback => { mounted = callback }, onBeforeUnmount: () => {},
@@ -64,6 +68,23 @@ async function browseState(t, {
 }
 
 const ids = state => state.filteredReadingAssets.value.map(asset => asset.id)
+
+test('Academic reading has its own source and the whole exam matches each Part', async t => {
+  const state = await browseState(t, {
+    query: { view: 'browse' },
+    readers: [{ id: 'reader', title: '精读', activity: 'reading', provider: 'idictation', category: 'P2' }],
+    exams: [{ id: 'exam', title: '剑雅21 Test 1', activity: 'reading', provider: 'idictation-exam',
+      category: '整套', parts: ['P1', 'P2', 'P3'] }]
+  })
+  state.sourceFilter.value = 'idictation-exam'
+  for (const part of ['P1', 'P2', 'P3']) {
+    state.selectedCategory.value = part
+    assert.deepEqual(ids(state), ['exam'])
+  }
+  state.sourceFilter.value = 'idictation'
+  state.selectedCategory.value = 'P2'
+  assert.deepEqual(ids(state), ['reader'])
+})
 
 test('weekly judgement link can return to all and search a completion-only asset', async t => {
   const state = await browseState(t)

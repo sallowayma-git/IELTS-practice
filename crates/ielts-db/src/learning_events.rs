@@ -579,7 +579,8 @@ fn reading_projection_events(
                 "visitCount": answer.visit_count,
                 "elapsedMs": answer.elapsed_ms,
                 "marked": answer.marked,
-                "firstTryCorrect": answer.is_correct.map(|correct| correct && answer.change_count == 0),
+                "firstTryCorrect": answer.is_correct.filter(|_| !asset_id.starts_with("idictation-reading-") || answer.answered_at.is_some())
+                    .map(|correct| correct && answer.change_count == 0),
             }),
             occurred_at.to_string(),
         ));

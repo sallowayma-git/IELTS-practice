@@ -19,6 +19,10 @@ const LOCAL_ORIGIN: &str = if cfg!(windows) {
 /// Invoke a command in a mock app whose main webview is at the local origin.
 /// The temp directory outlives the app, which owns the migrated database.
 fn invoke(cmd: &str, body: InvokeBody) -> Result<serde_json::Value, String> {
+    invoke_at(cmd, body, "main", LOCAL_ORIGIN)
+}
+
+fn invoke_at(cmd: &str, body: InvokeBody, label: &str, origin: &str) -> Result<serde_json::Value, String> {
     let directory = tempfile::tempdir().expect("temp dir for the mock database");
     let app = mock_builder()
         .manage(test_db(directory.path()))
@@ -31,7 +35,7 @@ fn invoke(cmd: &str, body: InvokeBody) -> Result<serde_json::Value, String> {
         ])
         .build(tauri::generate_context!())
         .expect("mock app builds with the real context");
-    let webview = WebviewWindowBuilder::new(&app, "main", Default::default())
+    let webview = WebviewWindowBuilder::new(&app, label, Default::default())
         .build()
         .expect("main webview");
     get_ipc_response(
@@ -40,7 +44,7 @@ fn invoke(cmd: &str, body: InvokeBody) -> Result<serde_json::Value, String> {
             cmd: cmd.into(),
             callback: CallbackFn(0),
             error: CallbackFn(1),
-            url: LOCAL_ORIGIN.parse().unwrap(),
+            url: origin.parse().unwrap(),
             body,
             headers: Default::default(),
             invoke_key: INVOKE_KEY.to_string(),
@@ -48,6 +52,16 @@ fn invoke(cmd: &str, body: InvokeBody) -> Result<serde_json::Value, String> {
     )
     .map(|body| body.deserialize().unwrap())
     .map_err(|error| error.to_string())
+}
+
+#[test]
+fn product_window_cannot_reach_local_commands() {
+    let error = invoke_at("soul_get", InvokeBody::default(),
+        "idictation-product", "https://www.idictation.cn/main/book").unwrap_err();
+    assert!(error.contains("not allowed"), "{error}");
+    let error = invoke_at("soul_get", InvokeBody::default(),
+        "main", "https://www.idictation.cn/main/book").unwrap_err();
+    assert!(error.contains("not allowed"), "{error}");
 }
 
 #[test]

@@ -10,6 +10,9 @@ pub mod app;
 pub mod commands;
 #[path = "../../plug/jiufen/host.rs"]
 mod jiufen;
+#[allow(dead_code)]
+#[path = "../../plug/idictation/host.rs"]
+mod idictation;
 #[cfg(test)]
 mod ipc_acl_tests;
 
@@ -79,6 +82,16 @@ pub fn run() {
     };
 
     let builder = tauri::Builder::default()
+        .plugin(tauri::plugin::Builder::<tauri::Wry>::new("local-prototype-guard")
+            .js_init_script(include_str!("app/prototype-guard.js"))
+            .build())
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(product) = window.app_handle().get_webview_window("idictation-product") {
+                    let _ = product.close();
+                }
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -92,6 +105,7 @@ pub fn run() {
         .manage(db)
         .manage(vault)
         .manage(jiufen::service::Account::default())
+        .manage(idictation::service::Account::default())
         .manage(agent::WorkspaceGrants::default())
         .manage(agent::AgentCancelRegistry::default())
         .manage(commands::backup::BackupImportGrants::default())
@@ -283,6 +297,31 @@ pub fn run() {
             jiufen::practice::jiufen_review,
             jiufen::practice::jiufen_listening_audio,
             jiufen::practice::jiufen_study_material,
+            idictation::service::idictation_open_login,
+            // Settings and libraries share saved-session recovery.
+            idictation::service::idictation_connect,
+            idictation::service::idictation_disconnect,
+            idictation::service::idictation_books,
+            idictation::service::idictation_chapters,
+            idictation::service::idictation_sync_chapter,
+            idictation::reader::idictation_reader_catalog,
+            idictation::reader::idictation_open_reader,
+            idictation::reader::idictation_reader_payload,
+            idictation::training::idictation_training_start,
+            idictation::training::idictation_training_answer,
+            idictation::training::idictation_training_audio,
+            idictation::training::idictation_training_finish,
+            idictation::training::idictation_training_close,
+            idictation::article::idictation_article_books,
+            idictation::article::idictation_article_chapters,
+            idictation::article::idictation_open_article,
+            idictation::article::idictation_article_payload,
+            idictation::article::idictation_article_audio,
+            idictation::reading::idictation_reading_catalog,
+            idictation::reading::idictation_reading_open,
+            idictation::reading::idictation_reading_save,
+            idictation::reading::idictation_reading_submit,
+            idictation::reading::idictation_reading_review,
             commands::reading::reading_pick_practice_asset,
             commands::reading::reading_get_asset_payload,
             commands::reading::reading_get_pdf_data_url,
@@ -323,6 +362,9 @@ pub fn run() {
             commands::enrichment::vocab_list,
             commands::enrichment::vocab_review,
             commands::enrichment::vocab_delete,
+            commands::vocabulary_books::vocab_books,
+            commands::vocabulary_books::vocab_book_units,
+            commands::vocabulary_books::vocab_book_words,
             commands::enrichment::coach_ensure_thread,
             commands::enrichment::coach_list_messages,
             commands::enrichment::coach_run,

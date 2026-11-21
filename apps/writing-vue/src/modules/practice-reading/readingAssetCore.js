@@ -1,4 +1,5 @@
 export function createReadingAssetController(api, normalizeReadingRecordId) {
+  let generation = 0
   const state = {
     asset: null,
     loading: false,
@@ -6,10 +7,12 @@ export function createReadingAssetController(api, normalizeReadingRecordId) {
   }
 
   async function loadReadingAsset(assetId, options = {}) {
+    const current = ++generation
     const normalizedAssetId = normalizeReadingRecordId(assetId)
     if (!normalizedAssetId) {
       state.asset = null
       state.error = '缺少阅读资源编号'
+      state.loading = false
       return null
     }
 
@@ -18,19 +21,21 @@ export function createReadingAssetController(api, normalizeReadingRecordId) {
     state.error = ''
     try {
       const data = normalizeReadingAssetViewModel(await api.getAsset(normalizedAssetId))
+      if (current !== generation) return null
       state.asset = data
       if (typeof afterLoad === 'function') {
         await afterLoad(data)
       }
       return data
     } catch (loadError) {
+      if (current !== generation) return null
       state.asset = null
       state.error = loadError?.message
         ? `阅读资源加载失败：${loadError.message}`
         : '阅读资源加载失败，请稍后重试'
       throw loadError
     } finally {
-      state.loading = false
+      if (current === generation) state.loading = false
     }
   }
 
@@ -43,7 +48,9 @@ export function createReadingAssetController(api, normalizeReadingRecordId) {
   }
 
   function clearReadingAsset() {
+    generation++
     state.asset = null
+    state.loading = false
   }
 
   return {
@@ -70,7 +77,7 @@ export function normalizeReadingAssetViewModel(value) {
 /** A passage the unified reading page can render (not a PDF-only scan). */
 export function hasReadingPracticePayload(asset) {
   const metadata = asset?.metadata || {}
-  return !asset?.pdfOnly && Boolean(
+  return asset?.practiceKind !== 'material' && metadata.practiceKind !== 'material' && !asset?.pdfOnly && Boolean(
     asset?.payloadRef
     || asset?.contentRef
     || metadata.dataKey

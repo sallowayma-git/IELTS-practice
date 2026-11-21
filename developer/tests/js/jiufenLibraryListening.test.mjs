@@ -70,7 +70,7 @@ test('listening hotlist filter composes with source, Part and frequency', async 
     {id:'hot',title:'Online',provider:'jiufen',parts:['P1','P4'],category:'P1 / P4',frequency:'high',hotlist:[{part:'P4',rank:5}]},
     {id:'plain',title:'Online high',provider:'jiufen',parts:['P4'],category:'P4',frequency:'high'}
   ])
-  const deps = { computed,ref,onMounted:()=>{},useRouter:()=>({}),useRoute:()=>({}),remoteCards:()=>remote }
+  const deps = { computed,ref,onMounted:()=>{},useRouter:()=>({}),useRoute:()=>({}),remoteCards:()=>remote,articleCards:ref([]) }
   const state = new Function(...Object.keys(deps), `${source}; return {assets,hotlistOnly,sourceFilter,partFilter,frequencyFilter,filteredAssets}`)(...Object.values(deps))
   state.assets.value = [{id:'local',title:'Local',category:'P4',frequency:'high'}]
   const ids = () => state.filteredAssets.value.map(item => item.id)

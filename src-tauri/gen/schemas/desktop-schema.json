@@ -783,6 +783,150 @@
           "markdownDescription": "Enables the history_writing_statistics command without any pre-configured scope."
         },
         {
+          "description": "Enables the idictation_article_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-article-audio",
+          "markdownDescription": "Enables the idictation_article_audio command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_article_books command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-article-books",
+          "markdownDescription": "Enables the idictation_article_books command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_article_chapters command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-article-chapters",
+          "markdownDescription": "Enables the idictation_article_chapters command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_article_payload command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-article-payload",
+          "markdownDescription": "Enables the idictation_article_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_books command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-books",
+          "markdownDescription": "Enables the idictation_books command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_chapters command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-chapters",
+          "markdownDescription": "Enables the idictation_chapters command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_connect command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-connect",
+          "markdownDescription": "Enables the idictation_connect command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_disconnect command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-disconnect",
+          "markdownDescription": "Enables the idictation_disconnect command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_open_article command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-open-article",
+          "markdownDescription": "Enables the idictation_open_article command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_open_login command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-open-login",
+          "markdownDescription": "Enables the idictation_open_login command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_open_reader command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-open-reader",
+          "markdownDescription": "Enables the idictation_open_reader command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_reader_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-reader-catalog",
+          "markdownDescription": "Enables the idictation_reader_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_reader_payload command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-reader-payload",
+          "markdownDescription": "Enables the idictation_reader_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_reading_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-reading-catalog",
+          "markdownDescription": "Enables the idictation_reading_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_reading_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-reading-open",
+          "markdownDescription": "Enables the idictation_reading_open command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_reading_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-reading-review",
+          "markdownDescription": "Enables the idictation_reading_review command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_reading_save command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-reading-save",
+          "markdownDescription": "Enables the idictation_reading_save command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_reading_submit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-reading-submit",
+          "markdownDescription": "Enables the idictation_reading_submit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_sync_chapter command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-sync-chapter",
+          "markdownDescription": "Enables the idictation_sync_chapter command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_training_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-training-answer",
+          "markdownDescription": "Enables the idictation_training_answer command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_training_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-training-audio",
+          "markdownDescription": "Enables the idictation_training_audio command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_training_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-training-close",
+          "markdownDescription": "Enables the idictation_training_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_training_finish command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-training-finish",
+          "markdownDescription": "Enables the idictation_training_finish command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the idictation_training_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-idictation-training-start",
+          "markdownDescription": "Enables the idictation_training_start command without any pre-configured scope."
+        },
+        {
           "description": "Enables the import_backup_path command without any pre-configured scope.",
           "type": "string",
           "const": "allow-import-backup-path",
@@ -1297,6 +1441,24 @@
           "type": "string",
           "const": "allow-upsert-setting",
           "markdownDescription": "Enables the upsert_setting command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the vocab_book_units command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-vocab-book-units",
+          "markdownDescription": "Enables the vocab_book_units command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the vocab_book_words command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-vocab-book-words",
+          "markdownDescription": "Enables the vocab_book_words command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the vocab_books command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-vocab-books",
+          "markdownDescription": "Enables the vocab_books command without any pre-configured scope."
         },
         {
           "description": "Enables the vocab_delete command without any pre-configured scope.",
@@ -1857,6 +2019,150 @@
           "markdownDescription": "Denies the history_writing_statistics command without any pre-configured scope."
         },
         {
+          "description": "Denies the idictation_article_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-article-audio",
+          "markdownDescription": "Denies the idictation_article_audio command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_article_books command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-article-books",
+          "markdownDescription": "Denies the idictation_article_books command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_article_chapters command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-article-chapters",
+          "markdownDescription": "Denies the idictation_article_chapters command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_article_payload command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-article-payload",
+          "markdownDescription": "Denies the idictation_article_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_books command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-books",
+          "markdownDescription": "Denies the idictation_books command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_chapters command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-chapters",
+          "markdownDescription": "Denies the idictation_chapters command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_connect command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-connect",
+          "markdownDescription": "Denies the idictation_connect command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_disconnect command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-disconnect",
+          "markdownDescription": "Denies the idictation_disconnect command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_open_article command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-open-article",
+          "markdownDescription": "Denies the idictation_open_article command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_open_login command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-open-login",
+          "markdownDescription": "Denies the idictation_open_login command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_open_reader command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-open-reader",
+          "markdownDescription": "Denies the idictation_open_reader command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_reader_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-reader-catalog",
+          "markdownDescription": "Denies the idictation_reader_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_reader_payload command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-reader-payload",
+          "markdownDescription": "Denies the idictation_reader_payload command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_reading_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-reading-catalog",
+          "markdownDescription": "Denies the idictation_reading_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_reading_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-reading-open",
+          "markdownDescription": "Denies the idictation_reading_open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_reading_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-reading-review",
+          "markdownDescription": "Denies the idictation_reading_review command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_reading_save command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-reading-save",
+          "markdownDescription": "Denies the idictation_reading_save command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_reading_submit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-reading-submit",
+          "markdownDescription": "Denies the idictation_reading_submit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_sync_chapter command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-sync-chapter",
+          "markdownDescription": "Denies the idictation_sync_chapter command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_training_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-training-answer",
+          "markdownDescription": "Denies the idictation_training_answer command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_training_audio command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-training-audio",
+          "markdownDescription": "Denies the idictation_training_audio command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_training_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-training-close",
+          "markdownDescription": "Denies the idictation_training_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_training_finish command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-training-finish",
+          "markdownDescription": "Denies the idictation_training_finish command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the idictation_training_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-idictation-training-start",
+          "markdownDescription": "Denies the idictation_training_start command without any pre-configured scope."
+        },
+        {
           "description": "Denies the import_backup_path command without any pre-configured scope.",
           "type": "string",
           "const": "deny-import-backup-path",
@@ -2371,6 +2677,24 @@
           "type": "string",
           "const": "deny-upsert-setting",
           "markdownDescription": "Denies the upsert_setting command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the vocab_book_units command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-vocab-book-units",
+          "markdownDescription": "Denies the vocab_book_units command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the vocab_book_words command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-vocab-book-words",
+          "markdownDescription": "Denies the vocab_book_words command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the vocab_books command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-vocab-books",
+          "markdownDescription": "Denies the vocab_books command without any pre-configured scope."
         },
         {
           "description": "Denies the vocab_delete command without any pre-configured scope.",

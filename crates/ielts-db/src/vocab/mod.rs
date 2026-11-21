@@ -1,5 +1,7 @@
 //! Vocabulary items and persisted SM-2 review scheduling.
 
+pub mod books;
+
 use ielts_domain::{
     vocab_sm2::{schedule_after_result, Sm2Rating, Sm2State, DEFAULT_EASE_FACTOR},
     LearningEventType,
@@ -196,7 +198,7 @@ pub fn list_vocab(conn: &Connection, limit: u32, offset: u32) -> DbResult<Vec<Vo
                 r.ease_factor, r.interval_days, r.repetitions, r.due_at, r.last_reviewed_at, r.lapses
          FROM vocabulary_items v
          LEFT JOIN vocabulary_review_state r ON r.item_id = v.id
-         ORDER BY v.updated_at DESC
+         ORDER BY v.updated_at DESC, v.id ASC
          LIMIT ?1 OFFSET ?2",
     )?;
     let rows = stmt.query_map(params![limit.min(500) as i64, offset as i64], map_item)?;

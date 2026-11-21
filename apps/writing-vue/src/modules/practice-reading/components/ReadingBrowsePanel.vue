@@ -162,7 +162,7 @@
           <div class="reading-card__body">
             <div class="reading-card__tags">
               <span class="tag tag-neutral">{{ categoryOf(asset) }}</span>
-              <span v-if="asset.provider" class="tag tag-info">九分学长</span>
+              <span v-if="asset.provider" class="tag tag-info">{{ asset.source || '在线题源' }}</span>
               <span v-if="asset.hotlist?.length" class="tag tag-accent" title="九分学长7天热榜" data-hotlist-tag>热榜</span>
               <span v-for="tag in asset.sourceTags || []" :key="tag" class="tag tag-neutral reading-card__source" data-source-tag>{{ tag }}</span>
               <span
@@ -211,10 +211,10 @@
                 :disabled="asset.available === false"
                 data-action="start"
                 :data-exam-id="asset.id"
-                :aria-label="`${customSuiteDraft ? '选择' : '开始练习'} ${asset.title}`"
+                :aria-label="`${customSuiteDraft ? '选择' : asset.practiceKind === 'material' ? '开始精读' : '开始练习'} ${asset.title}`"
                 @click="$emit('browse-primary-action', asset)"
               >
-                {{ asset.available === false ? '暂无权限' : customSuiteDraft ? '选择此题' : '开始练习' }}
+                {{ asset.available === false ? '暂无权限' : customSuiteDraft ? '选择此题' : asset.practiceKind === 'material' ? '开始精读' : '开始练习' }}
               </button>
             </template>
           </footer>

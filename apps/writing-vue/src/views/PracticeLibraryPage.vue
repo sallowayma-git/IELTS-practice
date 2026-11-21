@@ -102,7 +102,14 @@
       @confirm-custom-suite-selection="confirmCustomSuiteSelection"
       @cancel-custom-suite-selection="cancelCustomSuiteSelection"
     >
-      <LibraryFilters v-if="!customSuiteDraft" v-model:part="selectedCategory" v-model:source="sourceFilter" :parts="customSuiteCategories" />
+      <LibraryFilters v-if="!customSuiteDraft" v-model:part="selectedCategory" v-model:source="sourceFilter" :parts="customSuiteCategories" :extra-sources="[{value:'idictation',label:'爱听写精读'},{value:'idictation-exam',label:'爱听写真题'}]" />
+      <ReaderFilters v-if="!customSuiteDraft && sourceFilter === 'idictation'" />
+      <div v-if="!customSuiteDraft && sourceFilter === 'idictation-exam'">
+        <button type="button" class="btn btn-secondary" :disabled="readingBusy" @click="loadReadingCatalog">
+          {{ readingBusy ? '正在加载…' : '加载剑雅 A 类阅读' }}
+        </button>
+        <p v-if="readingError" role="alert">{{ readingError }}</p>
+      </div>
     </ReadingBrowsePanel>
 
     <ReadingMoreToolsPanel
@@ -164,6 +171,9 @@
 <script setup>
 import LibraryFilters from '../../../../plug/jiufen/LibraryFilters.vue'
 import { remoteCards, openNativeUnit } from '../../../../plug/jiufen/library.js'
+import ReaderFilters from '../../../../plug/idictation/ReaderFilters.vue'
+import { readerCards, openReader } from '../../../../plug/idictation/readerLibrary.js'
+import { examCards, openReading, loadReadingCatalog, readingBusy, readingError } from '../../../../plug/idictation/readingLibrary.js'
 import MoodMascot from '@/components/mascot/MoodMascot.vue'
 import { moodLabel } from '@/components/mascot/moodFor.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -285,8 +295,8 @@ const questionKind = computed(() => typeof route.query.kind === 'string' ? route
 const questionKindLabel = computed(() => QUESTION_KIND_LABELS[questionKind.value] || questionKind.value)
 
 const filteredReadingAssets = computed(() => {
-  const local = readingAssets.value.filter(a => !a.id.startsWith('jiufen-reading-'))
-  const cards = customSuiteDraft.value ? local : [...local, ...onlineReading.value].filter(a => sourceFilter.value === 'all' || (a.provider || 'local') === sourceFilter.value)
+  const local = readingAssets.value.filter(a => !a.id.startsWith('jiufen-reading-') && !a.id.startsWith('idictation-reading-'))
+  const cards = customSuiteDraft.value ? local : [...local, ...onlineReading.value, ...readerCards.value, ...examCards.value].filter(a => sourceFilter.value === 'all' || (a.provider || 'local') === sourceFilter.value)
   return filterReadingAssets(cards, {
     questionKind: questionKind.value,
     keyword: keyword.value,
@@ -544,12 +554,13 @@ function startReading(asset) {
 
 let openingRemote = false
 async function handleBrowsePrimaryAction(asset) {
-  if (asset.provider === 'jiufen') {
+  if (['jiufen', 'idictation', 'idictation-exam'].includes(asset.provider)) {
     if (openingRemote) return
     openingRemote = true
     const origin = route.fullPath
     try {
-      const target = await openNativeUnit(asset)
+      const open = asset.provider === 'idictation-exam' ? openReading : asset.provider === 'idictation' ? openReader : openNativeUnit
+      const target = await open(asset)
       if (route.fullPath === origin) await router.push(target)
     } catch (failure) {
       showLocalMessage(failure?.message || String(failure))

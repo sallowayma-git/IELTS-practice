@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-chapters"
+description = "Enables the idictation_chapters command without any pre-configured scope."
+commands.allow = ["idictation_chapters"]
+
+[[permission]]
+identifier = "deny-idictation-chapters"
+description = "Denies the idictation_chapters command without any pre-configured scope."
+commands.deny = ["idictation_chapters"]

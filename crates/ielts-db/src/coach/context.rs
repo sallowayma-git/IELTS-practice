@@ -228,7 +228,11 @@ fn resolve_practice_selector(
             "questionGroups": source.payload.get("questionGroups"),
             "questionDisplayMap": source.payload.get("questionDisplayMap")}),
             focus,
-            json!([]),
+            if source.payload["idictation"]["subject"] == "reading" {
+                json!(["Imported official answers may lack per-question interaction history. Do not infer first-try correctness or speed for questions without recorded interactions."])
+            } else {
+                json!([])
+            },
             Some(load_answer_key(&source.payload)),
         )
     } else {

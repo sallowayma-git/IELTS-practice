@@ -23,4 +23,5 @@ pub mod paths;
 pub mod reading;
 pub mod settings;
 pub mod soul;
+pub mod vocabulary_books;
 pub mod writing;

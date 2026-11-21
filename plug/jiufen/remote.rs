@@ -155,7 +155,7 @@ pub(super) async fn payload(
     }
     payload["examId"] = json!(asset_id);
     // A converter upgrade may add transient study fields. The submitted core is checked above.
-    db.with_conn(|conn| ielts_db::transient_assets::put(conn, asset_id, payload.clone()))
+    db.with_conn(|conn| ielts_db::transient_assets::put(conn, "jiufen", asset_id, payload.clone()))
         .map_err(|e| e.to_string())?;
     Ok(PracticeAssetV2Payload { asset, payload })
 }

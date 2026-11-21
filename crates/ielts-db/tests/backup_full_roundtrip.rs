@@ -75,6 +75,7 @@ fn is_m12_table(name: &str) -> bool {
 
 fn is_newer_than_legacy(name: &str) -> bool {
     name == "soul_revisions" || name == "weekly_digests"
+        || matches!(name, "vocabulary_books" | "vocabulary_book_units" | "vocabulary_book_entries")
         || name == "agent_context_snapshots"
         || name == "agent_context_items"
         || is_memory_table(name)
@@ -483,7 +484,7 @@ fn full_backup_roundtrip_preserves_every_user_truth_table() {
         .unwrap();
 
     let package = create_backup_package(&source, "roundtrip-test").unwrap();
-    assert_eq!(package.manifest.schema_version, 22);
+    assert_eq!(package.manifest.schema_version, ielts_db::backup::BACKUP_SCHEMA_VERSION);
     assert!(package.attempts.is_empty(), "format 18 carries attempts once");
     assert_eq!(
         package.manifest.table_count as usize,

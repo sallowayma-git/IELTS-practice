@@ -50,7 +50,14 @@ export function useNativeAnswerControls(options) {
   function collectCheckboxGroup(input) {
     const questionIds = resolveNativeQuestionIds(input)
     if (!questionIds.length) return []
-    const checkedValues = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${escapeCss(input.name)}"]`))
+    const boxes = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${escapeCss(input.name)}"]`))
+    const maxSelections = Number(input.dataset?.maxSelections)
+    if (input.checked && Number.isSafeInteger(maxSelections) && maxSelections > 0
+      && boxes.filter(box => box.checked).length > maxSelections) {
+      input.checked = false
+      return []
+    }
+    const checkedValues = boxes
       .filter((box) => box.checked)
       .map((box) => String(box.value || '').trim())
       .filter(Boolean)

@@ -7,6 +7,12 @@
 
 /* ---- shell leaks and layout fixes ---------------------------------- */
 
+.runified.material-mode { grid-template-rows:var(--header-height) 0 minmax(0,1fr) 0; }
+.runified.material-mode .shell { display:block; padding-bottom:0; }
+.runified.material-mode #left { width:100%; max-width:60rem; height:100%; margin:auto; }
+.runified.material-mode .header-right { gap:1rem; }
+.runified.material-mode .sub-header-bar { display:none; }
+
 /* The app shell gives every button and .q-item a 44px touch floor
    (.app-shell :where(button, .q-item …)); the exam sizes its own controls. */
 .runified button,

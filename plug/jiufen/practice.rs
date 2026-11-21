@@ -195,7 +195,7 @@ pub async fn jiufen_open_unit(
         if let Ok(previous) = ielts_db::get_practice_asset(conn, &asset_id) {
             asset.fingerprint = previous.fingerprint;
         }
-        ielts_db::transient_assets::put(conn, &asset_id, payload.clone())?;
+        ielts_db::transient_assets::put(conn, "jiufen", &asset_id, payload.clone())?;
         ielts_db::reading::upsert_practice_asset(conn, &asset)
     })
     .map_err(|e| e.to_string())?;

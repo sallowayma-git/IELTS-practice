@@ -128,6 +128,7 @@
             </div>
           </div>
           <JiufenAccountPanel />
+          <IdictationAccountPanel />
           <div class="setting-row">
             <div class="setting-row__copy">
               <strong>新手引导</strong>
@@ -932,6 +933,7 @@ import {
 import { invokeCommand } from '@/api/tauri-bridge.js'
 import { useReadingDataTools } from '@/modules/practice-reading/useReadingDataTools.js'
 import JiufenAccountPanel from '../../../../plug/jiufen/JiufenAccountPanel.vue'
+import IdictationAccountPanel from '../../../../plug/idictation/IdictationAccountPanel.vue'
 import { createRequestGate } from '@/utils/request-gate.js'
 import {
   isProviderDefaultUrl,

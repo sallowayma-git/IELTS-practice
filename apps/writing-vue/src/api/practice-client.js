@@ -3,6 +3,7 @@
  */
 
 import { isJiufenAsset } from '@/api/jiufen.js'
+import { isIdictationMaterial, isIdictationReading } from '@/api/idictation.js'
 import {
   listReadingAssets,
   getReadingAssetPayload,
@@ -60,7 +61,7 @@ export const practiceAssets = {
 
   async get(activity, assetId) {
     const normalizedAssetId = String(assetId || '').trim()
-    if (isJiufenAsset(normalizedAssetId)) {
+    if (isJiufenAsset(normalizedAssetId) || isIdictationMaterial(normalizedAssetId) || isIdictationReading(normalizedAssetId)) {
       const loaded = await getReadingAssetPayload(normalizedAssetId)
       return { ...loaded.asset, payload: loaded.payload }
     }
