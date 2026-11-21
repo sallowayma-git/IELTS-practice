@@ -123,6 +123,10 @@
                 correctAnswer: normalizedCorrect,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
+            // Preserve submission evidence and the display-only exclusion marker.
+            ['weight', 'partialCorrectCount', 'isCorrectSource'].forEach(function (field) {
+                if (Object.prototype.hasOwnProperty.call(entry, field)) sanitized[key][field] = entry[field];
+            });
             var acceptedAnswers = normalizeValueList(entry.acceptedAnswers);
             if (acceptedAnswers.length) {
                 sanitized[key].acceptedAnswers = acceptedAnswers;

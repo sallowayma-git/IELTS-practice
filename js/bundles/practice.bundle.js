@@ -2386,12 +2386,16 @@ class PracticeRecordModal {
         const formattedStart = this.formatDate(startTimestamp);
         const durationSeconds = this.resolveDuration(record);
         const formattedDuration = this.formatDuration(durationSeconds);
-        const score = this.resolveScore(record);
-        const accuracy = this.resolveAccuracy(record);
+        const summaryCounts = window.AnswerComparisonUtils.resolveRecordCounts(record, this.collectAllEntries(record),
+            source => this.getNormalizedEntries(this.prepareRecordForDisplay(source)));
+        const score = this.resolveScore(record, summaryCounts);
+        const accuracy = summaryCounts.correct !== null && summaryCounts.total > 0
+            ? summaryCounts.correct / summaryCounts.total : null;
         const accuracyPercent = accuracy != null ? Math.round(accuracy * 100) : null;
-        const summaryCounts = this.getEntriesSummary(this.collectAllEntries(record));
-        const incorrectCount = summaryCounts.incorrect || 0;
-        const unansweredCount = summaryCounts.unanswered || 0;
+        const missedCount = summaryCounts.missed ?? '未知';
+        const countNote = summaryCounts.detailStatus === 'conflict'
+            ? '明细与保存成绩不一致；统计以保存成绩为准。'
+            : '按计分题数统计；未得分包含答错、未答或明细未知的题目。';
 
         // 多套题模式的额外信息
         let multiSuiteInfo = '';
@@ -2440,15 +2444,24 @@ class PracticeRecordModal {
                                     <span class="meta-value">${accuracyPercent != null ? `${accuracyPercent}%` : '\u672a\u77e5'}</span>
                                 </div>
                                 <div class="meta-item">
-                                    <span class="meta-label">\u9519\u9898\u6570\uff1a</span>
-                                    <span class="meta-value error-count">${incorrectCount}</span>
+                                    <span class="meta-label">未得分：</span>
+                                    <span class="meta-value error-count">${missedCount}</span>
                                 </div>
                                 <div class="meta-item">
-                                    <span class="meta-label">\u672a\u4f5c\u7b54\uff1a</span>
-                                    <span class="meta-value unanswered-count">${unansweredCount}</span>
+                                    <span class="meta-label">已知答错：</span>
+                                    <span class="meta-value incorrect-count">${summaryCounts.incorrect}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">已知未答：</span>
+                                    <span class="meta-value unanswered-count">${summaryCounts.unanswered}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">明细未知：</span>
+                                    <span class="meta-value unknown-count">${summaryCounts.unknown}</span>
                                 </div>
                                 ${multiSuiteInfo}
                             </div>
+                            <p class="count-semantics">${countNote}</p>
                         </div>
                         <div class="answer-details">
                             ${record.type === 'reading' || record.type === 'reading-suite' ? (window.ReadingTimingView?.render(record) || '') : ''}
@@ -2515,20 +2528,8 @@ class PracticeRecordModal {
         return null;
     }
 
-    resolveScore(record) {
-        if (typeof record.correctAnswers === 'number' && typeof record.totalQuestions === 'number') {
-            return `${record.correctAnswers}/${record.totalQuestions}`;
-        }
-        if (record.scoreInfo && typeof record.scoreInfo.correct === 'number' && typeof record.scoreInfo.total === 'number') {
-            return `${record.scoreInfo.correct}/${record.scoreInfo.total}`;
-        }
-        if (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo.correct === 'number' && typeof record.realData.scoreInfo.total === 'number') {
-            return `${record.realData.scoreInfo.correct}/${record.realData.scoreInfo.total}`;
-        }
-        if (typeof record.score === 'number' && typeof record.total === 'number') {
-            return `${record.score}/${record.total}`;
-        }
-        return '\u672a\u77e5';
+    resolveScore(record, counts = window.AnswerComparisonUtils.resolveRecordCounts(record)) {
+        return counts.total === null ? '未知' : `${counts.correct ?? '未知'}/${counts.total}`;
     }
 
     resolveAccuracy(record) {
@@ -2700,48 +2701,8 @@ class PracticeRecordModal {
     }
 
     collectAllEntries(record) {
-        const utils = window.AnswerComparisonUtils;
-        if (!utils || !record) {
-            return [];
-        }
-
-        const suites = this.getSuiteEntries(record);
-        const hasSuites = Array.isArray(suites) && suites.length > 0;
-        let entries = [];
-
-        // 套题详情优先使用分篇数据，避免顶层聚合数据导致错题数固定或重复统计。
-        if (!hasSuites) {
-            entries = this.getNormalizedEntries(this.prepareRecordForDisplay(record));
-        }
-
-        if (hasSuites) {
-            suites.forEach((entry, index) => {
-                const subset = this.getNormalizedEntries(this.prepareRecordForDisplay(entry));
-                for (const item of subset) {
-                    entries.push({
-                        ...item,
-                        sourceEntryKey: item.sourceEntryKey || entry.examId || entry.id || `suite-entry-${index}`,
-                        examId: item.examId || entry.examId || entry.id || `suite-entry-${index}`
-                    });
-                }
-            });
-        }
-
-        if (!entries.length) {
-            return entries;
-        }
-
-        const seen = new Set();
-        return entries.filter((entry) => {
-            const questionKey = entry && (entry.questionId || entry.canonicalKey || entry.displayNumber || entry.key || '');
-            const examKey = entry && (entry.sourceEntryKey || entry.examId || '');
-            const dedupeKey = `${examKey}::${questionKey}::${entry && entry.correctAnswer ? String(entry.correctAnswer) : ''}`;
-            if (seen.has(dedupeKey)) {
-                return false;
-            }
-            seen.add(dedupeKey);
-            return true;
-        });
+        return window.AnswerComparisonUtils.getRecordEntries(record,
+            source => this.getNormalizedEntries(this.prepareRecordForDisplay(source)));
     }
 
     getEntriesSummary(entries) {
@@ -2792,7 +2753,13 @@ class PracticeRecordModal {
                 let resultIcon = '\u2753';
                 let resultClass = 'unknown';
 
-                if (entry.isCorrect === true) {
+                if (entry.partialCorrectCount > 0 && (entry.partialCorrectCount < entry.weight || entry.isCorrect === false)) {
+                    resultIcon = `部分得分 ${entry.partialCorrectCount}/${entry.weight}`;
+                    resultClass = 'partial';
+                } else if (!entry.hasUserAnswer) {
+                    resultIcon = '未作答';
+                    resultClass = 'unanswered';
+                } else if (entry.isCorrect === true) {
                     resultIcon = '\u2705';
                     resultClass = 'correct';
                 } else if (entry.isCorrect === false) {
@@ -3915,6 +3882,10 @@ if (document.readyState === 'loading') {
                 correctAnswer: normalizedCorrect,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
+            // Preserve submission evidence and the display-only exclusion marker.
+            ['weight', 'partialCorrectCount', 'isCorrectSource'].forEach(function (field) {
+                if (Object.prototype.hasOwnProperty.call(entry, field)) sanitized[key][field] = entry[field];
+            });
             var acceptedAnswers = normalizeValueList(entry.acceptedAnswers);
             if (acceptedAnswers.length) {
                 sanitized[key].acceptedAnswers = acceptedAnswers;
