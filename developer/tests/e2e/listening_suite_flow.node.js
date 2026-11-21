@@ -20,7 +20,8 @@ const exams = [1, 2, 3, 4].map((part) => ({
 function fixture(part, options = {}) {
     const q = (part - 1) * 10 + 1;
     const tokenControl = options.answerControl === 'token' && part === 4;
-    const accepted = options.alternatives ? ['colour', 'color'] : [tokenControl ? 'A' : `answer${part}`];
+    const accepted = options.literalAnswer ? [options.literalAnswer]
+        : options.alternatives ? ['colour', 'color'] : [tokenControl ? 'A' : `answer${part}`];
     const answerControl = tokenControl
         ? `<div class="drop-zone" data-q="${q}" style="min-height:40px"></div>`
         : `<input ${options.answerControl === 'id' && part === 4 ? 'id' : 'name'}="q${q}" autocomplete="off">`;
@@ -417,14 +418,20 @@ try {
         { scoring: 'table', answerControl: 'token' },
         { scoring: 'table', alternatives: true },
         { scoring: 'table', alternatives: true, matchCore: true },
+        ...['1 / 2', '10 / 11 / 2026'].flatMap((literalAnswer) => [false, true].flatMap((matchCore) => [
+            { scoring: 'table', literalAnswer, matchCore },
+            { scoring: 'table', literalAnswer, matchCore, partialAnswer: true }
+        ])),
         { finishControl: '<button id="finishBtn"><span>Done</span></button>' },
         { finishControl: '<button data-action="check"><span>Done</span></button>' },
         { finishControl: '<span role="button" tabindex="0" aria-label="Grade answers"><span>Done</span></span>' }
     ]) {
+        const literalInput = options.literalAnswer && (options.partialAnswer ? options.literalAnswer.split(' / ')[0] : options.literalAnswer);
+        const expectedPartScore = options.partialAnswer ? 0 : 1;
         const { context, page } = await setup(options);
         const suite = await start(page, 'simulation');
         await waitForSuiteReady(suite);
-        if (options.alternatives && !options.matchCore) {
+        if ((options.alternatives || options.literalAnswer) && !options.matchCore) {
             await suite.evaluate(() => document.querySelectorAll('iframe').forEach((frame) => {
                 delete frame.contentWindow.AnswerMatchCore;
             }));
@@ -440,7 +447,7 @@ try {
                     slot.appendChild(token);
                     slot.dispatchEvent(new Event('input', { bubbles: true }));
                 });
-            } else await activeFrame(suite).locator('input').fill(options.alternatives ? (part % 2 ? 'colour' : 'color') : 'answer' + part);
+            } else await activeFrame(suite).locator('input').fill(literalInput || (options.alternatives ? (part % 2 ? 'colour' : 'color') : 'answer' + part));
         }
         const snapshots = await suite.evaluate(() => Array.from(document.querySelectorAll('iframe'), (frame) => ({
             snapshot: frame.contentWindow.__listeningBridgeSnapshot(),
@@ -448,19 +455,26 @@ try {
             disabled: Boolean(frame.contentDocument.querySelector('input')?.disabled),
             finishCalls: frame.contentWindow.App.finishCalls
         })));
-        assert.ok(snapshots.every(({ snapshot }) => snapshot?.scoreInfo.correct === 1 && snapshot.scoreInfo.total === 1),
-            'suite snapshots support native generated and existing result tables');
+        assert.ok(snapshots.every(({ snapshot }) => snapshot?.scoreInfo.correct === expectedPartScore && snapshot.scoreInfo.total === 1),
+            `suite snapshots score current answers for ${JSON.stringify(options)}: ${JSON.stringify(snapshots.map(({ snapshot }) => snapshot?.scoreInfo))}`);
         assert.ok(snapshots.every(({ reviewing, disabled, finishCalls }) => !reviewing && !disabled && finishCalls === 0),
             'scoring snapshots do not enter native review');
-        if (options.answerControl || options.alternatives) {
-            const expected = options.answerControl === 'token' ? 'A' : options.alternatives ? 'color' : 'answer4';
+        if (options.answerControl || options.alternatives || options.literalAnswer) {
+            const expected = literalInput || (options.answerControl === 'token' ? 'A' : options.alternatives ? 'color' : 'answer4');
             assert.equal(snapshots[3].snapshot.answers.q31, expected);
-            assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(3).textContent(), 'Correct');
+            assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(3).textContent(), expectedPartScore ? 'Correct' : 'Incorrect');
+            if (options.alternatives || options.literalAnswer) {
+                assert.equal(await activeFrame(suite).locator('body').evaluate(() => Boolean(window.AnswerMatchCore)), Boolean(options.matchCore));
+            }
+            if (options.literalAnswer) {
+                assert.ok(snapshots.every(({ snapshot }) => Object.values(snapshot.answerComparison).every(
+                    (entry) => JSON.stringify(entry.acceptedAnswers) === JSON.stringify([options.literalAnswer])
+                )), 'numeric slash answers remain one accepted value in every part');
+            }
             if (options.alternatives) {
                 assert.ok(snapshots.every(({ snapshot }) => Object.values(snapshot.answerComparison).every(
                     (entry) => JSON.stringify(entry.acceptedAnswers) === JSON.stringify(['colour', 'color'])
                 )), 'displayed alternatives remain separate accepted answers in every part');
-                assert.equal(await activeFrame(suite).locator('body').evaluate(() => Boolean(window.AnswerMatchCore)), Boolean(options.matchCore));
                 const dateScores = await activeFrame(suite).locator('body').evaluate(() => {
                     const correctCell = document.querySelector('#fixture-results tbody tr').cells[2];
                     const displayed = correctCell.textContent;
@@ -481,7 +495,7 @@ try {
                 assert.equal(await activeFrame(suite).locator('#q31').getAttribute('name'), null);
                 assert.equal(await activeFrame(suite).locator('#q31').getAttribute('data-q'), null);
             }
-            for (const value of ['wrong', '']) {
+            for (const value of ['wrong', '', ...(options.literalAnswer ? options.literalAnswer.split(' / ') : [])]) {
                 const snapshot = await activeFrame(suite).locator('body').evaluate((_, currentValue) => {
                     const input = document.querySelector('input');
                     if (input) input.value = currentValue;
@@ -502,7 +516,7 @@ try {
             }, expected);
             const restored = await activeFrame(suite).locator('body').evaluate(() => window.__listeningBridgeSnapshot());
             assert.equal(restored.answers.q31, expected, 'tokens also support text-only values');
-            assert.equal(restored.scoreInfo.correct, 1);
+            assert.equal(restored.scoreInfo.correct, expectedPartScore);
         }
         if (options.retainedTable) {
             assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(1).textContent(), '',
@@ -526,14 +540,15 @@ try {
                 'simulation intercepts native completion before review handlers');
         } else await suite.locator('[data-suite-submit]').click();
         const saved = await waitForRecord(page);
-        assert.equal(saved[0].correctAnswers, options.reset ? 3 : 4);
+        assert.equal(saved[0].correctAnswers, options.reset ? 3 : 4 * expectedPartScore);
         assert.equal(saved[0].suiteEntries.length, 4);
-        if (options.answerControl || options.alternatives) {
+        if (options.answerControl || options.alternatives || options.literalAnswer) {
             assert.equal(saved[0].suiteEntries[3].answers.q31, snapshots[3].snapshot.answers.q31,
                 'the aggregate record preserves the current table-backed answer');
         }
         results.push({ compatibility: options.scoring || options.finishControl, retainedTable: options.retainedTable, reset: options.reset,
             answerControl: options.answerControl, alternatives: options.alternatives, matchCore: options.matchCore,
+            literalAnswer: options.literalAnswer, partialAnswer: options.partialAnswer,
             recordCount: saved.length, correct: saved[0].correctAnswers });
         await context.close();
     }

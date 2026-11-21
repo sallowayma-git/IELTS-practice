@@ -326,8 +326,13 @@
   }
 
   function normalizeDisplayedAnswers(value, mode) {
-    // Text alternatives are displayed with " / "; bare slashes may belong to a date or fraction.
-    var values = mode === 'multiple' ? value : String(value || '').split(/\s+\/\s+/);
+    var displayed = String(value || '');
+    var values = mode === 'multiple' ? value : displayed.replace(/\s+\/\s+/g, function (separator, offset) {
+      // Native reports may put spaces around literal numeric slashes in fractions or dates.
+      var before = displayed.slice(0, offset);
+      var after = displayed.slice(offset + separator.length);
+      return /\d$/.test(before) && /^[+-]?(?:\d|\.\d)/.test(after) ? separator : '|';
+    });
     return normalizeAcceptedAnswers(values, mode);
   }
 
