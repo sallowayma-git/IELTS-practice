@@ -328,10 +328,21 @@
   function normalizeDisplayedAnswers(value, mode) {
     var values = normalizeAcceptedAnswers(value, mode);
     if (mode === 'multiple') return values;
-    // Preserve complete fractions/dates, not alternatives that merely meet at digits.
-    var numericSlashLiteral = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:\s*\/\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+))+$/;
+    // Adjacent numeric fragments form one fraction/date even among text alternatives.
+    var numericFragment = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:\s*\/\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+))*$/;
     return values.reduce(function (answers, displayed) {
-      return answers.concat(numericSlashLiteral.test(displayed) ? [displayed] : displayed.split(/\s+\/\s+/));
+      var parts = displayed.split(/(\s+\/\s+)/);
+      var current = parts[0];
+      for (var i = 2; i < parts.length; i += 2) {
+        if (numericFragment.test(current) && numericFragment.test(parts[i])) {
+          current += parts[i - 1] + parts[i];
+        } else {
+          answers.push(current);
+          current = parts[i];
+        }
+      }
+      answers.push(current);
+      return answers;
     }, []);
   }
 

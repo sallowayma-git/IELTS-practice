@@ -428,11 +428,21 @@ try {
             { scoring: 'table', literalAnswer, matchCore },
             { scoring: 'table', literalAnswer, matchCore, partialAnswer: true }
         ])),
+        ...[
+            ['1 / 2', 'half'],
+            ['10 / 11 / 2026', 'November 10 2026']
+        ].flatMap((pair) => [pair, pair.slice().reverse()].flatMap((alternatives) => [false, true].flatMap((matchCore) =>
+            [false, true].map((partialAnswer) => ({ scoring: 'table', alternatives, matchCore, partialAnswer }))))),
         { finishControl: '<button id="finishBtn"><span>Done</span></button>' },
         { finishControl: '<button data-action="check"><span>Done</span></button>' },
         { finishControl: '<span role="button" tabindex="0" aria-label="Grade answers"><span>Done</span></span>' }
     ]) {
-        const literalInput = options.literalAnswer && (options.partialAnswer ? options.literalAnswer.split(' / ')[0] : options.literalAnswer);
+        const literalAnswer = options.literalAnswer || options.alternatives?.find((answer) => answer.includes(' / '));
+        const components = literalAnswer ? literalAnswer.split(' / ') : [];
+        const answers = options.partialAnswer ? components
+            : options.alternatives || (options.literalAnswer ? [options.literalAnswer] : []);
+        const answerForPart = (part) => answers.length ? answers[(part - 1) % answers.length]
+            : options.answerControl === 'token' && part === 4 ? 'A' : 'answer' + part;
         const expectedPartScore = options.partialAnswer ? 0 : 1;
         const { context, page } = await setup(options);
         const suite = await start(page, 'simulation');
@@ -453,8 +463,7 @@ try {
                     slot.appendChild(token);
                     slot.dispatchEvent(new Event('input', { bubbles: true }));
                 });
-            } else await activeFrame(suite).locator('input').fill(literalInput || (options.alternatives
-                ? options.alternatives[(part - 1) % options.alternatives.length] : 'answer' + part));
+            } else await activeFrame(suite).locator('input').fill(answerForPart(part));
         }
         const snapshots = await suite.evaluate(() => Array.from(document.querySelectorAll('iframe'), (frame) => ({
             snapshot: frame.contentWindow.__listeningBridgeSnapshot(),
@@ -467,8 +476,7 @@ try {
         assert.ok(snapshots.every(({ reviewing, disabled, finishCalls }) => !reviewing && !disabled && finishCalls === 0),
             'scoring snapshots do not enter native review');
         if (options.answerControl || options.alternatives || options.literalAnswer) {
-            const expected = literalInput || (options.answerControl === 'token' ? 'A'
-                : options.alternatives ? options.alternatives[3 % options.alternatives.length] : 'answer4');
+            const expected = answerForPart(4);
             assert.equal(snapshots[3].snapshot.answers.q31, expected);
             assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(3).textContent(), expectedPartScore ? 'Correct' : 'Incorrect');
             if (options.alternatives || options.literalAnswer) {
@@ -503,7 +511,7 @@ try {
                 assert.equal(await activeFrame(suite).locator('#q31').getAttribute('name'), null);
                 assert.equal(await activeFrame(suite).locator('#q31').getAttribute('data-q'), null);
             }
-            for (const value of ['wrong', '', ...(options.literalAnswer ? options.literalAnswer.split(' / ') : [])]) {
+            for (const value of ['wrong', '', ...components]) {
                 const snapshot = await activeFrame(suite).locator('body').evaluate((_, currentValue) => {
                     const input = document.querySelector('input');
                     if (input) input.value = currentValue;
