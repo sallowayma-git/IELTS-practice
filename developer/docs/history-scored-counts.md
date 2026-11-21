@@ -134,14 +134,17 @@ node scripts/verify-diagnostic-release.mjs
 ```
 
 The persistence regression opens the actual static index and shipped bundles,
-saves thirteen synthetic records through AppData into real IndexedDB, opens both
-detail/full projections, downloads Markdown through the modal export entrypoint,
+saves sixteen controlled records through AppData into real IndexedDB, including
+split selections from the production grading runtime. It opens both detail/full
+projections, downloads Markdown through the modal export entrypoint,
 reopens and reloads, and compares all saved records including annotations and
 the canonical replay snapshot. It uses isolated browser storage and does not
 enable sync. Optional `HISTORY_BROWSER_CHANNEL=chrome` or `msedge` and
 `HISTORY_ACCESS_MODE=file` select additional browser/access-mode coverage.
 The empty-record cases distinguish missing grading evidence, saved 0/0, and a
 saved zero denominator without earned credit through each projection and reopen.
+The suite and split-selection cases retain incomplete child totals and both new
+and legacy occupancy evidence through the same persistence and display paths.
 
 The first four modal assertions fail on opensource baseline
 `5cee8fa324227f4ba15f6df65453db9023e08249` with 1/1/4/0 instead of 3/3/6/3.
