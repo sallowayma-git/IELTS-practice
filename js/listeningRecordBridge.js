@@ -550,7 +550,7 @@
     return null;
   }
 
-  function getAnswerInputValue(doc, question, correctAnswer, sourceKey) {
+  function getAnswerInputs(doc, question, sourceKey) {
     var directName = 'q' + question;
     var rawSourceName = String(sourceKey || '');
     var sourceInputs = rawSourceName ? Array.prototype.slice.call(doc.querySelectorAll('[name="' + cssAttr(rawSourceName) + '"]')) : [];
@@ -559,13 +559,17 @@
     var questionDataInputs = question ? Array.prototype.slice.call(doc.querySelectorAll('[data-q="' + cssAttr(question) + '"], [data-q="' + cssAttr(directName) + '"]')) : [];
     var multipleName = (question === '11' || question === '12') ? 'q11_12' : '';
     var multipleInputs = multipleName ? Array.prototype.slice.call(doc.querySelectorAll('[name="' + cssAttr(multipleName) + '"]')) : [];
-    var inputs = sourceInputs.length
+    return sourceInputs.length
       ? sourceInputs
       : (directInputs.length
         ? directInputs
         : (sourceDataInputs.length
           ? sourceDataInputs
           : (questionDataInputs.length ? questionDataInputs : multipleInputs)));
+  }
+
+  function getAnswerInputValue(doc, question, correctAnswer, sourceKey) {
+    var inputs = getAnswerInputs(doc, question, sourceKey);
     if (!inputs.length) return '';
 
     var first = inputs[0];
@@ -766,6 +770,45 @@
     }).filter(Boolean);
   }
 
+  function generateAttemptDetails(win) {
+    var app = win && win.App;
+    if (!app || typeof app.generateResultsTable !== 'function') return [];
+    try {
+      var html = app.generateResultsTable();
+      var tempDiv = win.document.createElement('div');
+      tempDiv.innerHTML = html;
+      return parseResultsFromDocument(tempDiv);
+    } catch (e) {
+      warn('parseResultsFromHtml failed:', e);
+      return [];
+    }
+  }
+
+  function buildDetailsFromCurrentResults(doc) {
+    // A retained report supplies the answer key, never the current attempt or grade.
+    var details = parseResultsFromDocument(doc).map(function (detail, index) {
+      var question = normalizeQuestionLabel(detail.question, index).replace(/^q/i, '');
+      var sourceKey = 'q' + question.replace(/-/g, '_');
+      var controls = getAnswerInputs(doc, question, sourceKey);
+      var hasInput = controls.some(function (el) { return /^(input|textarea|select)$/i.test(el.tagName); });
+      var hasSlot = controls.some(function (el) {
+        return el.matches && el.matches('.match-slot, .flow-slot, .map-slot, .drop-zone, .dropzone');
+      });
+      // Do not silently submit a partial score when a report cannot be tied to live controls.
+      if (!hasInput && !hasSlot) return null;
+      var userAnswer = hasInput
+        ? getAnswerInputValue(doc, question, detail.correctAnswer, sourceKey)
+        : getSlotAnswerValue(doc, question, sourceKey);
+      var multiple = isMultipleAnswerControl(doc, question, sourceKey);
+      var accepted = normalizeAcceptedAnswers(detail.correctAnswer, multiple ? 'multiple' : 'text');
+      var isCorrect = accepted.length > 0 && (multiple
+        ? arraysEqualSet(String(userAnswer || '').split(',').map(normalizeComparableAnswer).filter(Boolean), accepted.map(normalizeComparableAnswer))
+        : compareAgainstAccepted(userAnswer, accepted, 'text'));
+      return makeDetail(question, userAnswer, detail.correctAnswer, isCorrect, accepted);
+    });
+    return details.every(Boolean) ? details : [];
+  }
+
   function extractAttemptDetails(win, options) {
     options = options || {};
     var allowGenerated = !!options.allowGenerated;
@@ -781,16 +824,9 @@
     var app = win.App;
     var isReviewing = !!(app && app.state && (app.state.isReviewing || app.state.review));
 
-    if ((allowGenerated || isReviewing) && app && typeof app.generateResultsTable === 'function') {
-      try {
-        var html = app.generateResultsTable();
-        var tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        var s2 = parseResultsFromDocument(tempDiv);
-        if (s2.length) return s2;
-      } catch (e) {
-        warn('parseResultsFromHtml failed:', e);
-      }
+    if (allowGenerated || isReviewing) {
+      var s2 = generateAttemptDetails(win);
+      if (s2.length) return s2;
     }
 
     if (isReviewing) {
@@ -1386,7 +1422,8 @@
   window.__listeningBridgeSnapshot = function () {
     var details = buildDetailsFromAppState(window);
     if (!details.length) details = buildDetailsFromInlineConfig(window.document);
-    if (!details.length) details = extractAttemptDetails(window, { allowGenerated: true });
+    if (!details.length) details = generateAttemptDetails(window);
+    if (!details.length) details = buildDetailsFromCurrentResults(window.document);
     if (!details.length) return null;
     return buildBridgePayload(details);
   };

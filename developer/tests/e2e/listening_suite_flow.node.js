@@ -21,20 +21,21 @@ function fixture(part, options = {}) {
     const q = (part - 1) * 10 + 1;
     const config = !options.scoring ? `config:{questionList:[${q}],answerKey:{text:{q${q}:'answer${part}'}}},` : '';
     const finishControl = options.finishControl || '<button id="finish-btn">Finish</button>';
-    const tableOnly = options.scoring === 'table' ? `
-        const report=document.createElement('div');report.hidden=true;document.body.appendChild(report);
+    const resultTable = options.scoring === 'table' || options.retainedTable ? `
+        const report=document.createElement('div');report.hidden=true;report.id='fixture-results';document.body.appendChild(report);
         const generate=App.generateResultsTable.bind(App);
         const updateResults=()=>{report.innerHTML=generate();};
-        document.querySelector('input').addEventListener('input',updateResults);
+        ${options.scoring === 'table' ? "document.querySelector('input').addEventListener('input',updateResults);" : ''}
         updateResults();
-        delete App.generateResultsTable;` : '';
+        const finish=App.finish.bind(App);App.finish=()=>{updateResults();finish();};
+        ${options.scoring === 'table' ? 'delete App.generateResultsTable;' : ''}` : '';
     return `<!doctype html><html><head><meta charset="utf-8"><title>Listening Part ${part}</title>
     <style>*{box-sizing:border-box}body{margin:0;font-family:system-ui}.header,.bottom-bar{display:flex;gap:16px;padding:16px}.shell{padding:24px}input{padding:10px}.q-nav-container{display:flex}</style></head><body>
     <header class="header"><h1>Listening Part ${part}</h1><span id="timer">00:00</span><div class="header-controls"></div></header>
     <main class="shell"><h2>Part ${part}</h2><p>Complete the notes.</p><label>Question ${q} <input name="q${q}" autocomplete="off"></label><textarea id="notes" aria-label="Notes"></textarea>
     <audio controls src="/__fixture.wav" preload="metadata"></audio><div class="match-slot" data-q="${q + 1}"></div></main>
     <footer class="bottom-bar"><div id="q-nav-container"><button class="q-nav-item" data-qnum="${q}">${q}</button></div><div class="bb-center"><button id="clear-btn">Reset</button><span id="fixture-completion-control">${finishControl}</span></div></footer>
-    <script>window.App={${config}state:{isReviewing:false},finishCalls:0,finish(){this.finishCalls++;this.state.isReviewing=true;document.querySelector('input').disabled=true;},generateResultsTable(){const answer=document.querySelector('input').value;return '<table class="results-table"><thead><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody><tr><td>${q}</td><td>'+answer+'</td><td>answer${part}</td><td>'+(answer==='answer${part}'?'Correct':'Incorrect')+'</td></tr></tbody></table>';}};document.querySelector('#fixture-completion-control > *').addEventListener('click',()=>App.finish());document.getElementById('clear-btn').addEventListener('click',()=>{document.querySelector('input').value='';});${tableOnly}</script></body></html>`;
+    <script>window.App={${config}state:{isReviewing:false},finishCalls:0,finish(){this.finishCalls++;this.state.isReviewing=true;document.querySelector('input').disabled=true;},generateResultsTable(){const answer=document.querySelector('input').value;return '<table class="results-table"><thead><tr><th>Question</th><th>Your answer</th><th>Correct answer</th><th>Result</th></tr></thead><tbody><tr><td>${q}</td><td>'+answer+'</td><td>answer${part}</td><td>'+(answer==='answer${part}'?'Correct':'Incorrect')+'</td></tr></tbody></table>';}};document.querySelector('#fixture-completion-control > *').addEventListener('click',()=>App.finish());document.getElementById('clear-btn').addEventListener('click',()=>{document.querySelector('input').value='';});${resultTable}</script></body></html>`;
 }
 
 const server = http.createServer((req, res) => {
@@ -300,11 +301,32 @@ try {
                 assert.equal(await activeFrame(suite).locator('input').inputValue(), 'answer1', 'review restores submitted P1');
                 assert.equal(await activeFrame(suite).locator('input').isDisabled(), true, 'review is read-only');
                 assert.match(await activeFrame(suite).locator('#listening-suite-review').innerText(), /answer1/);
+                const submittedDraft = await page.evaluate(() => JSON.stringify(window.app.currentSuiteSession.draftsByExam['listening-p1-suite-fixture']));
+                await activeFrame(suite).locator('#timer').click();
+                await suite.locator('[data-suite-navigate="next"]:enabled').click();
+                await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
+                    && window.__listeningBridgeGetState().examId === expected, exams[1].id);
+                await waitForSuiteReady(suite);
+                assert.equal(await activeFrame(suite).locator('input').inputValue(), 'Unsubmitted P2 draft');
+                assert.equal(await activeFrame(suite).locator('#timer').evaluate((timer) => timer.classList.contains('paused')), true,
+                    'cached P2 drafts must not overwrite a newer pause from submitted P1');
+                const paused = await activeFrame(suite).locator('#timer').innerText();
+                await suite.waitForTimeout(1400);
+                assert.equal(await activeFrame(suite).locator('#timer').innerText(), paused, 'the timer stays paused after review navigation');
+                await suite.locator('[data-suite-navigate="prev"]:enabled').click();
+                await activeFrame(suite).locator('#listening-suite-review').waitFor();
+                await activeFrame(suite).locator('#timer').click();
+                await reloadSuite(suite);
+                await activeFrame(suite).locator('#listening-suite-review').waitFor();
+                assert.equal(await activeFrame(suite).locator('#timer').evaluate((timer) => timer.classList.contains('paused')), false,
+                    'a timer-only resume on submitted P1 survives immediate reload');
                 await suite.locator('[data-suite-navigate="next"]:enabled').click();
                 await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
                     && window.__listeningBridgeGetState().examId === expected, exams[1].id);
                 assert.equal(await activeFrame(suite).locator('input').inputValue(), 'Unsubmitted P2 draft', 'returning from review restores the current draft');
                 await assertRunningCountdown(page, suite);
+                assert.equal(await page.evaluate(() => JSON.stringify(window.app.currentSuiteSession.draftsByExam['listening-p1-suite-fixture'])), submittedDraft,
+                    'timer-only review changes do not rewrite the submitted answer draft');
             }
             await activeFrame(suite).locator('input').fill('answer' + part);
             if (mode === 'stationary' && part === 2) {
@@ -336,7 +358,9 @@ try {
     }
     for (const options of [
         { scoring: 'generated' },
+        { scoring: 'generated', retainedTable: true },
         { scoring: 'table' },
+        { scoring: 'table', reset: true },
         { finishControl: '<button id="finishBtn"><span>Done</span></button>' },
         { finishControl: '<button data-action="check"><span>Done</span></button>' },
         { finishControl: '<span role="button" tabindex="0" aria-label="Grade answers"><span>Done</span></span>' }
@@ -358,6 +382,19 @@ try {
             'suite snapshots support native generated and existing result tables');
         assert.ok(snapshots.every(({ reviewing, disabled, finishCalls }) => !reviewing && !disabled && finishCalls === 0),
             'scoring snapshots do not enter native review');
+        if (options.retainedTable) {
+            assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(1).textContent(), '',
+                'the live generator scores current inputs even while the retained table is blank');
+        }
+        if (options.reset) {
+            await activeFrame(suite).locator('#clear-btn').click();
+            assert.equal(await activeFrame(suite).locator('input').inputValue(), '');
+            assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(1).textContent(), 'answer4',
+                'native Reset leaves stale result artifacts without dispatching an input event');
+            const resetSnapshot = await activeFrame(suite).locator('body').evaluate(() => window.__listeningBridgeSnapshot());
+            assert.equal(resetSnapshot.answers.q31, '', 'table-only snapshots read the current reset answer');
+            assert.equal(resetSnapshot.scoreInfo.correct, 0, 'a stale correct result must not survive Reset');
+        }
         if (options.finishControl) {
             const nativeState = await activeFrame(suite).locator('#fixture-completion-control span').last().evaluate((target) => {
                 target.click();
@@ -367,9 +404,10 @@ try {
                 'simulation intercepts native completion before review handlers');
         } else await suite.locator('[data-suite-submit]').click();
         const saved = await waitForRecord(page);
-        assert.equal(saved[0].correctAnswers, 4);
+        assert.equal(saved[0].correctAnswers, options.reset ? 3 : 4);
         assert.equal(saved[0].suiteEntries.length, 4);
-        results.push({ compatibility: options.scoring || options.finishControl, recordCount: saved.length, correct: saved[0].correctAnswers });
+        results.push({ compatibility: options.scoring || options.finishControl, retainedTable: options.retainedTable, reset: options.reset,
+            recordCount: saved.length, correct: saved[0].correctAnswers });
         await context.close();
     }
     assert.deepEqual(errors, []);

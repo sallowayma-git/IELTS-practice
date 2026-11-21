@@ -125,7 +125,7 @@
                 global.sessionStorage.setItem(recoveryKey(), JSON.stringify({
                     version: 1, suiteSessionId: state.suiteSessionId,
                     examIds: sequence.map((entry) => entry.examId), activeExamId: state.examId,
-                    draftsByExam, elapsedByExam, timer: timerPayload(), updatedAt: draftTimestamp
+                    draftsByExam, elapsedByExam, timer: timerPayload(), updatedAt: Math.max(Date.now(), draftTimestamp)
                 }));
             } catch (_) { /* Keep forwarding drafts even if the local recovery cache cannot be written. */ }
         }
@@ -168,7 +168,13 @@
 
         function syncDraft() {
             const slot = activeSlot();
-            if (!slot?.ready || finished || pendingSubmission || slot.submitted || reviewContext?.readOnly) return;
+            if (!slot?.ready || finished || pendingSubmission) return;
+            if (slot.submitted || reviewContext?.readOnly) {
+                // Review navigation and timer clicks still need synchronous recovery,
+                // without creating or forwarding a new submitted-answer draft.
+                saveRecovery();
+                return;
+            }
             const draft = draftFor(slot);
             slot.draft = draft;
             // sessionStorage survives reload synchronously; postMessage delivery can race INIT.
