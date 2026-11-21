@@ -22,9 +22,15 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     let browser;
+    let phase = 'startup';
+    const browserErrors = [];
     try {
         browser = await chromium.launch({ headless: true, ...(process.env.HISTORY_BROWSER_CHANNEL ? { channel: process.env.HISTORY_BROWSER_CHANNEL } : {}) });
         const page = await browser.newPage();
+        page.on('console', message => {
+            if (message.type() === 'error') browserErrors.push(message.text());
+        });
+        page.on('pageerror', error => browserErrors.push(error.stack || error.message));
         const ready = async () => {
             await page.waitForFunction(() => window.app?.isInitialized === true);
             await page.evaluate(async () => {
@@ -58,6 +64,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         const emptyScores = { 'empty-ungraded': '未知', 'empty-zero': '0/0', 'empty-denominator': '0/0' };
         for (const [id, missed] of Object.entries(expected)) {
             for (const projection of ['detail', 'full']) {
+                phase = `${id}/${projection}`;
                 const result = await page.evaluate(async ({ id, projection }) => {
                     const record = await AppData.practice.get(id, { projection });
                     const snapshot = JSON.stringify(record);
@@ -80,9 +87,12 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
                     assert.equal(await page.locator('.answer-row.partial').textContent().then(text => text.includes('1/4')), true);
                 }
             }
-            const downloadEvent = page.waitForEvent('download');
-            await page.evaluate(id => practiceRecordModal.exportSingle(id), id);
-            const download = await downloadEvent;
+            phase = `${id}/export`;
+            const [download] = await Promise.all([
+                page.waitForEvent('download'),
+                page.evaluate(id => practiceRecordModal.exportSingle(id), id)
+            ]);
+            assert.equal(await download.failure(), null, `${id}: Markdown download failed`);
             assert.ok(fs.readFileSync(await download.path(), 'utf8').length > 0);
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed));
@@ -95,6 +105,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         await page.reload();
         await ready();
         for (const [id, missed] of Object.entries(expected)) {
+            phase = `${id}/reload`;
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed), `reload/${id}`);
             if (id in emptyScores) assert.equal(await page.locator('.score-highlight').textContent(), emptyScores[id]);
@@ -104,6 +115,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         console.log(JSON.stringify({ browser: browser.version(), channel: process.env.HISTORY_BROWSER_CHANNEL || 'chromium',
             mode: process.env.HISTORY_ACCESS_MODE || 'http', records: Object.keys(expected).length, projections: ['detail', 'full'] }));
     } catch (error) {
+        console.error(JSON.stringify({ phase, browserErrors: browserErrors.slice(-20) }));
         console.error(error);
         throw error;
     } finally {
