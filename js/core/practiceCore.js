@@ -527,9 +527,15 @@
                 correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
-            ['weight', 'partialCorrectCount', 'isCorrectSource'].forEach(field => {
+            ['weight', 'partialCorrectCount', 'answeredCount', 'isCorrectSource'].forEach(field => {
                 if (Object.prototype.hasOwnProperty.call(entry, field)) normalized[questionId][field] = entry[field];
             });
+            // A split row may display the entire selected set. Preserve unknown
+            // occupancy when normalizing legacy arrays into display strings.
+            if (!Object.prototype.hasOwnProperty.call(entry, 'answeredCount') && entry.weight === 1
+                && Array.isArray(entry.userAnswer ?? entry.user ?? entry.answer)) {
+                normalized[questionId].answeredCount = null;
+            }
         });
 
         return normalized;

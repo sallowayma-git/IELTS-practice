@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { fixtures, grade, record } from '../fixtures/historyCountFixtures.mjs';
+import { productionReadingResults } from '../fixtures/productionReadingResults.mjs';
 
 const root = process.env.HISTORY_SOURCE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const files = [
@@ -129,12 +130,13 @@ test('stale and display-generated metadata cannot award weighted credit', () => 
 
 test('normalization retains grading evidence and display provenance', () => {
     const context = load();
-    const source = { q1: { ...grade('A', 'A, B', false, 2, 1), isCorrectSource: 'display' } };
+    const source = { q1: { ...grade('A', 'A, B', false, 2, 1), answeredCount: 1, isCorrectSource: 'display' } };
     for (const useSanitizer of [true, false]) {
         if (!useSanitizer) delete context.AnswerSanitizer;
         const result = context.PracticeCore.contracts.normalizeAnswerComparison(source);
         assert.equal(result.q1.weight, 2);
         assert.equal(result.q1.partialCorrectCount, 1);
+        assert.equal(result.q1.answeredCount, 1);
         assert.equal(result.q1.isCorrectSource, 'display');
     }
 });
@@ -244,4 +246,97 @@ test('suite-only totals and scoped numeric passage IDs do not collapse or disapp
     const scoped = record('scoped', { 'audio-passage-312::q1': grade('B', 'A', false), 'audio-passage-313::q1': grade('A', 'A', true) });
     assert.equal(counts(context, scoped).total, 2);
     assert.equal(counts(context, scoped).correct, 1);
+});
+
+test('incomplete passage grades retain suite denominators through display preparation', () => {
+    const context = load();
+    const input = fixtures().incompleteSuite;
+    const original = JSON.stringify(input);
+    for (const source of [input, { suiteEntries: [input, structuredClone(input)] }]) {
+        for (const candidate of [source, new context.DataConsistencyManager().ensureConsistency(source)]) {
+            const result = counts(context, candidate);
+            assert.equal(result.total, 11);
+            assert.equal(result.correct, null);
+            assert.equal(result.missed, null);
+            assert.equal(result.unknown, 10);
+            assert.equal(result.detailStatus, 'partial');
+            assert.match(context.practiceRecordModal.createModalHtml(candidate), /score-highlight">未知\/11</);
+            assert.equal(errorCount(context.practiceRecordModal.createModalHtml(candidate)), '未知');
+        }
+    }
+    assert.equal(JSON.stringify(input), original);
+});
+
+test('an unknown-size passage cannot make a suite complete and parent denominators fill the gap', () => {
+    const context = load();
+    const input = fixtures().incompleteSuite;
+    delete input.suiteEntries[1].totalQuestions;
+    assert.equal(counts(context, input).total, null);
+    assert.equal(counts(context, input).correct, null);
+    assert.equal(counts(context, input).detailStatus, 'partial');
+    input.totalQuestions = 11;
+    assert.equal(counts(context, input).total, 11);
+    assert.equal(counts(context, input).unknown, 10);
+    assert.equal(counts(context, input).correct, null);
+    input.correctAnswers = 7;
+    assert.equal(counts(context, input).correct, 7, 'a valid saved parent grade stays authoritative');
+});
+
+test('production split selections retain slot occupancy through ingestion and the real modal', () => {
+    const context = load();
+    for (const [selected, expected] of [
+        [['C'], [1, 0, 12]], [['E'], [1, 0, 12]], [['D'], [0, 1, 12]],
+        [[], [0, 0, 13]], [['C', 'D'], [1, 1, 11]], [['C', 'E'], [2, 0, 11]],
+        [['C', 'D', 'E'], [0, 2, 11]]
+    ]) {
+        const submitted = productionReadingResults('p2-medium-245', { q9: selected, q10: selected });
+        const input = context.PracticeCore.ingestor.fromCompletion({ ...submitted, examId: 'p2-medium-245' });
+        const original = JSON.stringify(input);
+        for (const candidate of [input, new context.DataConsistencyManager().ensureConsistency(input)]) {
+            const result = counts(context, candidate);
+            assert.deepEqual([result.correct, result.incorrect, result.unanswered], expected, String(selected));
+            assert.equal(result.unknown, 0, String(selected));
+            const html = context.practiceRecordModal.createModalHtml(candidate);
+            assert.match(html, new RegExp(`unanswered-count">${expected[2]}<`));
+            assert.equal(errorCount(html), String(13 - expected[0]));
+        }
+        assert.equal(JSON.stringify(input), original);
+    }
+});
+
+test('legacy split display sets keep unproven occupancy unknown after normalization', () => {
+    for (const useSanitizer of [true, false]) {
+        const context = load();
+        if (!useSanitizer) delete context.AnswerSanitizer;
+        const submitted = productionReadingResults('p2-medium-245', { q9: ['C'], q10: ['C'] });
+        for (const row of Object.values(submitted.answerComparison)) delete row.answeredCount;
+        for (const row of Object.values(submitted.scoreInfo.details)) delete row.answeredCount;
+        const input = context.PracticeCore.ingestor.fromCompletion({ ...submitted, examId: 'p2-medium-245' });
+        delete input.scoreInfo.details;
+        delete input.realData.scoreInfo.details;
+        const result = counts(context, input);
+        assert.equal(result.correct, 1);
+        assert.equal(result.incorrect, 0);
+        assert.equal(result.unanswered, 11);
+        assert.equal(result.unknown, 1);
+        assert.equal(result.detailStatus, 'partial');
+    }
+});
+
+test('suite aggregation carries partial and conflicting child detail alongside known grades', () => {
+    const context = load();
+    const known = record('known', { q1: grade('A', 'A', true) }, 1, 1);
+    const summary = record('summary', {}, 7, 10);
+    const input = { suiteEntries: [known, summary] };
+    let result = counts(context, input);
+    assert.equal(result.total, 11);
+    assert.equal(result.correct, 8);
+    assert.equal(result.unknown, 10);
+    assert.equal(result.detailStatus, 'partial');
+    input.suiteEntries.push(record('conflict', { q1: grade('A', 'A', true) }, 0, 1));
+    result = counts(context, input);
+    assert.equal(result.correct, 8);
+    assert.equal(result.total, 12);
+    assert.equal(result.unknown, 11);
+    assert.equal(result.detailStatus, 'conflict');
 });

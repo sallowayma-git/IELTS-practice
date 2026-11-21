@@ -124,9 +124,13 @@
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
             // Preserve submission evidence and the display-only exclusion marker.
-            ['weight', 'partialCorrectCount', 'isCorrectSource'].forEach(function (field) {
+            ['weight', 'partialCorrectCount', 'answeredCount', 'isCorrectSource'].forEach(function (field) {
                 if (Object.prototype.hasOwnProperty.call(entry, field)) sanitized[key][field] = entry[field];
             });
+            if (!Object.prototype.hasOwnProperty.call(entry, 'answeredCount') && entry.weight === 1
+                && Array.isArray(entry.userAnswer ?? entry.user ?? entry.answer)) {
+                sanitized[key].answeredCount = null;
+            }
             var acceptedAnswers = normalizeValueList(entry.acceptedAnswers);
             if (acceptedAnswers.length) {
                 sanitized[key].acceptedAnswers = acceptedAnswers;

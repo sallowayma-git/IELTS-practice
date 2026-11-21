@@ -423,13 +423,25 @@
         const partialCorrectCount = Number.isSafeInteger(partial) && partial >= 0 && partial <= weight
             ? partial : (isCorrect === true ? weight : (isCorrect === false && weight === 1 ? 0 : null));
         const selected = entry.hasUserAnswer ? [].concat(entry.userInfo.normalized).length : 0;
-        const unanswered = Math.max(0, weight - selected);
-        const credit = partialCorrectCount !== null && partialCorrectCount <= weight - unanswered
+        const savedAnswered = storedGrade?.answeredCount;
+        const hasOccupancyEvidence = storedGrade && Object.prototype.hasOwnProperty.call(storedGrade, 'answeredCount');
+        const legacySelectionSet = weight === 1 && (selected > weight || entry.correctnessCandidates.some(candidate => (
+            Array.isArray(candidate.userAnswer ?? candidate.user ?? candidate.answer)
+            && matchesAnswerSnapshot(candidate.userAnswer ?? candidate.user ?? candidate.answer, entry.userInfo)
+            && matchesAnswerSnapshot(candidate.correctAnswer ?? candidate.correct, entry.correctInfo)
+        )));
+        // Shared split-key rows display all selections, not their assigned slot.
+        // Only matching submission occupancy may classify those rows as filled.
+        const answered = Number.isSafeInteger(savedAnswered) && savedAnswered >= 0
+            && savedAnswered <= Math.min(weight, selected) ? savedAnswered
+            : (selected > 0 && (hasOccupancyEvidence || legacySelectionSet) ? null : Math.min(weight, selected));
+        const unanswered = answered === null ? 0 : weight - answered;
+        const credit = partialCorrectCount !== null && (answered === null || partialCorrectCount <= answered)
             ? partialCorrectCount : null;
+        const incorrect = credit === null || answered === null ? 0 : answered - credit;
         const scoredCounts = {
             total: weight, correct: credit ?? 0,
-            incorrect: credit === null ? 0 : weight - unanswered - credit,
-            unanswered, unknown: credit === null ? weight - unanswered : 0
+            incorrect, unanswered, unknown: weight - (credit ?? 0) - incorrect - unanswered
         };
 
         return {
@@ -762,15 +774,29 @@
         record = record || {};
         if (entries === null) entries = getRecordEntries(record, normalize);
         const detail = summariseEntries(entries);
-        let saved = savedCounts(record, detail.total);
-        let source = 'saved';
+        const saved = savedCounts(record, detail.total);
         if (!saved) {
             const passages = uniquePassages(record);
             const grades = passages.map(passage => resolveRecordCounts(passage, null, normalize));
-            if (grades.length && grades.every(grade => grade.correct !== null && grade.total !== null)) {
-                saved = grades.reduce((sum, grade) => ({ correct: sum.correct + grade.correct, total: sum.total + grade.total }),
-                    { correct: 0, total: 0 });
-                source = 'passages';
+            if (grades.length) {
+                const sum = field => grades.reduce((value, grade) => value + (grade[field] ?? 0), 0);
+                const knownTotal = sum('total');
+                const possible = savedCountCandidates(record).map(([, value]) => countValue(value))
+                    .find(value => value !== null && value >= knownTotal);
+                const total = possible ?? (grades.every(grade => grade.total !== null) ? knownTotal : null);
+                const completeGrade = total !== null && total === knownTotal
+                    && grades.every(grade => grade.correct !== null && grade.total !== null);
+                const correct = completeGrade ? sum('correct') : null;
+                const missed = completeGrade ? total - correct : null;
+                const incorrect = sum('incorrect');
+                const unanswered = sum('unanswered');
+                const unknown = sum('unknown') + (total === null ? 0 : total - knownTotal);
+                // Missing child grades, including empty/unknown-size passages,
+                // must not disappear into a complete subset of flattened rows.
+                const detailStatus = grades.some(grade => grade.detailStatus === 'conflict') ? 'conflict'
+                    : (completeGrade && !unknown && grades.every(grade => grade.detailStatus === 'complete') ? 'complete' : 'partial');
+                return { total, correct, missed, incorrect, unanswered, unknown, source: 'passages', detailStatus,
+                    unclassifiedMissed: missed === null ? null : missed - incorrect - unanswered };
             }
         }
         if (saved) {
@@ -780,7 +806,7 @@
             const incorrect = compatible ? detail.incorrect : 0;
             const unanswered = compatible ? detail.unanswered : 0;
             const unknown = compatible ? detail.unknown + saved.total - detail.total : saved.total;
-            return { ...saved, missed, incorrect, unanswered, unknown, source,
+            return { ...saved, missed, incorrect, unanswered, unknown, source: 'saved',
                 unclassifiedMissed: missed - incorrect - unanswered,
                 detailStatus: !compatible ? 'conflict' : (unknown ? 'partial' : 'complete') };
         }

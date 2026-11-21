@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { fixtures, record } from '../fixtures/historyCountFixtures.mjs';
+import { productionReadingResults } from '../fixtures/productionReadingResults.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
@@ -53,16 +54,40 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         source.normalized = structuredClone(source.partial);
         source.normalized.id = source.normalized.examId = 'normalized';
         delete source.normalized.scoreInfo.details;
-        const before = await page.evaluate(async inputs => {
+        const submitted = productionReadingResults('p2-medium-245', { q9: ['C'], q10: ['C'] });
+        const legacy = structuredClone(submitted);
+        for (const row of Object.values(legacy.answerComparison)) delete row.answeredCount;
+        for (const row of Object.values(legacy.scoreInfo.details)) delete row.answeredCount;
+        const before = await page.evaluate(async ({ inputs, submitted, legacy }) => {
             inputs.normalized.answerComparison = PracticeCore.contracts.normalizeAnswerComparison(inputs.normalized.answerComparison);
+            for (const [id, result] of [['production-split', submitted], ['legacy-split', legacy]]) {
+                const input = PracticeCore.ingestor.fromCompletion({ ...result, id, examId: 'p2-medium-245' });
+                input.id = id;
+                // Exercise comparison metadata without a redundant details copy.
+                delete input.scoreInfo.details;
+                delete input.realData.scoreInfo.details;
+                inputs[id] = input;
+            }
             for (const record of Object.values(inputs)) await AppData.practice.completeAttempt({ record, operationId: `history-count-${record.id}` });
             const records = {};
             for (const input of Object.values(inputs)) records[input.id] = await AppData.practice.get(input.id, { projection: 'full' });
             return records;
-        }, source);
+        }, { inputs: source, submitted, legacy });
         const expected = { 'all-wrong': 3, partial: 3, split: 3, suite: 6, summary: 3, ordinary: 2, unknown: '未知', duplicate: 1,
-            'no-grade': '未知', normalized: 3, 'empty-ungraded': '未知', 'empty-zero': 0, 'empty-denominator': 0 };
-        const emptyScores = { 'empty-ungraded': '未知', 'empty-zero': '0/0', 'empty-denominator': '0/0' };
+            'no-grade': '未知', normalized: 3, 'empty-ungraded': '未知', 'empty-zero': 0, 'empty-denominator': 0,
+            'incomplete-suite': '未知', 'production-split': 12, 'legacy-split': 12 };
+        const expectedScores = { 'empty-ungraded': '未知', 'empty-zero': '0/0', 'empty-denominator': '0/0',
+            'incomplete-suite': '未知/11', 'production-split': '1/13', 'legacy-split': '1/13' };
+        const expectedDetails = {
+            'incomplete-suite': { total: 11, correct: null, incorrect: 0, unanswered: 0, unknown: 10, detailStatus: 'partial' },
+            'production-split': { total: 13, correct: 1, incorrect: 0, unanswered: 12, unknown: 0, detailStatus: 'complete' },
+            'legacy-split': { total: 13, correct: 1, incorrect: 0, unanswered: 11, unknown: 1, detailStatus: 'partial' }
+        };
+        const checkDetailCounts = (id, counts) => {
+            for (const [field, expected] of Object.entries(expectedDetails[id] || {})) {
+                assert.equal(counts[field], expected, `${id}/${field}`);
+            }
+        };
         let downloadCount = 0;
         for (const [id, missed] of Object.entries(expected)) {
             for (const projection of ['detail', 'full']) {
@@ -80,7 +105,8 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
                     };
                 }, { id, projection });
                 assert.equal(result.count, String(missed), `${id}/${projection}`);
-                if (id in emptyScores) assert.equal(await page.locator('.score-highlight').textContent(), emptyScores[id]);
+                if (id in expectedScores) assert.equal(await page.locator('.score-highlight').textContent(), expectedScores[id]);
+                checkDetailCounts(id, result.counts);
                 assert.equal(result.replayUnchanged, true);
                 assert.equal(result.unchanged, true);
                 if (id === 'partial' || id === 'normalized') {
@@ -103,7 +129,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
             downloadCount++;
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed));
-            if (id in emptyScores) assert.equal(await page.locator('.score-highlight').textContent(), emptyScores[id]);
+            if (id in expectedScores) assert.equal(await page.locator('.score-highlight').textContent(), expectedScores[id]);
         }
         if (process.env.HISTORY_SCREENSHOT) {
             await page.evaluate(() => practiceRecordModal.showById('partial'));
@@ -115,8 +141,9 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
             phase = `${id}/reload`;
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed), `reload/${id}`);
-            if (id in emptyScores) assert.equal(await page.locator('.score-highlight').textContent(), emptyScores[id]);
+            if (id in expectedScores) assert.equal(await page.locator('.score-highlight').textContent(), expectedScores[id]);
             const after = await page.evaluate(id => AppData.practice.get(id, { projection: 'full' }), id);
+            checkDetailCounts(id, await page.evaluate(record => AnswerComparisonUtils.resolveRecordCounts(record), after));
             assert.deepEqual(after, before[id], `stored grade, snapshot and annotations changed for ${id}`);
         }
         console.log(JSON.stringify({ browser: browser.version(), channel: process.env.HISTORY_BROWSER_CHANNEL || 'chromium',

@@ -68,8 +68,14 @@ no saved denominator remain unknown. An explicitly saved zero denominator remain
 valid for an empty record, including when earned credit was not saved separately.
 Display preparation retains an explicit denominator before filling display fields.
 
-If a suite lacks a valid parent pair, compatible passage results can supply its
-aggregate. Otherwise weighted detail is the fallback. Missing or unknown detail
+If a suite lacks a valid parent pair, resolve each distinct passage recursively
+and retain its denominator and incomplete/conflicting detail status. A complete
+subset of leaf rows cannot stand in for the whole suite. For example, a 1/1
+passage plus a passage with a known denominator of 10 and unknown earned credit
+produces unknown/11, ten unknown slots, and unknown missed credit. If a passage's
+denominator is unknown, the suite denominator stays unknown unless a valid parent
+denominator covers the gap. A valid saved parent grade remains authoritative.
+For a leaf record, weighted detail is the fallback. Missing or unknown detail
 leaves `correct` and `missed` null when no complete aggregate can be established;
 the UI renders **未知**. A known denominator is retained. `summariseEntries`
 still exposes the known detail credit separately even for incomplete detail.
@@ -90,8 +96,23 @@ answered weighted failure without partial-credit evidence remains unknown
 rather than being assigned zero credit. Missing answer keys never authorize a
 boolean verdict, even when a valid weight supplies the denominator.
 
-PracticeCore and AnswerSanitizer preserve `weight`, `partialCorrectCount`, and
-`isCorrectSource` during normalization. The existing AppData detail and full
+The grading runtime records `answeredCount`, the number of occupied scored slots
+for that row. Split-key checkbox rows use their actual token assignment, while
+`userAnswer` still displays the entire selected set. In `p2-medium-245`, selecting
+only C assigns one occupied slot to q9 and zero to q10: the group has one earned
+slot, zero known wrong responses, and one unanswered slot. Full, wrong, empty,
+and over-selected groups retain the submission grading policy.
+
+Display tokens alone cannot establish occupancy for a split row. Matching saved
+`answeredCount` is validated against the weight and displayed selection count.
+Legacy weight-one selection arrays without this evidence keep occupancy unknown;
+normalization preserves that absence as `answeredCount: null` before converting
+the array to a display string. Earned credit remains available, but unproven
+missed slots are not labeled answered-wrong or unanswered. Empty selections still
+establish blank slots. Scalar legacy answers keep their existing classification.
+
+PracticeCore and AnswerSanitizer preserve `weight`, `partialCorrectCount`,
+`answeredCount`, and `isCorrectSource` during normalization. The existing AppData detail and full
 projections preserve these fields without a storage schema migration. Tests
 exercise the normalization path both with and without AnswerSanitizer and
 persist a normalized record without a redundant scoreInfo.details copy.

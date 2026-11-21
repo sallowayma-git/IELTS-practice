@@ -32,6 +32,10 @@ export function fixtures() {
         allWrong: record('all-wrong', { q11: grade(['D', 'E', 'F'], ['A', 'B', 'C'], false, 3, 0) }, 0, 3),
         partial, split,
         suite: record('suite', {}, 5, 11, { suiteEntries: [split, partial] }),
+        incompleteSuite: record('incomplete-suite', {}, undefined, undefined, { suiteEntries: [
+            record('a', { q1: grade('A', 'A', true) }, 1, 1),
+            { examId: 'b', totalQuestions: 10, answers: {} }
+        ] }),
         summary: record('summary', {}, 7, 10),
         ordinary: record('ordinary', { q1: grade('A', 'A', true), q2: grade('B', 'A', false), q3: grade('', 'A', false) }, 1, 3),
         unknown: record('unknown', { q1: { userAnswer: 'A', correctAnswer: '', isCorrect: null } }),

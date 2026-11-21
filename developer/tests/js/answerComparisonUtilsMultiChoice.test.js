@@ -78,6 +78,7 @@ function buildSplitKeyRecord() {
             isCorrect: false,
             questionType: 'multi_choice',
             partialCorrectCount: 0,
+            answeredCount: 1,
             weight: 1
         },
         q2: {
@@ -87,6 +88,7 @@ function buildSplitKeyRecord() {
             isCorrect: true,
             questionType: 'multi_choice',
             partialCorrectCount: 1,
+            answeredCount: 1,
             weight: 1
         }
     };
