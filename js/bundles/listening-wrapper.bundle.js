@@ -5036,6 +5036,8 @@
             if (!slot?.ready) { pendingReplay = payload; return; }
             if (!payload.entry) return;
             pendingReplay = null;
+            // Restoring controls emits input events before REVIEW_CONTEXT may arrive.
+            slot.submitted = true;
             const entry = payload.entry;
             restorePage(slot.frame, slot.draft?.listeningState || entry.listeningState || entry.rawData?.draft?.listeningState);
             const doc = slot.frame.contentDocument;

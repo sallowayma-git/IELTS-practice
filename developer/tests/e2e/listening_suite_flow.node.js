@@ -325,6 +325,19 @@ try {
     }
     for (const mode of ['classic', 'stationary']) {
         const { context, page } = await setup();
+        if (mode === 'stationary') {
+            await page.evaluate(() => {
+                const post = window.app._postExamMessage;
+                window.app._postExamMessage = function (examId, target, type, payload) {
+                    // Replaying submitted inputs must be safe before the navigation context arrives.
+                    if (examId === 'listening-p1-suite-fixture' && type === 'REVIEW_CONTEXT' && payload.readOnly) {
+                        setTimeout(() => post.call(this, examId, target, type, payload), 100);
+                        return;
+                    }
+                    return post.call(this, examId, target, type, payload);
+                };
+            });
+        }
         if (mode === 'classic') {
             await page.evaluate(() => {
                 window.__listeningSuiteCompletions = {};
@@ -341,7 +354,16 @@ try {
         await assertImmediateReloadRecovery(page, suite);
         for (let part = 1; part <= 4; part++) {
             await suite.waitForFunction((expected) => window.__listeningBridgeGetState?.().initialized
-                && window.__listeningBridgeGetState().examId === expected, exams[part - 1].id);
+                && window.__listeningBridgeGetState().examId === expected, exams[part - 1].id).catch(async (error) => {
+                const host = await page.evaluate(() => {
+                    const session = window.app.currentSuiteSession;
+                    return { activeExamId: session?.activeExamId, currentIndex: session?.currentIndex,
+                        results: session?.results?.map((entry) => entry.examId) };
+                });
+                const bridge = await suite.evaluate(() => window.__listeningBridgeGetState?.());
+                error.message += '\n' + JSON.stringify({ mode, part, host, bridge });
+                throw error;
+            });
             if (mode === 'classic' && part === 4) await assertPreviousPartReceiptIgnored(page, suite);
             if (mode === 'stationary' && part === 2) {
                 await activeFrame(suite).locator('input').fill('Unsubmitted P2 draft');
