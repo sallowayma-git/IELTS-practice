@@ -948,9 +948,21 @@
             }
             state.windowSessionToken = incomingToken;
             state.examId = normalizeSafeId(payload.examId, state.examId || 'listening-unknown');
-            state.sessionId = normalizeSafeId(payload.sessionId, state.sessionId || (state.examId + '_' + Date.now()));
+            var nextSessionId = normalizeSafeId(payload.sessionId, state.sessionId || (state.examId + '_' + Date.now()));
+            var timerRestarted = state.sessionId && nextSessionId !== state.sessionId
+                && Number.isFinite(payload.startTime);
+            state.sessionId = nextSessionId;
             state.suiteSessionId = normalizeSafeId(payload.suiteSessionId, state.suiteSessionId || '');
             state.startTime = Number.isFinite(Number(payload.startTime)) ? Number(payload.startTime) : state.startTime;
+            if (timerRestarted) {
+                state.pausedAtMs = null;
+                state.pausedOffsetMs = 0;
+                state.running = true;
+                state.expiryHandled = false;
+                var doc = getFrameDocument();
+                if (doc?.body?.classList.contains('listening-timer-locked')) setLocked(doc, false);
+                updateTimerDisplay();
+            }
             diagnostics?.connect(state, payload);
         } else {
             var messagePayload = message && message.data || {};

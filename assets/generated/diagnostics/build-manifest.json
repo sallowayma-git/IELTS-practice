@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:936cc525acc1e47ddfec5e048b4954b1d714061bbbc520b74c7eb80e2ad31667",
+  "buildId": "sha256:b2e1f4fe044b6394a15799d3f96317d36631ace30f4d471f2e421e6a8df52ef3",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -550,7 +550,7 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "bc8d27ae1faf912e16b96704673302aec29460cef0319e9a1645140bcbeaf4ec"
+      "sha256": "8e52643dc22b521d5c99cf0d1762b4581f92e0db0c01b826903f590c792bab82"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
@@ -570,11 +570,11 @@
     },
     {
       "path": "js/bundles/listening-record-bridge.bundle.js",
-      "sha256": "f4de9f08eee8a0bde9d4bfdadc70bd68e95d404e9adbd88f3083b5121fd2e72d"
+      "sha256": "3dc4f5d08d12ccde2e616dffbd85bb1128a1948f7d607db5a4dced0c3d66cf2f"
     },
     {
       "path": "js/bundles/listening-wrapper.bundle.js",
-      "sha256": "ab55cd5e8153ee6be6beb93135da644b675d1c2aa6c2a7e855de4186ee7933c9"
+      "sha256": "1bb8c59358b944a5dd9950be6c3bca71dea8ce868285d5c98cb8b0490970a493"
     },
     {
       "path": "js/bundles/more.bundle.js",
@@ -1026,73 +1026,73 @@
       {
         "source": "js/app/examSessionMixin.js",
         "startLine": 8924,
-        "endLine": 16284,
+        "endLine": 16308,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/practiceReviewFlow.js",
-        "startLine": 16288,
-        "endLine": 16585,
+        "startLine": 16312,
+        "endLine": 16609,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/browseController.js",
-        "startLine": 16589,
-        "endLine": 17259,
+        "startLine": 16613,
+        "endLine": 17283,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/PDFHandler.js",
-        "startLine": 17263,
-        "endLine": 17695,
+        "startLine": 17287,
+        "endLine": 17719,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/BrowseStateManager.js",
-        "startLine": 17699,
-        "endLine": 18261,
+        "startLine": 17723,
+        "endLine": 18285,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/suiteBackGuard.js",
-        "startLine": 18265,
-        "endLine": 18434,
+        "startLine": 18289,
+        "endLine": 18458,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 18438,
-        "endLine": 18652,
+        "startLine": 18462,
+        "endLine": 18676,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerComparisonUtils.js",
-        "startLine": 18656,
-        "endLine": 19427,
+        "startLine": 18680,
+        "endLine": 19451,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 19431,
-        "endLine": 20463,
+        "startLine": 19455,
+        "endLine": 20487,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 20467,
-        "endLine": 20728,
+        "startLine": 20491,
+        "endLine": 20752,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 20732,
-        "endLine": 20937,
+        "startLine": 20756,
+        "endLine": 20961,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 20941,
-        "endLine": 26703,
+        "startLine": 20965,
+        "endLine": 26727,
         "sourceStartLine": 1
       }
     ],
@@ -1710,7 +1710,7 @@
       {
         "source": "js/listeningRecordBridge.js",
         "startLine": 14527,
-        "endLine": 15934,
+        "endLine": 15980,
         "sourceStartLine": 1
       }
     ],
@@ -1862,7 +1862,7 @@
       {
         "source": "js/listeningUnifiedWrapper.js",
         "startLine": 12784,
-        "endLine": 13879,
+        "endLine": 13891,
         "sourceStartLine": 1
       }
     ],

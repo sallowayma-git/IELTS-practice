@@ -151,6 +151,47 @@ function latestActiveTimer(harness, delay) {
     );
 }
 
+async function verifyRestartAfterSave() {
+    const harness = createHarness();
+    const bridge = harness.window;
+    const init = {
+        examId: 'listening-protocol',
+        sessionId: 'first-attempt',
+        windowSessionToken: 'first-token',
+        parentOrigin: 'null'
+    };
+    harness.dispatch('INIT_SESSION', init);
+    assert.strictEqual(bridge.__listeningBridgeComplete({ allowGenerated: true }), true);
+    const first = messagesOf(harness, 'PRACTICE_COMPLETE').at(-1).message.data;
+    const restarted = bridge.__listeningBridgeRestart();
+    assert.strictEqual(bridge.__listeningBridgeRestart(), restarted, 'rapid Reset clicks share one request');
+    assert.strictEqual(messagesOf(harness, 'PRACTICE_RESET_REQUEST').length, 0, 'wait for the first save');
+
+    const ack = {
+        submissionId: first.submissionId,
+        sessionId: first.sessionId,
+        windowSessionToken: first.windowSessionToken
+    };
+    harness.dispatch('PRACTICE_SUBMIT_ACK', ack);
+    harness.dispatch('PRACTICE_SUBMIT_ACK', ack);
+    const requests = messagesOf(harness, 'PRACTICE_RESET_REQUEST');
+    assert.strictEqual(requests.length, 1);
+    assert.strictEqual(requests[0].message.data.sessionId, 'first-attempt');
+    assert.strictEqual(requests[0].message.data.submissionId, first.submissionId);
+    assert.strictEqual(requests[0].message.data.windowSessionToken, 'first-token');
+
+    harness.dispatch('INIT_SESSION', init);
+    assert.strictEqual(bridge.__listeningBridgeGetState().completed, true, 'duplicate INIT cannot reopen a submit');
+    harness.dispatch('INIT_SESSION', { ...init, sessionId: 'second-attempt', windowSessionToken: 'second-token' });
+    assert.strictEqual(await restarted, true);
+    assert.strictEqual(bridge.__listeningBridgeGetState().completed, false);
+    assert.strictEqual(bridge.__listeningBridgeComplete({ allowGenerated: true }), true);
+    const second = messagesOf(harness, 'PRACTICE_COMPLETE').at(-1).message.data;
+    assert.strictEqual(second.sessionId, 'second-attempt');
+    assert.strictEqual(second.windowSessionToken, 'second-token');
+    assert.notStrictEqual(second.submissionId, first.submissionId);
+}
+
 function run() {
     const harness = createHarness();
     const state = harness.window.__listeningBridgeGetState();
@@ -310,6 +351,7 @@ function run() {
 
 try {
     run();
+    await verifyRestartAfterSave();
 } catch (error) {
     console.error(error);
     process.exitCode = 1;

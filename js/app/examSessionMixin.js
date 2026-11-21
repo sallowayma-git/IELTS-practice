@@ -2686,6 +2686,7 @@
                 return false;
             };
 
+            const pendingListeningSubmissions = new Set();
             const messageHandler = async (event) => {
                 // Reserve this channel even when diagnostics are unavailable. Never
                 // normalize it as a business error, emit rejection logs, or touch session state.
@@ -3109,7 +3110,7 @@
                         this.handleProgressUpdate(examId, data);
                         break;
                     case 'PRACTICE_COMPLETE':
-                    case 'PRACTICE_RESULT':
+                    case 'PRACTICE_RESULT': {
                         if (windowInfo && windowInfo.reviewMode) {
                             console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
                             break;
@@ -3126,11 +3127,25 @@
                             windowInfo.suiteSessionId = data.suiteSessionId;
                             this.examWindows && this.examWindows.set(examId, windowInfo);
                         }
-                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow, {
-                            expectedRegistration,
-                            retainSubmitReceipt: isListeningBridgeSource || src === 'practice_page'
-                        });
+                        const targetWindow = sourceWindow || expectedWindow;
+                        const submissionKey = isListeningBridgeSource
+                            ? JSON.stringify([data.sessionId, data.submissionId])
+                            : null;
+                        if (pendingListeningSubmissions.has(submissionKey)) {
+                            this._replayPracticeSubmitReceipt(examId, data, targetWindow);
+                            break;
+                        }
+                        if (submissionKey) pendingListeningSubmissions.add(submissionKey);
+                        try {
+                            await this.handlePracticeComplete(examId, data, targetWindow, {
+                                expectedRegistration,
+                                retainSubmitReceipt: isListeningBridgeSource || src === 'practice_page'
+                            });
+                        } finally {
+                            pendingListeningSubmissions.delete(submissionKey);
+                        }
                         break;
+                    }
                     case 'ERROR_OCCURRED':
                         this.handleDataCollectionError(examId, data);
                         break;
@@ -3150,6 +3165,12 @@
                         }
                         break;
                     case 'PRACTICE_RESET_REQUEST':
+                        if (isListeningBridgeSource && (
+                            data.reason !== 'listening-retry'
+                            || windowInfo.suiteSessionId || windowInfo.reviewMode || windowInfo.readOnly
+                            || payloadExamId !== expectedExamId || payloadSessionId !== expectedSessionId
+                            || !windowInfo.practiceSubmitReceipts?.[`${payloadSessionId}:${data.submissionId}`]?.succeeded
+                        )) break;
                         await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow, expectedRegistration);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
@@ -5686,9 +5707,9 @@
             }
         },
 
-        async _removeActiveExamSessionMetadata(examId) {
+        async _removeActiveExamSessionMetadata(examId, options = {}) {
             try {
-                await this._discardActiveSessionsForExam(examId);
+                await this._discardActiveSessionsForExam(examId, options);
             } catch (error) {
                 console.warn('[App] 清理活动会话元数据失败:', error);
             }
@@ -5747,7 +5768,9 @@
             windowInfo.reviewMode = false;
             windowInfo.readOnly = false;
             this.examWindows && this.examWindows.set(examId, windowInfo);
-            await this._removeActiveExamSessionMetadata(examId);
+            await this._removeActiveExamSessionMetadata(examId, {
+                expectedSessionId: windowInfo.lastCompletedSessionId
+            });
             return !expectedRegistration || this._isExamSessionRegistrationCurrent(examId, expectedRegistration);
         },
 
@@ -5825,7 +5848,7 @@
             }
             resetRegistration = startResult.registration;
             this._syncRecorderSessionStarted(examId, windowInfo, {
-                pageType: 'unified-reading',
+                pageType: reason === 'listening-retry' ? 'listening' : 'unified-reading',
                 url: payload.normalUrl || payload.url || null,
                 title: payload.title || null,
                 resetReason: reason || 'reset'
@@ -5834,7 +5857,8 @@
             await this._sendExamInitEnvelope(examId, targetWindow, {
                 practiceMode: null,
                 reviewMode: false,
-                readOnly: false
+                readOnly: false,
+                ...(reason === 'listening-retry' ? { startTime: windowInfo.startTime } : {})
             }, resetRegistration);
             if (!this._isExamSessionRegistrationCurrent(examId, resetRegistration)) {
                 return false;
@@ -6551,8 +6575,8 @@
                     }
                 }
 
-                // 更新UI状态
-                this.updateExamStatus(examId, 'completed');
+                // A new attempt may already own this window after the previous ACK.
+                if (ownsRegistration()) this.updateExamStatus(examId, 'completed');
 
                 // 显示完成通知（使用真实数据）
                 await this.showRealCompletionNotification(examId, data);

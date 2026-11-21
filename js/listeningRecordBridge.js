@@ -980,6 +980,41 @@
     return true;
   }
 
+  var practiceRestart = null;
+  function finishPracticeRestart(success) {
+    if (!practiceRestart) return;
+    var restart = practiceRestart;
+    practiceRestart = null;
+    clearTimeout(restart.timeout);
+    restart.resolve(success);
+  }
+
+  function requestRestartAfterSave() {
+    if (!practiceRestart || practiceRestart.previousSessionId || !isCompletionSettled('default')) return;
+    practiceRestart.previousSessionId = state.sessionId;
+    if (!sendMessage('PRACTICE_RESET_REQUEST', {
+      reason: 'listening-retry',
+      examId: state.examId,
+      sessionId: state.sessionId,
+      submissionId: state.completedCompletions.default.submissionId
+    })) finishPracticeRestart(false);
+  }
+
+  function restartPractice() {
+    if (!state.parentWindow || state.suiteSessionId || resolveCompletionSuiteId({})) return Promise.resolve(true);
+    if (!state.pendingCompletions.default && !isCompletionSettled('default')) return Promise.resolve(true);
+    if (practiceRestart) return practiceRestart.promise;
+    var restart = { previousSessionId: null };
+    restart.promise = new Promise(function (resolve) {
+      restart.resolve = resolve;
+      restart.timeout = setTimeout(function () { finishPracticeRestart(false); }, 10000);
+    });
+    practiceRestart = restart;
+    if (state.pendingCompletions.default) onComplete({ allowGenerated: true });
+    requestRestartAfterSave();
+    return restart.promise;
+  }
+
   var completionDebounceTimers = Object.create(null);
   var completionDebounceOptions = Object.create(null);
   var completionRetryTimers = Object.create(null);
@@ -1016,7 +1051,7 @@
     var suiteId = resolveCompletionSuiteId(options);
     if (suiteId) options.suiteId = suiteId;
     var completionKey = completionKeyForSuite(suiteId);
-    if (isCompletionSettled(completionKey)) return;
+    if (isCompletionSettled(completionKey) || (practiceRestart && completionKey === 'default')) return;
     if (completionDebounceTimers[completionKey]) clearTimeout(completionDebounceTimers[completionKey]);
     completionDebounceOptions[completionKey] = options;
     completionDebounceTimers[completionKey] = setTimeout(function () {
@@ -1298,6 +1333,15 @@
         diagnostics?.connect(state, payload);
         stopInitRequestLoop();
         if (String(previousSessionId || '') !== String(state.sessionId || '')) {
+          if (isCompletionSettled('default') && !state.suiteSessionId) {
+            delete state.completedCompletions.default;
+            clearTimeout(completionDebounceTimers.default);
+            delete completionDebounceTimers.default;
+            delete completionDebounceOptions.default;
+            clearCompletionRetryTimers('default');
+            syncLegacyCompletionState();
+            if (practiceRestart?.previousSessionId === previousSessionId) finishPracticeRestart(true);
+          }
           Object.keys(state.pendingCompletions).forEach(function (completionKey) {
             state.pendingCompletions[completionKey].payload = null;
           });
@@ -1331,6 +1375,7 @@
           clearCompletionRetryTimers(pendingKey);
           syncLegacyCompletionState();
           log('PRACTICE_COMPLETE persisted, submissionId=' + outcome.submissionId);
+          if (pendingKey === 'default') requestRestartAfterSave();
         } else {
           // Existing retries may already have committed; a rejection cannot
           // establish that every attempt failed to persist.
@@ -1394,6 +1439,7 @@
   }
 
   window.__listeningBridgeComplete = onComplete;
+  window.__listeningBridgeRestart = restartPractice;
   window.__listeningBridgeGetState = function () { return state; };
 
   function startBridge() {
