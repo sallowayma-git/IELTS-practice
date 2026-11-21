@@ -36,6 +36,13 @@ export function fixtures() {
             record('a', { q1: grade('A', 'A', true) }, 1, 1),
             { examId: 'b', totalQuestions: 10, answers: {} }
         ] }),
+        nestedIncompleteSuite: record('nested-incomplete-suite', {}, undefined, 3, { suiteEntries: [
+            { id: 'nested-child', suiteEntries: [
+                record('known-wrong', { q1: grade('B', 'A', false) }, 0, 1),
+                { examId: 'ungraded', totalQuestions: 1, answers: {} },
+                { examId: 'unknown-size', answers: {} }
+            ] }
+        ] }),
         summary: record('summary', {}, 7, 10),
         ordinary: record('ordinary', { q1: grade('A', 'A', true), q2: grade('B', 'A', false), q3: grade('', 'A', false) }, 1, 3),
         unknown: record('unknown', { q1: { userAnswer: 'A', correctAnswer: '', isCorrect: null } }),

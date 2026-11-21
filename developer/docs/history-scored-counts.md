@@ -18,6 +18,9 @@ question can occupy several slots. `correct` is earned credit, `total` is the
 denominator, and `missed` is credit not earned. The UI calls `missed` **未得分**;
 it is not an answered-wrong count.
 
+- `minimumTotal`: the known lower bound on the denominator. It equals `total`
+  when that denominator is known; otherwise it retains all established descendant
+  slots. This is computed evidence, not a stored grade or a detail-outcome count.
 - `incorrect`: slots known to contain a wrong response.
 - `unanswered`: slots known to be unfilled, including missing selections in a
   weighted group. A group with one correct selection out of four has one earned
@@ -74,7 +77,13 @@ subset of leaf rows cannot stand in for the whole suite. For example, a 1/1
 passage plus a passage with a known denominator of 10 and unknown earned credit
 produces unknown/11, ten unknown slots, and unknown missed credit. If a passage's
 denominator is unknown, the suite denominator stays unknown unless a valid parent
-denominator covers the gap. A valid saved parent grade remains authoritative.
+denominator covers the gap. Each child carries `minimumTotal` even when its final
+`total` is null. Only the parent denominator beyond the sum of these bounds adds
+unknown slots; known descendants must not be counted again. For example, a
+three-question parent containing a nested suite with one known wrong slot, one
+ungraded slot, and an unknown-size passage has one incorrect and two unknown
+slots, not four unknown slots. Denominators below the child bounds cannot fill
+the gap. A valid saved parent grade remains authoritative.
 For a leaf record, weighted detail is the fallback. Missing or unknown detail
 leaves `correct` and `missed` null when no complete aggregate can be established;
 the UI renders **未知**. A known denominator is retained. `summariseEntries`
@@ -134,7 +143,7 @@ node scripts/verify-diagnostic-release.mjs
 ```
 
 The persistence regression opens the actual static index and shipped bundles,
-saves sixteen controlled records through AppData into real IndexedDB, including
+saves seventeen controlled records through AppData into real IndexedDB, including
 split selections from the production grading runtime. It opens both detail/full
 projections, downloads Markdown through the modal export entrypoint,
 reopens and reloads, and compares all saved records including annotations and
@@ -143,8 +152,10 @@ enable sync. Optional `HISTORY_BROWSER_CHANNEL=chrome` or `msedge` and
 `HISTORY_ACCESS_MODE=file` select additional browser/access-mode coverage.
 The empty-record cases distinguish missing grading evidence, saved 0/0, and a
 saved zero denominator without earned credit through each projection and reopen.
-The suite and split-selection cases retain incomplete child totals and both new
-and legacy occupancy evidence through the same persistence and display paths.
+The suite and split-selection cases retain incomplete child totals, nested slot
+bounds, and both new and legacy occupancy evidence through the same persistence
+and display paths. The nested-suite regression also checks the modal's visible
+unknown count after both projections, reopen, and reload.
 
 The first four modal assertions fail on opensource baseline
 `5cee8fa324227f4ba15f6df65453db9023e08249` with 1/1/4/0 instead of 3/3/6/3.

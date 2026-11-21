@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:798345dd3dde433b1f4c4d4b28e73d39fd0874995430b1a0e0061f39db916c70",
+  "buildId": "sha256:57f7a7f9eeb9722162c72001f021e09ca6c01908e1212993ce693ea96c4ae766",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -550,7 +550,7 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "8e29f5a6f313acda189029fb1020a18f5e2d1d1c6f73df629eb2902f32418b90"
+      "sha256": "54d8f01c4e5260b2d3865228b378794a9dc89b16c55ba2fa40c11e117e060be5"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
@@ -1068,31 +1068,31 @@
       {
         "source": "js/utils/answerComparisonUtils.js",
         "startLine": 18656,
-        "endLine": 19603,
+        "endLine": 19605,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 19607,
-        "endLine": 20639,
+        "startLine": 19609,
+        "endLine": 20641,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 20643,
-        "endLine": 20904,
+        "startLine": 20645,
+        "endLine": 20906,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 20908,
-        "endLine": 21113,
+        "startLine": 20910,
+        "endLine": 21115,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 21117,
-        "endLine": 26879,
+        "startLine": 21119,
+        "endLine": 26881,
         "sourceStartLine": 1
       }
     ],

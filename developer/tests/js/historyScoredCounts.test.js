@@ -304,6 +304,76 @@ test('production split selections retain slot occupancy through ingestion and th
     }
 });
 
+test('nested incomplete suites fill only the unaccounted parent denominator', () => {
+    const context = load();
+    const input = fixtures().nestedIncompleteSuite;
+    const original = JSON.stringify(input);
+    const manager = new context.DataConsistencyManager();
+    for (const candidate of [input, manager.ensureConsistency(input)]) {
+        const result = counts(context, candidate);
+        assert.equal(result.total, 3);
+        assert.equal(result.correct, null);
+        assert.equal(result.missed, null);
+        assert.equal(result.incorrect, 1);
+        assert.equal(result.unanswered, 0);
+        assert.equal(result.unknown, 2);
+        assert.equal(result.detailStatus, 'partial');
+        const html = context.practiceRecordModal.createModalHtml(candidate);
+        assert.match(html, /score-highlight">未知\/3</);
+        assert.match(html, /incorrect-count">1</);
+        assert.match(html, /unknown-count">2</);
+        assert.equal(errorCount(html), '未知');
+    }
+    assert.equal(JSON.stringify(input), original);
+});
+
+test('nested slot bounds retain earned, blank, weighted and summary-only child slots', () => {
+    const context = load();
+    for (const [known, expected] of [
+        [record('correct', { q1: grade('A', 'A', true) }, 1, 1), [3, 0, 0, 2]],
+        [record('blank', { q1: grade('', 'A', false) }, 0, 1), [3, 0, 1, 2]],
+        [record('summary', {}, 1, 2), [4, 0, 0, 4]],
+        [fixtures().partial, [6, 0, 3, 2]]
+    ]) {
+        let nested = fixtures().nestedIncompleteSuite.suiteEntries[0];
+        nested.suiteEntries[0] = known;
+        for (let depth = 0; depth < 3; depth++) {
+            nested = { id: 'level-' + depth, suiteEntries: [nested, structuredClone(nested)] };
+        }
+        const input = record('parent', {}, undefined, expected[0], { suiteEntries: [nested] });
+        for (const candidate of [input, new context.DataConsistencyManager().ensureConsistency(input)]) {
+            const result = counts(context, candidate);
+            assert.deepEqual([result.total, result.incorrect, result.unanswered, result.unknown], expected, known.id);
+            assert.equal(result.correct, null, known.id);
+            assert.equal(result.missed, null, known.id);
+            assert.equal(result.detailStatus, 'partial', known.id);
+        }
+    }
+});
+
+test('nested slot bounds reject undersized denominators and survive unknown intermediate totals', () => {
+    const context = load();
+    for (const denominator of [1, 0, undefined]) {
+        const nested = fixtures().nestedIncompleteSuite;
+        nested.totalQuestions = denominator;
+        const result = counts(context, nested);
+        assert.equal(result.total, null, String(denominator));
+        assert.equal(result.incorrect, 1);
+        assert.equal(result.unknown, 1);
+        assert.equal(result.minimumTotal, 2);
+        const parent = { totalQuestions: 4, suiteEntries: [nested, structuredClone(nested)] };
+        for (const candidate of [parent, new context.DataConsistencyManager().ensureConsistency(parent)]) {
+            const resolved = counts(context, candidate);
+            assert.equal(resolved.total, 4);
+            assert.equal(resolved.incorrect, 1);
+            assert.equal(resolved.unknown, 3);
+            assert.equal(resolved.correct, null);
+            assert.equal(resolved.missed, null);
+            assert.equal(resolved.detailStatus, 'partial');
+        }
+    }
+});
+
 test('legacy split display sets keep unproven occupancy unknown after normalization', () => {
     for (const useSanitizer of [true, false]) {
         const context = load();

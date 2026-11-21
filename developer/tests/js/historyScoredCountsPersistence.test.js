@@ -75,11 +75,12 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         }, { inputs: source, submitted, legacy });
         const expected = { 'all-wrong': 3, partial: 3, split: 3, suite: 6, summary: 3, ordinary: 2, unknown: '未知', duplicate: 1,
             'no-grade': '未知', normalized: 3, 'empty-ungraded': '未知', 'empty-zero': 0, 'empty-denominator': 0,
-            'incomplete-suite': '未知', 'production-split': 12, 'legacy-split': 12 };
+            'incomplete-suite': '未知', 'nested-incomplete-suite': '未知', 'production-split': 12, 'legacy-split': 12 };
         const expectedScores = { 'empty-ungraded': '未知', 'empty-zero': '0/0', 'empty-denominator': '0/0',
-            'incomplete-suite': '未知/11', 'production-split': '1/13', 'legacy-split': '1/13' };
+            'incomplete-suite': '未知/11', 'nested-incomplete-suite': '未知/3', 'production-split': '1/13', 'legacy-split': '1/13' };
         const expectedDetails = {
             'incomplete-suite': { total: 11, correct: null, incorrect: 0, unanswered: 0, unknown: 10, detailStatus: 'partial' },
+            'nested-incomplete-suite': { total: 3, correct: null, missed: null, incorrect: 1, unanswered: 0, unknown: 2, detailStatus: 'partial' },
             'production-split': { total: 13, correct: 1, incorrect: 0, unanswered: 12, unknown: 0, detailStatus: 'complete' },
             'legacy-split': { total: 13, correct: 1, incorrect: 0, unanswered: 11, unknown: 1, detailStatus: 'partial' }
         };
@@ -106,6 +107,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
                 }, { id, projection });
                 assert.equal(result.count, String(missed), `${id}/${projection}`);
                 if (id in expectedScores) assert.equal(await page.locator('.score-highlight').textContent(), expectedScores[id]);
+                if (id in expectedDetails) assert.equal(await page.locator('.unknown-count').textContent(), String(expectedDetails[id].unknown));
                 checkDetailCounts(id, result.counts);
                 assert.equal(result.replayUnchanged, true);
                 assert.equal(result.unchanged, true);
@@ -130,6 +132,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed));
             if (id in expectedScores) assert.equal(await page.locator('.score-highlight').textContent(), expectedScores[id]);
+            if (id in expectedDetails) assert.equal(await page.locator('.unknown-count').textContent(), String(expectedDetails[id].unknown));
         }
         if (process.env.HISTORY_SCREENSHOT) {
             await page.evaluate(() => practiceRecordModal.showById('partial'));
@@ -142,6 +145,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed), `reload/${id}`);
             if (id in expectedScores) assert.equal(await page.locator('.score-highlight').textContent(), expectedScores[id]);
+            if (id in expectedDetails) assert.equal(await page.locator('.unknown-count').textContent(), String(expectedDetails[id].unknown));
             const after = await page.evaluate(id => AppData.practice.get(id, { projection: 'full' }), id);
             checkDetailCounts(id, await page.evaluate(record => AnswerComparisonUtils.resolveRecordCounts(record), after));
             assert.deepEqual(after, before[id], `stored grade, snapshot and annotations changed for ${id}`);

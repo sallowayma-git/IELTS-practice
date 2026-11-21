@@ -19435,7 +19435,9 @@ window.BrowseStateManager = BrowseStateManager;
             const grades = passages.map(passage => resolveRecordCounts(passage, null, normalize));
             if (grades.length) {
                 const sum = field => grades.reduce((value, grade) => value + (grade[field] ?? 0), 0);
-                const knownTotal = sum('total');
+                // Unknown final totals still carry slots established by descendants.
+                // Count that lower bound before filling any parent denominator gap.
+                const knownTotal = sum('minimumTotal');
                 const possible = savedCountCandidates(record).map(([, value]) => countValue(value))
                     .find(value => value !== null && value >= knownTotal);
                 const total = possible ?? (grades.every(grade => grade.total !== null) ? knownTotal : null);
@@ -19450,7 +19452,7 @@ window.BrowseStateManager = BrowseStateManager;
                 // must not disappear into a complete subset of flattened rows.
                 const detailStatus = grades.some(grade => grade.detailStatus === 'conflict') ? 'conflict'
                     : (completeGrade && !unknown && grades.every(grade => grade.detailStatus === 'complete') ? 'complete' : 'partial');
-                return { total, correct, missed, incorrect, unanswered, unknown, source: 'passages', detailStatus,
+                return { total, minimumTotal: total ?? knownTotal, correct, missed, incorrect, unanswered, unknown, source: 'passages', detailStatus,
                     unclassifiedMissed: missed === null ? null : missed - incorrect - unanswered };
             }
         }
@@ -19461,7 +19463,7 @@ window.BrowseStateManager = BrowseStateManager;
             const incorrect = compatible ? detail.incorrect : 0;
             const unanswered = compatible ? detail.unanswered : 0;
             const unknown = compatible ? detail.unknown + saved.total - detail.total : saved.total;
-            return { ...saved, missed, incorrect, unanswered, unknown, source: 'saved',
+            return { ...saved, minimumTotal: saved.total, missed, incorrect, unanswered, unknown, source: 'saved',
                 unclassifiedMissed: missed - incorrect - unanswered,
                 detailStatus: !compatible ? 'conflict' : (unknown ? 'partial' : 'complete') };
         }
@@ -19471,7 +19473,7 @@ window.BrowseStateManager = BrowseStateManager;
         const total = possible ?? (detail.total || null);
         const unknown = detail.unknown + (total === null ? 0 : total - detail.total);
         const complete = total !== null && unknown === 0;
-        return { ...detail, total, correct: complete ? detail.correct : null,
+        return { ...detail, total, minimumTotal: total ?? detail.total, correct: complete ? detail.correct : null,
             missed: complete ? detail.incorrect + detail.unanswered : null, unknown,
             unclassifiedMissed: null, source: 'detail', detailStatus: complete ? 'complete' : 'partial' };
     }
