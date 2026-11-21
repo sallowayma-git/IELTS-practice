@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { fixtures, record } from '../fixtures/historyCountFixtures.mjs';
@@ -62,6 +63,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         const expected = { 'all-wrong': 3, partial: 3, split: 3, suite: 6, summary: 3, ordinary: 2, unknown: '未知', duplicate: 1,
             'no-grade': '未知', normalized: 3, 'empty-ungraded': '未知', 'empty-zero': 0, 'empty-denominator': 0 };
         const emptyScores = { 'empty-ungraded': '未知', 'empty-zero': '0/0', 'empty-denominator': '0/0' };
+        let downloadCount = 0;
         for (const [id, missed] of Object.entries(expected)) {
             for (const projection of ['detail', 'full']) {
                 phase = `${id}/${projection}`;
@@ -88,12 +90,17 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
                 }
             }
             phase = `${id}/export`;
+            // Blink silently drops downloads beyond ten per one-second burst.
+            // Allow its window to reset without skipping any real exports.
+            // https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/local_frame.cc
+            if (downloadCount > 0 && downloadCount % 10 === 0) await delay(1100);
             const [download] = await Promise.all([
                 page.waitForEvent('download'),
                 page.evaluate(id => practiceRecordModal.exportSingle(id), id)
             ]);
             assert.equal(await download.failure(), null, `${id}: Markdown download failed`);
             assert.ok(fs.readFileSync(await download.path(), 'utf8').length > 0);
+            downloadCount++;
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed));
             if (id in emptyScores) assert.equal(await page.locator('.score-highlight').textContent(), emptyScores[id]);
