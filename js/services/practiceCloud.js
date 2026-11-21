@@ -238,7 +238,8 @@
         global.addEventListener('online', schedule);
         global.addEventListener('focus', schedule);
         document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); });
-        setInterval(() => { if (!document.hidden && state.phase !== 'conflict') sync(); }, 15000);
+        // An active sync already refreshes remote data; polling must not restart it.
+        setInterval(() => { if (!running && !document.hidden && state.phase !== 'conflict') sync(); }, 15000);
         render();
         await action(refreshAuth);
     }
