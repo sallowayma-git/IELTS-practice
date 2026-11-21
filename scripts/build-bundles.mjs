@@ -204,6 +204,7 @@ const bundles = {
          'js/utils/answerMatchCore.js',
          'js/app/spellingErrorCollector.js',
          'js/utils/safeObjectLiteralParser.js',
+         'js/listeningReviewStudio.js',
          'js/listeningRecordBridge.js'
      ],
     'js/bundles/listening-wrapper.bundle.js': [

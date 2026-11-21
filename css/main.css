@@ -5137,6 +5137,13 @@ body.blue-dark-mode .theme-modal-close:hover {
     overflow-y: auto;
 }
 
+.record-summary-header {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    margin: 0 0 16px 0;
+}
+
 .record-summary h4 {
     margin: 0 0 16px 0;
     font-size: 1.1rem;
@@ -5146,6 +5153,47 @@ body.blue-dark-mode .theme-modal-close:hover {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border-radius: 8px;
+}
+
+.record-summary-header h4 {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.record-replay-cta-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: 1.5px solid #4f46e5;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-size: 0.92rem;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.record-replay-cta-btn:hover {
+    background: #4f46e5;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+}
+
+.record-replay-cta-btn:focus-visible {
+    outline: 3px solid rgba(79, 70, 229, 0.45);
+    outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+    .record-summary-header {
+        flex-direction: column;
+    }
 }
 
 .record-summary .record-summary-replay-trigger {
@@ -8545,6 +8593,38 @@ body.blue-dark-mode .practice-settings-block__head .hero-panel__muted {
 .record-review-badge--scheduled {
     background: var(--color-gray-100, #f1f5f9);
     color: var(--color-gray-600, #475569);
+}
+
+.history-record-item:not(.history-item-selectable) {
+    cursor: pointer;
+}
+
+.replay-record-btn {
+    background: none;
+    border: none;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    opacity: 0.45;
+    transition: all var(--transition-normal);
+    padding: var(--space-sm);
+    border-radius: var(--border-radius-full);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-gray-500);
+}
+
+.history-item:hover .replay-record-btn {
+    opacity: 0.85;
+}
+
+.replay-record-btn:hover {
+    opacity: 1;
+    background: rgba(79, 70, 229, 0.12);
+    color: #4f46e5;
+    transform: scale(1.1);
 }
 
 .review-record-btn {

@@ -2675,6 +2675,7 @@
         if (record && record.recordId) recordId = String(record.recordId);
         var item = createNode('div', {
             className: 'history-item history-record-item',
+            title: bulkDeleteMode ? null : '双击打开原卷复盘（保留本次对错答案）',
             dataset: { recordId: recordId }
         });
 
@@ -2756,6 +2757,13 @@
         var actions = null;
         if (!bulkDeleteMode) {
             var actionChildren = [];
+            actionChildren.push(createNode('button', {
+                type: 'button',
+                className: 'replay-record-btn',
+                title: '打开原卷复盘（查看当时对错答案）',
+                'aria-label': '打开原卷复盘',
+                dataset: { recordAction: 'replay', recordId: recordId }
+            }, '📄'));
             // 复盘入口只对确实有复盘计划的记录出现（首版仅阅读），听力历史保持原样。
             if (reviewBadge) {
                 actionChildren.push(createNode('button', {

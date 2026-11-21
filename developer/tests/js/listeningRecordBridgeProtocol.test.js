@@ -151,6 +151,47 @@ function latestActiveTimer(harness, delay) {
     );
 }
 
+async function verifyRestartAfterSave() {
+    const harness = createHarness();
+    const bridge = harness.window;
+    const init = {
+        examId: 'listening-protocol',
+        sessionId: 'first-attempt',
+        windowSessionToken: 'first-token',
+        parentOrigin: 'null'
+    };
+    harness.dispatch('INIT_SESSION', init);
+    assert.strictEqual(bridge.__listeningBridgeComplete({ allowGenerated: true }), true);
+    const first = messagesOf(harness, 'PRACTICE_COMPLETE').at(-1).message.data;
+    const restarted = bridge.__listeningBridgeRestart();
+    assert.strictEqual(bridge.__listeningBridgeRestart(), restarted, 'rapid Reset clicks share one request');
+    assert.strictEqual(messagesOf(harness, 'PRACTICE_RESET_REQUEST').length, 0, 'wait for the first save');
+
+    const ack = {
+        submissionId: first.submissionId,
+        sessionId: first.sessionId,
+        windowSessionToken: first.windowSessionToken
+    };
+    harness.dispatch('PRACTICE_SUBMIT_ACK', ack);
+    harness.dispatch('PRACTICE_SUBMIT_ACK', ack);
+    const requests = messagesOf(harness, 'PRACTICE_RESET_REQUEST');
+    assert.strictEqual(requests.length, 1);
+    assert.strictEqual(requests[0].message.data.sessionId, 'first-attempt');
+    assert.strictEqual(requests[0].message.data.submissionId, first.submissionId);
+    assert.strictEqual(requests[0].message.data.windowSessionToken, 'first-token');
+
+    harness.dispatch('INIT_SESSION', init);
+    assert.strictEqual(bridge.__listeningBridgeGetState().completed, true, 'duplicate INIT cannot reopen a submit');
+    harness.dispatch('INIT_SESSION', { ...init, sessionId: 'second-attempt', windowSessionToken: 'second-token' });
+    assert.strictEqual(await restarted, true);
+    assert.strictEqual(bridge.__listeningBridgeGetState().completed, false);
+    assert.strictEqual(bridge.__listeningBridgeComplete({ allowGenerated: true }), true);
+    const second = messagesOf(harness, 'PRACTICE_COMPLETE').at(-1).message.data;
+    assert.strictEqual(second.sessionId, 'second-attempt');
+    assert.strictEqual(second.windowSessionToken, 'second-token');
+    assert.notStrictEqual(second.submissionId, first.submissionId);
+}
+
 function run() {
     const harness = createHarness();
     const state = harness.window.__listeningBridgeGetState();
@@ -308,8 +349,95 @@ function run() {
     }));
 }
 
+function verifyHistoricalReplayProtocol() {
+    const replayHarness = createHarness();
+    let appliedPayloads = [];
+    replayHarness.window.__listeningReviewStudio = {
+        applyReplayRecord(payload) {
+            appliedPayloads.push(payload);
+            // Simulate finishTest running during replay
+            replayHarness.window.App.finishTest();
+            return true;
+        }
+    };
+
+    replayHarness.dispatch('INIT_SESSION', {
+        examId: 'listening-replay-p1',
+        sessionId: 'replay-session-1',
+        windowSessionToken: 'replay-token-1',
+        parentOrigin: 'null',
+        reviewMode: true,
+        readOnly: true
+    });
+
+    const replayState = replayHarness.window.__listeningBridgeGetState();
+    assert.strictEqual(replayState.reviewMode, true, 'INIT_SESSION reviewMode must activate bridge reviewMode');
+    assert.strictEqual(replayState.readOnly, true, 'INIT_SESSION readOnly must activate bridge readOnly');
+
+    // Forged token and wrong origin must be ignored
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', {
+        reviewSessionId: 'rev-1',
+        recordId: 'rec-1',
+        reviewEntryIndex: 0,
+        windowSessionToken: 'wrong-token',
+        entry: { examId: 'listening-replay-p1', answers: { q1: 'litter' } }
+    });
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', {
+        reviewSessionId: 'rev-1',
+        recordId: 'rec-1',
+        reviewEntryIndex: 0,
+        windowSessionToken: 'replay-token-1',
+        entry: { examId: 'listening-replay-p1', answers: { q1: 'litter' } }
+    }, { origin: 'https://forged.example' });
+    assert.strictEqual(appliedPayloads.length, 0, 'unauthenticated REPLAY_PRACTICE_RECORD must be rejected');
+    assert.strictEqual(messagesOf(replayHarness, 'REPLAY_APPLIED').length, 0);
+
+    // Trusted replay message
+    const trustedReplay = {
+        reviewSessionId: 'rev-1',
+        reviewAttemptId: null,
+        recordId: 'rec-1',
+        reviewEntryIndex: 0,
+        windowSessionToken: 'replay-token-1',
+        entry: {
+            examId: 'listening-replay-p1',
+            duration: 95,
+            answers: { q1: 'litter', q2: 'cats' }
+        }
+    };
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', trustedReplay);
+    assert.strictEqual(appliedPayloads.length, 1, 'trusted REPLAY_PRACTICE_RECORD must invoke ListeningReviewStudio.applyReplayRecord');
+    assert.strictEqual(appliedPayloads[0].recordId, 'rec-1');
+
+    // Duplicate replay with same signature must be idempotent on UI apply, while still ACKing
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', trustedReplay);
+    assert.strictEqual(appliedPayloads.length, 1, 'duplicate REPLAY_PRACTICE_RECORD with same signature must not re-apply');
+
+    const acks = messagesOf(replayHarness, 'REPLAY_APPLIED');
+    assert.strictEqual(acks.length, 2, 'trusted REPLAY_PRACTICE_RECORD must emit REPLAY_APPLIED ACK');
+    assert.strictEqual(acks[0].message.data.sessionId, 'replay-session-1');
+    assert.strictEqual(acks[0].message.data.recordId, 'rec-1');
+    assert.strictEqual(acks[0].message.data.reviewSessionId, 'rev-1');
+    assert.strictEqual(acks[0].message.data.windowSessionToken, 'replay-token-1');
+
+    // Completing during reviewMode must NEVER send PRACTICE_COMPLETE
+    assert.strictEqual(
+        replayHarness.window.__listeningBridgeComplete({ allowGenerated: true }),
+        false,
+        'reviewMode must suppress __listeningBridgeComplete'
+    );
+    replayHarness.timers.filter((t) => !t.interval && !t.cancelled).forEach((t) => t.callback());
+    assert.strictEqual(
+        messagesOf(replayHarness, 'PRACTICE_COMPLETE').length,
+        0,
+        'reviewMode replay must never emit PRACTICE_COMPLETE'
+    );
+}
+
 try {
     run();
+    verifyHistoricalReplayProtocol();
+    await verifyRestartAfterSave();
 } catch (error) {
     console.error(error);
     process.exitCode = 1;
