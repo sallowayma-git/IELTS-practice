@@ -5334,8 +5334,18 @@
         },
 
         async openPracticeRecordReplay(record, options = {}) {
+            const reservedWindow = options && options.reuseWindow && !options.reuseWindow.closed
+                ? options.reuseWindow
+                : null;
+            const ownsReservedWindow = Boolean(reservedWindow && options && options.ownsReservedWindow === true);
+            const closeReserved = () => {
+                if (!ownsReservedWindow || !reservedWindow || reservedWindow.closed) return;
+                try { reservedWindow.close(); } catch (_) { }
+            };
+
             const session = this._buildReviewSession(record, options);
             if (!session) {
+                closeReserved();
                 throw new Error('该练习记录缺少可回放的题目映射');
             }
             const store = this._ensureReviewReplayStore();
@@ -5344,20 +5354,42 @@
             const firstEntry = session.entries[0];
             if (!firstEntry || !firstEntry.examId) {
                 store.delete(session.sessionId);
+                closeReserved();
                 throw new Error('无法解析首题题目标识');
             }
 
-            const examDefinition = await this._resolveReviewExamDefinition(firstEntry);
-            const openedWindow = await this.openExam(firstEntry.examId, {
+            let examDefinition;
+            try {
+                examDefinition = await this._resolveReviewExamDefinition(firstEntry);
+            } catch (error) {
+                store.delete(session.sessionId);
+                closeReserved();
+                throw error;
+            }
+            const openOptions = {
                 reviewMode: true,
                 readOnly: true,
                 reviewSessionId: session.sessionId,
                 reviewEntryIndex: 0,
                 examDefinition,
                 requireRecordProvenance: true
-            });
+            };
+            if (reservedWindow) {
+                openOptions.reuseWindow = reservedWindow;
+                openOptions.ownsReservedWindow = ownsReservedWindow;
+                openOptions.reservationAttempted = true;
+            }
+            let openedWindow;
+            try {
+                openedWindow = await this.openExam(firstEntry.examId, openOptions);
+            } catch (error) {
+                store.delete(session.sessionId);
+                closeReserved();
+                throw error;
+            }
             if (!openedWindow) {
                 store.delete(session.sessionId);
+                closeReserved();
                 throw new Error('无法打开回顾页面');
             }
             this._bindReviewWindowRef(session.sessionId, openedWindow);

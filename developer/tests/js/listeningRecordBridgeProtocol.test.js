@@ -349,8 +349,94 @@ function run() {
     }));
 }
 
+function verifyHistoricalReplayProtocol() {
+    const replayHarness = createHarness();
+    let appliedPayloads = [];
+    replayHarness.window.__listeningReviewStudio = {
+        applyReplayRecord(payload) {
+            appliedPayloads.push(payload);
+            // Simulate finishTest running during replay
+            replayHarness.window.App.finishTest();
+            return true;
+        }
+    };
+
+    replayHarness.dispatch('INIT_SESSION', {
+        examId: 'listening-replay-p1',
+        sessionId: 'replay-session-1',
+        windowSessionToken: 'replay-token-1',
+        parentOrigin: 'null',
+        reviewMode: true,
+        readOnly: true
+    });
+
+    const replayState = replayHarness.window.__listeningBridgeGetState();
+    assert.strictEqual(replayState.reviewMode, true, 'INIT_SESSION reviewMode must activate bridge reviewMode');
+    assert.strictEqual(replayState.readOnly, true, 'INIT_SESSION readOnly must activate bridge readOnly');
+
+    // Forged token and wrong origin must be ignored
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', {
+        reviewSessionId: 'rev-1',
+        recordId: 'rec-1',
+        reviewEntryIndex: 0,
+        windowSessionToken: 'wrong-token',
+        entry: { examId: 'listening-replay-p1', answers: { q1: 'litter' } }
+    });
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', {
+        reviewSessionId: 'rev-1',
+        recordId: 'rec-1',
+        reviewEntryIndex: 0,
+        windowSessionToken: 'replay-token-1',
+        entry: { examId: 'listening-replay-p1', answers: { q1: 'litter' } }
+    }, { origin: 'https://forged.example' });
+    assert.strictEqual(appliedPayloads.length, 0, 'unauthenticated REPLAY_PRACTICE_RECORD must be rejected');
+    assert.strictEqual(messagesOf(replayHarness, 'REPLAY_APPLIED').length, 0);
+
+    // Trusted replay message
+    const trustedReplay = {
+        reviewSessionId: 'rev-1',
+        reviewAttemptId: null,
+        recordId: 'rec-1',
+        reviewEntryIndex: 0,
+        windowSessionToken: 'replay-token-1',
+        entry: {
+            examId: 'listening-replay-p1',
+            duration: 95,
+            answers: { q1: 'litter', q2: 'cats' }
+        }
+    };
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', trustedReplay);
+    assert.strictEqual(appliedPayloads.length, 1, 'trusted REPLAY_PRACTICE_RECORD must invoke ListeningReviewStudio.applyReplayRecord');
+    assert.strictEqual(appliedPayloads[0].recordId, 'rec-1');
+
+    // Duplicate replay with same signature must be idempotent on UI apply, while still ACKing
+    replayHarness.dispatch('REPLAY_PRACTICE_RECORD', trustedReplay);
+    assert.strictEqual(appliedPayloads.length, 1, 'duplicate REPLAY_PRACTICE_RECORD with same signature must not re-apply');
+
+    const acks = messagesOf(replayHarness, 'REPLAY_APPLIED');
+    assert.strictEqual(acks.length, 2, 'trusted REPLAY_PRACTICE_RECORD must emit REPLAY_APPLIED ACK');
+    assert.strictEqual(acks[0].message.data.sessionId, 'replay-session-1');
+    assert.strictEqual(acks[0].message.data.recordId, 'rec-1');
+    assert.strictEqual(acks[0].message.data.reviewSessionId, 'rev-1');
+    assert.strictEqual(acks[0].message.data.windowSessionToken, 'replay-token-1');
+
+    // Completing during reviewMode must NEVER send PRACTICE_COMPLETE
+    assert.strictEqual(
+        replayHarness.window.__listeningBridgeComplete({ allowGenerated: true }),
+        false,
+        'reviewMode must suppress __listeningBridgeComplete'
+    );
+    replayHarness.timers.filter((t) => !t.interval && !t.cancelled).forEach((t) => t.callback());
+    assert.strictEqual(
+        messagesOf(replayHarness, 'PRACTICE_COMPLETE').length,
+        0,
+        'reviewMode replay must never emit PRACTICE_COMPLETE'
+    );
+}
+
 try {
     run();
+    verifyHistoricalReplayProtocol();
     await verifyRestartAfterSave();
 } catch (error) {
     console.error(error);

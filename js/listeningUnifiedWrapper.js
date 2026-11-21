@@ -25,7 +25,27 @@
         }
     }
 
+    function resolveReviewStudioCssUrl() {
+        var doc = global.document;
+        var currentScriptSrc = doc && doc.currentScript && doc.currentScript.src;
+        try {
+            if (currentScriptSrc) {
+                var currentScriptUrl = new URL(currentScriptSrc, global.location.href);
+                if (/\/listening-wrapper\.bundle\.js$/i.test(currentScriptUrl.pathname)) {
+                    return new URL('../../css/listening-review-studio.css', currentScriptUrl).href;
+                }
+                if (/\/listeningUnifiedWrapper\.js$/i.test(currentScriptUrl.pathname)) {
+                    return new URL('../css/listening-review-studio.css', currentScriptUrl).href;
+                }
+            }
+            return new URL('../../../css/listening-review-studio.css', global.location.href).href;
+        } catch (_) {
+            return '../../../css/listening-review-studio.css';
+        }
+    }
+
     var BRIDGE_SCRIPT_URL = resolveBridgeScriptUrl();
+    var REVIEW_STUDIO_CSS_URL = resolveReviewStudioCssUrl();
     var ADAPTER_STYLE_ID = 'listening-unified-wrapper-adapter-style';
     var TIMER_INTERVAL_MS = 1000;
     var CANDIDATE_CODE_PATTERN = /^\d{6}$/;
@@ -48,6 +68,8 @@
         parentOrigin: '',
         parentOriginIsOpaque: false,
         windowSessionToken: '',
+        reviewMode: false,
+        fixedDurationSeconds: null,
         timerInterval: null,
         lastTimerText: ''
     };
@@ -278,7 +300,7 @@
     }
 
     function handleExpired(doc, preferences) {
-        if (state.expiryHandled) return;
+        if (state.reviewMode || state.expiryHandled) return;
         state.expiryHandled = true;
         if (preferences.expiryAction === 'auto-submit') {
             var button = findFinishButton(doc);
@@ -511,7 +533,9 @@
             actions.appendChild(submitButton);
         }
         if (notesButton) {
-            notesButton.textContent = 'Notes';
+            if (notesButton.dataset.hasSavedNotes !== 'true') {
+                notesButton.textContent = 'Notes';
+            }
             notesButton.classList.add('nav-action-btn');
             actions.appendChild(notesButton);
         }
@@ -670,6 +694,9 @@
         Array.prototype.slice.call(nav.querySelectorAll('.listening-part-nav-section'))
             .forEach(function updatePart(section) {
                 var questions = Array.prototype.slice.call(section.querySelectorAll('.q-nav-item:not(.listening-placeholder-q)'));
+                questions.forEach(function syncEachColumn(item) {
+                    syncQuestionColumnState(item.closest('.q-column.listening-question-column'), item);
+                });
                 var answered = questions.filter(function isAnswered(item) {
                     return item.classList.contains('answered')
                         || item.classList.contains('correct')
@@ -705,6 +732,19 @@
         updatePartNavigationStatus(doc);
         var timer = ensureWrapperTimer(doc);
         if (!timer) return;
+        if (state.reviewMode) {
+            var fixedSecs = Number.isFinite(state.fixedDurationSeconds) ? state.fixedDurationSeconds : 0;
+            var fixedText = formatSeconds(fixedSecs);
+            if (timer.textContent !== fixedText) {
+                timer.textContent = fixedText;
+                state.lastTimerText = fixedText;
+            }
+            timer.title = '历史练习用时（复盘模式）';
+            timer.classList.remove('timer-expired');
+            timer.classList.add('paused');
+            timer.dataset.timerMode = 'review';
+            return;
+        }
         var preferences = readTimerPreferences();
         var elapsed = elapsedSeconds();
         var displaySeconds = elapsed;
@@ -813,6 +853,8 @@
             'body.dark-mode.listening-unified-ui .part-nav-status { color: #94a3b8; }',
             'body.dark-mode.listening-unified-ui .q-bar-segment { background-color: #334155; }',
             'body.dark-mode.listening-unified-ui .q-bar-segment.answered { background-color: #3b82f6; }',
+            'body.dark-mode.listening-unified-ui .q-bar-segment.correct { background-color: #22c55e; }',
+            'body.dark-mode.listening-unified-ui .q-bar-segment.incorrect { background-color: #ef4444; }',
             'body.dark-mode.listening-unified-ui .q-nav-item, body.dark-mode.listening-unified-ui .q-item { color: #64748b; }',
             'body.dark-mode.listening-unified-ui .q-nav-item:hover, body.dark-mode.listening-unified-ui .q-item:hover { background-color: #334155; color: #f8fafc; }',
             'body.dark-mode.listening-unified-ui .q-nav-item.answered, body.dark-mode.listening-unified-ui .q-nav-item.correct, body.dark-mode.listening-unified-ui .q-nav-item.incorrect { color: #e2e8f0; }',
@@ -829,17 +871,30 @@
         (doc.head || doc.documentElement).appendChild(style);
     }
 
+    function ensureReviewStudioStyle(doc) {
+        if (!doc || !doc.body || typeof doc.querySelector !== 'function' || typeof doc.getElementById !== 'function') return;
+        if (!doc.querySelector('main.shell') || !doc.getElementById('questionsPage')) return;
+        if (doc.querySelector('link[data-listening-review-studio="true"], link[href*="listening-review-studio.css"]')) return;
+        var link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = REVIEW_STUDIO_CSS_URL;
+        link.dataset.listeningReviewStudio = 'true';
+        (doc.head || doc.documentElement).appendChild(link);
+    }
+
     function adaptFrameUi() {
         var doc = getFrameDocument();
         if (!doc || !doc.body) return;
         doc.body.classList.add('listening-unified-ui');
         ensureAdapterStyle(doc);
+        ensureReviewStudioStyle(doc);
         ensureListeningLayout(doc);
         var timer = doc.getElementById('timer');
         if (timer && !timer.dataset.wrapperTimerBound) {
             timer.dataset.wrapperTimerBound = 'true';
             timer.title = 'Click to pause or resume timer display';
             timer.addEventListener('click', function toggleTimer() {
+                if (state.reviewMode) return;
                 updateClockPause(!state.running);
                 updateTimerDisplay();
             });
@@ -954,7 +1009,12 @@
             state.sessionId = nextSessionId;
             state.suiteSessionId = normalizeSafeId(payload.suiteSessionId, state.suiteSessionId || '');
             state.startTime = Number.isFinite(Number(payload.startTime)) ? Number(payload.startTime) : state.startTime;
-            if (timerRestarted) {
+            state.reviewMode = Boolean(payload.reviewMode || payload.readOnly);
+            if (state.reviewMode) {
+                updateClockPause(false);
+                state.expiryHandled = false;
+                updateTimerDisplay();
+            } else if (timerRestarted) {
                 state.pausedAtMs = null;
                 state.pausedOffsetMs = 0;
                 state.running = true;
@@ -973,6 +1033,15 @@
                 : Boolean(state.parentOrigin && messageOrigin === state.parentOrigin);
             if (!state.parentWindow || source !== state.parentWindow || message.source !== 'exam_host'
                 || !originMatches || !state.windowSessionToken || messageToken !== state.windowSessionToken) return;
+            if (type === 'REPLAY_PRACTICE_RECORD') {
+                state.reviewMode = true;
+                updateClockPause(false);
+                var replayDuration = Number(messagePayload && messagePayload.entry && messagePayload.entry.duration);
+                if (Number.isFinite(replayDuration) && replayDuration >= 0) {
+                    state.fixedDurationSeconds = Math.round(replayDuration);
+                }
+                updateTimerDisplay();
+            }
         }
         forwardToIframe(message);
         if (type === 'SUITE_NAVIGATE') diagnostics?.step('suite-navigation', 'succeeded');

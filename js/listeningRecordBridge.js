@@ -27,6 +27,9 @@
     startTime: Date.now(),
     initialized: false,
     completed: false,
+    reviewMode: false,
+    readOnly: false,
+    lastReplaySignature: '',
     parentWindow: null,
     expectedParentOrigin: deriveParentOriginFromReferrer(),
     parentOrigin: '',
@@ -901,10 +904,19 @@
     };
     if (contentSuiteId) payload.suiteId = contentSuiteId;
     if (totalSuites) payload.totalSuites = totalSuites;
+    try {
+      var noteEl = window.document && typeof window.document.getElementById === 'function'
+        ? window.document.getElementById('notes-textarea')
+        : null;
+      if (noteEl && typeof noteEl.value === 'string' && noteEl.value.trim()) {
+        payload.noteText = noteEl.value;
+      }
+    } catch (_) {}
     return payload;
   }
 
   function sendPendingCompletion(reason, completionKey) {
+    if (state.reviewMode || state.readOnly) return false;
     var key = completionKey || 'default';
     var pending = state.pendingCompletions[key];
     if (!pending || isCompletionSettled(key)) return false;
@@ -930,6 +942,10 @@
   }
 
   function onComplete(options) {
+    if (state.reviewMode || state.readOnly) {
+      log('review/readOnly mode active, skipping PRACTICE_COMPLETE');
+      return false;
+    }
     options = Object.assign({}, options || {});
     var suiteId = resolveCompletionSuiteId(options);
     if (suiteId) options.suiteId = suiteId;
@@ -1001,6 +1017,7 @@
   }
 
   function restartPractice() {
+    if (state.reviewMode || state.readOnly) return Promise.resolve(false);
     if (!state.parentWindow || state.suiteSessionId || resolveCompletionSuiteId({})) return Promise.resolve(true);
     if (!state.pendingCompletions.default && !isCompletionSettled('default')) return Promise.resolve(true);
     if (practiceRestart) return practiceRestart.promise;
@@ -1047,6 +1064,7 @@
   }
 
   function debouncedOnComplete(delay, options) {
+    if (state.reviewMode || state.readOnly) return;
     options = Object.assign({}, options || {});
     var suiteId = resolveCompletionSuiteId(options);
     if (suiteId) options.suiteId = suiteId;
@@ -1285,6 +1303,143 @@
     observer.observe(doc.body, { childList: true, subtree: true });
   }
 
+  function isAuthenticatedHostEvent(event, data, payload) {
+    if (!state.parentWindow || event.source !== state.parentWindow || data.source !== HOST_MESSAGE_SOURCE) return false;
+    var incomingOrigin = typeof event.origin === 'string' ? event.origin : '';
+    if (state.parentOriginIsOpaque ? incomingOrigin !== 'null' : (!state.parentOrigin || incomingOrigin !== state.parentOrigin)) return false;
+    if (!payload || !state.windowSessionToken || String(payload.windowSessionToken || '') !== String(state.windowSessionToken || '')) return false;
+    return true;
+  }
+
+  function clearAllPendingCompletionsForReview() {
+    Object.keys(completionDebounceTimers).forEach(function (k) {
+      clearTimeout(completionDebounceTimers[k]);
+      delete completionDebounceTimers[k];
+      delete completionDebounceOptions[k];
+    });
+    Object.keys(completionRetryTimers).forEach(function (k) {
+      clearCompletionRetryTimers(k);
+    });
+    state.pendingCompletions = Object.create(null);
+    syncLegacyCompletionState();
+  }
+
+  function extractReplayAnswerValue(entry, qNum) {
+    var answers = (entry && entry.answers && typeof entry.answers === 'object') ? entry.answers : {};
+    var comparison = (entry && entry.answerComparison && typeof entry.answerComparison === 'object') ? entry.answerComparison : {};
+    var candidates = ['q' + qNum, String(qNum), 'Q' + qNum];
+    for (var i = 0; i < candidates.length; i++) {
+      var k = candidates[i];
+      if (Object.prototype.hasOwnProperty.call(answers, k) && answers[k] != null && String(answers[k]).trim() !== '') {
+        return answers[k];
+      }
+    }
+    for (var j = 0; j < candidates.length; j++) {
+      var ck = candidates[j];
+      var cmp = comparison[ck];
+      if (cmp && cmp.userAnswer != null && String(cmp.userAnswer).trim() !== '' && String(cmp.userAnswer).trim() !== '未作答') {
+        return cmp.userAnswer;
+      }
+    }
+    return '';
+  }
+
+  function applyBasicListeningReplayFallback(replayPayload) {
+    if (window.__listeningReviewStudio && typeof window.__listeningReviewStudio.applyReplayRecord === 'function') {
+      window.__listeningReviewStudio.applyReplayRecord(replayPayload);
+      return;
+    }
+    var doc = window.document;
+    if (!doc || typeof doc.querySelectorAll !== 'function') return;
+    var entry = (replayPayload && replayPayload.entry) || replayPayload || {};
+    var answers = (entry.answers && typeof entry.answers === 'object') ? entry.answers : {};
+    var comparison = (entry.answerComparison && typeof entry.answerComparison === 'object') ? entry.answerComparison : {};
+
+    Array.prototype.slice.call(doc.querySelectorAll('input[type="text"], textarea:not(#notes-textarea)')).forEach(function (el) {
+      var m = String(el.name || el.id || '').match(/^q?(\d+)$/i);
+      if (!m) return;
+      var val = extractReplayAnswerValue(entry, Number(m[1]));
+      el.value = Array.isArray(val) ? val.join(', ') : String(val || '');
+    });
+
+    Array.prototype.slice.call(doc.querySelectorAll('input[type="radio"]')).forEach(function (el) {
+      var m = String(el.name || '').match(/^q?(\d+)$/i);
+      if (!m) return;
+      var val = String(extractReplayAnswerValue(entry, Number(m[1])) || '').trim().toUpperCase();
+      el.checked = !!val && String(el.value || '').trim().toUpperCase() === val;
+    });
+
+    var pairNames = Object.create(null);
+    Array.prototype.slice.call(doc.querySelectorAll('input[type="checkbox"][name]')).forEach(function (el) {
+      if (/^q\d+_\d+$/i.test(el.name)) pairNames[el.name] = true;
+    });
+    Object.keys(pairNames).forEach(function (pairName) {
+      var m = pairName.match(/^q(\d+)_(\d+)$/i);
+      if (!m) return;
+      var q1 = Number(m[1]);
+      var q2 = Number(m[2]);
+      var chosen = Object.create(null);
+      [answers[pairName], answers['q' + q1 + '-' + q2], answers['q' + q1], answers['q' + q2],
+       answers[String(q1)], answers[String(q2)],
+       comparison['q' + q1] && comparison['q' + q1].userAnswer,
+       comparison['q' + q2] && comparison['q' + q2].userAnswer].forEach(function (raw) {
+        if (raw == null) return;
+        var list = Array.isArray(raw) ? raw : String(raw).split(/[\s,;/、]+/);
+        list.forEach(function (tok) {
+          var clean = String(tok || '').trim().toUpperCase();
+          if (/^[A-Z]$/.test(clean)) chosen[clean] = true;
+        });
+      });
+      Array.prototype.slice.call(doc.querySelectorAll('input[type="checkbox"][name="' + pairName + '"]')).forEach(function (cb) {
+        cb.checked = !!chosen[String(cb.value || '').trim().toUpperCase()];
+      });
+    });
+
+    if (typeof entry.noteText === 'string' && typeof doc.getElementById === 'function') {
+      var noteEl = doc.getElementById('notes-textarea');
+      if (noteEl) noteEl.value = entry.noteText;
+    }
+
+    try {
+      if (window.App && typeof window.App.finishTest === 'function') {
+        window.App.finishTest();
+      } else if (typeof window.finishTest === 'function') {
+        window.finishTest();
+      }
+    } catch (err) {
+      warn('fallback finishTest failed during replay:', err);
+    }
+
+    Array.prototype.slice.call(doc.querySelectorAll('input[type="text"], textarea:not(#notes-textarea)')).forEach(function (el) {
+      el.readOnly = true;
+    });
+    Array.prototype.slice.call(doc.querySelectorAll('input[type="radio"], input[type="checkbox"], select')).forEach(function (el) {
+      el.disabled = true;
+    });
+  }
+
+  function dispatchListeningReplay(replayPayload) {
+    window.__pendingListeningReplay = replayPayload;
+    if (window.__listeningReviewStudio && typeof window.__listeningReviewStudio.applyReplayRecord === 'function') {
+      try {
+        window.__listeningReviewStudio.applyReplayRecord(replayPayload);
+        return;
+      } catch (err) {
+        warn('ListeningReviewStudio.applyReplayRecord failed, falling back:', err);
+      }
+    }
+    try {
+      if (typeof window.CustomEvent === 'function' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new window.CustomEvent('listeningReplayRecord', { detail: replayPayload }));
+      }
+    } catch (_) {}
+    setTimeout(function () {
+      if (!window.__listeningReviewStudio || typeof window.__listeningReviewStudio.applyReplayRecord !== 'function') {
+        applyBasicListeningReplayFallback(replayPayload);
+      }
+    }, 150);
+  }
+
   function initMessageListener() {
     window.addEventListener('message', function (event) {
       if (!event || !event.data) return;
@@ -1329,9 +1484,14 @@
         state.examId = payload.examId || state.examId;
         state.suiteSessionId = payload.suiteSessionId || state.suiteSessionId || null;
         state.startTime = toTimestampMs(payload.startTime, toTimestampMs(state.startTime, Date.now()));
+        state.reviewMode = !!(payload.reviewMode || payload.readOnly);
+        state.readOnly = !!(payload.readOnly || payload.reviewMode);
         state.initialized = true;
         diagnostics?.connect(state, payload);
         stopInitRequestLoop();
+        if (state.reviewMode || state.readOnly) {
+          clearAllPendingCompletionsForReview();
+        }
         if (String(previousSessionId || '') !== String(state.sessionId || '')) {
           if (isCompletionSettled('default') && !state.suiteSessionId) {
             delete state.completedCompletions.default;
@@ -1347,17 +1507,46 @@
           });
         }
 
-        log('INIT_SESSION received — examId=' + state.examId + ' sessionId=' + state.sessionId);
+        log('INIT_SESSION received — examId=' + state.examId + ' sessionId=' + state.sessionId + (state.reviewMode ? ' [reviewMode]' : ''));
         sendSessionReady('ready');
-        Object.keys(state.pendingCompletions).forEach(function (completionKey) {
-          sendPendingCompletion('init_received', completionKey);
+        if (!state.reviewMode && !state.readOnly) {
+          Object.keys(state.pendingCompletions).forEach(function (completionKey) {
+            sendPendingCompletion('init_received', completionKey);
+          });
+        }
+      } else if (type === 'REPLAY_PRACTICE_RECORD') {
+        var replayPayload = data.data || data;
+        if (!isAuthenticatedHostEvent(event, data, replayPayload)) return;
+        state.reviewMode = true;
+        state.readOnly = true;
+        clearAllPendingCompletionsForReview();
+        var replaySig = [
+          replayPayload.reviewSessionId || '',
+          replayPayload.reviewAttemptId || '',
+          replayPayload.recordId || '',
+          Number.isInteger(replayPayload.reviewEntryIndex) ? replayPayload.reviewEntryIndex : 0,
+          (replayPayload.entry && replayPayload.entry.examId) || state.examId || ''
+        ].join('|');
+        if (replaySig !== state.lastReplaySignature) {
+          state.lastReplaySignature = replaySig;
+          log('REPLAY_PRACTICE_RECORD received — recordId=' + (replayPayload.recordId || 'unknown'));
+          dispatchListeningReplay(replayPayload);
+        }
+        sendMessage('REPLAY_APPLIED', {
+          examId: state.examId,
+          sessionId: state.sessionId,
+          reviewSessionId: replayPayload.reviewSessionId || null,
+          reviewAttemptId: replayPayload.reviewAttemptId || null,
+          recordId: replayPayload.recordId || null,
+          reviewEntryIndex: Number.isInteger(replayPayload.reviewEntryIndex) ? replayPayload.reviewEntryIndex : 0
         });
+      } else if (type === 'REVIEW_CONTEXT') {
+        var reviewContext = data.data || data;
+        if (!isAuthenticatedHostEvent(event, data, reviewContext)) return;
+        window.__listeningReviewContext = reviewContext;
       } else if (type === 'PRACTICE_SUBMIT_ACK' || type === 'PRACTICE_SUBMIT_FAILED') {
         var outcome = data.data || data;
-        if (!state.parentWindow || event.source !== state.parentWindow || data.source !== HOST_MESSAGE_SOURCE) return;
-        var outcomeOrigin = typeof event.origin === 'string' ? event.origin : '';
-        if (state.parentOriginIsOpaque ? outcomeOrigin !== 'null' : (!state.parentOrigin || outcomeOrigin !== state.parentOrigin)) return;
-        if (!outcome || String(outcome.windowSessionToken || '') !== String(state.windowSessionToken || '')) return;
+        if (!isAuthenticatedHostEvent(event, data, outcome)) return;
         var pendingKey = Object.keys(state.pendingCompletions).find(function (completionKey) {
           return String(state.pendingCompletions[completionKey].submissionId || '') === String(outcome.submissionId || '');
         });

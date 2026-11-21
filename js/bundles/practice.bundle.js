@@ -2184,6 +2184,7 @@ class PracticeRecordModal {
         this.boundBackdropHandler = null;
         this.boundEscHandler = null;
         this.replayTriggerElement = null;
+        this.replayCtaElement = null;
         this.boundReplayClickHandler = null;
         this.boundReplayKeyHandler = null;
 
@@ -2264,10 +2265,14 @@ class PracticeRecordModal {
         if (this.replayTriggerElement && this.boundReplayKeyHandler) {
             this.replayTriggerElement.removeEventListener('keydown', this.boundReplayKeyHandler);
         }
+        if (this.replayCtaElement && this.boundReplayClickHandler) {
+            this.replayCtaElement.removeEventListener('click', this.boundReplayClickHandler);
+        }
 
         this.boundBackdropHandler = null;
         this.boundEscHandler = null;
         this.replayTriggerElement = null;
+        this.replayCtaElement = null;
         this.boundReplayClickHandler = null;
         this.boundReplayKeyHandler = null;
     }
@@ -2299,8 +2304,10 @@ class PracticeRecordModal {
         document.addEventListener('keydown', this.boundEscHandler);
 
         const replayTrigger = modal.querySelector('.record-summary-replay-trigger');
-        if (replayTrigger) {
-            this.replayTriggerElement = replayTrigger;
+        const replayCta = modal.querySelector('.record-replay-cta-btn');
+        if (replayTrigger || replayCta) {
+            this.replayTriggerElement = replayTrigger || null;
+            this.replayCtaElement = replayCta || null;
             const launchReplay = async () => {
                 const recordId = this.currentRecordId
                     || (this.currentRecord && (this.currentRecord.id || this.currentRecord.sessionId))
@@ -2318,6 +2325,25 @@ class PracticeRecordModal {
                     return;
                 }
 
+                let reservedWindow = null;
+                if (typeof window.open === 'function') {
+                    try {
+                        reservedWindow = window.open(
+                            'about:blank',
+                            '_blank',
+                            'width=1360,height=880,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+                        );
+                    } catch (_) {
+                        reservedWindow = null;
+                    }
+                }
+                const closeReservedWindow = () => {
+                    if (reservedWindow && !reservedWindow.closed) {
+                        try { reservedWindow.close(); } catch (_) { }
+                    }
+                };
+
+                const snapshotRecord = this.currentRecord;
                 closeModal();
                 try {
                     // 回顾必须 full：重新按 id 拉取含 highlights/notes 的完整记录。
@@ -2325,20 +2351,24 @@ class PracticeRecordModal {
                     let replayRecord = null;
                     if (window.AppData && recordId) {
                         replayRecord = await window.AppData.practice.get(recordId, { projection: 'full' });
-                    } else if (this.currentRecord && (
-                        Array.isArray(this.currentRecord.highlights)
-                        || Array.isArray(this.currentRecord.notes)
-                        || this.currentRecord.realData
-                        || this.currentRecord.rawData
+                    } else if (snapshotRecord && (
+                        Array.isArray(snapshotRecord.highlights)
+                        || Array.isArray(snapshotRecord.notes)
+                        || snapshotRecord.realData
+                        || snapshotRecord.rawData
                     )) {
                         // 无 API 时仅允许已是 full 形态的 currentRecord。
-                        replayRecord = this.currentRecord;
+                        replayRecord = snapshotRecord;
                     }
                     if (!replayRecord) {
                         throw new Error('无法加载完整记录用于回顾');
                     }
-                    await window.app.openPracticeRecordReplay(replayRecord);
+                    const replayOptions = reservedWindow
+                        ? { reuseWindow: reservedWindow, ownsReservedWindow: true }
+                        : {};
+                    await window.app.openPracticeRecordReplay(replayRecord, replayOptions);
                 } catch (error) {
+                    closeReservedWindow();
                     console.error('[PracticeRecordModal] 启动回放失败:', error);
                     if (typeof window.showMessage === 'function') {
                         window.showMessage(`无法回放该记录：${error.message || '未知错误'}`, 'error');
@@ -2357,8 +2387,13 @@ class PracticeRecordModal {
                 }
             };
 
-            replayTrigger.addEventListener('click', this.boundReplayClickHandler);
-            replayTrigger.addEventListener('keydown', this.boundReplayKeyHandler);
+            if (replayTrigger) {
+                replayTrigger.addEventListener('click', this.boundReplayClickHandler);
+                replayTrigger.addEventListener('keydown', this.boundReplayKeyHandler);
+            }
+            if (replayCta) {
+                replayCta.addEventListener('click', this.boundReplayClickHandler);
+            }
         }
     }
 
@@ -2419,9 +2454,14 @@ class PracticeRecordModal {
                     </div>
                     <div class="modal-body">
                         <div class="record-summary">
-                            <h4 class="record-summary-replay-trigger" role="button" tabindex="0" aria-label="打开该练习记录回放">
-                                ${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}
-                            </h4>
+                            <div class="record-summary-header">
+                                <h4 class="record-summary-replay-trigger" role="button" tabindex="0" aria-label="打开该练习记录回放" title="点击打开原卷复盘（保留本次对错答案）">
+                                    ${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}
+                                </h4>
+                                <button type="button" class="record-replay-cta-btn" data-action="modal-replay" title="打开与考试一致的原卷页面，对照查看本次对错答案">
+                                    📖 打开原卷复盘
+                                </button>
+                            </div>
                             <div class="record-meta">
                                 <div class="meta-item">
                                     <span class="meta-label">\u7ec3\u4e60\u65f6\u95f4\uff1a</span>

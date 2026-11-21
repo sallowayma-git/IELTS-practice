@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "appVersion": "0.6.3.2",
-  "buildId": "sha256:b2e1f4fe044b6394a15799d3f96317d36631ace30f4d471f2e421e6a8df52ef3",
+  "buildId": "sha256:632f560867b7671bb9901b6c960c968a861e81a9485ce2c07947a3fc7cb346d6",
   "mappingPath": "assets/generated/diagnostics/build-manifest.json",
   "readingResources": [
     "assets/generated/reading-exams/p1-high-01.js",
@@ -526,7 +526,7 @@
     },
     {
       "path": "css/main.css",
-      "sha256": "3ddcf6db435f10c44a56c0216463c22f68733df4a4ec548c4377c1ce4c350575"
+      "sha256": "b45001e8cbe9ac651ddb31cc7b1b15cd321237b49a706ab0e26452ede717dffb"
     },
     {
       "path": "css/onboarding.css",
@@ -550,11 +550,11 @@
     },
     {
       "path": "js/bundles/browse.bundle.js",
-      "sha256": "8e52643dc22b521d5c99cf0d1762b4581f92e0db0c01b826903f590c792bab82"
+      "sha256": "4d6bb32a6637723a4f0f423807b84f3776d13e0425c4ccc846b5dc0107452b48"
     },
     {
       "path": "js/bundles/core-foundation.bundle.js",
-      "sha256": "12ea0eba6cc81f83d844c1465b80333afabadb13b7f7a494875f0c4d52343364"
+      "sha256": "90b43993c668ba1c32bd43d9f636979db6397fdf4f4b09b916e66190e68f5142"
     },
     {
       "path": "js/bundles/diagnostics.bundle.js",
@@ -570,11 +570,11 @@
     },
     {
       "path": "js/bundles/listening-record-bridge.bundle.js",
-      "sha256": "3dc4f5d08d12ccde2e616dffbd85bb1128a1948f7d607db5a4dced0c3d66cf2f"
+      "sha256": "c6d18398e515b07cdbb49ea4cce7654f22aeb9c38c62d7c1d5cf5288f250abd0"
     },
     {
       "path": "js/bundles/listening-wrapper.bundle.js",
-      "sha256": "1bb8c59358b944a5dd9950be6c3bca71dea8ce868285d5c98cb8b0490970a493"
+      "sha256": "c19a11645c34af7d62660c8a4b39e4232280b9dd555b357d2478f1a56c6490a3"
     },
     {
       "path": "js/bundles/more.bundle.js",
@@ -582,11 +582,11 @@
     },
     {
       "path": "js/bundles/practice-page-enhancer.bundle.js",
-      "sha256": "424290980a6cb99cc30768e5b98ada3fe6e94bb06c2dfca832dab89264c62b9b"
+      "sha256": "0a5a9ed5550d672f7588088375c880342ac4b9553f5b7cd16fb98161fb086e73"
     },
     {
       "path": "js/bundles/practice.bundle.js",
-      "sha256": "26927bffd7b3aae233a3bd82d1d44368c0ffb2690542ba5bf706598dc5ae765e"
+      "sha256": "26d502d2af6537556366ca2ef7f3b781c6923ba55f54f90c2a93a4dfcdae5f23"
     },
     {
       "path": "js/bundles/reading-library.bundle.js",
@@ -594,7 +594,7 @@
     },
     {
       "path": "js/bundles/reading-page.bundle.js",
-      "sha256": "f76c22e513602bb0e5be3aead87d2f229bf63152227c62296a42465a4b957ccc"
+      "sha256": "2f521f12d9f2d8fbeb63d7a8518d4090dfbdba0a0ce441dccec49407b5138301"
     },
     {
       "path": "js/bundles/reading-tools.bundle.js",
@@ -626,11 +626,11 @@
     },
     {
       "path": "js/diagnostics/diagnosticContract.js",
-      "sha256": "4243942a0456dcb95ef8c6d52da029e02c12b81f0fb6899b422ca3fd28d4de5e"
+      "sha256": "7f05591c1890b1e97173ea24395a3e551cfd14126179c1c83dfedb5784bf6c80"
     },
     {
       "path": "scripts/build-bundles.mjs",
-      "sha256": "7eaf083c2c2d6cfd7d5329de1bd4db5b0f24aaa039a8e2fc13029f5ccb9633bd"
+      "sha256": "cf4f689b5ac534e5f709be118bb5eb012a10a3f6953a367b6c527585b3c0e7d3"
     },
     {
       "path": "scripts/diagnostic-build.mjs",
@@ -1002,97 +1002,97 @@
       {
         "source": "js/views/legacyViewBundle.js",
         "startLine": 784,
-        "endLine": 5240,
+        "endLine": 5248,
         "sourceStartLine": 1
       },
       {
         "source": "js/data/practiceRecordSource.js",
-        "startLine": 5244,
-        "endLine": 5442,
+        "startLine": 5252,
+        "endLine": 5450,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examActions.js",
-        "startLine": 5446,
-        "endLine": 7606,
+        "startLine": 5454,
+        "endLine": 7614,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/spellingErrorCollector.js",
-        "startLine": 7610,
-        "endLine": 8920,
+        "startLine": 7618,
+        "endLine": 8928,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/examSessionMixin.js",
-        "startLine": 8924,
-        "endLine": 16308,
+        "startLine": 8932,
+        "endLine": 16348,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/practiceReviewFlow.js",
-        "startLine": 16312,
-        "endLine": 16609,
+        "startLine": 16352,
+        "endLine": 16649,
         "sourceStartLine": 1
       },
       {
         "source": "js/app/browseController.js",
-        "startLine": 16613,
-        "endLine": 17283,
+        "startLine": 16653,
+        "endLine": 17323,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/PDFHandler.js",
-        "startLine": 17287,
-        "endLine": 17719,
+        "startLine": 17327,
+        "endLine": 17759,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/BrowseStateManager.js",
-        "startLine": 17723,
-        "endLine": 18285,
+        "startLine": 17763,
+        "endLine": 18325,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/suiteBackGuard.js",
-        "startLine": 18289,
-        "endLine": 18458,
+        "startLine": 18329,
+        "endLine": 18498,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerMatchCore.js",
-        "startLine": 18462,
-        "endLine": 18676,
+        "startLine": 18502,
+        "endLine": 18716,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerComparisonUtils.js",
-        "startLine": 18680,
-        "endLine": 19451,
+        "startLine": 18720,
+        "endLine": 19491,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/BrowsePreferencesUtils.js",
-        "startLine": 19455,
-        "endLine": 20487,
+        "startLine": 19495,
+        "endLine": 20527,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/browseLearningControls.js",
-        "startLine": 20491,
-        "endLine": 20752,
+        "startLine": 20531,
+        "endLine": 20792,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/interruptedPracticeHistory.js",
-        "startLine": 20756,
-        "endLine": 20961,
+        "startLine": 20796,
+        "endLine": 21001,
         "sourceStartLine": 1
       },
       {
         "source": "js/main.js",
-        "startLine": 20965,
-        "endLine": 26727,
+        "startLine": 21005,
+        "endLine": 26868,
         "sourceStartLine": 1
       }
     ],
@@ -1144,25 +1144,25 @@
       {
         "source": "js/components/practiceRecordModal.js",
         "startLine": 2178,
-        "endLine": 3437,
+        "endLine": 3477,
         "sourceStartLine": 1
       },
       {
         "source": "js/components/practiceHistoryEnhancer.js",
-        "startLine": 3441,
-        "endLine": 3789,
+        "startLine": 3481,
+        "endLine": 3829,
         "sourceStartLine": 1
       },
       {
         "source": "js/utils/answerSanitizer.js",
-        "startLine": 3793,
-        "endLine": 3942,
+        "startLine": 3833,
+        "endLine": 3982,
         "sourceStartLine": 1
       },
       {
         "source": "js/core/practiceRecorder.js",
-        "startLine": 3946,
-        "endLine": 6773,
+        "startLine": 3986,
+        "endLine": 6813,
         "sourceStartLine": 1
       }
     ],
@@ -1708,9 +1708,15 @@
         "sourceStartLine": 1
       },
       {
-        "source": "js/listeningRecordBridge.js",
+        "source": "js/listeningReviewStudio.js",
         "startLine": 14527,
-        "endLine": 15980,
+        "endLine": 16504,
+        "sourceStartLine": 1
+      },
+      {
+        "source": "js/listeningRecordBridge.js",
+        "startLine": 16508,
+        "endLine": 18150,
         "sourceStartLine": 1
       }
     ],
@@ -1862,7 +1868,7 @@
       {
         "source": "js/listeningUnifiedWrapper.js",
         "startLine": 12784,
-        "endLine": 13891,
+        "endLine": 13960,
         "sourceStartLine": 1
       }
     ],

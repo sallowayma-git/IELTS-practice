@@ -3458,6 +3458,7 @@ class VirtualScroller {
         if (record && record.recordId) recordId = String(record.recordId);
         var item = createNode('div', {
             className: 'history-item history-record-item',
+            title: bulkDeleteMode ? null : '双击打开原卷复盘（保留本次对错答案）',
             dataset: { recordId: recordId }
         });
 
@@ -3539,6 +3540,13 @@ class VirtualScroller {
         var actions = null;
         if (!bulkDeleteMode) {
             var actionChildren = [];
+            actionChildren.push(createNode('button', {
+                type: 'button',
+                className: 'replay-record-btn',
+                title: '打开原卷复盘（查看当时对错答案）',
+                'aria-label': '打开原卷复盘',
+                dataset: { recordAction: 'replay', recordId: recordId }
+            }, '📄'));
             // 复盘入口只对确实有复盘计划的记录出现（首版仅阅读），听力历史保持原样。
             if (reviewBadge) {
                 actionChildren.push(createNode('button', {
@@ -14257,8 +14265,18 @@ class VirtualScroller {
         },
 
         async openPracticeRecordReplay(record, options = {}) {
+            const reservedWindow = options && options.reuseWindow && !options.reuseWindow.closed
+                ? options.reuseWindow
+                : null;
+            const ownsReservedWindow = Boolean(reservedWindow && options && options.ownsReservedWindow === true);
+            const closeReserved = () => {
+                if (!ownsReservedWindow || !reservedWindow || reservedWindow.closed) return;
+                try { reservedWindow.close(); } catch (_) { }
+            };
+
             const session = this._buildReviewSession(record, options);
             if (!session) {
+                closeReserved();
                 throw new Error('该练习记录缺少可回放的题目映射');
             }
             const store = this._ensureReviewReplayStore();
@@ -14267,20 +14285,42 @@ class VirtualScroller {
             const firstEntry = session.entries[0];
             if (!firstEntry || !firstEntry.examId) {
                 store.delete(session.sessionId);
+                closeReserved();
                 throw new Error('无法解析首题题目标识');
             }
 
-            const examDefinition = await this._resolveReviewExamDefinition(firstEntry);
-            const openedWindow = await this.openExam(firstEntry.examId, {
+            let examDefinition;
+            try {
+                examDefinition = await this._resolveReviewExamDefinition(firstEntry);
+            } catch (error) {
+                store.delete(session.sessionId);
+                closeReserved();
+                throw error;
+            }
+            const openOptions = {
                 reviewMode: true,
                 readOnly: true,
                 reviewSessionId: session.sessionId,
                 reviewEntryIndex: 0,
                 examDefinition,
                 requireRecordProvenance: true
-            });
+            };
+            if (reservedWindow) {
+                openOptions.reuseWindow = reservedWindow;
+                openOptions.ownsReservedWindow = ownsReservedWindow;
+                openOptions.reservationAttempted = true;
+            }
+            let openedWindow;
+            try {
+                openedWindow = await this.openExam(firstEntry.examId, openOptions);
+            } catch (error) {
+                store.delete(session.sessionId);
+                closeReserved();
+                throw error;
+            }
             if (!openedWindow) {
                 store.delete(session.sessionId);
+                closeReserved();
                 throw new Error('无法打开回顾页面');
             }
             this._bindReviewWindowRef(session.sessionId, openedWindow);
@@ -22761,16 +22801,87 @@ function setupPracticeHistoryInteractions() {
         return;
     }
 
+    let pendingDetailsTimer = null;
+    const clearPendingDetails = () => {
+        if (pendingDetailsTimer) {
+            clearTimeout(pendingDetailsTimer);
+            pendingDetailsTimer = null;
+        }
+    };
+
+    const openRecordReplayFromHistory = async (recordId, event) => {
+        if (!recordId) return;
+        clearPendingDetails();
+        if (event) {
+            if (typeof event.preventDefault === 'function') event.preventDefault();
+            if (typeof event.stopPropagation === 'function') event.stopPropagation();
+        }
+        if (window.practiceRecordModal && typeof window.practiceRecordModal.hide === 'function' && window.practiceRecordModal.isVisible) {
+            try { window.practiceRecordModal.hide(); } catch (_) { }
+        }
+        if (!window.app || typeof window.app.openPracticeRecordReplay !== 'function') {
+            if (typeof showMessage === 'function') {
+                showMessage('当前版本不支持原卷复盘', 'error');
+            }
+            return;
+        }
+        let reservedWindow = null;
+        if (typeof window.open === 'function') {
+            try {
+                reservedWindow = window.open(
+                    'about:blank',
+                    '_blank',
+                    'width=1360,height=880,scrollbars=yes,resizable=yes,status=yes,toolbar=yes'
+                );
+            } catch (_) {
+                reservedWindow = null;
+            }
+        }
+        const closeReservedWindow = () => {
+            if (reservedWindow && !reservedWindow.closed) {
+                try { reservedWindow.close(); } catch (_) { }
+            }
+        };
+        try {
+            let replayRecord = null;
+            if (window.AppData && window.AppData.practice && typeof window.AppData.practice.get === 'function') {
+                replayRecord = await window.AppData.practice.get(String(recordId), { projection: 'full' });
+            }
+            if (!replayRecord) {
+                throw new Error('未找到对应的练习记录');
+            }
+            const replayOptions = reservedWindow
+                ? { reuseWindow: reservedWindow, ownsReservedWindow: true }
+                : {};
+            await window.app.openPracticeRecordReplay(replayRecord, replayOptions);
+        } catch (error) {
+            closeReservedWindow();
+            console.error('[PracticeHistory] 打开原卷复盘失败:', error);
+            if (typeof showMessage === 'function') {
+                showMessage(`无法打开原卷复盘：${(error && error.message) || '未知错误'}`, 'error');
+            }
+        }
+    };
+
     const handleDetails = (recordId, event) => {
         if (!recordId) return;
         if (event) event.preventDefault();
-        if (typeof showRecordDetails === 'function') {
-            showRecordDetails(recordId);
+        if (event && Number(event.detail) >= 2) {
+            clearPendingDetails();
+            return;
         }
+        clearPendingDetails();
+        pendingDetailsTimer = setTimeout(() => {
+            pendingDetailsTimer = null;
+            if (typeof showRecordDetails === 'function') {
+                showRecordDetails(recordId);
+            }
+        }, 220);
     };
 
     const handleDelete = (recordId, event) => {
         if (!recordId) return;
+        clearPendingDetails();
         if (event) event.preventDefault();
         if (typeof deleteRecord === 'function') {
             deleteRecord(recordId);
@@ -22779,6 +22890,7 @@ function setupPracticeHistoryInteractions() {
 
     const handleReview = (recordId, event) => {
         if (!recordId) return;
+        clearPendingDetails();
         if (event) {
             event.preventDefault();
             if (typeof event.stopPropagation === 'function') event.stopPropagation();
@@ -22815,6 +22927,10 @@ function setupPracticeHistoryInteractions() {
             handleDetails(this.dataset.recordId, event);
         });
 
+        window.DOM.delegate('click', '.practice-history-list [data-record-action="replay"], #history-list [data-record-action="replay"]', function (event) {
+            openRecordReplayFromHistory(this.dataset.recordId, event);
+        });
+
         window.DOM.delegate('click', '.practice-history-list [data-record-action="delete"], #history-list [data-record-action="delete"]', function (event) {
             handleDelete(this.dataset.recordId, event);
         });
@@ -22840,6 +22956,12 @@ function setupPracticeHistoryInteractions() {
             const detailsTarget = event.target.closest('[data-record-action="details"]');
             if (detailsTarget && container.contains(detailsTarget)) {
                 handleDetails(detailsTarget.dataset.recordId, event);
+                return;
+            }
+
+            const replayTarget = event.target.closest('[data-record-action="replay"]');
+            if (replayTarget && container.contains(replayTarget)) {
+                openRecordReplayFromHistory(replayTarget.dataset.recordId, event);
                 return;
             }
 
@@ -22873,6 +22995,25 @@ function setupPracticeHistoryInteractions() {
             handleCheckbox(checkbox.dataset.recordId, event);
         });
     }
+
+    // DOMEvents 委托池未包含 dblclick，直接监听 document 上的双击事件，支持任意历史记录行双击进入原卷复盘
+    document.addEventListener('dblclick', (event) => {
+        if (typeof getBulkDeleteModeState === 'function' && getBulkDeleteModeState()) {
+            return;
+        }
+        const target = event && event.target;
+        if (!target || typeof target.closest !== 'function') {
+            return;
+        }
+        if (target.closest('[data-record-action="delete"], [data-record-action="review"], input[type="checkbox"], .delete-record-btn, .review-record-btn')) {
+            return;
+        }
+        const item = target.closest('.practice-history-list .history-item, #history-list .history-item');
+        if (!item || !item.dataset || !item.dataset.recordId) {
+            return;
+        }
+        openRecordReplayFromHistory(item.dataset.recordId, event);
+    });
 
     practiceHistoryDelegatesConfigured = true;
 }
