@@ -66,6 +66,9 @@ function loadModal(utilsOverride = {}) {
     };
     sandbox.globalThis = sandbox.window;
     vm.createContext(sandbox);
+    const utilsStubs = windowStub.AnswerComparisonUtils;
+    vm.runInContext(fs.readFileSync(path.join(repoRoot, 'js/utils/answerComparisonUtils.js'), 'utf8'), sandbox);
+    Object.assign(windowStub.AnswerComparisonUtils, utilsStubs);
     const source = fs.readFileSync(path.join(repoRoot, 'js/components/practiceRecordModal.js'), 'utf8');
     vm.runInContext(source, sandbox, { filename: 'js/components/practiceRecordModal.js' });
     return windowStub.practiceRecordModal;

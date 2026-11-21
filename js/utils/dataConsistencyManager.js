@@ -123,6 +123,19 @@ class DataConsistencyManager {
         console.log('[DataConsistencyManager] 开始数据补充:', record && record.id);
 
         const enriched = this.cloneRecordData(record) || {};
+        // Retain the original aggregate evidence before legacy display repair
+        // supplies row-count totals. AppData uses the same existing evidence
+        // field to distinguish a saved zero from an inferred display zero.
+        if (!Object.prototype.hasOwnProperty.call(enriched, 'browseScore')
+            && window.AnswerComparisonUtils?.resolveRecordCounts) {
+            const counts = window.AnswerComparisonUtils.resolveRecordCounts(record);
+            enriched.browseScore = {
+                earned: counts.source === 'saved' ? counts.correct : null,
+                // Preserve an explicit denominator even without earned credit;
+                // the count resolver validates it before using it for display.
+                possible: counts.source === 'saved' ? counts.total : (record?.totalQuestions ?? null)
+            };
+        }
         const numericCorrectCount = typeof enriched.correctAnswers === 'number'
             ? enriched.correctAnswers
             : null;

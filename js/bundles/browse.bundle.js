@@ -18724,6 +18724,14 @@ window.BrowseStateManager = BrowseStateManager;
             return { canonicalKey: null, questionNumber: null, originalKey: original };
         }
 
+        const separator = original.lastIndexOf('::');
+        if (separator >= 0) {
+            const scope = original.slice(0, separator);
+            const question = normalizeKey(original.slice(separator + 2));
+            return { ...question, originalKey: original, sourceEntryKey: scope,
+                canonicalKey: question.canonicalKey ? `${scope}::${question.canonicalKey}` : null };
+        }
+
         const lowered = original.toLowerCase();
 
         // 处理范围题号（如 q21-22 或 21-22），保留完整键用于展示
@@ -18782,6 +18790,7 @@ window.BrowseStateManager = BrowseStateManager;
         if (!canonicalKey) {
             return true;
         }
+        canonicalKey = canonicalKey.split('::').pop();
 
         if (NOISE_KEYS.has(canonicalKey)) {
             return true;
@@ -18971,17 +18980,16 @@ window.BrowseStateManager = BrowseStateManager;
         return JSON.stringify(tokens(snapshot)) === JSON.stringify(tokens(answerInfo));
     }
 
-    function resolveStoredCorrect(entry) {
-        if (!entry.hasCorrectAnswer) {
-            return null;
-        }
+    function resolveStoredGrade(entry) {
+        let metadata = null;
         for (const candidate of entry.correctnessCandidates) {
             if (matchesAnswerSnapshot(candidate.userAnswer ?? candidate.user ?? candidate.answer, entry.userInfo)
                 && matchesAnswerSnapshot(candidate.correctAnswer ?? candidate.correct, entry.correctInfo)) {
-                return candidate.isCorrect;
+                if (typeof candidate.isCorrect === 'boolean') return candidate;
+                if (!metadata) metadata = candidate;
             }
         }
-        return null;
+        return metadata;
     }
 
     function alignLetterKeys(entryMap) {
@@ -19057,20 +19065,52 @@ window.BrowseStateManager = BrowseStateManager;
         const correctDisplay = entry.hasCorrectAnswer ? entry.correctAnswer : 'N/A';
         // Preserve submission grading only for the final displayed answer snapshot,
         // including any letter-to-number alignment. Legacy rows still recompute.
-        const storedCorrect = resolveStoredCorrect(entry);
+        const storedGrade = resolveStoredGrade(entry);
+        const storedCorrect = entry.hasCorrectAnswer && storedGrade ? storedGrade.isCorrect : null;
         const recomputedCorrect = answersMatch(entry.userInfo, entry.correctInfo);
         const isCorrect = typeof storedCorrect === 'boolean'
             ? storedCorrect
             : recomputedCorrect;
 
+        const weight = storedGrade && Number.isSafeInteger(storedGrade.weight) && storedGrade.weight > 0
+            ? storedGrade.weight : 1;
+        const partial = entry.hasCorrectAnswer && storedGrade ? storedGrade.partialCorrectCount : null;
+        const partialCorrectCount = Number.isSafeInteger(partial) && partial >= 0 && partial <= weight
+            ? partial : (isCorrect === true ? weight : (isCorrect === false && weight === 1 ? 0 : null));
+        const selected = entry.hasUserAnswer ? [].concat(entry.userInfo.normalized).length : 0;
+        const savedAnswered = storedGrade?.answeredCount;
+        const hasOccupancyEvidence = storedGrade && Object.prototype.hasOwnProperty.call(storedGrade, 'answeredCount');
+        const legacySelectionSet = weight === 1 && (selected > weight || entry.correctnessCandidates.some(candidate => (
+            Array.isArray(candidate.userAnswer ?? candidate.user ?? candidate.answer)
+            && matchesAnswerSnapshot(candidate.userAnswer ?? candidate.user ?? candidate.answer, entry.userInfo)
+            && matchesAnswerSnapshot(candidate.correctAnswer ?? candidate.correct, entry.correctInfo)
+        )));
+        // Shared split-key rows display all selections, not their assigned slot.
+        // Only matching submission occupancy may classify those rows as filled.
+        const answered = Number.isSafeInteger(savedAnswered) && savedAnswered >= 0
+            && savedAnswered <= Math.min(weight, selected) ? savedAnswered
+            : (selected > 0 && (hasOccupancyEvidence || legacySelectionSet) ? null : Math.min(weight, selected));
+        const unanswered = answered === null ? 0 : weight - answered;
+        const credit = partialCorrectCount !== null && (answered === null || partialCorrectCount <= answered)
+            ? partialCorrectCount : null;
+        const incorrect = credit === null || answered === null ? 0 : answered - credit;
+        const scoredCounts = {
+            total: weight, correct: credit ?? 0,
+            incorrect, unanswered, unknown: weight - (credit ?? 0) - incorrect - unanswered
+        };
+
         return {
             canonicalKey: entry.canonicalKey,
+            sourceEntryKey: entry.sourceEntryKey,
             originalKeys: Array.from(entry.originalKeys),
             questionNumber: entry.questionNumber,
             displayNumber,
             userAnswer: userDisplay,
             correctAnswer: correctDisplay,
             isCorrect,
+            weight,
+            partialCorrectCount: credit,
+            scoredCounts,
             hasUserAnswer: entry.hasUserAnswer,
             hasCorrectAnswer: entry.hasCorrectAnswer
         };
@@ -19121,14 +19161,14 @@ window.BrowseStateManager = BrowseStateManager;
                 return;
             }
             Object.entries(source).forEach(([rawKey, candidate]) => {
-                if (!isPlainObject(candidate) || typeof candidate.isCorrect !== 'boolean'
+                if (!isPlainObject(candidate)
                     || candidate.isCorrectSource === 'display') {
                     return;
                 }
                 // Older display enrichment also stored unmarked booleans. Only
                 // weighted grades or details from a submission producer can
                 // override matching; a questionId alone is normalization metadata.
-                const hasGradingEvidence = (Number.isFinite(candidate.weight) && candidate.weight > 0)
+                const hasGradingEvidence = (Number.isSafeInteger(candidate.weight) && candidate.weight > 0)
                     || producer === 'unified_reading_page'
                     || producer === 'listening_record_bridge';
                 if (!hasGradingEvidence) {
@@ -19162,6 +19202,7 @@ window.BrowseStateManager = BrowseStateManager;
             if (!entryMap[keyInfo.canonicalKey]) {
                 entryMap[keyInfo.canonicalKey] = {
                     canonicalKey: keyInfo.canonicalKey,
+                    sourceEntryKey: keyInfo.sourceEntryKey,
                     questionNumber: keyInfo.questionNumber,
                     rangeLabel: keyInfo.rangeLabel || null,
                     originalKeys: new Set(),
@@ -19188,8 +19229,8 @@ window.BrowseStateManager = BrowseStateManager;
             const lookupKeys = [
                 keyInfo.originalKey,
                 keyInfo.canonicalKey,
-                keyInfo.questionNumber != null ? String(keyInfo.questionNumber) : null,
-                keyInfo.questionNumber != null ? `q${keyInfo.questionNumber}` : null
+                !keyInfo.sourceEntryKey && keyInfo.questionNumber != null ? String(keyInfo.questionNumber) : null,
+                !keyInfo.sourceEntryKey && keyInfo.questionNumber != null ? `q${keyInfo.questionNumber}` : null
             ].filter(Boolean);
 
             const userValue = lookupAnswer(userMap, lookupKeys);
@@ -19239,7 +19280,7 @@ window.BrowseStateManager = BrowseStateManager;
 
         const entries = Object.keys(entryMap)
             .map(key => entryMap[key])
-            .filter(entry => entry && (entry.hasUserAnswer || entry.hasCorrectAnswer));
+            .filter(Boolean);
 
         const finalEntries = entries.map(finaliseEntry);
 
@@ -19275,11 +19316,22 @@ window.BrowseStateManager = BrowseStateManager;
         let incorrect = 0;
         let unanswered = 0;
         let unknown = 0;
+        let total = 0;
 
         entries.forEach(entry => {
             if (!entry) {
                 return;
             }
+            if (entry.scoredCounts) {
+                const counts = entry.scoredCounts;
+                total += counts.total;
+                correct += counts.correct;
+                incorrect += counts.incorrect;
+                unanswered += counts.unanswered;
+                unknown += counts.unknown;
+                return;
+            }
+            total += 1;
             if (!entry.hasUserAnswer || entry.userAnswer == null || entry.userAnswer === 'No Answer') {
                 unanswered += 1;
                 return;
@@ -19294,12 +19346,136 @@ window.BrowseStateManager = BrowseStateManager;
         });
 
         return {
-            total: entries.length,
+            total,
             correct,
             incorrect,
             unanswered,
             unknown
         };
+    }
+
+    function passageIdentity(record, index) {
+        return record.sessionId || record.id || record.examId || record.metadata?.examId || `suite-entry-${index}`;
+    }
+
+    function uniquePassages(record) {
+        const seen = new Set();
+        return (Array.isArray(record?.suiteEntries) ? record.suiteEntries : []).filter((entry, index) => {
+            if (!entry || typeof entry !== 'object') return false;
+            const identity = passageIdentity(entry, index);
+            if (seen.has(identity)) return false;
+            seen.add(identity);
+            return true;
+        });
+    }
+
+    function getRecordEntries(record, normalize = getNormalizedEntries) {
+        const entries = [];
+        const collect = (source, scope = []) => {
+            const passages = uniquePassages(source);
+            if (passages.length) {
+                passages.forEach((passage, index) => collect(passage, [...scope, passageIdentity(passage, index)]));
+                return; // Root suite maps are copies of the passage results.
+            }
+            for (const entry of normalize(source)) {
+                entries.push({ ...entry, sourceEntryKey: JSON.stringify([...scope, entry.sourceEntryKey || '']) });
+            }
+        };
+        if (record && typeof record === 'object') collect(record);
+        const seen = new Set();
+        return entries.filter(entry => {
+            const key = JSON.stringify([entry.sourceEntryKey, entry.canonicalKey || entry.questionId || entry.displayNumber]);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    function countValue(value) {
+        if (typeof value !== 'number' && !(typeof value === 'string' && value.trim())) return null;
+        const number = Number(value);
+        return Number.isSafeInteger(number) && number >= 0 ? number : null;
+    }
+
+    function savedCountCandidates(record) {
+        const candidates = [];
+        // AppData captures original evidence before supplying legacy display zeros.
+        if (Object.prototype.hasOwnProperty.call(record, 'browseScore')) {
+            candidates.push([record.browseScore?.earned, record.browseScore?.possible]);
+        } else {
+            candidates.push([record.correctAnswers, record.totalQuestions]);
+        }
+        for (const score of [record.scoreInfo, record.realData?.scoreInfo]) {
+            if (!score || score.source === 'comparison_calculation' || score.source === 'display') continue;
+            candidates.push([score.correct, score.total], [score.correct, score.totalQuestions]);
+        }
+        candidates.push([record.score, record.total]);
+        return candidates;
+    }
+
+    function savedCounts(record, detailTotal) {
+        for (const [earned, possible] of savedCountCandidates(record)) {
+            const correct = countValue(earned);
+            const total = countValue(possible);
+            if (correct !== null && total !== null && correct <= total && (total > 0 || detailTotal === 0)) {
+                return { correct, total };
+            }
+        }
+        return null;
+    }
+
+    // Shared history/export count contract. Aggregate grades never create row verdicts.
+    function resolveRecordCounts(record, entries = null, normalize = getNormalizedEntries) {
+        record = record || {};
+        if (entries === null) entries = getRecordEntries(record, normalize);
+        const detail = summariseEntries(entries);
+        const saved = savedCounts(record, detail.total);
+        if (!saved) {
+            const passages = uniquePassages(record);
+            const grades = passages.map(passage => resolveRecordCounts(passage, null, normalize));
+            if (grades.length) {
+                const sum = field => grades.reduce((value, grade) => value + (grade[field] ?? 0), 0);
+                // Unknown final totals still carry slots established by descendants.
+                // Count that lower bound before filling any parent denominator gap.
+                const knownTotal = sum('minimumTotal');
+                const possible = savedCountCandidates(record).map(([, value]) => countValue(value))
+                    .find(value => value !== null && value >= knownTotal);
+                const total = possible ?? (grades.every(grade => grade.total !== null) ? knownTotal : null);
+                const completeGrade = total !== null && total === knownTotal
+                    && grades.every(grade => grade.correct !== null && grade.total !== null);
+                const correct = completeGrade ? sum('correct') : null;
+                const missed = completeGrade ? total - correct : null;
+                const incorrect = sum('incorrect');
+                const unanswered = sum('unanswered');
+                const unknown = sum('unknown') + (total === null ? 0 : total - knownTotal);
+                // Missing child grades, including empty/unknown-size passages,
+                // must not disappear into a complete subset of flattened rows.
+                const detailStatus = grades.some(grade => grade.detailStatus === 'conflict') ? 'conflict'
+                    : (completeGrade && !unknown && grades.every(grade => grade.detailStatus === 'complete') ? 'complete' : 'partial');
+                return { total, minimumTotal: total ?? knownTotal, correct, missed, incorrect, unanswered, unknown, source: 'passages', detailStatus,
+                    unclassifiedMissed: missed === null ? null : missed - incorrect - unanswered };
+            }
+        }
+        if (saved) {
+            const missed = saved.total - saved.correct;
+            const compatible = detail.total <= saved.total && detail.correct <= saved.correct
+                && detail.incorrect + detail.unanswered <= missed;
+            const incorrect = compatible ? detail.incorrect : 0;
+            const unanswered = compatible ? detail.unanswered : 0;
+            const unknown = compatible ? detail.unknown + saved.total - detail.total : saved.total;
+            return { ...saved, minimumTotal: saved.total, missed, incorrect, unanswered, unknown, source: 'saved',
+                unclassifiedMissed: missed - incorrect - unanswered,
+                detailStatus: !compatible ? 'conflict' : (unknown ? 'partial' : 'complete') };
+        }
+        // Missing saved evidence must also exclude synthesized display totals.
+        const possible = savedCountCandidates(record).map(([, value]) => countValue(value))
+            .find(value => value !== null && value >= detail.total);
+        const total = possible ?? (detail.total || null);
+        const unknown = detail.unknown + (total === null ? 0 : total - detail.total);
+        const complete = total !== null && unknown === 0;
+        return { ...detail, total, minimumTotal: total ?? detail.total, correct: complete ? detail.correct : null,
+            missed: complete ? detail.incorrect + detail.unanswered : null, unknown,
+            unclassifiedMissed: null, source: 'detail', detailStatus: complete ? 'complete' : 'partial' };
     }
 
     function inferCategory(record, metadata, examEntry) {
@@ -19413,6 +19589,8 @@ window.BrowseStateManager = BrowseStateManager;
 
     const AnswerComparisonUtils = {
         getNormalizedEntries,
+        getRecordEntries,
+        resolveRecordCounts,
         summariseEntries,
         enrichRecordMetadata,
         withEnrichedMetadata

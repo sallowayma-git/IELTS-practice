@@ -353,7 +353,7 @@
     function isNoiseKey(key) {
         if (!key) return true;
 
-        const keyStr = String(key).toLowerCase();
+        const keyStr = String(key).split('::').pop().toLowerCase();
         const noiseKeys = [
             'playback-speed', 'playbackspeed', 'volume-slider', 'volumeslider',
             'audio-volume', 'audiocurrenttime', 'audio-duration', 'audioduration',
@@ -391,6 +391,10 @@
             return `q${index + 1}`;
         }
         const key = String(rawKey).trim();
+        const separator = key.lastIndexOf('::');
+        if (separator >= 0) {
+            return `${key.slice(0, separator)}::${normalizeQuestionKey(key.slice(separator + 2), index)}`;
+        }
         return key.startsWith('q') ? key : `q${key}`;
     }
 
@@ -523,6 +527,15 @@
                 correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
+            ['weight', 'partialCorrectCount', 'answeredCount', 'isCorrectSource'].forEach(field => {
+                if (Object.prototype.hasOwnProperty.call(entry, field)) normalized[questionId][field] = entry[field];
+            });
+            // A split row may display the entire selected set. Preserve unknown
+            // occupancy when normalizing legacy arrays into display strings.
+            if (!Object.prototype.hasOwnProperty.call(entry, 'answeredCount') && entry.weight === 1
+                && Array.isArray(entry.userAnswer ?? entry.user ?? entry.answer)) {
+                normalized[questionId].answeredCount = null;
+            }
         });
 
         return normalized;

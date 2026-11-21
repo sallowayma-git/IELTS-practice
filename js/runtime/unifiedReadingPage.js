@@ -5647,6 +5647,7 @@
                 ? selectedTokens.slice()
                 : (assignedToken || answers[normalizedTargetId] || ''),
             expectedToken,
+            answeredCount: assignedToken ? 1 : 0,
             isCorrect: !overSelected
                 && Boolean(assignedToken && expectedToken && areAnswerTokensEquivalent(assignedToken, expectedToken))
         };
@@ -5726,10 +5727,12 @@
             let isCorrect = compareAnswers(userAnswer, correctAnswer);
             let weight = questionWeight(correctAnswer, questionGroup);
             let partialCorrectCount = isCorrect ? weight : 0;
+            let answeredCount = splitAnswerTokens(userAnswer).length ? weight : 0;
 
             if (isSplitMultiChoiceGroup) {
                 const splitSelection = resolveSplitMultiChoiceSelection(answers, answerKey, questionGroup, normalizedQuestionId);
                 displayUserAnswer = splitSelection.displayUserAnswer || userAnswer;
+                answeredCount = splitSelection.answeredCount;
                 if (!splitSelection.expectedToken) {
                     isCorrect = null;
                     partialCorrectCount = 0;
@@ -5750,6 +5753,7 @@
                     && matchedTokens.length === expectedTokens.length
                     && selectedTokens.length === expectedTokens.length;
                 weight = expectedTokens.length || 1;
+                answeredCount = Math.min(weight, selectedTokens.length);
             }
 
             if (!questionTypePerformance[questionType]) {
@@ -5772,6 +5776,7 @@
                 isCorrect,
                 questionType,
                 partialCorrectCount,
+                answeredCount,
                 weight
             };
             details[questionId] = {
@@ -5781,6 +5786,7 @@
                 isCorrect,
                 questionType,
                 partialCorrectCount,
+                answeredCount,
                 weight
             };
         });
