@@ -212,7 +212,7 @@ async function assertRunningCountdown(page, suite) {
     }, before, { timeout: 5000 });
 }
 async function records(page) { return page.evaluate(() => window.AppData.practice.list({ projection: 'detail' })); }
-async function assertPreviousPartReceiptIgnored(page, suite) {
+async function assertPreviousPartMessagesIgnored(page, suite) {
     await suite.evaluate((previousExamId) => {
         window.__lateSuiteReceiptObserved = false;
         window.__lateSuiteReceiptCloseCalls = 0;
@@ -238,6 +238,28 @@ async function assertPreviousPartReceiptIgnored(page, suite) {
         'a delayed P3 receipt must not close unsubmitted P4');
     assert.equal(await activeFrame(suite).locator('input').isEnabled(), true);
     assert.equal((await records(page)).length, 0, 'the suite is still unfinished before submitting P4');
+
+    // During navigation the old document can receive the next part's INIT and retry
+    // its pending completion with the new session/token but the old answers/examId.
+    const retry = await page.evaluate((previousExamId) => {
+        const session = window.app.currentSuiteSession;
+        const info = window.app.examWindows.get(session.activeExamId);
+        return {
+            data: { ...window.__listeningSuiteCompletions[previousExamId],
+                sessionId: info.expectedSessionId, windowSessionToken: info.windowSessionToken },
+            activeExamId: session.activeExamId,
+            rejectedBefore: window.app._examMessageRejectionCounts?.get('suite-completion-binding-mismatch:PRACTICE_COMPLETE') || 0
+        };
+    }, exams[2].id);
+    await suite.evaluate((data) => window.opener.postMessage({
+        type: 'PRACTICE_COMPLETE', source: 'listening_record_bridge', data
+    }, window.location.origin), retry.data);
+    await page.waitForFunction(({ activeExamId, rejectedBefore }) =>
+        (window.app._examMessageRejectionCounts?.get('suite-completion-binding-mismatch:PRACTICE_COMPLETE') || 0) > rejectedBefore
+        || window.app.currentSuiteSession?.results.some(entry => entry.examId === activeExamId), retry);
+    assert.equal(await page.evaluate((examId) => window.app.currentSuiteSession.results.some(entry => entry.examId === examId),
+        retry.activeExamId), false, 'a rebound P3 retry must not submit P4');
+    assert.equal((await records(page)).length, 0, 'a rebound retry must not finalize the suite');
 }
 async function waitForRecord(page) {
     const deadline = Date.now() + 15000;
@@ -364,7 +386,7 @@ try {
                 error.message += '\n' + JSON.stringify({ mode, part, host, bridge });
                 throw error;
             });
-            if (mode === 'classic' && part === 4) await assertPreviousPartReceiptIgnored(page, suite);
+            if (mode === 'classic' && part === 4) await assertPreviousPartMessagesIgnored(page, suite);
             if (mode === 'stationary' && part === 2) {
                 await activeFrame(suite).locator('input').fill('Unsubmitted P2 draft');
                 await suite.locator('[data-suite-navigate="prev"]:enabled').click();
@@ -424,6 +446,10 @@ try {
         const saved = await waitForRecord(page);
         assert.equal(saved[0].type, 'listening');
         assert.equal(saved[0].suiteEntries.length, 4);
+        for (let part = 1; part <= 4; part++) {
+            assert.equal(saved[0].suiteEntries[part - 1].answers[`q${(part - 1) * 10 + 1}`], `answer${part}`,
+                'each part must retain its own submitted answers');
+        }
         assert.equal(saved[0].correctAnswers, 4);
         if (mode === 'classic' && !suite.isClosed()) {
             await suite.waitForEvent('close', { timeout: 5000 });
