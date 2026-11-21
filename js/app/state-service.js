@@ -76,6 +76,7 @@
 
         return {
             status,
+            type: value.type === 'listening' ? 'listening' : 'reading',
             stageIndex,
             categories,
             pickedByCategory,
@@ -417,6 +418,10 @@
             if (!normalizedExam || !normalizedExam.examId) {
                 return this.state.customSuiteDraft;
             }
+            if (String(normalizedExam.type).toLowerCase() === 'listening'
+                && (exam.hasHtml === false || typeof exam.filename !== 'string' || !/\.html?$/i.test(exam.filename.trim()))) {
+                return this.state.customSuiteDraft;
+            }
 
             return this.updateCustomSuiteDraft((current) => {
                 const next = current ? normalizeCustomSuiteDraft(current) : normalizeCustomSuiteDraft({
@@ -432,6 +437,7 @@
                     return null;
                 }
 
+                if ((normalizedExam.type || 'reading') !== next.type) return next;
                 const categories = getCustomSuiteCategories(next);
                 const expectedCategory = categories[Math.min(next.stageIndex, categories.length - 1)];
                 const examCategory = typeof normalizedExam.category === 'string' ? normalizedExam.category.trim().toUpperCase() : '';

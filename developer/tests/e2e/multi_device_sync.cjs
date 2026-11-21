@@ -72,12 +72,35 @@ async function run() {
         await first.setOffline(false);
         await firstPage.evaluate(() => PracticeCloud.sync());
         await phase(firstPage, 'ready');
+        // Expose the conflict before the Web Lock request settles, so the user's
+        // resolution overlaps the earlier sync instead of depending on timing.
+        await secondPage.evaluate(() => {
+            const original = navigator.locks.request;
+            const released = new Promise(resolve => { window.__testReleaseConflictSync = resolve; });
+            navigator.locks.request = async function (name, ...args) {
+                const result = await original.call(this, name, ...args);
+                if (name === 'ielts-practice-cloud-sync' && PracticeCloud.status().phase === 'conflict') {
+                    navigator.locks.request = original;
+                    window.__testConflictSyncHeld = true;
+                    await released;
+                }
+                return result;
+            };
+        });
         await second.setOffline(false);
-        await secondPage.evaluate(() => PracticeCloud.sync());
+        await secondPage.evaluate(() => { window.__testConflictSync = PracticeCloud.sync(); });
         await phase(secondPage, 'conflict');
+        await secondPage.waitForFunction(() => window.__testConflictSyncHeld === true);
         remote = await (await first.request.get('/api/practice-records')).json();
         assert.equal(remote.records.find(item => item.id === seed.id).notes['2'], 'First device edit', 'conflict does not overwrite the server');
         await secondPage.locator('[data-cloud-resolve="remote"]').click();
+        await secondPage.evaluate(async () => {
+            window.__testReleaseConflictSync();
+            await window.__testConflictSync;
+            delete window.__testReleaseConflictSync;
+            delete window.__testConflictSyncHeld;
+            delete window.__testConflictSync;
+        });
         await phase(secondPage, 'ready');
         assert.equal((await records(secondPage)).find(item => item.id === seed.id).notes['2'], 'First device edit');
 

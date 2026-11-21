@@ -6692,6 +6692,28 @@
     return answers.join(' / ');
   }
 
+  function normalizeDisplayedAnswers(value, mode) {
+    var values = normalizeAcceptedAnswers(value, mode);
+    if (mode === 'multiple') return values;
+    // Join only slash-free components of a spaced fraction/date. A compact slash
+    // value is already a complete alternative and must keep its own boundaries.
+    var numericComponent = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/;
+    return values.reduce(function (answers, displayed) {
+      var parts = displayed.split(/(\s+\/\s+)/);
+      var current = parts[0];
+      for (var i = 2; i < parts.length; i += 2) {
+        if (numericComponent.test(parts[i - 2]) && numericComponent.test(parts[i])) {
+          current += parts[i - 1] + parts[i];
+        } else {
+          answers.push(current);
+          current = parts[i];
+        }
+      }
+      answers.push(current);
+      return answers;
+    }, []);
+  }
+
   function compareAgainstAccepted(userAnswer, correctValue, mode) {
     var accepted = normalizeAcceptedAnswers(correctValue, mode);
     if (!accepted.length) return false;
@@ -6917,7 +6939,7 @@
     return null;
   }
 
-  function getAnswerInputValue(doc, question, correctAnswer, sourceKey) {
+  function getAnswerInputs(doc, question, sourceKey) {
     var directName = 'q' + question;
     var rawSourceName = String(sourceKey || '');
     var sourceInputs = rawSourceName ? Array.prototype.slice.call(doc.querySelectorAll('[name="' + cssAttr(rawSourceName) + '"]')) : [];
@@ -6933,6 +6955,14 @@
         : (sourceDataInputs.length
           ? sourceDataInputs
           : (questionDataInputs.length ? questionDataInputs : multipleInputs)));
+    if (inputs.length) return inputs;
+    return Array.prototype.slice.call(doc.querySelectorAll(
+      '[id="' + cssAttr(rawSourceName || directName) + '"], [id="' + cssAttr(directName) + '"]'
+    )).filter(function (el) { return /^(input|textarea|select)$/i.test(el.tagName); });
+  }
+
+  function getAnswerInputValue(doc, question, correctAnswer, sourceKey) {
+    var inputs = getAnswerInputs(doc, question, sourceKey);
     if (!inputs.length) return '';
 
     var first = inputs[0];
@@ -6950,17 +6980,17 @@
 
   function getSlotAnswerValue(doc, question, sourceKey) {
     var selectors = [
-      '.match-slot[data-q="' + cssAttr(question) + '"] .tag',
-      '.match-slot[data-q="' + cssAttr(sourceKey) + '"] .tag',
-      '.flow-slot[data-q="' + cssAttr(question) + '"] .tag',
-      '.flow-slot[data-q="' + cssAttr(sourceKey) + '"] .tag',
-      '.map-slot[data-q="' + cssAttr(question) + '"] .tag',
-      '.map-slot[data-q="' + cssAttr(sourceKey) + '"] .tag',
-      '[data-q="' + cssAttr(question) + '"] .tag',
-      '[data-q="' + cssAttr(sourceKey) + '"] .tag'
+      '.match-slot[data-q="' + cssAttr(question) + '"]',
+      '.match-slot[data-q="' + cssAttr(sourceKey) + '"]',
+      '.flow-slot[data-q="' + cssAttr(question) + '"]',
+      '.flow-slot[data-q="' + cssAttr(sourceKey) + '"]',
+      '.map-slot[data-q="' + cssAttr(question) + '"]',
+      '.map-slot[data-q="' + cssAttr(sourceKey) + '"]',
+      '[data-q="' + cssAttr(question) + '"]',
+      '[data-q="' + cssAttr(sourceKey) + '"]'
     ];
     for (var i = 0; i < selectors.length; i++) {
-      var slot = doc.querySelector(selectors[i]);
+      var slot = doc.querySelector(selectors[i] + ' .tag, ' + selectors[i] + ' .token');
       var value = String(slot && slot.dataset && slot.dataset.value || slot && slot.textContent || '').trim();
       if (value) return value;
     }
@@ -7133,6 +7163,45 @@
     }).filter(Boolean);
   }
 
+  function generateAttemptDetails(win) {
+    var app = win && win.App;
+    if (!app || typeof app.generateResultsTable !== 'function') return [];
+    try {
+      var html = app.generateResultsTable();
+      var tempDiv = win.document.createElement('div');
+      tempDiv.innerHTML = html;
+      return parseResultsFromDocument(tempDiv);
+    } catch (e) {
+      warn('parseResultsFromHtml failed:', e);
+      return [];
+    }
+  }
+
+  function buildDetailsFromCurrentResults(doc) {
+    // A retained report supplies the answer key, never the current attempt or grade.
+    var details = parseResultsFromDocument(doc).map(function (detail, index) {
+      var question = normalizeQuestionLabel(detail.question, index).replace(/^q/i, '');
+      var sourceKey = 'q' + question.replace(/-/g, '_');
+      var controls = getAnswerInputs(doc, question, sourceKey);
+      var hasInput = controls.some(function (el) { return /^(input|textarea|select)$/i.test(el.tagName); });
+      var hasSlot = controls.some(function (el) {
+        return el.matches && el.matches('.match-slot, .flow-slot, .map-slot, .drop-zone, .dropzone');
+      });
+      // Do not silently submit a partial score when a report cannot be tied to live controls.
+      if (!hasInput && !hasSlot) return null;
+      var userAnswer = hasInput
+        ? getAnswerInputValue(doc, question, detail.correctAnswer, sourceKey)
+        : getSlotAnswerValue(doc, question, sourceKey);
+      var multiple = isMultipleAnswerControl(doc, question, sourceKey);
+      var accepted = normalizeDisplayedAnswers(detail.correctAnswer, multiple ? 'multiple' : 'text');
+      var isCorrect = accepted.length > 0 && (multiple
+        ? arraysEqualSet(String(userAnswer || '').split(',').map(normalizeComparableAnswer).filter(Boolean), accepted.map(normalizeComparableAnswer))
+        : compareAgainstAccepted(userAnswer, accepted, 'text'));
+      return makeDetail(question, userAnswer, detail.correctAnswer, isCorrect, accepted);
+    });
+    return details.every(Boolean) ? details : [];
+  }
+
   function extractAttemptDetails(win, options) {
     options = options || {};
     var allowGenerated = !!options.allowGenerated;
@@ -7148,16 +7217,9 @@
     var app = win.App;
     var isReviewing = !!(app && app.state && (app.state.isReviewing || app.state.review));
 
-    if ((allowGenerated || isReviewing) && app && typeof app.generateResultsTable === 'function') {
-      try {
-        var html = app.generateResultsTable();
-        var tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        var s2 = parseResultsFromDocument(tempDiv);
-        if (s2.length) return s2;
-      } catch (e) {
-        warn('parseResultsFromHtml failed:', e);
-      }
+    if (allowGenerated || isReviewing) {
+      var s2 = generateAttemptDetails(win);
+      if (s2.length) return s2;
     }
 
     if (isReviewing) {
@@ -7465,10 +7527,16 @@
     }, 500);
   }
 
-  function hookButtonFinish() {
+  var finishButtonSelectors = [
+    '.finish-btn', '#finish-btn', '#finishBtn', '[data-action="finish"]',
+    '.submit-btn', '#submit-btn', '#submitBtn', '[data-action="submit"]',
+    '.check-btn', '#check-btn', '[data-action="check"]',
+    '.review-btn', '#review-btn', '[data-action="review"]',
+    'button.finish', 'button.submit', 'button.check-answers'
+  ];
+
+  function findFinishControl(el) {
     var doc = window.document;
-    if (doc.__listeningBridgeFinishDelegated) return;
-    doc.__listeningBridgeFinishDelegated = true;
     var finishPattern = /\b(?:finish|submit|check(?:\s+answers?)?|review|grade|score)\b|完成|提交|交卷|查看答案|批改|评分/i;
     var actionNamePattern = /(?:^|[\s_-])(?:finish|submit|check|review|grade)(?:[\s_-]|$)|(?:finish|submit|check|review|grade)[\s_-]*(?:btn|button)|(?:btn|button)[\s_-]*(?:finish|submit|check|review|grade)/i;
 
@@ -7493,6 +7561,7 @@
     function isFinishLikeElement(el) {
       var node = el;
       while (node && node !== doc && node !== doc.documentElement) {
+        if (typeof node.matches === 'function' && node.matches(finishButtonSelectors.join(', '))) return node;
         if (isActionCandidate(node)) {
           var haystack = [
             node.id,
@@ -7515,14 +7584,15 @@
       }
       return null;
     }
+    return isFinishLikeElement(el);
+  }
 
-    var buttonSelectors = [
-      '.finish-btn', '#finish-btn', '#finishBtn', '[data-action="finish"]',
-      '.submit-btn', '#submit-btn', '#submitBtn', '[data-action="submit"]',
-      '.check-btn', '#check-btn', '[data-action="check"]',
-      '.review-btn', '#review-btn', '[data-action="review"]',
-      'button.finish', 'button.submit', 'button.check-answers'
-    ];
+  function hookButtonFinish() {
+    var doc = window.document;
+    if (doc.__listeningBridgeFinishDelegated) return;
+    doc.__listeningBridgeFinishDelegated = true;
+    var isFinishLikeElement = findFinishControl;
+    var buttonSelectors = finishButtonSelectors;
 
     for (var i = 0; i < buttonSelectors.length; i++) {
       var btns = doc.querySelectorAll(buttonSelectors[i]);
@@ -7739,6 +7809,17 @@
   }
 
   window.__listeningBridgeComplete = onComplete;
+  window.__listeningBridgeFindFinishControl = findFinishControl;
+  // Read the current attempt without invoking native finish/review handlers.
+  // Simulation suites use this for one final submission across all four parts.
+  window.__listeningBridgeSnapshot = function () {
+    var details = buildDetailsFromAppState(window);
+    if (!details.length) details = buildDetailsFromInlineConfig(window.document);
+    if (!details.length) details = generateAttemptDetails(window);
+    if (!details.length) details = buildDetailsFromCurrentResults(window.document);
+    if (!details.length) return null;
+    return buildBridgePayload(details);
+  };
   window.__listeningBridgeGetState = function () { return state; };
 
   if (window.document.readyState === 'complete' || window.document.readyState === 'interactive') {

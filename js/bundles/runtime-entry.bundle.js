@@ -1471,7 +1471,8 @@
 
     var suitePracticeLaunchPromise = null;
 
-    function startSuitePractice() {
+    function startSuitePractice(options) {
+        var suiteType = options && options.type === 'listening' ? 'listening' : 'reading';
         if (suitePracticeLaunchPromise) return suitePracticeLaunchPromise;
         function getSuitePreferenceUtils() {
             return global.SuitePreferenceUtils || null;
@@ -1567,7 +1568,7 @@
                 host.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;';
                 host.innerHTML = [
                     '<div role="dialog" aria-modal="true" style="width:min(420px,92vw);background:var(--color-white, #fff);border:1px solid var(--color-gray-200, #e2e8f0);border-radius:16px;padding:24px;box-shadow:var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1));font-family:var(--font-family-primary, sans-serif);">',
-                    '<h3 style="margin:0 0 8px;font-size:20px;font-weight:700;color:var(--color-gray-900, #0f172a);letter-spacing:-0.02em;">选择套题流程</h3>',
+                    '<h3 style="margin:0 0 8px;font-size:20px;font-weight:700;color:var(--color-gray-900, #0f172a);letter-spacing:-0.02em;">选择' + (suiteType === 'listening' ? '听力' : '阅读') + '套题流程</h3>',
                     '<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:var(--color-gray-600, #475569);">本次会话将锁定所选流程，答题中不再切换。</p>',
                     '<div style="display:flex;flex-direction:column;gap:10px;">',
                     '<button type="button" data-suite-flow-mode="simulation" style="padding:14px 16px;border:2px solid transparent;border-radius:12px;background:var(--color-gray-50, #f8fafc);color:var(--color-gray-800, #1e293b);font-weight:600;cursor:pointer;text-align:left;transition:all 0.2s ease;display:flex;flex-direction:column;gap:4px;">',
@@ -1590,7 +1591,7 @@
                     '<option value="high_medium">高频 + 次高频</option>',
                     '<option value="high">仅高频</option>',
                     '<option value="all">全部频率（默认）</option>',
-                    '<option value="custom">自选套题（P1/P2/P3）</option>',
+                    '<option value="custom">自选套题（' + (suiteType === 'listening' ? 'P1/P2/P3/P4' : 'P1/P2/P3') + '）</option>',
                     '</select>',
                     '<div style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--color-gray-500, #64748b);">',
                     '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -1709,6 +1710,7 @@
                     if (appInstance && typeof appInstance.startSuitePractice === 'function') {
                         try {
                             return appInstance.startSuitePractice({
+                                type: suiteType,
                                 flowMode: selection.flowMode,
                                 frequencyScope: selection.frequencyScope
                             });

@@ -125,6 +125,7 @@ const bundles = {
         'js/data/v2/dataKernel.js',
         'js/data/v2/appData.js',
         'js/utils/practiceTimerPreferences.js',
+        'js/runtime/listeningSuiteController.js',
         'js/listeningUnifiedWrapper.js'
     ],
     'js/bundles/more.bundle.js': [

@@ -1761,6 +1761,56 @@ async function run() {
         assert.strictEqual(session.results.length, 0, '错篇提交不得写入 session.results');
     }
 
+    // A reused listening window must not relabel a previous part's retry as the next part.
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_listening_rebound_retry');
+        const examId = 'listening-p4';
+        const expectedSessionId = 'listening-p4-session';
+        session.sequence = [1, 2, 3, 4].map(part => ({
+            examId: `listening-p${part}`,
+            exam: { id: `listening-p${part}`, type: 'listening', title: `Part ${part}` }
+        }));
+        session.activeExamId = examId;
+        session.currentIndex = 3;
+        session.flowMode = 'classic';
+        app.currentSuiteSession = session;
+        const captured = [];
+        app.handlePracticeComplete = async (handledExamId, data) => captured.push({ examId: handledExamId, data });
+        app.setupExamWindowCommunication(session.windowRef, examId, session.sequence[3].exam, {
+            suiteSessionId: session.id
+        });
+        const info = app.ensureExamWindowSession(examId, session.windowRef);
+        info.expectedSessionId = expectedSessionId;
+        app._refreshExamWindowToken(examId, info);
+        const handler = app.messageHandlers.get(examId);
+        const completion = {
+            examId, sessionId: expectedSessionId, suiteSessionId: session.id,
+            submissionId: 'listening-p4-submission', windowSessionToken: info.windowSessionToken,
+            answers: { q31: 'answer4' }
+        };
+        for (const type of ['PRACTICE_COMPLETE', 'PRACTICE_RESULT']) {
+            const deliver = data => handler({
+                source: session.windowRef, origin: 'http://localhost',
+                data: { type, source: 'listening_record_bridge', data }
+            });
+            for (const stale of [
+                { examId: 'listening-p3', submissionId: 'listening-p3-submission', answers: { q21: 'answer3' } },
+                { sessionId: 'previous-attempt' },
+                { suiteSessionId: 'previous-suite' },
+                { suiteSessionId: null }
+            ]) {
+                const before = captured.length;
+                await deliver({ ...completion, ...stale });
+                assert.strictEqual(captured.length, before, 'stale listening suite identities must not reach completion persistence');
+            }
+            await deliver(completion);
+            assert.strictEqual(captured.at(-1).examId, examId, 'the current part still submits');
+            assert.deepStrictEqual(captured.at(-1).data.answers, { q31: 'answer4' });
+        }
+        assert.strictEqual(captured.length, 2, 'only the two correctly bound completions are accepted');
+    }
+
     // Case 9: 听力桥的临时 examId/sessionId 不得阻断父应用当前题源落库
     {
         const app = createApp(windowStub);

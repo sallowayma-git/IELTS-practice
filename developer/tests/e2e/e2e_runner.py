@@ -21,11 +21,12 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Keep this list the single source of truth for "full e2e" in CI and local runs.
-# Prefer file://-capable scripts; do not require a temporary HTTP host.
+# Prefer file://-capable scripts; HTTP cases must manage their own temporary host.
 E2E_CASES = [
     "browse_preference_toggle_flow.py",
     "reading_single_flow.py",
     "listening_practice_flow.py",
+    "listening_suite_flow.node.js",
     "suite_practice_flow.py",
     "practice_submit_file_flow.py",
     "file_init_referrer_trap.py",
@@ -49,7 +50,7 @@ def _run_case(script_name: str) -> dict:
         case_env["PYTHONIOENCODING"] = "utf-8"
         case_env["PYTHONUTF8"] = "1"
         completed = subprocess.run(
-            [sys.executable, str(script_path)],
+            ["node" if script_path.suffix == ".js" else sys.executable, str(script_path)],
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,

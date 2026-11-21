@@ -11,7 +11,7 @@
 
 This document describes the suite practice mode system, which enables users to practice multiple IELTS exams in sequence or as a batch. The system supports two distinct modes:
 
-1. **Sequential Suite Mode**: Automatically opens P1, P2, P3 reading exams one after another in the same window/tab
+1. **Cross-exam Suite Mode**: Combines reading P1–P3 or listening P1–P4 in one window, with simulation, classic, and stationary flows
 2. **Multi-Suite Mode**: Handles HTML pages containing multiple test sets on a single page (e.g., "100 Listening P1" pages with 10 practice tests)
 
 For information about single exam practice sessions, see [Practice Session Lifecycle & Management](/sallowayma-git/IELTS-practice/5.1-practice-session-lifecycle-and-management). For cross-window communication protocols, see [Cross-Window Communication Protocol](/sallowayma-git/IELTS-practice/5.3-cross-window-communication-protocol).
@@ -22,15 +22,41 @@ For information about single exam practice sessions, see [Practice Session Lifec
 
 ### Sequential Suite Mode
 
-Sequential suite mode randomly selects one exam from each category (P1, P2, P3) and presents them in sequence within a single browser tab. After completing each exam, the window navigates to the next exam automatically.
+Classic suite mode randomly selects one exam from each category (P1–P3 for reading, P1–P4 for listening) and presents them in sequence within a single browser tab. After completing each exam, the window navigates to the next exam automatically.
 
 **Key characteristics:**
 
-* One window reused across all three exams
-* Sequential progression: P1 → P2 → P3
+* One window reused across all exams
+* Sequential progression: P1 → P2 → P3, followed by P4 for listening
 * Automatic navigation between exams
 * Single aggregated record saved at completion
 * Window close guards prevent accidental exit
+
+### Listening P1–P4 suites
+
+When the active library contains listening exams, the listening overview provides a suite button. The same flow selector and frequency filters used for reading apply to listening. Random selection requires one available exam in every part; custom selection advances through P1, P2, P3, and P4 and cannot mix reading and listening exams.
+
+| Flow | Listening behavior |
+| --- | --- |
+| Simulation | Switch freely between four parts and submit the entire suite once. Native submit buttons also submit the whole suite. |
+| Classic | Submit each part and automatically advance to the next part. |
+| Stationary | Submit a part, review its answers, and use Previous/Next to navigate. Finish suite saves the aggregate after reviewing P4. |
+
+Listening suites use the existing listening timer preferences, including elapsed/countdown mode, time limit, and expiry action. The preferences are captured when the suite starts; all parts share the same clock and pause state. Reading retains its 60-minute suite countdown.
+
+`js/runtime/listeningSuiteController.js` runs inside the unified listening wrapper. Simulation keeps four source frames in the same window and pauses inactive audio. Drafts preserve answer controls, matching slots, notes stored in form controls, audio position/rate, and question-area scroll positions. Refreshing restores the active part and shared timer state through the existing suite recovery store. Stationary review restores submitted answers as read-only while preserving the next part's unfinished draft.
+
+Completion uses the existing suite persistence path and saves one `type: listening` record with four `suiteEntries`, aggregated scores, answer comparisons, and spelling errors. Simulation freezes the submission before saving; retries reuse the same submission ID and aggregate. The source HTML pages and their audio remain library assets and must be served from the same HTTP(S) origin as the app for this wrapper flow.
+
+Validation commands from the repository root:
+
+```sh
+node scripts/build-bundles.mjs --check
+npm test --prefix developer
+node developer/tests/e2e/listening_suite_flow.node.js
+```
+
+The listening suite browser case also runs through `developer/tests/e2e/e2e_runner.py` in CI. It serves synthetic native listening pages and audio locally, exercising the actual app, wrapper, record bridge, and persistence layer without requiring private question-bank assets.
 
 ### Multi-Suite Mode
 

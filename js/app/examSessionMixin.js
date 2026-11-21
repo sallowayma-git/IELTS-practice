@@ -2553,6 +2553,19 @@
                     this._reportExamMessageRejected(examId, type, 'token-mismatch', event);
                     return;
                 }
+                // Navigation reuses the WindowProxy: the outgoing listening part can
+                // receive the next INIT and retry with its token. Never relabel that
+                // part's frozen answers through the standalone listening fallback.
+                const boundSuiteSessionId = String(windowInfo.suiteSessionId || '').trim();
+                if (src === 'listening_record_bridge'
+                    && (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT')
+                    && boundSuiteSessionId
+                    && (payloadExamId !== expectedExamId
+                        || payloadSessionId !== expectedSessionId
+                        || payloadSuiteSessionId !== boundSuiteSessionId)) {
+                    this._reportExamMessageRejected(examId, type, 'suite-completion-binding-mismatch', event);
+                    return;
+                }
                 const canRoutePayloadExamInActiveSuite = Boolean(
                     suiteRoutableMessageTypes.has(type)
                     && isPayloadExamInActiveSuite
@@ -4555,6 +4568,15 @@
                 suiteSessionId: suiteSessionId || null,
                 suiteFlowMode: info.suiteFlowMode || null,
                 autoAdvanceAfterSubmit,
+                ...(activeSuite && activeSuite.type === 'listening' ? {
+                    suiteTimerPreferences: activeSuite.suiteTimerPreferences,
+                    suiteTimerPausedOffsetMs: activeSuite.suiteTimerPausedOffsetMs,
+                    suiteTimerPausedAtMs: activeSuite.suiteTimerPausedAtMs,
+                    suiteTimerRunning: activeSuite.suiteTimerRunning,
+                    suiteDraftsByExam: activeSuite.draftsByExam || {},
+                    suiteActiveExamId: activeSuite.activeExamId,
+                    suiteElapsedByExam: activeSuite.elapsedByExam || {}
+                } : {}),
                 suiteTimerAnchorMs: timerContext.suiteTimerAnchorMs || null,
                 globalTimerAnchorMs: timerContext.globalTimerAnchorMs || null,
                 suiteTimerMode: timerContext.suiteTimerMode || null,

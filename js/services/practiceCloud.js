@@ -8,6 +8,7 @@
     let csrfToken = null;
     let generation = 0;
     let running = null;
+    let syncRequested = false;
     let timer = null;
     let registrationAllowed = false;
     let uiBusy = false;
@@ -67,12 +68,23 @@
     }
     async function sync(choices = {}) {
         if (!state.user) return;
-        if (running) return running;
         const userId = state.user.id;
         const started = generation;
         const current = () => started === generation && state.user?.id === userId;
+        if (running) {
+            // A conflict choice needs its own pass; the active task has different choices.
+            if (Object.keys(choices).length) {
+                await running;
+                if (current()) return sync(choices);
+                return;
+            }
+            // A caller may have committed changes after the active pass captured them.
+            syncRequested = true;
+            return running;
+        }
         running = withLock(async () => {
             for (let attempt = 0; attempt < 5 && current(); attempt += 1) {
+                syncRequested = false;
                 const captured = await app.cloudSync.capture();
                 checkOwner(captured, userId);
                 if (!captured.state.enabled) {
@@ -83,6 +95,7 @@
                 const remote = await request('/api/practice-records/sync');
                 if (!current()) return;
                 if (remote.userId !== userId) throw Object.assign(new Error('账号会话已改变，请重新登录。'), { status: 401 });
+                if (syncRequested) continue;
                 const remoteRecords = app.cloudSync.normalize(remote.records);
                 const merged = merge(captured.state.baseline || [], captured.records, remoteRecords, choices);
                 if (merged.conflicts.length) {
@@ -109,6 +122,7 @@
                     refreshViews();
                 }
                 if (!current()) return;
+                if (syncRequested) continue;
                 state.conflicts = [];
                 state.lastSyncedAt = nextState.lastSyncedAt;
                 setState('ready', `已同步 ${records.length} 条记录。新练习、答案、笔记、套题及删除操作会自动同步。`);
@@ -230,7 +244,8 @@
         global.addEventListener('online', schedule);
         global.addEventListener('focus', schedule);
         document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); });
-        setInterval(() => { if (!document.hidden && state.phase !== 'conflict') sync(); }, 15000);
+        // An active sync already refreshes remote data; polling must not restart it.
+        setInterval(() => { if (!running && !document.hidden && state.phase !== 'conflict') sync(); }, 15000);
         render();
         await action(refreshAuth);
     }
