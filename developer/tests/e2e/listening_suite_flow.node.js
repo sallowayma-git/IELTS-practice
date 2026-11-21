@@ -21,7 +21,7 @@ function fixture(part, options = {}) {
     const q = (part - 1) * 10 + 1;
     const tokenControl = options.answerControl === 'token' && part === 4;
     const accepted = options.literalAnswer ? [options.literalAnswer]
-        : options.alternatives ? ['colour', 'color'] : [tokenControl ? 'A' : `answer${part}`];
+        : options.alternatives || [tokenControl ? 'A' : `answer${part}`];
     const answerControl = tokenControl
         ? `<div class="drop-zone" data-q="${q}" style="min-height:40px"></div>`
         : `<input ${options.answerControl === 'id' && part === 4 ? 'id' : 'name'}="q${q}" autocomplete="off">`;
@@ -416,8 +416,14 @@ try {
         { scoring: 'table', reset: true },
         { scoring: 'table', answerControl: 'id' },
         { scoring: 'table', answerControl: 'token' },
-        { scoring: 'table', alternatives: true },
-        { scoring: 'table', alternatives: true, matchCore: true },
+        ...[
+            ['colour', 'color'],
+            ['7.30', '7:30'],
+            ['November 10', '10 November'],
+            ['Room 101', '101'],
+            ['Room 2', '2'],
+            ['10 November 2026', '10/11/2026']
+        ].flatMap((alternatives) => [false, true].map((matchCore) => ({ scoring: 'table', alternatives, matchCore }))),
         ...['1 / 2', '10 / 11 / 2026'].flatMap((literalAnswer) => [false, true].flatMap((matchCore) => [
             { scoring: 'table', literalAnswer, matchCore },
             { scoring: 'table', literalAnswer, matchCore, partialAnswer: true }
@@ -447,7 +453,8 @@ try {
                     slot.appendChild(token);
                     slot.dispatchEvent(new Event('input', { bubbles: true }));
                 });
-            } else await activeFrame(suite).locator('input').fill(literalInput || (options.alternatives ? (part % 2 ? 'colour' : 'color') : 'answer' + part));
+            } else await activeFrame(suite).locator('input').fill(literalInput || (options.alternatives
+                ? options.alternatives[(part - 1) % options.alternatives.length] : 'answer' + part));
         }
         const snapshots = await suite.evaluate(() => Array.from(document.querySelectorAll('iframe'), (frame) => ({
             snapshot: frame.contentWindow.__listeningBridgeSnapshot(),
@@ -460,7 +467,8 @@ try {
         assert.ok(snapshots.every(({ reviewing, disabled, finishCalls }) => !reviewing && !disabled && finishCalls === 0),
             'scoring snapshots do not enter native review');
         if (options.answerControl || options.alternatives || options.literalAnswer) {
-            const expected = literalInput || (options.answerControl === 'token' ? 'A' : options.alternatives ? 'color' : 'answer4');
+            const expected = literalInput || (options.answerControl === 'token' ? 'A'
+                : options.alternatives ? options.alternatives[3 % options.alternatives.length] : 'answer4');
             assert.equal(snapshots[3].snapshot.answers.q31, expected);
             assert.equal(await activeFrame(suite).locator('#fixture-results tbody td').nth(3).textContent(), expectedPartScore ? 'Correct' : 'Incorrect');
             if (options.alternatives || options.literalAnswer) {
@@ -473,7 +481,7 @@ try {
             }
             if (options.alternatives) {
                 assert.ok(snapshots.every(({ snapshot }) => Object.values(snapshot.answerComparison).every(
-                    (entry) => JSON.stringify(entry.acceptedAnswers) === JSON.stringify(['colour', 'color'])
+                    (entry) => JSON.stringify(entry.acceptedAnswers) === JSON.stringify(options.alternatives)
                 )), 'displayed alternatives remain separate accepted answers in every part');
                 const dateScores = await activeFrame(suite).locator('body').evaluate(() => {
                     const correctCell = document.querySelector('#fixture-results tbody tr').cells[2];

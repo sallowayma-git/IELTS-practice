@@ -326,14 +326,13 @@
   }
 
   function normalizeDisplayedAnswers(value, mode) {
-    var displayed = String(value || '');
-    var values = mode === 'multiple' ? value : displayed.replace(/\s+\/\s+/g, function (separator, offset) {
-      // Native reports may put spaces around literal numeric slashes in fractions or dates.
-      var before = displayed.slice(0, offset);
-      var after = displayed.slice(offset + separator.length);
-      return /\d$/.test(before) && /^[+-]?(?:\d|\.\d)/.test(after) ? separator : '|';
-    });
-    return normalizeAcceptedAnswers(values, mode);
+    var values = normalizeAcceptedAnswers(value, mode);
+    if (mode === 'multiple') return values;
+    // Preserve complete fractions/dates, not alternatives that merely meet at digits.
+    var numericSlashLiteral = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:\s*\/\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+))+$/;
+    return values.reduce(function (answers, displayed) {
+      return answers.concat(numericSlashLiteral.test(displayed) ? [displayed] : displayed.split(/\s+\/\s+/));
+    }, []);
   }
 
   function compareAgainstAccepted(userAnswer, correctValue, mode) {
