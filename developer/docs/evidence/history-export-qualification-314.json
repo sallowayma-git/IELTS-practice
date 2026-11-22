@@ -1,0 +1,1027 @@
+{
+  "schemaVersion": 1,
+  "issue": 314,
+  "generatedAt": "2026-11-22T06:55:50.402965+00:00",
+  "qualificationDisposition": {
+    "opensource": "controlled integrated qualification passed",
+    "main": "failed: known count and export defects reproduced",
+    "originalThreeToTen": "unresolved: original record and artifact identity unavailable",
+    "readyToClose": false
+  },
+  "originalReportInvestigation": {
+    "sources": [
+      "issue #309 original comment 7059764779",
+      "issues #310-#314",
+      "PR #315 and PR #317 descriptions and final reviews",
+      "associated issue-312/issue-313 implementation evidence directories",
+      "issue-310 and PR-315/PR-317 local review evidence directories",
+      "developer/tests/fixtures/historyCountFixtures.mjs"
+    ],
+    "result": "Only narrative reports and explicitly synthetic fixtures were found. No reporter-supplied record, export, browser version, access mode or artifact identity was found in these sources.",
+    "representativeResult": "The synthetic split-group 4/7 record displays three errors with four correct grouped rows on both affected baselines and the main browser build. It does not reproduce ten errors."
+  },
+  "harnessSha256": "9f43a0a49badb32a0e8c37fed99b768d15aab4128c0165d7d14349095ae1508f",
+  "browserMatrix": [
+    {
+      "channel": "chrome",
+      "mode": "http",
+      "browserVersion": "157.0.8103.79",
+      "commit": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+      "buildId": "sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766",
+      "capturedAt": "2026-11-22T06:48:47.457Z",
+      "productAcceptance": "pass for controlled fixtures on this artifact",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "passed",
+      "sync": {
+        "available": true,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": true,
+        "unknownVerdictPreserved": true,
+        "downloadSha256": "d648fdef992c0f564bf713731a446278fd2fa8574da37fadce83f8527a2c58ce"
+      },
+      "branch": "opensource",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "9c8ebfcb44c0c72e1a0d3ee9e646caf204d45b347854135f1a732f5250ca547e"
+    },
+    {
+      "channel": "chrome",
+      "mode": "file",
+      "browserVersion": "157.0.8103.79",
+      "commit": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+      "buildId": "sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766",
+      "capturedAt": "2026-11-22T06:49:19.122Z",
+      "productAcceptance": "pass for controlled fixtures on this artifact",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "passed",
+      "sync": {
+        "available": true,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": true,
+        "unknownVerdictPreserved": true,
+        "downloadSha256": "343f0500c5999ee728ad4e9b66d3f1bd9c4efe3326879b0cbc6fe1a579982d3f"
+      },
+      "branch": "opensource",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "b15c7f3368015e7dd325b5c409278a849022bccbc9cd01ac330bf10ac2f58381"
+    },
+    {
+      "channel": "msedge",
+      "mode": "http",
+      "browserVersion": "158.0.4370.33",
+      "commit": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+      "buildId": "sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766",
+      "capturedAt": "2026-11-22T06:49:59.829Z",
+      "productAcceptance": "pass for controlled fixtures on this artifact",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "passed",
+      "sync": {
+        "available": true,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": true,
+        "unknownVerdictPreserved": true,
+        "downloadSha256": "d95696319a2487b7ce561af06a8cca29f22e9b58bca4cac1d5e4cdd208789b6e"
+      },
+      "branch": "opensource",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "4524a717c8a58f851efd1e07e7b5f591ced064251bef55b8fa6f3ced85fd2a70"
+    },
+    {
+      "channel": "msedge",
+      "mode": "file",
+      "browserVersion": "158.0.4370.33",
+      "commit": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+      "buildId": "sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766",
+      "capturedAt": "2026-11-22T06:50:50.224Z",
+      "productAcceptance": "pass for controlled fixtures on this artifact",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "passed",
+      "sync": {
+        "available": true,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": true,
+        "unknownVerdictPreserved": true,
+        "downloadSha256": "c0c6caed33b309ab0398b9b0e80335d0df5302059425d1fc6ce9f43bafdb9f19"
+      },
+      "branch": "opensource",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "623b6e99b69015f5e928a3bd5d5b7d7ac0cce406e7d36f8fa4a51cd01c6f09ac"
+    },
+    {
+      "channel": "chrome",
+      "mode": "http",
+      "browserVersion": "157.0.8103.79",
+      "commit": "3510cc61e2a55017bcdab2b42f11bdd6ba1108d4",
+      "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601",
+      "capturedAt": "2026-11-22T06:48:41.385Z",
+      "productAcceptance": "fail: known count/export defects remain",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "known failures reproduced",
+      "sync": {
+        "available": false,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": false,
+        "unknownVerdictPreserved": false,
+        "downloadSha256": "f8e5f77449e65b722ed318a6c6b7820009f3c39f1e7d66bd0511117734ab577e"
+      },
+      "branch": "main",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "020b91e949621f14150cfec69e35792b438b45823b66b37fe6d676b93c81751c"
+    },
+    {
+      "channel": "chrome",
+      "mode": "file",
+      "browserVersion": "157.0.8103.79",
+      "commit": "3510cc61e2a55017bcdab2b42f11bdd6ba1108d4",
+      "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601",
+      "capturedAt": "2026-11-22T06:49:05.985Z",
+      "productAcceptance": "fail: known count/export defects remain",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "known failures reproduced",
+      "sync": {
+        "available": false,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": false,
+        "unknownVerdictPreserved": false,
+        "downloadSha256": "3965334880f3045cdd1c4f1e8c5c112a314784e51e40e53c90b954e6e49206f1"
+      },
+      "branch": "main",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "347f18e19cfd2491dfa49831625f754c609413ea9dc20ef5f05111e9006782f0"
+    },
+    {
+      "channel": "msedge",
+      "mode": "http",
+      "browserVersion": "158.0.4370.33",
+      "commit": "3510cc61e2a55017bcdab2b42f11bdd6ba1108d4",
+      "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601",
+      "capturedAt": "2026-11-22T06:49:39.425Z",
+      "productAcceptance": "fail: known count/export defects remain",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "known failures reproduced",
+      "sync": {
+        "available": false,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": false,
+        "unknownVerdictPreserved": false,
+        "downloadSha256": "e4c734bb7c0ede8738c33f77fc628dc8bf79046695fe58a22db0521d429f58bd"
+      },
+      "branch": "main",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "0a569f64bd06683e4a5ac2d23f3522f8276e8da479fc9c2ec8f3c6b37bccb38d"
+    },
+    {
+      "channel": "msedge",
+      "mode": "file",
+      "browserVersion": "158.0.4370.33",
+      "commit": "3510cc61e2a55017bcdab2b42f11bdd6ba1108d4",
+      "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601",
+      "capturedAt": "2026-11-22T06:50:48.244Z",
+      "productAcceptance": "fail: known count/export defects remain",
+      "fixtureSha256": "27b1591bc6da3948a686f2b38fc71e7195fca0c4bf55b2e457b08a532713a469",
+      "persistedRecords": 9,
+      "status": "known failures reproduced",
+      "sync": {
+        "available": false,
+        "storedEnabled": false,
+        "serviceEnabled": false,
+        "bound": false,
+        "completedSyncs": 0
+      },
+      "coldOverview": {
+        "browseUnloaded": true,
+        "groupedVerdictCorrect": false,
+        "unknownVerdictPreserved": false,
+        "downloadSha256": "3927cb237036903220f2f82486136941d20e76b97b72718a830f8239a2416776"
+      },
+      "branch": "main",
+      "visibleDetailAndFullProjections": true,
+      "closeButtonReopenAndReload": true,
+      "allStoredRecordsUnchanged": true,
+      "unrelatedRecordUnchanged": true,
+      "externalRequests": 0,
+      "rawEvidenceSha256": "46665f8fac40800f2cc64706774a2fe8a098338be0cfd1864d48407f12e0fb66"
+    }
+  ],
+  "artifacts": {
+    "opensource": {
+      "commit": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+      "buildId": "sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766"
+    },
+    "main": {
+      "commit": "3510cc61e2a55017bcdab2b42f11bdd6ba1108d4",
+      "buildId": "sha256:444e44a26c1b472f6ec7c9a864695890584d2492f78d298f314867dd8a8a5601"
+    }
+  },
+  "observedRecords": {
+    "opensource": {
+      "all-wrong": {
+        "inputGradePair": {
+          "correct": 0,
+          "total": 3
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 0,
+          "total": 3
+        },
+        "visibleSummary": {
+          "score": "0/3",
+          "count": "3",
+          "knownWrong": "3",
+          "knownBlank": "0",
+          "unknown": "0"
+        },
+        "rowVerdicts": [
+          [
+            "11",
+            "incorrect"
+          ]
+        ],
+        "actualExportRows": [
+          "| 11 | D, E, false | A, B, C | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "partial": {
+        "inputGradePair": {
+          "correct": 1,
+          "total": 4
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 1,
+          "total": 4
+        },
+        "visibleSummary": {
+          "score": "1/4",
+          "count": "3",
+          "knownWrong": "0",
+          "knownBlank": "3",
+          "unknown": "0"
+        },
+        "rowVerdicts": [
+          [
+            "11",
+            "部分得分 1/4"
+          ]
+        ],
+        "actualExportRows": [
+          "| 11 | A | A, B, C, D | Partial 1/4 |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "split": {
+        "inputGradePair": {
+          "correct": 4,
+          "total": 7
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 4,
+          "total": 7
+        },
+        "visibleSummary": {
+          "score": "4/7",
+          "count": "3",
+          "knownWrong": "3",
+          "knownBlank": "0",
+          "unknown": "0"
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "incorrect"
+          ],
+          [
+            "2",
+            "incorrect"
+          ],
+          [
+            "3",
+            "incorrect"
+          ],
+          [
+            "7",
+            "correct"
+          ],
+          [
+            "8",
+            "correct"
+          ],
+          [
+            "9",
+            "correct"
+          ],
+          [
+            "10",
+            "correct"
+          ]
+        ],
+        "actualExportRows": [
+          "| 1 | wrong | one | ✗ |",
+          "| 2 | wrong | two | ✗ |",
+          "| 3 | wrong | three | ✗ |",
+          "| 7 | C | C, E | ✓ |",
+          "| 8 | E | C, E | ✓ |",
+          "| 9 | B | B, D | ✓ |",
+          "| 10 | D | B, D | ✓ |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "suite": {
+        "inputGradePair": {
+          "correct": 5,
+          "total": 11
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 5,
+          "total": 11
+        },
+        "visibleSummary": {
+          "score": "5/11",
+          "count": "6",
+          "knownWrong": "3",
+          "knownBlank": "3",
+          "unknown": "0"
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "incorrect"
+          ],
+          [
+            "2",
+            "incorrect"
+          ],
+          [
+            "3",
+            "incorrect"
+          ],
+          [
+            "7",
+            "correct"
+          ],
+          [
+            "8",
+            "correct"
+          ],
+          [
+            "9",
+            "correct"
+          ],
+          [
+            "10",
+            "correct"
+          ],
+          [
+            "11",
+            "部分得分 1/4"
+          ]
+        ],
+        "actualExportRows": [],
+        "storedRecordUnchanged": true
+      },
+      "summary": {
+        "inputGradePair": {
+          "correct": 7,
+          "total": 10
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 7,
+          "total": 10
+        },
+        "visibleSummary": {
+          "score": "7/10",
+          "count": "3",
+          "knownWrong": "0",
+          "knownBlank": "0",
+          "unknown": "10"
+        },
+        "rowVerdicts": [],
+        "actualExportRows": [],
+        "storedRecordUnchanged": true
+      },
+      "ordinary": {
+        "inputGradePair": {
+          "correct": 1,
+          "total": 3
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 1,
+          "total": 3
+        },
+        "visibleSummary": {
+          "score": "1/3",
+          "count": "2",
+          "knownWrong": "1",
+          "knownBlank": "1",
+          "unknown": "0"
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "correct"
+          ],
+          [
+            "2",
+            "incorrect"
+          ],
+          [
+            "3",
+            "unanswered"
+          ]
+        ],
+        "actualExportRows": [
+          "| 1 | A | A | ✓ |",
+          "| 2 | B | A | ✗ |",
+          "| 3 | No Answer | A | No Answer |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "unknown": {
+        "inputGradePair": {
+          "correct": null,
+          "total": null
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 0,
+          "total": 0
+        },
+        "visibleSummary": {
+          "score": "未知/1",
+          "count": "未知",
+          "knownWrong": "0",
+          "knownBlank": "0",
+          "unknown": "1"
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "unknown"
+          ]
+        ],
+        "actualExportRows": [
+          "| 1 | A | N/A | Unknown |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "duplicate": {
+        "inputGradePair": {
+          "correct": 1,
+          "total": 2
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 1,
+          "total": 2
+        },
+        "visibleSummary": {
+          "score": "1/2",
+          "count": "1",
+          "knownWrong": "1",
+          "knownBlank": "0",
+          "unknown": "0"
+        },
+        "rowVerdicts": [
+          [
+            "7",
+            "correct"
+          ],
+          [
+            "8",
+            "incorrect"
+          ]
+        ],
+        "actualExportRows": [
+          "| 7 | C | C, E | ✓ |",
+          "| 8 | C | C, E | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      }
+    },
+    "main": {
+      "all-wrong": {
+        "inputGradePair": {
+          "correct": 0,
+          "total": 3
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 0,
+          "total": 3
+        },
+        "visibleSummary": {
+          "score": "0/3",
+          "count": "1",
+          "knownWrong": null,
+          "knownBlank": "0",
+          "unknown": null
+        },
+        "rowVerdicts": [
+          [
+            "11",
+            "incorrect"
+          ]
+        ],
+        "actualExportRows": [
+          "| 11 | D,E,F | A, B, C | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "partial": {
+        "inputGradePair": {
+          "correct": 1,
+          "total": 4
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 1,
+          "total": 4
+        },
+        "visibleSummary": {
+          "score": "1/4",
+          "count": "1",
+          "knownWrong": null,
+          "knownBlank": "0",
+          "unknown": null
+        },
+        "rowVerdicts": [
+          [
+            "11",
+            "incorrect"
+          ]
+        ],
+        "actualExportRows": [
+          "| 11 | A | A, B, C, D | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "split": {
+        "inputGradePair": {
+          "correct": 4,
+          "total": 7
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 4,
+          "total": 7
+        },
+        "visibleSummary": {
+          "score": "4/7",
+          "count": "3",
+          "knownWrong": null,
+          "knownBlank": "0",
+          "unknown": null
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "incorrect"
+          ],
+          [
+            "2",
+            "incorrect"
+          ],
+          [
+            "3",
+            "incorrect"
+          ],
+          [
+            "7",
+            "correct"
+          ],
+          [
+            "8",
+            "correct"
+          ],
+          [
+            "9",
+            "correct"
+          ],
+          [
+            "10",
+            "correct"
+          ]
+        ],
+        "actualExportRows": [
+          "| 1 | wrong | one | ✗ |",
+          "| 2 | wrong | two | ✗ |",
+          "| 3 | wrong | three | ✗ |",
+          "| 7 | C | C, E | ✗ |",
+          "| 8 | E | C, E | ✗ |",
+          "| 9 | B | B, D | ✗ |",
+          "| 10 | D | B, D | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "suite": {
+        "inputGradePair": {
+          "correct": 5,
+          "total": 11
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 5,
+          "total": 11
+        },
+        "visibleSummary": {
+          "score": "5/11",
+          "count": "4",
+          "knownWrong": null,
+          "knownBlank": "0",
+          "unknown": null
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "incorrect"
+          ],
+          [
+            "2",
+            "incorrect"
+          ],
+          [
+            "3",
+            "incorrect"
+          ],
+          [
+            "7",
+            "correct"
+          ],
+          [
+            "8",
+            "correct"
+          ],
+          [
+            "9",
+            "correct"
+          ],
+          [
+            "10",
+            "correct"
+          ],
+          [
+            "11",
+            "incorrect"
+          ]
+        ],
+        "actualExportRows": [],
+        "storedRecordUnchanged": true
+      },
+      "summary": {
+        "inputGradePair": {
+          "correct": 7,
+          "total": 10
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 7,
+          "total": 10
+        },
+        "visibleSummary": {
+          "score": "7/10",
+          "count": "0",
+          "knownWrong": null,
+          "knownBlank": "0",
+          "unknown": null
+        },
+        "rowVerdicts": [],
+        "actualExportRows": [],
+        "storedRecordUnchanged": true
+      },
+      "ordinary": {
+        "inputGradePair": {
+          "correct": 1,
+          "total": 3
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 1,
+          "total": 3
+        },
+        "visibleSummary": {
+          "score": "1/3",
+          "count": "1",
+          "knownWrong": null,
+          "knownBlank": "1",
+          "unknown": null
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "correct"
+          ],
+          [
+            "2",
+            "incorrect"
+          ],
+          [
+            "3",
+            "incorrect"
+          ]
+        ],
+        "actualExportRows": [
+          "| 1 | A | A | ✓ |",
+          "| 2 | B | A | ✗ |",
+          "| 3 | No Answer | A | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "unknown": {
+        "inputGradePair": {
+          "correct": null,
+          "total": null
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 0,
+          "total": 0
+        },
+        "visibleSummary": {
+          "score": "0/0",
+          "count": "0",
+          "knownWrong": null,
+          "knownBlank": "0",
+          "unknown": null
+        },
+        "rowVerdicts": [
+          [
+            "1",
+            "unknown"
+          ]
+        ],
+        "actualExportRows": [
+          "| 1 | A | N/A | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      },
+      "duplicate": {
+        "inputGradePair": {
+          "correct": 1,
+          "total": 2
+        },
+        "storedTopLevelGradeFields": {
+          "correct": 1,
+          "total": 2
+        },
+        "visibleSummary": {
+          "score": "1/2",
+          "count": "1",
+          "knownWrong": null,
+          "knownBlank": "0",
+          "unknown": null
+        },
+        "rowVerdicts": [
+          [
+            "7",
+            "correct"
+          ],
+          [
+            "8",
+            "incorrect"
+          ]
+        ],
+        "actualExportRows": [
+          "| 7 | C | C, E | ✗ |",
+          "| 8 | C | C, E | ✗ |"
+        ],
+        "storedRecordUnchanged": true
+      }
+    }
+  },
+  "sourceRegressions": {
+    "opensource-counts": {
+      "commit": "5cee8fa324227f4ba15f6df65453db9023e08249",
+      "passed": 0,
+      "failed": 4,
+      "failureType": "intended assertions",
+      "logSha256": "363b03dde6f7c0f6cc838c4a824d2bc55263615a21b7146be5f8a34585adfb67"
+    },
+    "opensource-outcomes": {
+      "commit": "5cee8fa324227f4ba15f6df65453db9023e08249",
+      "passed": 2,
+      "failed": 18,
+      "failureType": "intended assertions",
+      "logSha256": "afff942d55f73e72b98021460c45ef5feb5f14b18241036a56411e643ee81e02"
+    },
+    "main-counts": {
+      "commit": "3510cc61e2a55017bcdab2b42f11bdd6ba1108d4",
+      "passed": 0,
+      "failed": 4,
+      "failureType": "intended assertions",
+      "logSha256": "b584f338d5eeadb175700e01dc00420407e662cdcdb24419fba39ff27bcc1874"
+    },
+    "main-outcomes": {
+      "commit": "3510cc61e2a55017bcdab2b42f11bdd6ba1108d4",
+      "passed": 2,
+      "failed": 18,
+      "failureType": "intended assertions",
+      "logSha256": "ee3abd4ad016a383b78b9e04171e783dd40fb7388756f23b557b24c32695bfa4"
+    }
+  },
+  "integrated21RecordMatrix": [
+    {
+      "browser": "157.0.8103.79",
+      "channel": "chrome",
+      "mode": "http",
+      "records": 21,
+      "coldOverviewExport": true,
+      "projections": [
+        "detail",
+        "full"
+      ],
+      "status": "pass",
+      "logSha256": "41b848d70be6477eb4d41a64b3f480f5e3b6b34ae76323ff9e488a1d26d3f779"
+    },
+    {
+      "browser": "157.0.8103.79",
+      "channel": "chrome",
+      "mode": "file",
+      "records": 21,
+      "coldOverviewExport": true,
+      "projections": [
+        "detail",
+        "full"
+      ],
+      "status": "pass",
+      "logSha256": "0207ce5c61e307b32410f0a9efa5d090dbe3d743adde550c1e334474f3b748d0"
+    },
+    {
+      "browser": "158.0.4370.33",
+      "channel": "msedge",
+      "mode": "http",
+      "records": 21,
+      "coldOverviewExport": true,
+      "projections": [
+        "detail",
+        "full"
+      ],
+      "status": "pass",
+      "logSha256": "9332a5bae7c8c938ae036d60b6ae16e6a4bfc6d084bd7587df4adaac0e2a8331"
+    },
+    {
+      "browser": "158.0.4370.33",
+      "channel": "msedge",
+      "mode": "file",
+      "records": 21,
+      "coldOverviewExport": true,
+      "projections": [
+        "detail",
+        "full"
+      ],
+      "status": "pass",
+      "logSha256": "5b6a7b5c7e1eeb3590cb9681244acae51f4dd51198a525c42708612f8b28a049"
+    }
+  ],
+  "localChecks": {
+    "node": "v24.22.3",
+    "python": "3.14.3",
+    "javascript": {
+      "passed": 980,
+      "failed": 0,
+      "logSha256": "fb16fb9141ca330cc099b0a1317c345e9c303b10df6caa86cf26c0d7fb59b4d7"
+    },
+    "pythonUnit": {
+      "passed": 52,
+      "logSha256": "e9de81ba3fc56656539b65b4416e1f84ee90ff0b188b11477c51287c03b7be47"
+    },
+    "readingIntegrity": {
+      "files": 239,
+      "status": "pass",
+      "logSha256": "ab93fe772fd8a2cf7e8813eec5a41a41a417bba9680de0b59eff824b419f1395"
+    },
+    "bundles": {
+      "opensource": 18,
+      "main": 18,
+      "status": "current"
+    },
+    "diagnosticRuntime": {
+      "requiredAssets": 25,
+      "opensourceMappedSections": 227,
+      "mainMappedSections": 208
+    }
+  },
+  "ci": {
+    "runUrl": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/44994174847",
+    "commit": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+    "conclusion": "success",
+    "unifiedE2EFlowsPassed": 22,
+    "jobs": [
+      {
+        "name": "verify",
+        "conclusion": "success",
+        "url": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/44994174847/job/137121518239"
+      },
+      {
+        "name": "Release qualification (windows-latest)",
+        "conclusion": "success",
+        "url": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/44994174847/job/137121518423"
+      },
+      {
+        "name": "Release qualification (ubuntu-latest)",
+        "conclusion": "success",
+        "url": "https://github.com/sallowayma-git/IELTS-practice/actions/runs/44994174847/job/137121518442"
+      }
+    ],
+    "releaseEvidence": [
+      {
+        "platform": "linux",
+        "headSha": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+        "archiveSha256": "ac2e13b04dfbb6a6f1d8fbbc3c0c0bcf9bdd445c6a3b13c644ef1a6a4025a049",
+        "archiveBytes": 8242807,
+        "matchedSourceFiles": 528,
+        "assetManifestSha256": "9ed3838a550e5dcbae3be37343d164ee040e6ffbc9e743b4e378f48681c6f5ba",
+        "diagnosticRuntime": {
+          "buildId": "sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766",
+          "requiredAssets": 25,
+          "mappedSections": 225
+        },
+        "packageCasesPassed": 9,
+        "diagnosticCasesPassed": 222,
+        "qualificationSha256": "b521beea0b9f173458e184669ee72c50070f0b0f28be6ae1a1b59e19244cbdd5"
+      },
+      {
+        "platform": "win32",
+        "headSha": "4c8308ce5cf9938a9f891d20790cf35bbe1229c3",
+        "archiveSha256": "2b75f8eb95af9daca1f9a3d949807abd31f49f7cb92916a6d85135bd1ab192b2",
+        "archiveBytes": 8314233,
+        "matchedSourceFiles": 528,
+        "assetManifestSha256": "8d95b3856bf7333e90e6465884cbed95b29e0b6678b44a2a7ab85ecb005e59ce",
+        "diagnosticRuntime": {
+          "buildId": "sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766",
+          "requiredAssets": 25,
+          "mappedSections": 225
+        },
+        "packageCasesPassed": 9,
+        "diagnosticCasesPassed": 222,
+        "qualificationSha256": "80926b65d8d50e8c44b22eecf00305094246f6a0e8b49777aff3251c3641a3e6"
+      }
+    ]
+  }
+}
