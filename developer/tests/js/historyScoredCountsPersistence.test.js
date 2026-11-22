@@ -33,19 +33,21 @@ test('shipped history counts and Markdown outcomes survive IndexedDB projections
             if (message.type() === 'error') browserErrors.push(message.text());
         });
         page.on('pageerror', error => browserErrors.push(error.stack || error.message));
-        const ready = async () => {
+        const ready = async (loadHistory = true) => {
             await page.waitForFunction(() => window.app?.isInitialized === true);
-            await page.evaluate(async () => {
+            await page.evaluate(async loadHistory => {
                 await AppData.ready;
                 await LicenseModal.accept();
-                await AppLazyLoader.ensureGroup('browse-runtime');
-                await AppLazyLoader.ensureGroup('practice-suite');
-            });
+                if (loadHistory) {
+                    await AppLazyLoader.ensureGroup('browse-runtime');
+                    await AppLazyLoader.ensureGroup('practice-suite');
+                }
+            }, loadHistory);
         };
         const url = process.env.HISTORY_ACCESS_MODE === 'file'
             ? pathToFileURL(path.join(root, 'index.html')).href : `http://127.0.0.1:${server.address().port}/index.html`;
         await page.goto(url);
-        await ready();
+        await ready(false);
         const source = fixtures();
         source.detailOnly = record('detail-only', {}, undefined, undefined, { answerDetails: {
             q1: { answer: ['D', 'E'], correctAnswer: 'D', isCorrect: true, weight: 1 },
@@ -85,6 +87,21 @@ test('shipped history counts and Markdown outcomes survive IndexedDB projections
             for (const input of Object.values(inputs)) records[input.id] = await AppData.practice.get(input.id, { projection: 'full' });
             return records;
         }, { inputs: source, submitted, legacy });
+        phase = 'cold overview export';
+        assert.equal(await page.evaluate(() => typeof window.AnswerComparisonUtils), 'undefined');
+        const [coldDownload] = await Promise.all([
+            page.waitForEvent('download'),
+            page.evaluate(() => AppActions.exportPracticeMarkdown())
+        ]);
+        assert.equal(await coldDownload.failure(), null);
+        const coldMarkdown = fs.readFileSync(await coldDownload.path(), 'utf8');
+        assert.ok(!coldMarkdown.includes('答题详情生成失败'), 'cold export must load the validated resolver');
+        assert.match(coldMarkdown, /\| 7 \| C \| C, E \| ✓ \|/);
+        assert.match(coldMarkdown, /\| 1 \| A \| N\/A \| Unknown \|/);
+        assert.ok(coldMarkdown.includes('Partial 1/4'));
+        assert.equal(await page.evaluate(() => Boolean(document.querySelector('script[src*="browse.bundle.js"]'))), false,
+            'export must not require visiting or loading Browse');
+        await ready();
         const expected = { 'all-wrong': 3, partial: 3, split: 3, suite: 6, summary: 3, ordinary: 2, unknown: '未知', duplicate: 1,
             'no-grade': '未知', normalized: 3, 'empty-ungraded': '未知', 'empty-zero': 0, 'empty-denominator': 0,
             'incomplete-suite': '未知', 'nested-incomplete-suite': '未知', 'production-split': 12, 'legacy-split': 12,
@@ -119,7 +136,7 @@ test('shipped history counts and Markdown outcomes survive IndexedDB projections
                 assert.equal(counts[field], expected, `${id}/${field}`);
             }
         };
-        let downloadCount = 0;
+        let downloadCount = 1;
         for (const [id, missed] of Object.entries(expected)) {
             for (const projection of ['detail', 'full']) {
                 phase = `${id}/${projection}`;
@@ -185,7 +202,8 @@ test('shipped history counts and Markdown outcomes survive IndexedDB projections
             assert.deepEqual(after, before[id], `stored grade, snapshot and annotations changed for ${id}`);
         }
         console.log(JSON.stringify({ browser: browser.version(), channel: process.env.HISTORY_BROWSER_CHANNEL || 'chromium',
-            mode: process.env.HISTORY_ACCESS_MODE || 'http', records: Object.keys(expected).length, projections: ['detail', 'full'] }));
+            mode: process.env.HISTORY_ACCESS_MODE || 'http', records: Object.keys(expected).length,
+            coldOverviewExport: true, projections: ['detail', 'full'] }));
     } catch (error) {
         console.error(JSON.stringify({ phase, browserErrors: browserErrors.slice(-20) }));
         console.error(error);

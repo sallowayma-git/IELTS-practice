@@ -142,6 +142,11 @@ truthiness to determine an outcome. The shared resolver also reads legacy
 `answerDetails` user snapshots and the `answer` alias in score details, preserving
 the existing fallback inputs without introducing a separate export grader.
 
+The answer matcher and resolver ship in `practice.bundle.js` with the exporter
+and modal. Loading `practice-suite` therefore supplies the full export contract
+from a cold overview. Browse already depends on that group; export does not
+need to load or visit Browse first.
+
 | Validated row outcome | Markdown Result |
 | --- | --- |
 | Positive credit with a partial or non-perfect outcome | `Partial earned/possible` |
@@ -186,6 +191,11 @@ compares all saved records including annotations and
 the canonical replay snapshot. It uses isolated browser storage and does not
 enable sync. Optional `HISTORY_BROWSER_CHANNEL=chrome` or `msedge` and
 `HISTORY_ACCESS_MODE=file` select additional browser/access-mode coverage.
+Before loading Browse or history, it also downloads Markdown through the real
+`AppActions.exportPracticeMarkdown()` entrypoint and checks grouped, unknown and
+partial outcomes. This cold-export assertion fails on `071cbe62bf9c` because the
+resolver was only in the Browse bundle, and passes with the corrected bundle
+dependency. The test confirms that Browse is still unloaded after this export.
 The empty-record cases distinguish missing grading evidence, saved 0/0, and a
 saved zero denominator without earned credit through each projection and reopen.
 The suite and split-selection cases retain incomplete child totals, nested slot
@@ -209,9 +219,9 @@ and two passes against that unmodified baseline; all 20 pass after the repair.
 The existing 14 grouped-answer history safeguard checks also pass.
 
 The tested generated artifact is
-`sha256:79d1beed130d75e16689f5305afaac8580468e9d21a5d60004acdb90697cf90e`.
+`sha256:b3389028f2c577ad3d7d66f8f1c8bce63f5e502f54ba3245c6ace6ab5a53f766`.
 
-| Browser | Access | Controlled records | Detail/full, actual Markdown download, reopen/reload, data preservation |
+| Browser | Access | Controlled records | Cold export, detail/full, actual Markdown download, reopen/reload, data preservation |
 | --- | --- | ---: | --- |
 | Chromium 151.0.7922.34 | HTTP | 21 | Pass |
 | Chrome 157.0.8103.79 | HTTP | 21 | Pass |
