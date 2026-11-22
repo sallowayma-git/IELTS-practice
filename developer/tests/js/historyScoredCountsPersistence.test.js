@@ -12,7 +12,7 @@ import { productionReadingResults } from '../fixtures/productionReadingResults.m
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
-test('shipped history counts survive IndexedDB detail/full projections, export, reopen and reload', { timeout: 120000 }, async () => {
+test('shipped history counts and Markdown outcomes survive IndexedDB projections, export, reopen and reload', { timeout: 120000 }, async () => {
     const server = http.createServer((request, response) => {
         const filename = path.resolve(root, `.${decodeURIComponent(new URL(request.url, 'http://localhost').pathname)}`);
         if (!filename.startsWith(root + path.sep)) return response.writeHead(403).end();
@@ -47,6 +47,18 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         await page.goto(url);
         await ready();
         const source = fixtures();
+        source.detailOnly = record('detail-only', {}, undefined, undefined, { answerDetails: {
+            q1: { answer: ['D', 'E'], correctAnswer: 'D', isCorrect: true, weight: 1 },
+            q2: { userAnswer: 'A', correctAnswer: '', isCorrect: null }
+        } });
+        for (const name of ['split', 'partial', 'unknown']) {
+            const fallback = structuredClone(source[name]);
+            fallback.id = fallback.examId = `fallback-${name}`;
+            fallback.scoreInfo ||= {};
+            fallback.scoreInfo.details = fallback.answerComparison;
+            delete fallback.answerComparison;
+            source[fallback.id] = fallback;
+        }
         source.noGrade = { id: 'no-grade', examId: 'no-grade', type: 'reading', totalQuestions: 10 };
         source.emptyUngraded = record('empty-ungraded', {});
         source.emptyZero = record('empty-zero', {}, 0, 0);
@@ -75,7 +87,25 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
         }, { inputs: source, submitted, legacy });
         const expected = { 'all-wrong': 3, partial: 3, split: 3, suite: 6, summary: 3, ordinary: 2, unknown: '未知', duplicate: 1,
             'no-grade': '未知', normalized: 3, 'empty-ungraded': '未知', 'empty-zero': 0, 'empty-denominator': 0,
-            'incomplete-suite': '未知', 'nested-incomplete-suite': '未知', 'production-split': 12, 'legacy-split': 12 };
+            'incomplete-suite': '未知', 'nested-incomplete-suite': '未知', 'production-split': 12, 'legacy-split': 12,
+            'fallback-split': 3, 'fallback-partial': 3, 'fallback-unknown': '未知', 'detail-only': '未知' };
+        const splitOutcomes = { 1: '✗', 2: '✗', 3: '✗', 7: '✓', 8: '✓', 9: '✓', 10: '✓' };
+        const expectedOutcomes = {
+            split: splitOutcomes, 'fallback-split': splitOutcomes,
+            partial: { 11: 'Partial 1/4' }, normalized: { 11: 'Partial 1/4' }, 'fallback-partial': { 11: 'Partial 1/4' },
+            unknown: { 1: 'Unknown' }, 'fallback-unknown': { 1: 'Unknown' },
+            'all-wrong': { 11: '✗' }, duplicate: { 7: '✓', 8: '✗' }, ordinary: { 1: '✓', 2: '✗', 3: 'No Answer' },
+            'production-split': { 9: '✓', 10: '✗' }, 'legacy-split': { 9: '✓', 10: '✗' },
+            'detail-only': { 1: '✓', 2: 'Unknown' }
+        };
+        const checkMarkdown = (id, markdown) => {
+            assert.ok(markdown.length > 0);
+            for (const [question, result] of Object.entries(expectedOutcomes[id] || {})) {
+                const line = markdown.split('\n').find(line => line.startsWith(`| ${question} |`));
+                assert.ok(line?.endsWith(`| ${result} |`), `${id}/q${question}: expected ${result}, got ${line}`);
+            }
+            if (id === 'split' || id === 'fallback-split') assert.match(markdown, /4\/7/);
+        };
         const expectedScores = { 'empty-ungraded': '未知', 'empty-zero': '0/0', 'empty-denominator': '0/0',
             'incomplete-suite': '未知/11', 'nested-incomplete-suite': '未知/3', 'production-split': '1/13', 'legacy-split': '1/13' };
         const expectedDetails = {
@@ -97,12 +127,14 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
                     const record = await AppData.practice.get(id, { projection });
                     const snapshot = JSON.stringify(record);
                     practiceRecordModal.show(record);
+                    const markdown = new MarkdownExporter().generateRecordMarkdown(record);
                     return {
                         count: document.querySelector('.error-count')?.textContent,
                         replayUnchanged: JSON.stringify(practiceRecordModal.currentRecord) === snapshot,
                         unchanged: JSON.stringify(record) === snapshot,
                         counts: AnswerComparisonUtils.resolveRecordCounts(record),
-                        annotationsPresent: Boolean(record.highlights)
+                        annotationsPresent: Boolean(record.highlights),
+                        markdown
                     };
                 }, { id, projection });
                 assert.equal(result.count, String(missed), `${id}/${projection}`);
@@ -111,6 +143,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
                 checkDetailCounts(id, result.counts);
                 assert.equal(result.replayUnchanged, true);
                 assert.equal(result.unchanged, true);
+                checkMarkdown(id, result.markdown);
                 if (id === 'partial' || id === 'normalized') {
                     assert.equal(result.counts.unanswered, 3);
                     assert.equal(result.annotationsPresent, projection === 'full');
@@ -127,7 +160,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
                 page.evaluate(id => practiceRecordModal.exportSingle(id), id)
             ]);
             assert.equal(await download.failure(), null, `${id}: Markdown download failed`);
-            assert.ok(fs.readFileSync(await download.path(), 'utf8').length > 0);
+            checkMarkdown(id, fs.readFileSync(await download.path(), 'utf8'));
             downloadCount++;
             await page.evaluate(id => practiceRecordModal.showById(id), id);
             assert.equal(await page.locator('.error-count').textContent(), String(missed));
@@ -147,6 +180,7 @@ test('shipped history counts survive IndexedDB detail/full projections, export, 
             if (id in expectedScores) assert.equal(await page.locator('.score-highlight').textContent(), expectedScores[id]);
             if (id in expectedDetails) assert.equal(await page.locator('.unknown-count').textContent(), String(expectedDetails[id].unknown));
             const after = await page.evaluate(id => AppData.practice.get(id, { projection: 'full' }), id);
+            checkMarkdown(id, await page.evaluate(record => new MarkdownExporter().generateRecordMarkdown(record), after));
             checkDetailCounts(id, await page.evaluate(record => AnswerComparisonUtils.resolveRecordCounts(record), after));
             assert.deepEqual(after, before[id], `stored grade, snapshot and annotations changed for ${id}`);
         }

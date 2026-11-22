@@ -1,6 +1,6 @@
 # History scored-answer count contract
 
-Implementation: #312. Parent: #311. Exported row outcomes: #313. Integrated
+Implementations: #312 (counts), #313 (exported row outcomes). Parent: #311. Integrated
 static-artifact qualification and the original report: #314.
 
 `AnswerComparisonUtils.resolveRecordCounts(record)` is the shared, read-only
@@ -133,20 +133,56 @@ copies of one passage/question count once; distinct sessions and repeated
 question numbers across passages remain distinct. Root-only `passage::question`
 keys retain their scope, including numeric passage IDs and range questions.
 
+## Markdown answer outcomes
+
+Both exporter paths (comparison maps and fallback answer/detail maps) pass the
+original record snapshots to `getNormalizedEntries`. The exporter does not fill
+missing snapshots before validation, re-grade formatted strings, or use boolean
+truthiness to determine an outcome. The shared resolver also reads legacy
+`answerDetails` user snapshots and the `answer` alias in score details, preserving
+the existing fallback inputs without introducing a separate export grader.
+
+| Validated row outcome | Markdown Result |
+| --- | --- |
+| Positive credit with a partial or non-perfect outcome | `Partial earned/possible` |
+| No user answer | `No Answer` |
+| Correct | `✓` |
+| Incorrect | `✗` |
+| Unknown | `Unknown` |
+
+Partial credit takes precedence over the boolean, as it does in history. Unknown
+or missing verdicts can still be resolved by the shared answer matcher when an
+authoritative answer key exists; without that evidence they remain unknown.
+Duplicate split-group selections retain the validated per-slot verdicts instead
+of each receiving credit merely because their displayed token belongs to the
+group. Canonical answer-key precedence, complete snapshot checks, source ordering
+and display-provenance rejection remain in the shared resolver.
+
+`markdownOutcomes.test.js` exercises the real exporter, PracticeCore normalizer,
+display preparation and modal with both export paths. `MARKDOWN_SOURCE_ROOT`
+selects a different source checkout for failing-before verification. The tests
+cover C/E and B/D split groups, duplicate selections, partial credit, unknown and
+blank states, canonical conflicts, missing/stale snapshots, legacy/display
+booleans, nested grading sources and key aliases. They also compare input
+snapshots before and after rendering. Passage layout, richer export metadata and
+export completeness remain in #309; original-report qualification remains #314.
+
 ## Reproducible validation and limits
 
 ```sh
 node --test developer/tests/js/historyScoredCounts.test.js
+node --test developer/tests/js/markdownOutcomes.test.js
 node --test developer/tests/js/historyScoredCountsPersistence.test.js
 node scripts/build-bundles.mjs --check
 node scripts/verify-diagnostic-release.mjs
 ```
 
 The persistence regression opens the actual static index and shipped bundles,
-saves seventeen controlled records through AppData into real IndexedDB, including
+saves twenty-one controlled records through AppData into real IndexedDB, including
 split selections from the production grading runtime. It opens both detail/full
-projections, downloads Markdown through the modal export entrypoint,
-reopens and reloads, and compares all saved records including annotations and
+projections, checks the exported answer outcomes, downloads and checks the actual
+Markdown file through the modal export entrypoint, reopens and reloads, and
+compares all saved records including annotations and
 the canonical replay snapshot. It uses isolated browser storage and does not
 enable sync. Optional `HISTORY_BROWSER_CHANNEL=chrome` or `msedge` and
 `HISTORY_ACCESS_MODE=file` select additional browser/access-mode coverage.
@@ -161,6 +197,29 @@ The first four modal assertions fail on opensource baseline
 `5cee8fa324227f4ba15f6df65453db9023e08249` with 1/1/4/0 instead of 3/3/6/3.
 `HISTORY_SOURCE_ROOT` can point the source regression at another checkout for
 reproduction. These are synthetic fixtures, not the reporter's missing original
-record. Export is checked for read-only behavior here; exported row-verdict
-repair remains #313. Final integrated qualification, the exact reported 3-to-10
-observation, and maintainer-controlled main promotion remain tracked in #314.
+record. Export is checked for matching outcomes and read-only behavior. Final
+integrated qualification, the exact reported 3-to-10 observation, and
+maintainer-controlled main promotion remain tracked in #314.
+
+### #313 validation snapshot (2026-11-22)
+
+The implementation starts at `opensource@293aebf3f4f5a08527071c700889420b95ed472e`,
+including the merged count repair. The 20 exporter regressions produce 18 failures
+and two passes against that unmodified baseline; all 20 pass after the repair.
+The existing 14 grouped-answer history safeguard checks also pass.
+
+The tested generated artifact is
+`sha256:79d1beed130d75e16689f5305afaac8580468e9d21a5d60004acdb90697cf90e`.
+
+| Browser | Access | Controlled records | Detail/full, actual Markdown download, reopen/reload, data preservation |
+| --- | --- | ---: | --- |
+| Chromium 151.0.7922.34 | HTTP | 21 | Pass |
+| Chrome 157.0.8103.79 | HTTP | 21 | Pass |
+| Chrome 157.0.8103.79 | `file://` | 21 | Pass |
+| Edge 158.0.4370.33 | HTTP | 21 | Pass |
+| Edge 158.0.4370.33 | `file://` | 21 | Pass |
+
+These checks integrate the count and export implementations on controlled records.
+They do not reproduce the unavailable original record or qualify a promoted
+`main` artifact. `main@3510cc61e2a55017bcdab2b42f11bdd6ba1108d4` remains the
+previously reviewed baseline; #314 owns that remaining qualification.

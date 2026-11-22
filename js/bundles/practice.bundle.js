@@ -1810,72 +1810,44 @@ class MarkdownExporter {
      * 生成答题表格
      */
     generateAnswerTable(realData, record) {
+        const source = { ...record, realData: realData || record?.realData };
+        const comparison = source.answerComparison || source.realData?.answerComparison;
+        if (comparison && Object.keys(comparison).length > 0) {
+            return this.generateTableFromComparison(comparison, source);
+        }
+        return this.generateTableFromRecord(source);
+    }
+
+    /**
+     * 从answerComparison生成表格
+     */
+    generateTableFromComparison(answerComparison, record = null) {
+        // Keep the original snapshots: filling missing display answers first could
+        // turn an incomplete stored verdict into apparently valid grading evidence.
+        return this.generateTableFromRecord({ ...record, answerComparison });
+    }
+
+    generateTableFromRecord(record) {
         try {
-            // 优先使用answerComparison数据确保一致性（若有则合并补全缺失正确答案）
-            const comparison = record.answerComparison || realData?.answerComparison || null;
-            const hasComparison = comparison && Object.keys(comparison).length > 0;
-            if (hasComparison) {
-                const merged = this.mergeComparisonWithCorrections({ ...record, answerComparison: comparison });
-                return this.generateTableFromComparison(merged, record);
+            const utils = window.AnswerComparisonUtils;
+            if (!utils || typeof utils.getNormalizedEntries !== 'function') {
+                throw new Error('MarkdownExporter requires AnswerComparisonUtils.getNormalizedEntries');
             }
-
-            // 降级到原有逻辑（包含 detailSources）
-            const answers = record.answers || realData?.answers || {};
-            const correctAnswers = this.getCorrectAnswers(record);
-            const detailSources = record.answerDetails
-                || record.scoreInfo?.details
-                || record.realData?.scoreInfo?.details
-                || {};
-
+            // History owns snapshot/provenance validation, canonical answer-map
+            // precedence and legacy matching. Export only formats its outcomes.
+            const entries = utils.getNormalizedEntries(record);
             let table = '| Question | Your Answer | Correct Answer | Result |\n';
             table += '| -------- | ----------- | -------------- | ------ |\n';
-
-            // 获取所有题目编号并排序
-            const questionNumbers = this.extractQuestionNumbers(
-                answers && Object.keys(answers).length ? answers : {},
-                correctAnswers,
-                comparison || {}
-            );
-
-            // 限制题目数量避免表格过大
             const maxQuestions = 50;
-            const questionsToProcess = questionNumbers.slice(0, maxQuestions);
-
-            if (questionNumbers.length > maxQuestions) {
+            if (entries.length > maxQuestions) {
                 console.warn(`[MarkdownExporter] 题目过多，只显示前${maxQuestions}题`);
             }
-
-            for (let i = 0; i < questionsToProcess.length; i++) {
-                const qNum = questionsToProcess[i];
-                try {
-                    const detailKeyCandidates = [`q${qNum}`, qNum.toString()];
-                    let userAnswer = this.getUserAnswer(answers, qNum);
-                    if (!userAnswer && comparison && comparison[`q${qNum}`]) {
-                        userAnswer = comparison[`q${qNum}`].userAnswer || comparison[`q${qNum}`].user || userAnswer;
-                    }
-                    if (!userAnswer && detailSources && typeof detailSources === 'object') {
-                        for (const k of detailKeyCandidates) {
-                            if (detailSources[k]) {
-                                const detail = detailSources[k];
-                                userAnswer = detail.userAnswer ?? detail.answer ?? userAnswer;
-                                break;
-                            }
-                        }
-                    }
-                    const correctAnswer = this.getCorrectAnswer(correctAnswers, qNum);
-                    const result = this.compareAnswers(userAnswer, correctAnswer) ? '✓' : '✗';
-
-                    // 清理答案文本，避免Markdown格式问题
-                    const cleanUserAnswer = this.cleanAnswerText(userAnswer || 'No Answer');
-                    const cleanCorrectAnswer = this.cleanAnswerText(correctAnswer || 'N/A');
-
-                    table += `| ${qNum} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
-                } catch (error) {
-                    console.warn('[MarkdownExporter] 处理题目失败:', qNum, error);
-                    table += `| ${qNum} | Error | Error | ✗ |\n`;
-                }
+            for (const entry of entries.slice(0, maxQuestions)) {
+                const question = this.cleanAnswerText(entry.displayNumber);
+                const userAnswer = this.cleanAnswerText(entry.userAnswer);
+                const correctAnswer = this.cleanAnswerText(entry.correctAnswer);
+                table += `| ${question} | ${userAnswer} | ${correctAnswer} | ${this.formatAnswerOutcome(entry)} |\n`;
             }
-
             return table;
         } catch (error) {
             console.error('[MarkdownExporter] 生成答题表格失败:', error);
@@ -1883,67 +1855,14 @@ class MarkdownExporter {
         }
     }
 
-    /**
-     * 从answerComparison生成表格
-     */
-    generateTableFromComparison(answerComparison, record = null) {
-        // 支持将 keys 中的非数字后缀/前缀保留下来，比如 qa/qb 显示为 a/b
-
-        try {
-            let table = '| Question | Your Answer | Correct Answer | Result |\n';
-            table += '| -------- | ----------- | -------------- | ------ |\n';
-            const noiseKeys = new Set(['volume-slider', 'playback-speed', 'playbackspeed', 'volume']);
-            const correctMap = record ? this.getCorrectAnswers(record) : {};
-
-            // 按问题编号排序
-            const sortedKeys = Object.keys(answerComparison)
-                .filter(k => !noiseKeys.has(k))
-                .filter(k => {
-                    const entry = answerComparison[k];
-                    return entry && (entry.userAnswer || entry.correctAnswer);
-                })
-                .sort((a, b) => {
-                    const numA = parseInt(a.replace(/\D/g, '')) || 0;
-                    const numB = parseInt(b.replace(/\D/g, '')) || 0;
-                    return numA - numB;
-                });
-
-            // 限制处理的题目数量
-            const maxQuestions = 50;
-            const keysToProcess = sortedKeys.slice(0, maxQuestions);
-
-            for (let i = 0; i < keysToProcess.length; i++) {
-                const key = keysToProcess[i];
-                try {
-                    const comparison = answerComparison[key];
-                    // 如果没有数字，fallback 使用去掉前缀 q 的字母编号
-                    let questionNum = key.replace(/\D/g, '');
-                    if (!questionNum) {
-                        questionNum = key.replace(/^q/i, '');
-                    }
-                    let userAnswer = comparison.userAnswer || comparison.user || 'No Answer';
-                    const canonicalCorrect = correctMap[key]
-                        ?? (questionNum ? this.getCorrectAnswer(correctMap, questionNum) : null);
-                    let correctAnswer = canonicalCorrect || comparison.correctAnswer || comparison.correct || 'N/A';
-                    const result = canonicalCorrect
-                        ? (this.compareAnswers(userAnswer, canonicalCorrect) ? '✓' : '✗')
-                        : (comparison.isCorrect ? '✓' : '✗');
-
-                    // 清理答案文本
-                    const cleanUserAnswer = this.cleanAnswerText(userAnswer);
-                    const cleanCorrectAnswer = this.cleanAnswerText(correctAnswer);
-
-                    table += `| ${questionNum} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
-                } catch (error) {
-                    console.warn('[MarkdownExporter] 处理比较数据失败:', key, error);
-                }
-            }
-
-            return table;
-        } catch (error) {
-            console.error('[MarkdownExporter] 从比较数据生成表格失败:', error);
-            return '答题详情生成失败\n';
+    formatAnswerOutcome(entry) {
+        if (entry.partialCorrectCount > 0 && (entry.partialCorrectCount < entry.weight || entry.isCorrect === false)) {
+            return `Partial ${entry.partialCorrectCount}/${entry.weight}`;
         }
+        if (!entry.hasUserAnswer) return 'No Answer';
+        if (entry.isCorrect === true) return '✓';
+        if (entry.isCorrect === false) return '✗';
+        return 'Unknown';
     }
 
     /**
@@ -2059,19 +1978,6 @@ class MarkdownExporter {
         }
 
         return null;
-    }
-
-    /**
-     * 比较答案
-     */
-    compareAnswers(userAnswer, correctAnswer) {
-        if (!userAnswer || !correctAnswer) {
-            return false;
-        }
-
-        // 标准化答案进行比较
-        const normalize = (str) => String(str).trim().toLowerCase();
-        return normalize(userAnswer) === normalize(correctAnswer);
     }
 
     /**
