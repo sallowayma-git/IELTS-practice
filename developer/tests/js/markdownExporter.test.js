@@ -55,6 +55,9 @@ function loadExporter(options = {}) {
     vm.createContext(sandbox);
     const coreSource = fs.readFileSync(path.join(repoRoot, 'js/core/practiceCore.js'), 'utf8');
     vm.runInContext(coreSource, sandbox, { filename: 'js/core/practiceCore.js' });
+    for (const file of ['js/utils/answerMatchCore.js', 'js/utils/answerComparisonUtils.js']) {
+        vm.runInContext(fs.readFileSync(path.join(repoRoot, file), 'utf8'), sandbox, { filename: file });
+    }
     const source = fs.readFileSync(path.join(repoRoot, 'js/utils/markdownExporter.js'), 'utf8');
     vm.runInContext(source, sandbox, { filename: 'js/utils/markdownExporter.js' });
     return new windowStub.MarkdownExporter();

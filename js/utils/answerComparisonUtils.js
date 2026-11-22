@@ -476,8 +476,9 @@
             extractFromComparison(record.realData && record.realData.answerComparison, entry => entry.userAnswer ?? entry.user ?? entry.answer),
             record.answers,
             record.realData && record.realData.answers,
-            extractFromDetails(record.scoreInfo && record.scoreInfo.details, entry => entry.userAnswer ?? entry.user),
-            extractFromDetails(record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details, entry => entry.userAnswer ?? entry.user)
+            extractFromDetails(record.scoreInfo && record.scoreInfo.details, entry => entry.userAnswer ?? entry.user ?? entry.answer),
+            extractFromDetails(record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details, entry => entry.userAnswer ?? entry.user ?? entry.answer),
+            extractFromDetails(record.answerDetails, entry => entry.userAnswer ?? entry.user ?? entry.answer)
         ].filter(Boolean);
 
         const coreContracts = getPracticeCoreContracts();

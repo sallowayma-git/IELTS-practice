@@ -86,8 +86,6 @@ const bundles = {
         'js/components/PDFHandler.js',
         'js/components/BrowseStateManager.js',
         'js/utils/suiteBackGuard.js',
-        'js/utils/answerMatchCore.js',
-        'js/utils/answerComparisonUtils.js',
         'js/utils/BrowsePreferencesUtils.js',
         'js/components/browseLearningControls.js',
         'js/components/interruptedPracticeHistory.js',
@@ -102,6 +100,9 @@ const bundles = {
     ],
     'js/bundles/practice.bundle.js': [
         'js/app/spellingErrorCollector.js',
+        // History and cold exports need the same resolver without loading Browse.
+        'js/utils/answerMatchCore.js',
+        'js/utils/answerComparisonUtils.js',
         'js/utils/markdownExporter.js',
         'js/components/practiceRecordModal.js',
         'js/components/practiceHistoryEnhancer.js',
