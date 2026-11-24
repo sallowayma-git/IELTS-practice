@@ -1,7 +1,7 @@
 # Multi-device CI
 
 `Multi-device CI` is defined in `.github/workflows/ci-multi-device.yml` and runs
-only for pull requests targeting `feature/multi-device-easy-deploy`. It handles
+only for pull requests targeting `product/multi-device`. It handles
 opening, new commits, reopening, becoming ready for review, and edits. Edits
 include changing the base branch, title, or description. Draft and documentation-only
 PRs run the same checks. The workflow has no push, schedule, dispatch, or closed
@@ -49,9 +49,13 @@ python -X utf8 developer/tests/e2e/e2e_runner.py
 ## Reproduce the deployment smoke test
 
 Use Node.js 24 and a running Linux Docker engine with Docker Compose 2.24.4 or
-newer. The script uses only Node built-ins, so it does not require `npm ci`.
+newer. The orchestration script uses Node built-ins, but it also runs the browser
+sync regression, which requires the frontend test dependencies and Chromium.
+Backend dependencies are installed inside the application image during the build.
 
 ```sh
+npm ci --prefix developer
+node developer/node_modules/playwright/cli.js install --with-deps chromium --only-shell
 node backend/scripts/ci-smoke.mjs
 ```
 
@@ -73,6 +77,13 @@ The HTTP checks verify:
 - Two migration reruns with no newly applied migrations.
 - Existing sessions, account login, CSRF tokens, and records after application
   restart, including a further write through an existing session.
+
+The script then runs `developer/tests/e2e/multi_device_sync.cjs` against the same
+isolated PostgreSQL deployment to verify browser login, local backup and record
+merge, device synchronization, offline recovery, conflicts, deletion propagation,
+and full replay data. This sync regression is separate from the unified `md-e2e`
+suite. Running it directly without `MULTI_DEVICE_BASE_URL` instead starts an
+in-memory backend and also requires `npm ci --prefix backend`.
 
 The optional Tor image is built but public Tor connectivity is not exercised.
 Actual onion access remains part of manual deployment verification.
@@ -100,7 +111,7 @@ directory or its environment file as an artifact.
 
 After the first successful PR run, a maintainer can require the GitHub Actions
 check `md-ci` in a branch rule matching exactly
-`feature/multi-device-easy-deploy`. Apply this requirement only to that branch:
+`product/multi-device`. Apply this requirement only to that branch:
 other branches do not trigger this workflow. This change does not configure branch
 protection or a merge queue. A merge queue would require a separately designed
 `merge_group` trigger.
