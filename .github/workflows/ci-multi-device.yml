@@ -2,7 +2,7 @@ name: Multi-device CI
 
 on:
   pull_request:
-    branches: [feature/multi-device-easy-deploy]
+    branches: [feature/multi-device-easy-deploy, product/multi-device]
     types: [opened, synchronize, reopened, ready_for_review, edited]
 
 permissions:
