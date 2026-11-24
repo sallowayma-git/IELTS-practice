@@ -60,7 +60,9 @@ backend/tor/*.agekey
 *.sql.gz
 *.tar
 *.tar.gz
+# Keep the dependency lockfiles used by CI.
 !backend/package-lock.json
+!developer/package-lock.json
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db
@@ -88,3 +90,15 @@ developer/tests/reports/listeningpractice-scan.md
 !developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/**
 node_modules
 .playwright-mcp/
+
+# Local review workspaces and artifacts
+/.review-*/
+
+# Local runtime debug logs
+/debug.log
+/developer/debug.log
+
+# Local intensive-reading Computer Use acceptance artifacts
+/developer/doc/Intensive-Reading-Computer-Use-Evidence/
+/developer/doc/Intensive-Reading-Computer-Use-GitHub-Comment.md
+/developer/doc/Intensive-Reading-Computer-Use-Report.md
