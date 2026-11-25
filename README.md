@@ -1,627 +1,311 @@
-# IELTS Atlas / IELTS Practice
+# IELTS Multi-Device — 多设备练习系统
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 
-## 分支用途与范围说明
+IELTS Multi-Device 是面向个人 NAS、私人服务器和可信局域网的自托管雅思练习系统。本分支通过一个 Node.js 后端提供练习网页、账号会话和练习记录 API，使用 PostgreSQL 保存服务端数据，让手机、平板和电脑通过同一部署访问自己的练习记录。
 
-> 本分支是面向原上游仓库的轻量级 PR 分支，目标是提供最小化的单用户多设备后端部署能力。它适合运行在 NAS、小型私人服务器或类似自托管环境中，用简单模型保存并同步个人练习记录。
+当前产品分支为 **`product/multi-device`**。本文涵盖这套自托管部署的安装、账号、数据管理和维护；静态版及其已有的 Sync 功能请参阅对应版本文档。
 
-### 本分支包含
+[部署](#多设备后端部署) · [账号与多设备使用](#账号与多设备使用) · [升级与备份](#升级与备份) · [常见问题](#常见问题) · [贡献指南](CONTRIBUTING.md)
 
-| 能力 | 说明 |
+## 版本定位与能力范围
+
+| 版本 | 入口与用途 |
 | --- | --- |
-| 单一后端入口 | 通过一个后端应用入口提供静态资源、登录会话和练习记录 API。 |
-| PostgreSQL 持久化 | 使用一个 PostgreSQL 数据库保存账号、会话和练习记录。 |
-| 小型自托管部署 | 面向 NAS、私人服务器和可信局域网环境，避免复杂运维假设。 |
-| 可选 Tor 入口 | 可选一个 Tor onion service，并且只指向同一个后端应用入口。 |
+| **IELTS Multi-Device（本分支）** | 从 `product/multi-device` 源码部署 Node.js 应用与 PostgreSQL，自行管理账号、会话、服务端练习记录及备份。 |
+| [IELTS Atlas / IELTS Practice](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版；其 Sync 功能、运行方式和发布包请查看该版本文档。 |
+| [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | 写作与 AI 协作客户端，按对应分支文档安装和使用。 |
 
-### 本分支不包含
+本分支提供以下能力：
 
-| 排除项 | 原因 |
+| 能力 | 当前行为 |
 | --- | --- |
-| 管理员 UI/API、TOTP 或管理员加固 | 保持 PR 聚焦在单用户多设备部署。 |
-| auth/admin/business 分地址架构 | 不引入多入口、多域名或多服务拆分。 |
-| 多个 public URL 或多个 onion service | 避免把轻量部署变成完整生产代理架构。 |
-| 代理层拆分 | 不加入独立 auth、admin、business proxy。 |
-| 大范围 UI/样式/主题改动 | 减少与上游界面代码的冲突。 |
-| 生成的听力或运行时 bundle 改动 | 避免无关生成产物扩大 PR 范围。 |
+| 个人账号与独立设备会话 | 在设置页注册或登录，同一账号可在多台设备使用；默认只允许注册第一个账号。 |
+| 服务端练习记录 | PostgreSQL 保存账号、会话和练习记录；前端保留本地数据，通过后端合并记录与处理冲突。 |
+| 阅读与练习回顾 | 题库浏览、阅读答题、解析、笔记、高亮、答案对比及历史记录回顾。 |
+| 听力与套题 | 接入自备听力资源，支持阅读套题和听力 P1–P4 套题；题源与音频需要自行准备。 |
+| 学习管理 | 练习统计、Markdown 报告、数据导入导出、应用内备份、本地磁盘备份、词汇工具与成就。 |
+| 自托管部署 | Docker Compose 管理应用与数据库；可选 Tor onion service 指向同一个应用入口。 |
 
-### 完整版仓库
-
-需要完整独立仓库架构、更多服务端能力或更重部署方案的使用者，可以查看：[k-undurkhaan-2/IELTS-Project](https://github.com/k-undurkhaan-2/IELTS-Project)。
+产品范围以个人练习和轻量部署为主，当前不包含管理员 UI/API、TOTP、独立认证域、多个业务入口或多层代理架构。通用前端功能与静态版分别演进，不能假定本分支包含静态版的每一项新功能。更完整的独立服务端方案可参考 [IELTS-Project](https://github.com/k-undurkhaan-2/IELTS-Project)。
 
 ## 重要使用声明
 
-本项目允许个人基于学习、研究和自用目的进行本地运行、私人部署或在个人控制的网页环境中使用。使用者可以将项目部署到自己的电脑、私人服务器、NAS 或个人网页空间，但应确保访问范围和传播范围可控。
+本项目允许个人基于学习、研究和自用目的进行本地运行、私人部署或在个人控制的网页环境中使用。部署到电脑、私人服务器、NAS 或个人网页空间时，应确保访问范围和传播范围可控。
 
-请勿将包含题源、音频、PDF、解析、二次修改页面或打包产物的网站、镜像站、压缩包继续公开分发给更多人；请勿将本项目用于商业售卖、付费社群、引流推广、公开宣传或其他盈利行为。项目涉及的题源和部分素材存在第三方版权风险，机考网页形式的公开部署也可能触及相关从业者利益。大规模传播会显著增加被投诉、举报、删除仓库或关闭页面的风险，最终影响所有使用者。
+请勿将包含题源、音频、PDF、解析、二次修改页面或打包产物的网站、镜像站、压缩包继续公开分发给更多人；请勿将本项目用于商业售卖、付费社群、引流推广、公开宣传或其他盈利行为。题源和部分素材涉及第三方版权，公开部署不代表取得这些内容的传播许可。
 
-为保证项目能够长期稳定存在，请遵循以下原则：**自行部署，个人使用，控制传播范围，不以项目或其题源牟利。**
+请遵循：**自行部署，个人使用，控制传播范围，不以项目或其题源牟利。** 代码授权以 [LICENSE](LICENSE) 为准；题源、文章、音频、PDF、图片及其他第三方内容版权归原权利人所有。
 
-代码授权以 [LICENSE](LICENSE) 为准。题源、文章、音频、PDF、图片和其他第三方内容版权归原权利人所有，仅建议用于个人学习与备考场景。
+## 多设备后端部署
 
-## 分支概览
+### 准备环境与源码
 
-本项目目前维护三个主要分支，分别面向不同使用场景和技术需求：
+- 服务端：能够运行 Linux 容器的 Docker 环境，以及 Docker Compose。以下命令以 Compose 2.24.4 或更新版本为基线，与部署冒烟测试要求一致。
+- 浏览器：建议使用支持 IndexedDB 的近期 Chrome 或 Edge，允许练习页弹窗，并保留站点数据。移动浏览器的弹窗、音频和本地文件访问行为可能不同。
+- Docker 部署无需在宿主机另外安装 Node.js 或 PostgreSQL；当前应用镜像使用 Node.js 24，数据库镜像使用 PostgreSQL 16。
 
-| 分支 | 说明 | 状态 | 完成度 | 技术特征 |
-|------|------|------|--------|----------|
-| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版，纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
-| [product/multi-device](https://github.com/sallowayma-git/IELTS-practice/tree/product/multi-device) | 自主部署服务器版，支持多设备数据同步，适合有一定软件基础的用户 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
-| [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
-
-> **main** 适合所有用户直接使用；**product/multi-device** 面向希望自主部署的用户；**IELTS-WRITING-FEAT** 是 AI native 协作客户端，提供写作评分、阅读教练、自进化等 AI 功能。
-
-## 项目概述
-
-IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩展的练习系统。默认静态模式的主入口为 `index.html`，应用运行依赖静态 HTML、CSS、JavaScript bundle 和本地题库资源，不需要后端服务。本分支额外提供轻量 `backend/` 部署路径，用于个人多设备练习记录同步。
-
-系统提供题库浏览、阅读练习、可选听力练习、套题练习、练习记录、成绩统计、错题分析、数据备份、题库导入、词汇辅助、阅读背题和成就系统等功能。数据默认保存在浏览器本地存储中，支持在 `file://` 协议下直接运行，也支持部署到静态网页空间。
-
-当前准备发布版本：`0.6.2-fix`。
-
-## 快速开始
-
-### 系统要求
-
-- 推荐浏览器：Chrome 或 Edge 最新稳定版。
-- 基础能力：支持 ES6、IndexedDB、localStorage、sessionStorage、`window.open` 和 `postMessage`。
-- 运行方式：支持直接通过 `file://` 打开，也支持通过本地静态服务器或静态网页托管访问。
-- 浏览器设置：首次练习时需要允许弹窗，否则练习窗口可能无法打开。
-
-Firefox、Safari 和移动浏览器可以使用，但对 `file://`、PDF、音频、跨窗口通信和弹窗策略的限制可能更严格。
-
-### 本地直接运行
-
-1. 下载或解压完整项目目录。
-2. 保持目录结构完整，不要只复制 `index.html`。
-3. 双击打开根目录下的 `index.html`。
-4. 进入“题库浏览”确认题库列表是否正常显示。
-5. 点击任意练习项时，如浏览器提示弹窗拦截，请允许该页面打开新窗口。
-
-当前入口只有 `index.html`。旧文档中出现过的 `improved-working-system.html` 不再是有效入口。
-
-### 本地静态服务器运行
-
-如果浏览器对 `file://` 的资源访问限制较多，可以在项目根目录启动静态服务器：
+首次部署时，克隆本产品分支。已有部署请先阅读[升级与备份](#升级与备份)。
 
 ```bash
-python -m http.server 8000
+git clone --branch product/multi-device --single-branch https://github.com/sallowayma-git/IELTS-practice.git
+cd IELTS-practice
 ```
 
-然后访问：
+以下命令均在仓库根目录执行。请使用完整源码检出，包含 `backend/`、`assets/`、`css/`、`js/`、`templates/` 和 `index.html`；静态版运行 ZIP 不包含这套后端部署。
 
-```text
-http://localhost:8000/
-```
+### 创建配置并启动
 
-本地服务器适合调试资源路径、浏览器控制台错误、PDF 或音频加载问题。正式分发给个人用户时，发布包仍应保持解压后可直接打开 `index.html` 使用。
+从 [backend/.env.example](backend/.env.example) 创建本地配置，仅在首次配置时复制，已有部署应保留原文件。
 
-### 静态网页部署
-
-可以将运行时文件部署到静态网页空间，但应仅用于个人或小范围自用场景。部署时必须保留目录层级，避免 bundle、题库、字体、图片、PDF、音频或生成资产出现 404。
-
-公开部署前请重新阅读顶部使用声明。部署可行不等于适合公开传播，尤其不要将包含题源的网页用于商业化、宣传或大规模分发。
-
-### 可选多设备后端部署
-
-如果需要在手机、平板和桌面浏览器之间共享练习记录，可以使用 `backend/` 中的轻量后端。该模式使用单一应用入口、PostgreSQL 和浏览器 session 保存同一账号的练习记录，适合个人 NAS、小型自托管服务器或只在可信局域网内使用的环境。
-
-Docker Compose 快速启动：
-
-```powershell
-Copy-Item backend\.env.example backend\.env
-# 编辑 backend\.env，至少替换 POSTGRES_PASSWORD 和 SESSION_SECRET
-docker compose --env-file backend\.env -f backend\docker-compose.yml up --build
-```
-
-如果不使用 Docker，需要先准备 PostgreSQL，然后运行：
-
-```powershell
-npm --prefix backend install
-npm --prefix backend run migrate
-npm --prefix backend start
-```
-
-默认只暴露一个应用服务：`http://127.0.0.1:3000/`。如果需要在局域网访问，可以在确认防火墙、访问范围和反向代理设置后，将 `APP_BIND_ADDRESS` 改为合适的监听地址。`REGISTRATION_MODE=first-user` 会限制只有第一个账号可以自行注册；创建账号后可改为 `disabled`。
-
-#### 首次登录与多设备同步
-
-1. 从上述后端地址打开网页，进入 **设置 → 账号与多设备同步**。首次部署会显示“注册首个账号”；密码至少 8 个字符，包含大小写字母和数字。已有账号时直接登录。
-2. 如果此浏览器已有练习记录，点击 **备份并合并本地记录，启用同步**。应用会先创建一份应用内备份，再合并本地与服务器记录。空白浏览器登录后直接下载服务器记录。
-3. 在另一台设备通过同一个服务器入口访问并登录同一账号。保持应用主页面打开，新练习、答案、笔记、高亮、套题子记录和删除操作会自动同步；页面也会定期检查其他设备的更新。可点击“立即同步”主动刷新。
-4. 设置页会显示同步状态和最近同步时间。断网、会话失效或服务器暂时不可用时，练习继续保存在本地，重新连接或登录后重试。状态显示“同步未完成”时，不要把本地保存成功理解为已上传服务器。
-5. 同一条记录在两台设备上分别修改，或一端删除而另一端修改时，应用会暂停同步并列出冲突记录。选择保留本地或云端版本后继续；不会自动用旧设备快照覆盖服务器数据。
-
-已有记录位于其他浏览器、其他域名或 `file://` 来源时，先在原页面“导出数据”，再在后端页面“导入数据”，最后登录并合并。本地数据按来源隔离，SSH 隧道的主机名和端口也应保持稳定。应用内备份仍位于浏览器，长期保存请使用“导出到下载”或本地磁盘备份。
-
-同步范围仅为**练习记录及其完整回顾数据**。题库文件、词汇、偏好设置、备份文件和进行中的答题草稿仍属于当前设备。题库内置资源随部署更新；自备听力和自定义题库需在每台设备分别准备。
-
-退出登录会停止同步并保留此浏览器的本地记录，重新登录原账号后继续。为防止把一个账号的记录上传到另一个账号，已经绑定的浏览器不会自动切换数据归属；使用其他账号请使用独立浏览器配置，或先导出备份并清除本地数据。
-
-直接打开 `index.html` 或使用普通静态服务器时继续使用本地模式，不显示账号面板，也不会请求认证或同步 API。Docker 部署直接提供已提交的前端 bundle，无需另外构建前端或在控制台执行登录脚本。
-
-升级现有部署时，更新代码后重新运行上述 Docker Compose 命令构建应用，并保留原有 PostgreSQL 数据卷。本次修复无需新增环境变量或数据库迁移。升级后强制刷新网页一次，确保浏览器载入新的前端 bundle；“清除本地数据”不是升级步骤。已登录时清除本地数据后，服务器记录会在重新连接账号时再次下载；需要跨设备删除练习时，请使用练习记录页的删除操作。
-
-本分支的阅读题源、索引及解析已同步至 `main` 的 `3510cc61`（2026 年 11 月发布状态），保留历史题目 ID 的兼容映射；本次同步不包含 `main` 的其他界面或精读功能改动。
-
-可选 Tor hidden service 使用同一个后端应用入口，不需要拆分 auth、admin 或 business 域名：
-
-```powershell
-docker compose --profile onion --env-file backend\.env -f backend\docker-compose.yml up --build
-```
-
-该轻量后端不包含管理员页面、TOTP、独立认证域、多个 public URL 或多层代理架构。普通静态模式仍可继续直接打开 `index.html` 使用。
-
-## 功能说明
-
-### 学习总览
-
-总览页面用于展示学习状态和练习概况。系统会根据本地练习记录汇总已练习题目、平均表现、学习时长、连续学习状态和分类进度等信息。该页面适合作为每日打开应用后的入口，用于判断后续应继续刷题、复盘错题还是切换到词汇辅助。
-
-### 题库浏览与管理
-
-题库浏览是系统的核心入口。当前实现默认支持阅读资源；听力资源作为可选本地扩展接入，并按题目元数据生成可检索、可筛选的题库列表。
-
-主要能力包括：
-
-- 类型筛选：支持“全部”“阅读”“听力”等过滤方式；未配置听力扩展资源时，听力列表可能为空。
-- 分类筛选：支持按 P1、P2、P3 等分类查看题目。
-- 关键词搜索：支持按题目标题、文件名或元数据关键字检索。
-- 排序与状态：支持题库排序、练习状态展示和进度回显。
-- 资源区分：阅读资源主要来自生成后的阅读题库资产；听力资源来自用户自行配置的本地扩展索引或本地听力目录。
-- 题库导入：设置页提供“加载题库”入口，可通过文件夹选择器导入自定义阅读或听力资源。
-- 配置切换：设置页提供“题库配置切换”，用于在默认题库和导入题库配置之间切换。
-- 强制刷新：设置页提供“强制刷新题库”，用于重新同步当前题库索引和界面状态。
-
-题库索引不应手写维护。默认阅读索引来自 `assets/generated/` 下的生成资产；听力索引属于可选本地扩展资源，用户导入题库时由浏览器侧扫描和标准化流程生成配置。
-
-### 阅读练习
-
-阅读练习使用统一阅读页面运行，核心资产位于：
-
-```text
-assets/generated/reading-exams/
-assets/generated/reading-explanations/
-```
-
-当前实现支持：
-
-- 通过题库卡片打开阅读练习窗口。
-- 在统一阅读页中完成答题、提交和查看结果。
-- 回传用户答案、正确答案、得分信息和题目上下文。
-- 支持解析内容、定位高亮和答案对比。
-- 与练习记录系统同步，完成后自动写入本地历史。
-- 支持阅读背题模式，复用统一阅读页查看答案、解析和定位信息。
-
-阅读练习依赖浏览器新窗口和跨窗口通信。若练习页能打开但成绩没有保存，应优先检查弹窗权限、控制台错误和 `postMessage` 通信状态。
-
-### 听力练习
-
-听力练习通过听力索引和记录桥接模块接入。出于版权合规考虑，公开仓库和普通发布包默认不包含听力音频、配套题源、PDF、完整 `ListeningPractice/` 目录或预生成听力索引。
-
-如需在个人本地环境启用听力练习，可自行准备听力资源，并按可选扩展路径放置生成索引：
-
-```text
-assets/generated/listening-exams/manifest.js
-assets/generated/listening-exams/listening-index.compat.js
-```
-
-主要能力包括：
-
-- 支持从本地扩展听力索引加载听力题目。
-- 支持用户通过题库加载流程导入自备本地听力资源。
-- 支持 P1-P4 听力目录结构。
-- 通过 `listening-record-bridge` 将听力练习结果转换为统一练习记录。
-- 在练习记录和统计系统中与阅读记录使用同一套数据管理流程。
-
-这些路径只表示扩展资源的约定位置。若公开包中不存在上述文件，这是预期行为，不代表仓库缺失。需要随个人自用发布包包含 `ListeningPractice/P1-P4` 时，应先在本地准备资源并使用 `INCLUDE_LOCAL_LISTENING=1` 进行打包。
-
-### 套题练习模式
-
-套题模式用于连续完成多个练习单元，并将结果聚合为套题记录。该模式适合模拟完整练习流程，减少单篇练习之间的手动跳转。
-
-当前支持：
-
-- 创建套题会话。
-- 顺序打开和切换题目。
-- 跟踪当前套题窗口和当前题目。
-- 聚合每个子题目的得分、耗时和结果。
-- 保存完整套题记录。
-- 在异常关闭、中断或部分完成时尽量保留已完成记录。
-- 清理套题子记录，避免历史列表重复展示。
-
-套题模式依赖更严格的窗口管理和通信流程。如果浏览器阻止弹窗或用户手动关闭练习窗口，系统会进入降级保存路径。
-
-### 练习记录与统计
-
-练习记录页面用于查看、筛选、导出和管理历史记录。记录来源包括阅读练习、听力练习、套题练习和部分降级保存流程。
-
-主要能力包括：
-
-- 统计卡片：展示已练习题目、平均正确率、学习时长等核心指标。
-- 趋势分析：展示近期练习趋势，可按时间范围切换。
-- 练习热力图：按日期展示练习频率。
-- 中高频进度：展示重点题库或优先级题目的练习进度。
-- 阅读错题雷达：根据最近阅读记录统计错题题型分布。
-- 历史列表：按全部、阅读、听力等维度筛选记录。
-- 批量管理：支持选择多条记录并批量删除。
-- Markdown 导出：支持将练习历史导出为 Markdown 报告。
-- 详情查看：支持打开单条练习记录，查看分数、耗时、答案对比和原始结果信息。
-
-练习记录是本系统的核心用户数据。清理缓存、切换浏览器、隐私模式和浏览器自动清理站点数据都可能影响记录持久性，建议定期使用设置页的数据导出或备份功能。
-
-### 系统设置与数据管理
-
-设置页集中放置系统维护、题库管理和数据管理功能。
-
-系统管理能力：
-
-- 清除全部本地数据：删除浏览器中的练习、题库、词汇、设置、应用内备份和本地文件夹绑定，刷新后回到首次启动并重新显示 GPL 协议；外部文件夹中的 JSON 备份不会删除。
-- 加载题库：导入阅读或听力题库目录。
-- 主题切换：切换当前界面的背景与视觉主题。
-- 题库配置切换：查看、切换或管理题库配置。
-- 强制刷新题库：重新同步题库索引、统计和界面状态。
-
-数据管理能力：
-
-- 创建备份：将当前练习数据、统计数据和相关配置保存为备份。
-- 备份列表：查看已有备份并选择恢复。
-- 导出数据：导出当前本地数据，便于迁移或长期保存。
-- 导入数据：从外部 JSON 数据恢复或合并历史记录。
-- 完整性检查：对导入数据和本地数据进行基础校验。
-
-核心持久化数据使用 IndexedDB；IndexedDB 不可用时应用会明确报错，不会将练习记录静默降级到弱一致性存储。localStorage 仅用于旧数据迁移与少量兼容状态，sessionStorage 用于会话级草稿。不同浏览器、不同协议和不同域名下的数据互相隔离。
-
-### 更多工具
-
-“更多工具”页面提供练习以外的辅助能力：
-
-- 词汇练习：使用内置词表和记忆调度能力辅助复习。
-- 阅读背题：复用统一阅读页，直接查看答案、解析和定位高亮。
-- 成就系统：根据练习和使用行为展示已解锁徽章。
-
-这些功能共享主应用的数据层和界面状态，不需要额外后端服务。
-
-### 主题与界面
-
-当前主界面为 HeroUI 风格，包含动态背景、主导航、题库面板、练习记录面板、设置面板和更多工具面板。项目保留了主题适配基础设施，主题相关逻辑位于 `js/plugins/themes/` 和 `js/presentation/`。
-
-主题切换主要影响视觉呈现，不应改变练习记录、题库索引或数据存储格式。
-
-## 详细使用指南
-
-### 开始单篇练习
-
-1. 打开 `index.html`。
-2. 进入“题库浏览”。
-3. 使用类型筛选、分类筛选或搜索框定位题目。
-4. 点击题目卡片上的练习入口。
-5. 在新窗口中完成答题并提交。
-6. 返回主窗口，在“练习记录”中查看保存结果。
-
-如果练习窗口未打开，请先允许浏览器弹窗。如果练习完成后没有记录，请检查控制台是否存在资源加载失败或通信错误。
-
-### 使用套题模式
-
-1. 在题库或相关练习入口中选择套题练习。
-2. 系统创建套题会话并打开练习窗口。
-3. 按顺序完成每个题目。
-4. 套题结束后，系统聚合子题目结果并保存为套题记录。
-5. 在“练习记录”中查看套题结果。
-
-套题模式不适合在多个浏览器窗口中并行操作同一套题。并行操作会增加窗口引用、状态同步和记录归并的复杂度。
-
-### 查看与导出练习记录
-
-1. 进入“练习记录”。
-2. 查看统计卡片、趋势、热力图和历史列表。
-3. 使用“全部 / 阅读 / 听力”筛选历史记录。
-4. 点击单条记录查看详情。
-5. 使用“导出 Markdown”生成学习报告。
-6. 如需清理历史，使用批量选择和批量删除。
-
-删除记录前建议先导出或创建备份。删除后的数据是否可恢复取决于是否存在可用备份。
-
-### 导入自定义题库
-
-1. 进入“系统设置”。
-2. 点击“加载题库”。
-3. 选择阅读或听力资源目录。
-4. 根据界面提示选择全量或增量导入。
-5. 导入完成后返回“题库浏览”检查列表。
-6. 如有多个配置，通过“题库配置切换”选择当前使用的题库配置。
-
-自定义题库应保持稳定的目录结构。频繁移动文件、重命名目录或混合不同来源题库，可能导致记录与题目索引无法准确匹配。
-
-### 备份、恢复与迁移
-
-1. 进入“系统设置”。
-2. 使用“创建备份”保存当前数据快照。
-3. 使用“导出数据”生成外部文件，用于跨浏览器或跨设备迁移。
-4. 在新环境中使用“导入数据”恢复记录。
-5. 导入后检查练习记录、统计卡片和题库状态。
-
-浏览器本地存储与协议和域名绑定。例如，`file://` 打开的数据与 `http://localhost:8000/` 下的数据不一定共享。
-
-## 项目结构
-
-运行时文件：
-
-```text
-index.html
-css/
-js/bundles/
-assets/
-ReadingPractice/
-```
-
-主要源码目录：
-
-```text
-js/app/              应用入口、状态桥、题库浏览、练习会话和套题逻辑
-js/core/             练习、记录、存储、词汇等核心能力
-js/data/             repository 与数据源封装
-js/runtime/          懒加载、启动屏、统一阅读页运行时
-js/services/         题库发现、题库管理、统计、成就等服务
-js/components/       设置、诊断、记录弹窗、题库状态等 UI 组件
-js/presentation/     导航、主题、更多工具、首页交互
-js/utils/            存储、答案匹配、导入导出、性能和 DOM 工具
-js/plugins/          主题和扩展桥接
-assets/generated/    生成后的阅读题库索引、页面、解析资产，以及可选听力扩展索引
-assets/wordlists/    词汇数据
-developer/doc/Wiki/  架构文档、历史决策和模块说明
-developer/tests/     静态回归、E2E、工具脚本和测试报告
-scripts/             构建脚本
-```
-
-发布包只应包含用户运行所需文件。源码目录、开发文档、测试工具和 `node_modules/` 不应进入普通分发包。
-
-## 构建与发布
-
-### 生成 bundle
-
-`index.html` 当前加载 `js/bundles/*.bundle.js`。修改源码后必须重新生成 bundle：
+Linux / macOS / Git Bash：
 
 ```bash
-node scripts/build-bundles.mjs
-```
-
-不要手动编辑 `js/bundles/*.bundle.js`。这些文件是构建产物，应由脚本生成。
-
-### 生成发布包
-
-Linux / Git Bash：
-
-```bash
-bash developer/release.sh 0.6.2-fix
+cp backend/.env.example backend/.env
 ```
 
 Windows PowerShell：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
+Copy-Item backend/.env.example backend/.env
 ```
 
-输出位置：
-
-```text
-dist/ielts-practice-{version}.zip
-```
-
-发布脚本会先运行 `node scripts/build-bundles.mjs`，再创建只包含运行时文件的压缩包。用户解压后可直接打开 `index.html` 使用。
-
-### 包含本地听力资源
-
-普通发布包默认排除完整 `ListeningPractice/` 目录和听力生成资产。如果需要将自备本地听力资源打入个人自用发布包，使用：
+编辑 `backend/.env`，至少替换 `POSTGRES_PASSWORD` 和 `SESSION_SECRET`。后者应是至少 32 个字符的随机密钥，生产模式会拒绝示例值或过短的值。不要将个人配置提交到 Git。
 
 ```bash
-INCLUDE_LOCAL_LISTENING=1 bash developer/release.sh 0.6.2-fix
+docker compose --env-file backend/.env -f backend/docker-compose.yml config --quiet
+docker compose --env-file backend/.env -f backend/docker-compose.yml up -d --build
+docker compose --env-file backend/.env -f backend/docker-compose.yml ps
 ```
 
-PowerShell：
+容器启动时会等待数据库就绪，再执行尚未应用的迁移并启动后端。应用直接提供仓库中已提交的前端 bundle，无需另建前端服务。
 
-```powershell
-$env:INCLUDE_LOCAL_LISTENING = "1"
-powershell -ExecutionPolicy Bypass -File developer/release.ps1 0.6.2-fix
+在服务器本机打开 [http://127.0.0.1:3000/](http://127.0.0.1:3000/)。[健康接口](http://127.0.0.1:3000/api/health) 返回 `{"ok":true}` 表示应用能够响应；还需完成注册、保存一条记录并在另一设备读取，才能确认账号与数据库流程可用。
+
+启动失败时查看日志：
+
+```bash
+docker compose --env-file backend/.env -f backend/docker-compose.yml logs --tail=100 app postgres
 ```
 
-该模式要求存在：
+### 配置项与访问地址
+
+| 配置项 | 用途 |
+| --- | --- |
+| `POSTGRES_PASSWORD` | Compose 数据库密码，同时传给应用连接数据库；首次部署必须替换示例值。 |
+| `SESSION_SECRET` | 会话签名密钥。升级时保留；更换后现有浏览器会话可能需要重新登录。 |
+| `REGISTRATION_MODE` | `first-user` 仅允许首个账号注册，`disabled` 关闭注册，`open` 允许继续注册。个人部署通常使用前两种。 |
+| `APP_BIND_ADDRESS` | Docker 应用端口绑定地址，默认 `127.0.0.1`，仅服务器本机可访问。 |
+| `APP_PORT` | Docker 对外应用端口，默认 `3000`。 |
+| `HOST` / `PORT` | 直接运行 Node.js 后端时的监听配置；Compose 内部固定为 `0.0.0.0:3000`。 |
+| `DATABASE_URL` | 直接运行 Node.js 时使用的数据库连接串；Compose 应用使用容器内的 PostgreSQL 连接配置。 |
+| `COOKIE_SECURE` | 默认 `false`，适用于本地 HTTP；通过 HTTPS 访问时可设为 `true`，浏览器只在安全连接上发送会话 Cookie。 |
+| `TRUST_PROXY` / `TRUSTED_PROXY_IPS` | 在受控反向代理后启用并指定可信代理地址，配合代理转发的协议与客户端信息。 |
+
+手机或另一台电脑不能用服务器的 `127.0.0.1` 地址访问。需要局域网访问时，将 `APP_BIND_ADDRESS` 改为服务器的局域网地址，或 `0.0.0.0`，重新执行启动命令，并通过防火墙限制访问范围。例如，服务器地址为 `192.168.1.10` 时，在其他设备打开 `http://192.168.1.10:3000/`。
+
+应用本身不终止 TLS。通过 HTTPS 反向代理访问时，应让网页与 `/api/` 指向同一个后端，并按实际代理链配置上述 Cookie 与代理选项。普通 HTTP 入口不要启用 `COOKIE_SECURE=true`，否则可能无法维持登录。
+
+Compose 同时将数据库端口绑定到服务器本机 `127.0.0.1:55432`；浏览器只访问应用端口。数据库已有数据卷时，仅修改 `POSTGRES_PASSWORD` 不会更改库内已有账号的密码，应通过数据库维护流程协调变更。
+
+### 不使用 Docker
+
+使用 Node.js 24 和独立 PostgreSQL，先创建可访问的数据库，再准备 `backend/.env`。将 `DATABASE_URL` 改为实际连接信息；示例中的 `55432` 是 Compose 映射端口，不能直接当作所有 PostgreSQL 实例的端口。连接串中的密码如含 URL 保留字符，需要按连接串规则编码。
+
+```bash
+npm ci --prefix backend
+npm run migrate --prefix backend
+npm start --prefix backend
+```
+
+后端会读取 `backend/.env`。长期运行时可在该文件中设置 `NODE_ENV=production`，使用符合要求的会话密钥，并通过自己的进程管理方式维护服务。此方式下，修改 `APP_BIND_ADDRESS` 不会改变 Node.js 的监听地址，应设置 `HOST` 和 `PORT`。
+
+### 可选 Tor 入口
+
+Tor profile 为同一个应用提供 onion 入口，使用同一套账号、记录和数据库：
+
+```bash
+docker compose --profile onion --env-file backend/.env -f backend/docker-compose.yml up -d --build
+docker compose --profile onion --env-file backend/.env -f backend/docker-compose.yml exec -T tor cat /var/lib/tor/hidden_service/hostname
+```
+
+等待 Tor 完成初始化后，通过 Tor Browser 访问输出的 onion 地址。`tor_hidden_service` 数据卷保存 onion 服务身份，删除该卷会失去原身份。普通地址与 onion 地址属于不同浏览器来源，各自保存登录 Cookie 和本地数据；服务端账号及记录仍属于同一部署。
+
+CI 会检查 profile 配置并构建 Tor 镜像，实际 onion 连通性需要手动验证。
+
+## 账号与多设备使用
+
+### 首次注册与连接已有记录
+
+1. 从后端地址打开网页，进入 **设置 → 账号与多设备同步**。首次部署可点击“注册首个账号”；已有账号时直接登录。注册密码至少 8 个字符，包含大小写字母和数字，且不超过 72 个 UTF-8 字节。
+2. 此浏览器已有练习记录时，点击 **备份并合并本地记录，启用同步**。应用先创建本地备份，再将本地记录与当前账号合并。空白浏览器登录后会直接连接并下载服务端记录。
+3. 在另一台设备访问同一部署，登录同一账号。完成一次练习后，保留应用主页面，检查设置页的同步状态和最近同步时间；必要时点击 **立即同步**。
+4. 首个账号创建后，可将 `REGISTRATION_MODE` 改为 `disabled` 并重新执行 Compose 启动命令，以明确关闭注册。保留 `first-user` 也会阻止继续注册。
+
+未登录时仍可在当前浏览器练习并保存本地记录。界面中的“云端”指你部署的后端及数据库。
+
+### 哪些数据会进入服务端
+
+| 数据 | 保存与同步方式 |
+| --- | --- |
+| 账号、密码哈希与登录会话 | 保存在服务端 PostgreSQL；每台设备拥有自己的登录会话。 |
+| 已保存的练习记录及完整回顾数据 | 在启用同步后合并到服务端，包括答案、成绩、笔记、高亮、标记和套题子记录。 |
+| 练习记录的修改与删除 | 随记录同步到其他设备；遇到双方修改或删除冲突时，等待用户选择。 |
+| 题库文件、音频、PDF、词汇、偏好设置、备份文件及答题草稿 | 不通过练习记录 API 同步。随部署提供的资源由服务器提供；自定义题库、浏览器配置和本地文件需另行准备。 |
+
+统计和回顾基于设备当前已有的记录显示，读取另一设备的新记录后更新。进行中的套题和答题草稿不支持通过本后端跨设备接续。
+
+### 离线、冲突与退出登录
+
+- **离线或服务暂时不可用**：已经打开的页面会保留能够正常保存的本地练习记录，联网、回到页面或重新登录后可重试。显示“同步未完成”时，记录尚不能视为已到达服务端；这不保证断网后能重新加载全部网页、题目和音频。
+- **同一条记录发生冲突**：同步暂停并显示冲突记录列表。先备份需要保留的数据，再选择“保留这些记录的本地版本”或“使用这些记录的云端版本”。当前按钮会应用到列表中的全部冲突记录。
+- **退出登录**：停止同步并保留当前浏览器的本地记录，再次登录原账号后继续。已经绑定的本地数据不会自动改归其他账号；使用其他账号时应使用独立浏览器配置，或先导出备份再清除本地数据。
+- **清除本地数据与删除记录**：设置页清除本地数据不等于清空服务端；重新连接账号后会下载服务端记录。需要跨设备删除练习时，使用练习记录页的删除操作，并确认同步完成。
+
+### 从静态版或其他浏览器迁入
+
+在原页面导出数据，在后端页面导入，再登录并合并记录。应用不会自动读取其他域名、端口、协议、浏览器配置或 `file://` 来源中的数据。
+
+尽量保持日常访问地址稳定。更换域名、端口、HTTPS 协议或 SSH 隧道入口后，本地缓存、账号 Cookie 和题库配置可能需要重新建立；已成功保存到同一数据库的服务端记录可在登录后重新获取。
+
+## 练习功能与题库资源
+
+### 阅读、听力与套题
+
+从“题库浏览”按类型、分类或关键词查找题目，允许弹窗后开始练习。提交后在“练习记录”查看答案、解析、笔记、高亮和套题结果；使用统计、趋势、热力图及 Markdown 导出整理学习记录。主页面承担记录接收与同步，练习时应保持打开。
+
+阅读资产位于 [assets/generated/reading-exams/](assets/generated/reading-exams/) 与 [assets/generated/reading-explanations/](assets/generated/reading-explanations/)，实际题量以当前索引为准。阅读背题、词汇练习和成就仍可从对应入口使用。
+
+套题支持经典、模拟和驻足模式。听力套题按 P1–P4 组织，模拟模式可统一提交四个 Part；其他模式按界面提示提交或继续。套题记录包含子项及回顾数据，进行中的恢复状态保留在当前设备。
+
+### 自备听力与自定义题库
+
+仓库包含共享听力运行页面 [listening-practice-unified.html](assets/generated/listening-exams/listening-practice-unified.html)，不附带听力音频、题源、PDF、完整 `ListeningPractice/` 或个人生成的听力索引。
+
+如需启用听力扩展，自行准备资源并按题库导入流程配置；使用本地生成索引时，约定位置为：
 
 ```text
 assets/generated/listening-exams/manifest.js
 assets/generated/listening-exams/listening-index.compat.js
 ```
 
-并会按脚本规则包含 `ListeningPractice/P1` 至 `ListeningPractice/P4` 中存在的目录。
+默认仓库中缺少这两个索引属于正常情况。导入后需验证题目页面与音频实际可访问，保持资源目录及题目 ID 稳定，避免历史记录无法回顾。
 
-## 测试要求
+当前后端只提供 `css/`、`js/`、`assets/` 和 `templates/` 的静态资源，Dockerfile 也不会复制仓库根目录的 `ListeningPractice/`。仅把听力目录放到仓库根下或启用静态打包参数，并不能让它在后端入口可访问；服务端提供自备资源需要同时适配资源路径与服务映射。设备本地导入的资源也不会随练习记录自动上传。
 
-功能或优化改动后，按顺序运行：
+## 升级与备份
+
+### 区分三类备份
+
+- **应用内备份**：保存在当前浏览器，适合操作前快速恢复；清除站点数据可能一并删除这些备份。
+- **导出文件或本地磁盘备份**：适合浏览器迁移和长期留存。通过设置页导出，并确认文件已保存到浏览器存储之外；本地文件夹绑定取决于浏览器支持及授权。
+- **服务端备份**：备份 PostgreSQL 数据库，并妥善保管 `backend/.env`；使用 Tor 时还需保留 `tor_hidden_service` 卷中的身份。浏览器导出不能替代账号、会话和数据库备份。
+
+服务端记录会接收删除操作，因此同步副本不能替代独立备份。数据库备份应使用 PostgreSQL 备份工具或适当的数据库备份流程，避免把运行中数据目录的直接复制当作已验证的备份；恢复应先在独立实例验证。
+
+### 更新现有部署
+
+1. 确认当前分支为 `product/multi-device`，妥善保存本地改动，导出尚未同步的浏览器数据，并备份数据库与配置。
+2. 在原部署目录更新源码，保留原 Compose 项目、数据库数据卷和 `backend/.env`：
 
 ```bash
-python developer/tests/ci/run_static_suite.py
-python developer/tests/e2e/full_reset_flow.py
-python developer/tests/e2e/suite_practice_flow.py
+git switch product/multi-device
+git pull --ff-only origin product/multi-device
+docker compose --env-file backend/.env -f backend/docker-compose.yml up -d --build
+docker compose --env-file backend/.env -f backend/docker-compose.yml ps
 ```
 
-第一条会生成：
+3. 使用 Tor profile 的部署，更新时沿用带 `--profile onion` 的启动命令。直接运行 Node.js 的部署则重新安装锁定依赖、执行迁移，再重启后端。
+4. 查看应用日志，确认迁移和启动成功；浏览器强制刷新后，核对旧记录、登录状态和两台设备间的新记录同步。
 
-```text
-developer/tests/e2e/reports/static-ci-report.json
+迁移脚本会记录已执行的 SQL，容器启动时只应用尚未执行的迁移。具体升级仍应检查本次变更涉及的数据结构和配置，不假定后续版本永远无需迁移。
+
+不要把 `docker compose down -v` 或“清除本地数据”当作升级步骤：前者会删除部署的数据卷。迁移到另一台服务器或更换 Compose 项目名时，需要显式迁移数据库和所需数据卷；仅复制源码不会带走服务端记录。发生数据库结构变更后，也不能仅切回旧代码就认定完成回退。
+
+## 本分支的本地兼容模式
+
+本分支保留直接打开 `index.html` 或通过普通静态服务器运行的方式，用于本地练习和兼容性验证。此时本分支的“账号与多设备同步”面板不会显示，也不会请求本后端的认证与练习记录 API。
+
+```bash
+python -m http.server 8000
 ```
 
-测试原则：
+从仓库根目录运行后访问 [http://localhost:8000/](http://localhost:8000/)。它提供的是本地静态入口；要使用本文的服务端账号和 PostgreSQL 数据，请访问后端地址。关于静态版产品及其已有 Sync 功能，仍以 `main` 分支的文档为准。
 
-- 修改运行时代码、题库索引、资源路径、练习记录、套题流程或发布脚本后，必须运行上述测试。
-- 修改 README、说明文档或纯文本材料时，可不运行浏览器流程，但仍应检查路径和命令是否真实存在。
-- 新增 QA、测试工具或验证脚本应放在 `developer/tests/` 下，避免污染发布包。
+## 开发、构建与验证
 
-## 技术说明
+### 目录与运行资产
 
-### 启动流程
+| 路径 | 用途 |
+| --- | --- |
+| [backend/src/](backend/src/) | 后端认证、会话、练习记录 API 与静态资源入口。 |
+| [backend/migrations/](backend/migrations/) | PostgreSQL 数据库迁移。 |
+| [backend/docker-compose.yml](backend/docker-compose.yml) | 应用、PostgreSQL 与可选 Tor 的部署配置。 |
+| [backend/scripts/ci-smoke.mjs](backend/scripts/ci-smoke.mjs) | 隔离部署与持久化冒烟检查。 |
+| [js/services/practiceCloud.js](js/services/practiceCloud.js) | 本分支的前端账号、记录合并与冲突处理。 |
+| [js/](js/) / [js/bundles/](js/bundles/) | 前端源码与运行时 bundle。 |
+| [assets/generated/](assets/generated/) | 阅读题库、解析、共享练习页面及可选本地扩展资产。 |
+| [developer/tests/](developer/tests/) | 前后端相关回归、浏览器流程及 CI 辅助脚本。后端 API 测试位于 [backend/test/](backend/test/)。 |
 
-应用启动由 `index.html` 加载 bundle 完成。核心 bundle 包括：
+修改前端源码后生成并检查 bundle，再构建部署镜像；不要手工编辑生成的 bundle：
 
-```text
-js/bundles/runtime-entry.bundle.js
-js/bundles/core-foundation.bundle.js
-js/bundles/ui-shell.bundle.js
-js/bundles/legacy-app.bundle.js
+```bash
+node scripts/build-bundles.mjs
+node scripts/build-bundles.mjs --check
 ```
 
-初始化过程包括：
+[developer/release.sh](developer/release.sh) 和 [developer/release.ps1](developer/release.ps1) 生成的是静态运行 ZIP，不包含后端服务与数据库。`INCLUDE_LOCAL_LISTENING=1` 只控制该静态打包流程。本产品的部署入口是源码中的 Docker Compose 或直接运行 `backend/`，不是静态 ZIP。
 
-1. 启动屏和基础运行时加载。
-2. 存储命名空间初始化。
-3. 应用实例创建。
-4. 题库索引和练习记录加载。
-5. 导航、题库、记录、设置等视图初始化。
-6. 按需加载题库浏览、练习记录、套题、设置、更多工具等功能 bundle。
+### 验证与贡献
 
-### 数据存储
+具体环境和命令见 [贡献指南](CONTRIBUTING.md#按改动类型验证) 与 [Multi-device CI 说明](developer/tests/ci/MULTI_DEVICE_CI.md)。当前 CI 对目标为 `product/multi-device` 的 PR 执行：
 
-系统按数据用途使用本地存储：
+| 检查 | 内容 |
+| --- | --- |
+| `md-quality` | Bundle 一致性、JavaScript/IndexedDB、Python 与阅读数据完整性。 |
+| `md-backend` | 内存存储下的认证、会话、记录 API、并发保护与静态资源测试。 |
+| `md-e2e` | 阅读、听力、套题、导入导出及 `file://` 的统一浏览器回归。 |
+| `md-deploy-smoke` | 真实 PostgreSQL、迁移、重启持久化和浏览器登录与多设备记录流程。 |
+| `md-ci` | 汇总检查，要求以上四项全部成功。 |
 
-- IndexedDB：存储练习记录、词汇、设置、题库配置和备份等核心持久化数据，并提供事务与修订冲突检测。
-- localStorage：仅保留旧版数据迁移和少量兼容状态。
-- sessionStorage：存储会话级草稿，不作为核心数据降级后端。
+单独运行内存后端测试不能证明数据库持久化正确。草稿及纯文档 PR 也会运行完整 CI；纯文档修改的本地验证以链接、命令、配置一致性及 `git diff --check` 为主。
 
-主要数据包括：
-
-- 题库索引。
-- 练习记录。
-- 用户设置。
-- 备份数据。
-- 统计和派生状态。
-
-不同浏览器、不同域名、不同协议下的数据隔离。迁移数据时应使用导出和导入功能，不要直接复制浏览器内部存储。
-
-### 练习通信
-
-练习窗口与主窗口通过 `postMessage` 通信。典型流程如下：
-
-1. 主窗口打开练习页面。
-2. 主窗口创建练习会话。
-3. 练习页加载增强或桥接脚本。
-4. 用户提交答案。
-5. 练习页发送完成消息。
-6. 主窗口标准化成绩并保存记录。
-
-相关运行时包括：
-
-```text
-js/bundles/practice-page-enhancer.bundle.js
-js/bundles/listening-record-bridge.bundle.js
-js/bundles/session.bundle.js
-js/bundles/practice.bundle.js
-```
-
-### 题库资产
-
-阅读生成资产位于：
-
-```text
-assets/generated/reading-exams/
-assets/generated/reading-explanations/
-```
-
-可选听力扩展生成资产位于：
-
-```text
-assets/generated/listening-exams/
-```
-
-公开仓库和普通发布包可能不包含该目录。运行时题库数量以生成资产中的 manifest 和当前题库配置为准。README 不再写固定题量，避免题库更新后文档失真。
+本分支贡献以最新 `product/multi-device` 为基线并向该分支提交 PR；与部署无关的通用前端贡献按 `opensource` 的贡献指南处理。提交信息、PR 标题、正文和评审回复使用英文。
 
 ## 常见问题
 
-### 页面打开后样式异常或功能缺失
+### 手机或另一台电脑打不开页面
 
-通常是目录不完整或资源路径错误。确认以下目录存在并保持相对路径不变：
+确认访问的是服务器的局域网地址，而非手机自己的 `127.0.0.1`。检查 `APP_BIND_ADDRESS`、`APP_PORT`、容器状态、防火墙和网络连通性。修改 `.env` 后重新执行 Compose 启动命令，让服务配置生效。
 
-```text
-css/
-js/bundles/
-assets/
-ReadingPractice/
-```
+### 没有账号面板，或登录后立即失效
 
-如果使用发布包，确认压缩包解压完整。不要将 `index.html` 单独复制到其他目录运行。
+本分支的账号面板只在后端返回的网页中启用。确认没有打开 `file://`、普通静态服务器或其他版本的网页。经反向代理访问时，检查网页与 `/api/` 是否来自同一部署，以及 HTTPS、`COOKIE_SECURE` 和可信代理配置是否匹配；也需允许站点 Cookie。
 
-### 点击练习后没有打开窗口
+### 无法注册新账号
 
-检查浏览器是否拦截弹窗。练习页需要通过新窗口或新标签打开，主窗口依赖该窗口回传成绩。
+默认 `REGISTRATION_MODE=first-user` 只接受第一次注册。已有账号时请登录；`disabled` 会拒绝注册。密码还需满足长度、大小写、数字与 UTF-8 字节上限。当前产品没有管理员界面或自助密码重置流程。
 
-处理步骤：
+### 本地已有记录，另一台设备仍看不到
 
-1. 允许当前页面弹窗。
-2. 重新点击练习入口。
-3. 打开开发者工具查看 Console 是否有错误。
-4. 检查目标练习资源是否 404。
+在设置页确认两端使用同一部署与账号，已完成本地记录合并，并且显示同步成功。保持主页面打开，检查是否离线、会话失效或存在冲突。未完成同步前，不要清除仍持有记录的设备数据。
 
-### 练习完成后没有保存记录
+### 清除本地数据后记录又出现
 
-常见原因包括：
+服务端记录仍然存在，连接账号后会重新下载。跨设备删除应在练习记录页操作；清除浏览器数据用于重置本地环境。
 
-- 浏览器阻止跨窗口通信。
-- 练习页资源加载失败。
-- 用户在隐私模式中运行，存储被限制。
-- IndexedDB 被禁用、配额耗尽或后端事务失败。
-- 使用了不同协议或不同域名，导致查看的是另一份本地数据。
+### 练习页打不开、听力没有音频或回顾缺失
 
-处理步骤：
+允许弹窗并保持主页面打开，检查题目页面、bundle 与音频是否可访问。默认部署没有完整自备听力题库，根目录的 `ReadingPractice/` 和 `ListeningPractice/` 也不是后端自动公开的路径。同步完整记录不会同时复制题库文件；回顾仍需要相应题目资源。
 
-1. 查看 Console 中是否有 `postMessage`、storage 或资源加载错误。
-2. 在“系统设置”中导出数据，确认当前环境是否已有记录。
-3. 换用 Chrome 或 Edge 最新稳定版复测。
-4. 必要时通过本地静态服务器运行。
+### 更新后看不到原来的服务端记录
 
-### 题库列表为空
+先确认访问地址、账号、数据库连接和 Compose 项目是否与原部署一致。目录或项目名改变可能让 Compose 使用新的空数据卷；应找回原卷或从备份恢复。浏览器地址变化也会形成独立的本地数据，不应立即当作数据库记录已丢失。
 
-检查以下内容：
+### 应用无法启动或健康检查失败
 
-1. `assets/generated/reading-exams/manifest.js` 是否存在。
-2. `assets/generated/reading-exams/reading-practice-unified.html` 是否存在。
-3. `js/bundles/core-foundation.bundle.js` 是否正常加载。
-4. 是否误删或移动了 `assets/` 目录。
-5. 如使用自定义题库，重新通过“系统设置”中的“加载题库”导入。
-
-### 听力题库不可见
-
-公开仓库和普通发布包默认不包含听力资源。若需要启用听力题库，请检查：
-
-1. 是否已经自行准备本地听力资源。
-2. 是否存在 `assets/generated/listening-exams/manifest.js`。
-3. 是否存在 `assets/generated/listening-exams/listening-index.compat.js`。
-4. 如需本地听力目录，发布时是否设置 `INCLUDE_LOCAL_LISTENING=1`。
-5. `ListeningPractice/P1-P4` 中是否存在实际资源。
-
-### 数据丢失或统计清零
-
-浏览器本地数据可能因清理缓存、隐私模式、协议变化或域名变化而不可见。
-
-处理步骤：
-
-1. 检查当前是否使用了与之前相同的浏览器、路径、协议和域名。
-2. 在设置页查看备份列表。
-3. 使用导入功能恢复之前导出的数据。
-4. 如需长期保存，请定期导出数据文件。
-
-### `file://` 与本地服务器表现不一致
-
-这是浏览器安全策略造成的正常差异。项目要求尽量兼容 `file://`，但部分浏览器会限制音频、PDF、新窗口、跨页面脚本或本地文件访问。遇到差异时，应先在 Chrome 或 Edge 下验证，再使用本地静态服务器定位问题。
-
-## 维护原则
-
-- 主入口保持为 `index.html`。
-- 用户运行依赖 `js/bundles/`，源码改动后必须重新构建 bundle。
-- 保持 `file://` 可用；新增功能如需服务器能力，必须提供降级路径。
-- 发布包只包含运行时文件，不包含源码、开发工具、测试目录和 `node_modules/`。
-- 题库、记录和统计应通过统一数据结构流转，避免为单个题型堆叠特殊分支。
-- 文档中的命令、路径和入口必须能在当前仓库中验证。
+查看 `app` 与 `postgres` 日志，核对数据库密码、数据库可用性、迁移结果和会话密钥。Docker 生产模式要求 `SESSION_SECRET` 至少 32 个字符且不是示例值。`/api/health` 只验证应用响应，仍需通过实际登录与记录操作确认数据库正常。
 
 ## 许可证与内容版权
 
-代码许可证见 [LICENSE](LICENSE)。使用、修改和再分发代码时，应遵守许可证条款。
-
-题源、文章、音频、PDF、图片和解析材料可能来自第三方或原始考试资料，版权归原权利人所有。本项目不授予这些内容的商业使用权或公开传播权。使用者应自行承担因复制、部署、传播或商业化使用相关内容产生的法律和平台风险。
+代码使用 GNU GPL v3，具体授权条款见 [LICENSE](LICENSE)。题源、文章、音频、PDF、图片和解析材料可能来自第三方或原始考试资料，版权归原权利人所有；代码许可证不授予这些内容的商业使用权或公开传播权。

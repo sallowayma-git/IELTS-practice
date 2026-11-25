@@ -146,7 +146,7 @@ node backend/scripts/ci-smoke.mjs
 
 如果运行被强制中断，按 [部署冒烟清理说明](developer/tests/ci/MULTI_DEVICE_CI.md#reproduce-the-deployment-smoke-test) 设置 `MD_SMOKE_STATE_DIR` 并执行 `node backend/scripts/ci-smoke.mjs --cleanup`。不要上传该临时状态目录或其中的环境文件。
 
-按照 [README 的多设备后端部署说明](README.md#可选多设备后端部署) 创建本地 `backend/.env`，替换示例密码和会话密钥。验证使用独立的测试数据库或测试部署，避免影响现有数据。
+按照 [README 的多设备后端部署说明](README.md#多设备后端部署) 创建本地 `backend/.env`，替换示例密码和会话密钥。验证使用独立的测试数据库或测试部署，避免影响现有数据。
 
 需要手动检查实际配置或受影响服务时，再执行：
 
