@@ -20,17 +20,36 @@
 
 ## 分支概览
 
-本项目目前维护三个主要分支，分别面向不同使用场景和技术需求：
+以下列出主要产品版本。本文介绍在 `opensource` 上维护的静态版；其他产品的部署方式与功能范围请以对应分支文档为准。
 
 | 分支 | 说明 | 状态 | 完成度 | 技术特征 |
 |------|------|------|--------|----------|
-| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版（当前分支），纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
-| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | 自主部署服务器版，支持多设备数据同步，适合有一定软件基础的用户 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
+| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版，纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
+| [product/multi-device](https://github.com/sallowayma-git/IELTS-practice/tree/product/multi-device) | IELTS Multi-Device：自托管账号与练习记录同步，供手机、平板和电脑共同使用 | 自托管产品 | [能力范围与限制](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md#版本定位与能力范围) | Node.js · PostgreSQL · Docker Compose |
 | [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
 
 | 关联仓库 | 说明 | 状态 | 技术特征 |
 |:--------:|------|------|----------|
 | [IELTS-&#8288;Project (IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | 为独立web服务器开发的集成式解决方案，覆盖完整的后台、路由、数据库与安全基础设施 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![技术：Docker Compose、PostgreSQL](assets/images/ieltmps-tech.svg) |
+
+### IELTS Multi-Device
+
+`product/multi-device` 面向个人 NAS、私人服务器和可信局域网。单个 Node.js 24 后端提供网页与 API，PostgreSQL 16 保存账号、设备会话和练习记录。可以通过 Docker Compose 部署，也可以直接运行 Node.js 后端并连接自行准备的 PostgreSQL。
+
+- **账号与设备**：各设备访问同一部署并登录同一账号，默认仅允许注册第一个账号。浏览器已有记录时，先在设置页点击“备份并合并本地记录，启用同步”。
+- **记录同步**：同步已保存的阅读、听力和套题记录，包括答案、笔记、高亮、套题子记录等回顾数据。记录修改与删除也会同步；发生冲突时暂停同步，由用户选择保留的版本。
+- **本地数据与资源**：题库、音频、PDF、词汇、偏好设置、备份和进行中的草稿不通过练习记录 API 同步。资源需另行准备，未完成的单次练习或套题不能通过本后端在另一设备接续。
+
+首次部署请从产品分支获取源码：
+
+```bash
+git clone --branch product/multi-device --single-branch https://github.com/sallowayma-git/IELTS-practice.git
+cd IELTS-practice
+```
+
+按照[产品部署指南](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md#多设备后端部署)创建 `backend/.env`、替换数据库密码和会话密钥并启动服务。应用默认绑定 `127.0.0.1`；其他设备访问时需配置合适的 `APP_BIND_ADDRESS` 和网络访问范围。本文顶部的静态运行 ZIP 不包含这套后端部署。
+
+从静态版迁入时，先在原页面导出数据，再在后端地址导入、登录并合并记录。静态版的 [OneDrive 文件夹同步](ONEDRIVE_SYNC.md) 有独立的配置方式和数据范围。账号使用、升级、数据库备份及可选 Tor 入口见[产品 README](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md)，后端相关贡献见该分支的[贡献指南](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/CONTRIBUTING.md)。两个版本的前端功能分别演进。
 
 ## 项目概述
 
@@ -40,7 +59,7 @@ IELTS Atlas 是一个面向雅思阅读练习，并支持可选本地听力扩�
 
 ## 快速开始
 
-如需在多台电脑间同步学习记录，请参阅 [OneDrive 文件夹同步](ONEDRIVE_SYNC.md)。
+如需在多台电脑间同步学习记录，请参阅 [OneDrive 文件夹同步](ONEDRIVE_SYNC.md)。如需供手机、平板和电脑共同访问的自托管账号与练习记录服务，请参阅 [IELTS Multi-Device](#ielts-multi-device)。
 
 ![首次启动、学习总览与题库浏览的实际画面](.github/assets/quick-start.gif)
 

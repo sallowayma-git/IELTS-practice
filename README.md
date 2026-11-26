@@ -20,17 +20,36 @@ Code licensing is governed by [LICENSE](LICENSE). Question sources, articles, au
 
 ## Branch Overview
 
-This project currently maintains three main branches, each targeting different use cases and technical needs:
+The main product variants are listed below. This README documents the static edition maintained on `opensource`; use each product branch's documentation for its deployment and supported features.
 
 | Branch | Description | Status | Maturity | Tech |
 |------|------|--------|----------|------|
-| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | Static web edition (this branch), pure frontend, runs on almost any device | ![Status](https://img.shields.io/badge/status-stable-success) | ![Maturity](https://img.shields.io/badge/maturity-95%25-brightgreen) | ![Tech](https://img.shields.io/badge/tech-pure_frontend-blue) |
-| [feature/multi-device-easy-deploy](https://github.com/sallowayma-git/IELTS-practice/tree/feature/multi-device-easy-deploy) | Self-hosted server edition with multi-device data sync, for users with some technical background | ![Status](https://img.shields.io/badge/status-stable-success) | ![Maturity](https://img.shields.io/badge/maturity-100%25-brightgreen) | ![Tech](https://img.shields.io/badge/tech-Node.js-blue) |
+| [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | Static web edition, pure frontend, runs on almost any device | ![Status](https://img.shields.io/badge/status-stable-success) | ![Maturity](https://img.shields.io/badge/maturity-95%25-brightgreen) | ![Tech](https://img.shields.io/badge/tech-pure_frontend-blue) |
+| [product/multi-device](https://github.com/sallowayma-git/IELTS-practice/tree/product/multi-device) | IELTS Multi-Device: self-hosted accounts and practice-record sync across phones, tablets, and computers | Self-hosted product | [Scope and limits](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md#版本定位与能力范围) | Node.js · PostgreSQL · Docker Compose |
 | [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI-native collaboration client with AI-powered writing scoring, reading coaching, self-evolution, and more | ![Status](https://img.shields.io/badge/status-in_development-orange) | ![Maturity](https://img.shields.io/badge/maturity-80%25-orange) | ![Tech](https://img.shields.io/badge/tech-AI_Agent-blue) |
 
 | Related Repository | Description | Status | Tech |
 |:--------:|------|------|----------|
 | [IELTS-&#8288;Project (IELTMPS)](https://github.com/k-undurkhaan-2/IELTS-Project) | Integrated solution for a standalone web server, covering a complete backend, routing, database, and security infrastructure | ![Status](https://img.shields.io/badge/status-in_development-orange) | ![Tech: Docker Compose, PostgreSQL](assets/images/ieltmps-tech.svg) |
+
+### IELTS Multi-Device
+
+`product/multi-device` is intended for personal NAS devices, private servers, and trusted local networks. One Node.js 24 backend serves the web app and its APIs; PostgreSQL 16 stores accounts, device sessions, and practice records. Deploy with Docker Compose, or run the Node.js backend with your own PostgreSQL instance.
+
+- **Accounts and devices:** open the same deployment and sign in to the same account on each device. Registration defaults to the first account only. If a browser already has records, use **Back up and merge local records, enable sync** in Settings before syncing.
+- **Record sync:** saved reading, listening, and test-set records include answers and review data such as notes, highlights, and child records. Record edits and deletions also sync; conflicting changes pause sync for you to choose a version.
+- **Local data and resources:** question banks, audio, PDFs, vocabulary, preferences, backups, and in-progress drafts do not sync through the practice-record API. Prepare resources separately; an unfinished practice or test set cannot be continued on another device through this backend.
+
+For a new deployment, start from the product branch's source:
+
+```bash
+git clone --branch product/multi-device --single-branch https://github.com/sallowayma-git/IELTS-practice.git
+cd IELTS-practice
+```
+
+Follow the [product deployment guide](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md#多设备后端部署) to create `backend/.env`, replace the database password and session secret, and start the service. The default application binding is `127.0.0.1`; access from other devices requires a suitable `APP_BIND_ADDRESS` and network configuration. The static runtime ZIP linked above does not contain this backend deployment.
+
+To migrate static-edition records, export from the original page, import at the backend address, then sign in and merge. The static edition's [OneDrive folder sync](ONEDRIVE_SYNC.md) has its own setup and data scope. See the [product README](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md) for account use, upgrades, database backups, and the optional Tor entry, and its [contribution guide](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/CONTRIBUTING.md) for backend-specific changes. Frontend features evolve separately between editions.
 
 ## Project Overview
 
@@ -40,7 +59,7 @@ The system provides question-bank browsing, reading practice, optional listening
 
 ## Quick Start
 
-See [optional OneDrive folder sync](ONEDRIVE_SYNC.md) to share browser-local learning records across desktop computers.
+See [optional OneDrive folder sync](ONEDRIVE_SYNC.md) to share browser-local learning records across desktop computers. For a self-hosted account and practice-record service used by phones, tablets, and computers, see [IELTS Multi-Device](#ielts-multi-device).
 
 ![Quick start demo: first-run notice, learning overview, and library browsing](.github/assets/quick-start.gif)
 
