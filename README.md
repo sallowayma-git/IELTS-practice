@@ -25,7 +25,7 @@ The main product variants are listed below. This README documents the static edi
 | Branch | Description | Status | Maturity | Tech |
 |------|------|--------|----------|------|
 | [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | Static web edition, pure frontend, runs on almost any device | ![Status](https://img.shields.io/badge/status-stable-success) | ![Maturity](https://img.shields.io/badge/maturity-95%25-brightgreen) | ![Tech](https://img.shields.io/badge/tech-pure_frontend-blue) |
-| [product/multi-device](https://github.com/sallowayma-git/IELTS-practice/tree/product/multi-device) | IELTS Multi-Device: self-hosted accounts and practice-record sync across phones, tablets, and computers | Self-hosted product | [Scope and limits](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md#版本定位与能力范围) | Node.js · PostgreSQL · Docker Compose |
+| [product/multi-device](https://github.com/sallowayma-git/IELTS-practice/tree/product/multi-device) | IELTS Multi-Device: self-hosted accounts and practice-record sync across phones, tablets, and computers | ![Status](https://img.shields.io/badge/status-stable-success) | ![Maturity](https://img.shields.io/badge/maturity-100%25-brightgreen) | ![Tech](https://img.shields.io/badge/tech-Node.js-blue) |
 | [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI-native collaboration client with AI-powered writing scoring, reading coaching, self-evolution, and more | ![Status](https://img.shields.io/badge/status-in_development-orange) | ![Maturity](https://img.shields.io/badge/maturity-80%25-orange) | ![Tech](https://img.shields.io/badge/tech-AI_Agent-blue) |
 
 | Related Repository | Description | Status | Tech |

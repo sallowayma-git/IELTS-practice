@@ -25,7 +25,7 @@
 | 分支 | 说明 | 状态 | 完成度 | 技术特征 |
 |------|------|------|--------|----------|
 | [main](https://github.com/sallowayma-git/IELTS-practice/tree/main) | 静态网页版，纯前端运行，兼容几乎所有设备 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-95%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-纯前端-blue) |
-| [product/multi-device](https://github.com/sallowayma-git/IELTS-practice/tree/product/multi-device) | IELTS Multi-Device：自托管账号与练习记录同步，供手机、平板和电脑共同使用 | 自托管产品 | [能力范围与限制](https://github.com/sallowayma-git/IELTS-practice/blob/product/multi-device/README.md#版本定位与能力范围) | Node.js · PostgreSQL · Docker Compose |
+| [product/multi-device](https://github.com/sallowayma-git/IELTS-practice/tree/product/multi-device) | IELTS Multi-Device：自托管账号与练习记录同步，供手机、平板和电脑共同使用 | ![状态](https://img.shields.io/badge/状态-稳定-success) | ![完成度](https://img.shields.io/badge/完成度-100%25-brightgreen) | ![技术](https://img.shields.io/badge/技术-Node.js-blue) |
 | [IELTS-WRITING-FEAT](https://github.com/sallowayma-git/IELTS-practice/tree/IELTS-WRITING-FEAT) | AI native 协作客户端，融入写作评分、阅读教练、自进化等 AI 功能 | ![状态](https://img.shields.io/badge/状态-开发中-orange) | ![完成度](https://img.shields.io/badge/完成度-80%25-orange) | ![技术](https://img.shields.io/badge/技术-AI_Agent-blue) |
 
 | 关联仓库 | 说明 | 状态 | 技术特征 |
