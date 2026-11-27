@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-reader-annotation"
+description = "Enables the idictation_reader_annotation command without any pre-configured scope."
+commands.allow = ["idictation_reader_annotation"]
+
+[[permission]]
+identifier = "deny-idictation-reader-annotation"
+description = "Denies the idictation_reader_annotation command without any pre-configured scope."
+commands.deny = ["idictation_reader_annotation"]

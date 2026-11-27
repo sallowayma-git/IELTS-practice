@@ -19,6 +19,13 @@
         </div>
         <span class="list-row-trail tool-card-arrow" aria-hidden="true">进入 →</span>
       </button>
+      <router-link class="card is-interactive tool-card" :to="{ name: 'IdictationSpeaking' }">
+        <div class="list-row-main tool-card-content">
+          <h3>爱听写口语题库</h3>
+          <p>查看 Part 1–3 题目、提示和示例思路。</p>
+        </div>
+        <span class="list-row-trail tool-card-arrow" aria-hidden="true">进入 →</span>
+      </router-link>
     </div>
   </div>
 </template>

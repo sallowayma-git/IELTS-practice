@@ -6,15 +6,17 @@ function startArticleAudio(input, signal, slot) {
     && !old.disposed && !old.error && old.audio.currentTime>=old.start
     && old.audio.currentTime<(old.end??old.audio.duration)-0.02
   const start=resume?old.audio.currentTime:input.start
+  const volume=old?.sessionId===input.sessionId ? old.audio.volume : 1
   old?.dispose()
   const audio=new Audio()
+  audio.volume=volume
   const state={audio,sessionId:input.sessionId,mediaId:input.mediaId,start:input.start,end:input.end,
-    buffering:true,error:'',lease:Date.now(),timer:null,disposed:false,
+    buffering:true,error:'',lease:Date.now(),timer:null,disposed:false,ended:false,
     dispose(){this.disposed=true;clearInterval(this.timer);audio.pause();audio.src=''},
     pause(){audio.pause();this.buffering=false;clearInterval(this.timer)},
     snapshot(){if(this.disposed)return null;this.lease=Date.now();return {mediaId:this.mediaId,currentTime:audio.currentTime||0,
       duration:Number.isFinite(audio.duration)?audio.duration:0,playing:!audio.paused,buffering:this.buffering,
-      rate:audio.playbackRate,error:this.error,start:this.start,end:this.end}}
+      rate:audio.playbackRate,volume:audio.volume,error:this.error,start:this.start,end:this.end,ended:this.ended}}
   }
   window.__atlasArticleAudio=state
   const stop=()=>{if(!slot.keepAudio)state.dispose()}
@@ -22,10 +24,10 @@ function startArticleAudio(input, signal, slot) {
   audio.onwaiting=()=>{state.buffering=true}
   audio.onplaying=()=>{state.buffering=false;clearInterval(state.timer);state.timer=setInterval(()=>{
     if(Date.now()-state.lease>8000){state.pause();return}
-    if(state.end!=null&&audio.currentTime>=state.end-0.01)state.pause()
+    if(state.end!=null&&audio.currentTime>=state.end-0.01){state.ended=true;state.pause()}
   },40)}
   audio.onpause=()=>{state.buffering=false;clearInterval(state.timer)}
-  audio.onended=()=>{state.buffering=false;clearInterval(state.timer)}
+  audio.onended=()=>{state.ended=true;state.buffering=false;clearInterval(state.timer)}
   audio.onerror=()=>{state.error='原站音频加载失败';state.pause()}
   return new Promise((resolve,reject)=>{
     let done=false

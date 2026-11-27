@@ -15,6 +15,12 @@ pub(super) struct ArticleSession {
     playback:Option<(String,String)>,
 }
 
+impl ArticleSession {
+    pub(super) fn playback_asset(&self, session_id: &str) -> Option<&str> {
+        self.playback.as_ref().filter(|(id, _)| id == session_id).map(|(_, asset)| asset.as_str())
+    }
+}
+
 #[derive(Clone,Serialize)]
 #[serde(rename_all="camelCase")]
 pub struct Book {id:String,title:String,available:bool}
@@ -63,12 +69,22 @@ fn convert(owner:&str,grant:&Chapter,mode:&str,value:&Value)->Result<(String,Val
     let scope=hex::encode(Sha256::digest(json!([owner,grant.book_id,grant.id,mode,converted.fingerprint]).to_string().as_bytes()));
     let asset_id=format!("idictation-article-{scope}");
     let mut payload=converted.payload;payload["examId"]=json!(asset_id);
+    payload["articleMarking"] = super::article_marking::snapshot(value, mode);
+    payload["articleDictation"] = super::article_dictation::snapshot(value, mode);
     Ok((asset_id,payload))
 }
 fn frontend_payload(mut payload:Value)->Value {
     // Media URLs remain in the provider cache, never become main-window src.
     if let Some(rows)=payload["studyMaterial"]["media"].as_array_mut(){for row in rows{if let Some(row)=row.as_object_mut(){row.remove("url");}}}
+    if let Some(marking) = payload["articleMarking"].as_object_mut() { marking.remove("round"); }
+    if let Some(dictation) = payload["articleDictation"].as_object_mut() { dictation.remove("round"); }
     payload
+}
+
+pub(super) fn practice_round(round: &Value) -> Value {
+    if id(round).is_ok() { round.clone() }
+    else if round.is_null() || round == "" { json!(chrono::Utc::now().timestamp_millis()) }
+    else { Value::Null }
 }
 
 #[tauri::command]
@@ -97,10 +113,37 @@ pub async fn idictation_open_article(app:AppHandle,account:State<'_,Account>,db:
     let value=transport::read(&app,"articleDocument",json!({"c_id":source,"pagesize":9999,"sentence_mode":mode,"is_only_listen_answer_collect_sentences":0})).await?;
     verify(&app,&mut session).await?;
     let (asset_id,payload)=convert(session.owner.as_deref().ok_or("尚未连接账号")?,&chapter,&mode,&value)?;
-    db.with_conn(|conn|ielts_db::transient_assets::put(conn,"idictation",&asset_id,payload)).map_err(|e|e.to_string())?;
-    session.article.assets.retain(|(id,_)|id!=&asset_id);
-    session.article.assets.push_back((asset_id.clone(),chapter.title));
-    while session.article.assets.len()>16{session.article.assets.pop_front();}
+    remember_article(&db, &mut session.article, &asset_id, payload)?;
+    Ok(asset_id)
+}
+
+fn remember_article(db: &AppDb, session: &mut ArticleSession, id: &str, payload: Value) -> Result<(), String> {
+    let title = payload["meta"]["title"].as_str().unwrap_or("").to_owned();
+    db.with_conn(|conn| ielts_db::transient_assets::put(conn, "idictation", id, payload))
+        .map_err(|e| e.to_string())?;
+    session.assets.retain(|(previous, _)| previous != id);
+    session.assets.push_back((id.to_owned(), title));
+    while session.assets.len() > 16 { session.assets.pop_front(); }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn idictation_article_collections(app: AppHandle, account: State<'_, Account>, db: State<'_, AppDb>, page: u64) -> Result<String, String> {
+    if !(1..=10_000).contains(&page) { return Err("精听收藏页码无效".into()); }
+    let mut session = account.0.lock().await;
+    verify(&app, &mut session).await?;
+    let value = transport::read(&app, "articleCollections", json!({
+        "collect_date":[], "error_tags":[], "jingting_choices":[],
+        "page":page, "pagesize":material::COLLECTION_PAGE_SIZE
+    })).await?;
+    verify(&app, &mut session).await?;
+    let owner = session.owner.as_deref().ok_or("尚未连接账号")?;
+    let result = material::article_collection(owner, page, &value)?;
+    let scope = hex::encode(Sha256::digest(json!([owner, result.fingerprint]).to_string().as_bytes()));
+    let asset_id = format!("idictation-article-collection-{scope}");
+    let mut payload = result.payload;
+    payload["examId"] = json!(asset_id);
+    remember_article(&db, &mut session.article, &asset_id, payload)?;
     Ok(asset_id)
 }
 #[tauri::command]
@@ -108,9 +151,16 @@ pub async fn idictation_article_payload(app:AppHandle,account:State<'_,Account>,
     let mut session=account.0.lock().await;verify(&app,&mut session).await?;
     if !session.article.assets.iter().any(|(id,_)|id==&asset_id){return Err("请从当前账号的精听目录重新打开".into());}
     let payload=db.with_conn(|conn|ielts_db::transient_assets::get(conn,&asset_id)).map_err(|e|e.to_string())?;
-    transport::stop_article_audio(&app,None);transport::stop_audio(&app);
-    let playback=uuid::Uuid::new_v4().to_string();session.article.playback=Some((playback.clone(),asset_id));
+    let playback=open_playback(&app,&mut session.article,asset_id);
     Ok(json!({"sessionId":playback,"payload":frontend_payload(payload)}))
+}
+
+pub(super) fn open_playback(app: &AppHandle, session: &mut ArticleSession, asset_id: String) -> String {
+    transport::stop_article_audio(app, None);
+    transport::stop_audio(app);
+    let playback = uuid::Uuid::new_v4().to_string();
+    session.playback = Some((playback.clone(), asset_id));
+    playback
 }
 
 fn media_request(payload:&Value,media_id:&str,session_id:&str,rate:f64)->Result<Value,String>{

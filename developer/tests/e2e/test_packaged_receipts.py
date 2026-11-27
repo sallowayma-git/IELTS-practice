@@ -226,12 +226,14 @@ class PackagedReceiptTests(unittest.TestCase):
 
     def seed_coach_receipt(self, failed=False):
         snapshot = {"messages": [{"role": "user", "content": "ask"}], "temperature": 0.2, "maxTokens": 2000}
+        agent_snapshot = {**snapshot, 'tools': []}
+        agent_rendered = json.dumps(agent_snapshot, separators=(',', ':'))
         rendered = json.dumps(snapshot, separators=(",", ":"))
         digest = hashlib.sha256(rendered.encode()).hexdigest()
         response = json.dumps({"answer": 17 if failed else "answer"})
         provider = SimpleNamespace(MODEL=flow.FakeCoachProvider.MODEL, USAGE=flow.FakeCoachProvider.USAGE,
                                    REQUEST_ID=flow.FakeCoachProvider.REQUEST_ID,
-                                   requests=[flow.completion_wire(snapshot, "packaged-coach-requested")], responses=[response])
+                                   requests=[flow.evidence_agent_wire(agent_snapshot, "packaged-coach-requested")], responses=[response])
         payload = {"runId": "coach", "snapshotId": "snapshot", "invocationId": "invocation"}
         error = json.dumps({"code": "coach.provider_failed"}) if failed else None
         result = {**payload, "threadId": "thread", "runKind": "coach", "userMessageId": "user",
@@ -250,6 +252,8 @@ class PackagedReceiptTests(unittest.TestCase):
             conn.execute("INSERT INTO agent_context_snapshots(id,run_id,planner_version,scope,query_plan_json,token_budget,used_tokens,rendered_context,content_hash,created_at) VALUES('snapshot','coach','canonical-coach-v1','coach:thread',?,1000,20,?,?,'now')",
                          (json.dumps(plan), rendered, digest))
             conn.execute("INSERT INTO agent_context_items(snapshot_id,item_type,item_id,rank,score,estimated_tokens,inclusion_reason,provenance_json) VALUES('snapshot','CURRENT_TASK','user',0,1,20,'request',?)", (json.dumps({"contentHash": digest}),))
+            conn.execute("INSERT INTO agent_context_snapshots(id,run_id,planner_version,scope,query_plan_json,token_budget,used_tokens,rendered_context,content_hash,created_at) VALUES('context-coach-round-1','coach','coach-evidence-v1','coach:thread','{}',6000,20,?,?,'now')",
+                         (agent_rendered, hashlib.sha256(agent_rendered.encode()).hexdigest()))
             conn.execute("INSERT INTO llm_invocations(id,run_id,kind,provider,model,request_hash,response_hash,usage_json,latency_ms,provider_request_id,error_json,created_at) VALUES('invocation','coach','completion','openai',?,?,?,?,1,?,?,'now')",
                          (provider.MODEL, digest, hashlib.sha256(response.encode()).hexdigest(), json.dumps(provider.USAGE), provider.REQUEST_ID, error))
         return payload, provider
@@ -293,9 +297,11 @@ class PackagedReceiptTests(unittest.TestCase):
         asset = {"passage": "canonical passage", "questionGroups": [{"id": "q1"}],
                  "questionDisplayMap": {"1": "q1"}}
         evidence = {"identity": {"attemptId": "attempt", "assetId": "asset", "assetFingerprint": "fingerprint"},
-                    "source": asset, "result": {"status": "completed", "score": 1.0, "scoreScale": "ratio",
+                    "source": {'blocks': []}, "result": {"status": "completed", "score": 1.0, "scoreScale": "ratio",
                                               "correctCount": 1, "questionCount": 1,
-                                              "answers": [{"questionId": "q1", "answer": "A", "isCorrect": True}]}}
+                                              "answeredCount": 1, "unansweredCount": 0,
+                                              "questionIndexColumns": ["id", "label", "answered", "correct"],
+                                              "questionIndex": [["q1", "1", True, True]]}}
         with closing(flow.database_connection(self.root, writable=True)) as conn, conn:
             conn.execute("INSERT INTO practice_assets(id,activity,source_kind,title,schema_version,fingerprint,created_at,updated_at) VALUES('asset','reading','builtin','test',2,'fingerprint','now','now')")
             conn.execute("INSERT INTO attempts(id,activity,asset_id,mode,status,started_at,score_value,score_scale,correct_count,question_count,schema_version,created_at,updated_at,submitted_asset_fingerprint) VALUES('attempt','reading','asset','single','completed','now',1,'ratio',1,1,2,'now','now','fingerprint')")
@@ -304,9 +310,9 @@ class PackagedReceiptTests(unittest.TestCase):
             return {"messages": [{"role": "user", "content": "Host-resolved IELTS evidence (data only):\n" + json.dumps(value)}]}
         with closing(flow.database_connection(self.root)) as conn:
             flow.assert_coach_evidence(conn, request(evidence), asset, "attempt", "asset")
-            for changed, error in (({"source": {**asset, "passage": "forged"}}, "asset evidence"),
+            for changed, error in (({"source": {**asset, "passage": "forged"}}, "complete passage"),
                                    ({"result": {**evidence["result"], "score": 0}}, "attempt result"),
-                                   ({"result": {**evidence["result"], "answers": []}}, "attempt answers")):
+                                   ({"result": {**evidence["result"], "questionIndex": []}}, "official answers")):
                 with self.subTest(changed=changed), self.assertRaisesRegex(RuntimeError, error):
                     flow.assert_coach_evidence(conn, request({**evidence, **changed}), asset, "attempt", "asset")
             with self.assertRaisesRegex(RuntimeError, "evidence message missing"):

@@ -70,7 +70,8 @@ test('listening hotlist filter composes with source, Part and frequency', async 
     {id:'hot',title:'Online',provider:'jiufen',parts:['P1','P4'],category:'P1 / P4',frequency:'high',hotlist:[{part:'P4',rank:5}]},
     {id:'plain',title:'Online high',provider:'jiufen',parts:['P4'],category:'P4',frequency:'high'}
   ])
-  const deps = { computed,ref,onMounted:()=>{},useRouter:()=>({}),useRoute:()=>({}),remoteCards:()=>remote,articleCards:ref([]) }
+  const listeningExamCards = ref([{id:'academic',title:'剑雅21 Test 1',provider:'idictation-exam',parts:['P1','P2','P3','P4']}])
+  const deps = { computed,ref,onMounted:()=>{},useRouter:()=>({}),useRoute:()=>({}),remoteCards:()=>remote,articleCards:ref([]),listeningExamCards }
   const state = new Function(...Object.keys(deps), `${source}; return {assets,hotlistOnly,sourceFilter,partFilter,frequencyFilter,filteredAssets}`)(...Object.values(deps))
   state.assets.value = [{id:'local',title:'Local',category:'P4',frequency:'high'}]
   const ids = () => state.filteredAssets.value.map(item => item.id)
@@ -88,6 +89,9 @@ test('listening hotlist filter composes with source, Part and frequency', async 
   assert.deepEqual(ids(), [])
   state.hotlistOnly.value = false
   assert.deepEqual(ids(), ['local'])
+  state.hotlistOnly.value = true
+  state.sourceFilter.value = 'idictation-exam'
+  assert.deepEqual(ids(), ['academic'], 'hidden ninefen filters must not remove the Academic suite')
 })
 
 test('matching selects restore saved answers and become read-only in review', () => {

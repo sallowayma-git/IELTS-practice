@@ -3,6 +3,7 @@
     <label>类别 <select v-model="readerTrack" class="select" :disabled="readerBusy" @change="resetReaderLibrary"><option value="a">A 类</option><option value="g">G 类</option></select></label>
     <label>书册 <select v-model="readerBook" class="select" :disabled="readerBusy" @change="resetReaderLibrary"><option v-for="book in books" :key="book" :value="book">剑桥 {{ book }}</option></select></label>
     <button class="btn btn-secondary" type="button" :disabled="readerBusy" @click="loadReaderCatalog(1)">{{ readerBusy ? '加载中…' : '加载精读目录' }}</button>
+    <ReaderCollections />
     <template v-if="readerTotal > readerPageSize">
       <button class="btn btn-text" type="button" :disabled="readerBusy || readerPage <= 1" @click="loadReaderCatalog(readerPage - 1)">上一页</button>
       <span>{{ readerPage }} / {{ Math.ceil(readerTotal / readerPageSize) }}</span>
@@ -13,6 +14,7 @@
   </div>
 </template>
 <script setup>
+import ReaderCollections from './ReaderCollections.vue'
 import { readerBusy, readerError, readerTrack, readerBook, readerPage, readerTotal, readerPageSize, loadReaderCatalog, resetReaderLibrary } from './readerLibrary.js'
 const books = Array.from({length:18}, (_, i) => 21 - i)
 </script>

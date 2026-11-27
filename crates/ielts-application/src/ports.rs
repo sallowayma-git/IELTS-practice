@@ -42,7 +42,8 @@ pub struct CompletionRequest {
     pub cache_key: Option<String>,
 }
 
-/// Per-call-site output ceilings (tokens). The Coach (2000) and the sidecar
+/// Per-call-site output ceilings (tokens). The Coach (6000, see
+/// `COACH_OUTPUT_TOKEN_CEILING`) and the sidecar
 /// jobs (memory candidates 2000, weekly dream 2500) keep their own constants
 /// next to the code that builds the prompt.
 pub const WRITING_EVALUATION_MAX_TOKENS: u32 = 6_144;
@@ -190,6 +191,9 @@ pub trait LanguageModel: Send + Sync {
 
     fn identity(&self) -> (&str, &str) { ("unknown", "unknown") }
 
+    /// Optional tool transport; the existing completion path remains available.
+    fn evidence_agent(&self) -> Option<&dyn crate::AgentModel> { None }
+
     async fn complete_with_trace(&self, request: CompletionRequest) -> Result<(CompletionResponse, u32), crate::AgentModelFailure> {
         self.complete(request).await.map(|response| (response, 0)).map_err(Into::into)
     }
@@ -252,6 +256,15 @@ pub trait WritingEvaluationStore: Send + Sync {
 }
 
 pub trait CoachStore: Send + Sync {
+    fn supports_evidence_tools(&self) -> bool { false }
+    fn begin_evidence_round(&self, _run: &str, _round: u32, _request: &Value, _budget: u32) -> Result<(), ApplicationError> {
+        Err(ApplicationError::new("coach.trace_unavailable", "evidence trace unavailable", false))
+    }
+    fn finish_evidence_round(&self, _run: &str, _round: u32, _response: &Value, _error: Option<&Value>) -> Result<(), ApplicationError> {
+        Err(ApplicationError::new("coach.trace_unavailable", "evidence trace unavailable", false))
+    }
+    fn begin_evidence_tool(&self, _call: &ielts_db::BeginAgentToolCallCommand) -> Result<(), ApplicationError> { Ok(()) }
+    fn finish_evidence_tool(&self, _call: &ielts_db::FinishAgentToolCallCommand) -> Result<(), ApplicationError> { Ok(()) }
     fn begin_trace(&self, thread: &str, user_message: &str, request: &Value, provider: &str, model: &str, budget: u32) -> Result<String, ApplicationError>;
     fn complete_trace(&self, run: &str, thread: &str, answer: &str, payload: Value, response: &Value) -> Result<CoachMessage, ApplicationError>;
     fn fail_trace(&self, run: &str, error: &Value, response: Option<&Value>) -> Result<(), ApplicationError>;

@@ -23,13 +23,15 @@ export function useArticlePlayback(){
   const play=mediaId=>control('play',mediaId,rate.value)
   const toggle=()=>state.value?.playing?control('pause'):control('resume',state.value?.mediaId,rate.value)
   const seek=value=>control('seek',null,Number(value))
+  const changeVolume=value=>control('volume',null,Number(value))
   const changeRate=value=>{rate.value=Number(value);if(state.value)return control('rate',null,rate.value)}
-  function hidden(){if(document.hidden&&session){
+  function suspend(){if(session){
     const current=++generation;clearTimeout(timer);busy.value=false
     if(state.value)state.value={...state.value,playing:false}
     void idictation.articleAudio(session,'pause').then(result=>{if(alive&&current===generation)state.value=result}).catch(()=>{})
   }}
+  function hidden(){if(document.hidden)suspend()}
   document.addEventListener('visibilitychange',hidden)
   onBeforeUnmount(()=>{alive=false;document.removeEventListener('visibilitychange',hidden);void close()})
-  return {state,error,busy,rate,attach,close,play,toggle,seek,changeRate}
+  return {state,error,busy,rate,attach,close,play,toggle,seek,changeRate,changeVolume,suspend}
 }

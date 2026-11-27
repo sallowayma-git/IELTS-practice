@@ -17,6 +17,7 @@ export type ReadingCoachOptions = {
   setSubmission?: (next: AnyRecord) => void
   readCoachEnabled?: () => boolean
   readSelectedContext?: () => AnyRecord | null | undefined
+  readActiveQuestionId?: () => string
   getDisplayLabel?: (questionId: string) => string
   formatReviewAnswer?: (value: unknown) => string
   resolveCoachMode?: () => string
@@ -727,17 +728,15 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     if (Array.isArray(context?.questionNumbers) && context.questionNumbers.length) {
       return context.questionNumbers
     }
-    const wrongQuestions = resolveCoachWrongQuestions()
-    if (wrongQuestions.length) {
-      return wrongQuestions.slice(0, 3)
-    }
+    const current = normalizeCoachQuestionNumber(options.readActiveQuestionId?.())
+    if (current) return [current]
     if (typeof document !== 'undefined') {
       const active = document.activeElement as HTMLElement | null
       const raw = active?.getAttribute?.('name') || active?.id || ''
       const focused = normalizeCoachQuestionNumber(raw)
       if (focused) return [focused]
     }
-    return []
+    return resolveCoachWrongQuestions().slice(0, 3)
   }
 
   function resolveCoachMode() {

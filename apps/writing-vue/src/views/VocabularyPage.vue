@@ -7,7 +7,11 @@
             <p class="page-header-kicker">VOCABULARY · 生词</p>
             <h1 class="heading-serif">生词本</h1>
           </div>
-          <div v-if="!sessionOpen && !onlineOpen" class="page-header-actions">
+          <div v-if="!sessionOpen && !onlineOpen && !synonymOpen && !walkmanOpen" class="page-header-actions">
+            <button class="btn btn-secondary" type="button" :disabled="importingMistakes || loading" @click="importMistakes">
+              {{ importingMistakes ? '正在导入错词…' : '导入爱听写错词' }}
+            </button>
+            <button class="btn btn-secondary" type="button" @click="synonymOpen = true">爱听写同义替换</button>
             <button
               class="btn btn-primary"
               type="button"
@@ -19,6 +23,8 @@
           </div>
         </div>
         <p class="page-header-desc">复习到期和新收的单词。</p>
+        <p v-if="mistakeError" class="section-meta" role="alert">{{ mistakeError }}</p>
+        <p v-else-if="mistakeNotice" class="section-meta" role="status">{{ mistakeNotice }}</p>
       </header>
 
       <VocabularySessionPanel
@@ -28,8 +34,10 @@
         @updated="applyUpdatedItem"
       />
       <VocabularyTraining v-if="onlineOpen" :book-id="bookId" :unit-id="unitId" :mode="onlineMode" :resume="onlineResume" :title="units.find(unit=>unit.id===unitId)?.title || ''" @close="onlineOpen=false" />
+      <SynonymStudy v-if="synonymOpen" @close="synonymOpen = false" />
+      <VocabularyWalkman v-if="walkmanOpen" :book-id="bookId" :unit-id="unitId" :title="units.find(unit=>unit.id===unitId)?.title || ''" @close="walkmanOpen = false" />
 
-      <template v-if="!sessionOpen && !onlineOpen">
+      <template v-if="!sessionOpen && !onlineOpen && !synonymOpen && !walkmanOpen">
         <div v-if="books.length" class="vocabulary-toolbar" role="group" aria-label="词书范围">
           <select v-model="bookId" class="input" aria-label="选择词书" :disabled="loading" @change="changeBook">
             <option value="">全部生词</option>
@@ -44,6 +52,7 @@
           <label>练习模式 <select v-model="onlineMode" class="input"><option :value="1">听写</option><option :value="2">听音选义</option><option :value="3">默写</option><option :value="4">看词选义</option></select></label>
           <label><input v-model="onlineResume" type="checkbox" /> 继续原站进度</label>
           <button class="btn btn-secondary" type="button" :disabled="loading || !!error || !unitId" @click="onlineOpen=true">开始爱听写练习</button>
+          <button class="btn btn-secondary" type="button" :disabled="loading || !!error || !unitId" @click="walkmanOpen = true">随身听</button>
           <p class="section-meta">选择具体章节后开始。需先在设置中连接爱听写；号码类词书仅支持听写。</p>
         </div>
         <p v-if="loading" class="section-meta" role="status" aria-live="polite">正在加载生词本…</p>
@@ -128,13 +137,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { idictation } from '@/api/idictation.js'
 import { listVocab } from '@/api/enrichment-repository.js'
 import { listBooks, listBookUnits, listBookWords } from '@/api/vocabulary-books.js'
 import { loadVocabulary } from '@/modules/vocabulary/loadVocabulary.js'
 import MascotState from '@/components/mascot/MascotState.vue'
 import VocabularySessionPanel from '@/modules/vocabulary/components/VocabularySessionPanel.vue'
 import VocabularyTraining from '../../../../plug/idictation/VocabularyTraining.vue'
+import SynonymStudy from '../../../../plug/idictation/SynonymStudy.vue'
+import VocabularyWalkman from '../../../../plug/idictation/VocabularyWalkman.vue'
 import {
   dueLabel,
   filterVocabRows,
@@ -156,6 +168,12 @@ const nowMs = ref(0)
 const activeFilter = ref('all')
 const keyword = ref('')
 const sessionOpen = ref(false)
+const synonymOpen = ref(false)
+const walkmanOpen = ref(false)
+const importingMistakes = ref(false)
+const mistakeError = ref('')
+const mistakeNotice = ref('')
+let active = true
 const onlineOpen=ref(false),onlineMode=ref(1),onlineResume=ref(true)
 const selectedBook=computed(()=>books.value.find(book=>book.id===bookId.value))
 let loadGeneration = 0
@@ -221,7 +239,35 @@ function changeBook() {
   load()
 }
 
+async function importMistakes() {
+  if (importingMistakes.value) return
+  importingMistakes.value = true
+  mistakeError.value = ''
+  mistakeNotice.value = ''
+  try {
+    const result = await idictation.importMistakes()
+    if (!active) return
+    if (!result) {
+      mistakeNotice.value = '原站没有可导入的错词。'
+      return
+    }
+    if (!sessionOpen.value && !onlineOpen.value && !synonymOpen.value && !walkmanOpen.value) {
+      bookId.value = result.bookId
+      unitId.value = result.unitId
+      activeFilter.value = 'all'
+      keyword.value = ''
+      await load()
+    }
+    if (active) mistakeNotice.value = `已导入 ${result.imported} 条错词记录，可在「爱听写错词」词书复习。`
+  } catch (failure) {
+    if (active) mistakeError.value = failure?.message || String(failure)
+  } finally {
+    if (active) importingMistakes.value = false
+  }
+}
+
 onMounted(load)
+onBeforeUnmount(() => { active = false; loadGeneration++ })
 </script>
 
 <style scoped>

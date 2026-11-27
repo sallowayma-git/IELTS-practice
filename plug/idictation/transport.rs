@@ -9,26 +9,41 @@ const ORIGIN: &str = "https://www.idictation.cn";
 const BRIDGE: &str = include_str!("product-bridge.js");
 const ARTICLE_AUDIO: &str = include_str!("article-audio.js");
 
-pub fn open(app: &AppHandle) -> Result<(), String> {
+fn ensure_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     if let Some(window) = app.get_webview_window(WINDOW) {
-        window.show().map_err(|_| "无法显示爱听写登录窗口")?;
-        return window.set_focus().map_err(|_| "无法聚焦爱听写登录窗口".into());
+        return Ok(window);
     }
     let paths = app.state::<crate::app::state::AppPaths>();
     WebviewWindowBuilder::new(app, WINDOW,
         WebviewUrl::External(format!("{ORIGIN}/main/book").parse().unwrap()))
         .title("爱听写 · 登录并连接 IELTS Atlas")
         .inner_size(1100.0, 780.0)
+        .visible(false)
+        .focused(false)
+        .skip_taskbar(true)
         .data_directory(paths.app_data.join("providers").join("idictation"))
         .on_navigation(|url| url.origin().ascii_serialization() == ORIGIN)
-        .build().map(|_| ()).map_err(|_| "无法打开爱听写登录窗口".into())
+        .build().map_err(|_| "无法启动爱听写连接".into())
+}
+
+pub fn open(app: &AppHandle) -> Result<(), String> {
+    let window = ensure_window(app)?;
+    window.set_skip_taskbar(false).map_err(|_| "无法显示爱听写登录窗口")?;
+    window.show().map_err(|_| "无法显示爱听写登录窗口")?;
+    window.unminimize().map_err(|_| "无法恢复爱听写登录窗口")?;
+    window.set_focus().map_err(|_| "无法聚焦爱听写登录窗口".into())
+}
+
+pub fn hide(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(WINDOW) {
+        window.hide().map_err(|_| "无法收起爱听写窗口")?;
+        window.set_skip_taskbar(true).map_err(|_| "无法收起爱听写窗口")?;
+    }
+    Ok(())
 }
 
 pub async fn ensure_open(app: &AppHandle) -> Result<(), String> {
-    if app.get_webview_window(WINDOW).is_some() {
-        return Ok(());
-    }
-    open(app)?;
+    ensure_window(app)?;
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let handle = app.get_webview_window(WINDOW).ok_or("爱听写窗口已关闭")?;
@@ -37,7 +52,7 @@ pub async fn ensure_open(app: &AppHandle) -> Result<(), String> {
             }
             tokio::time::sleep(Duration::from_millis(150)).await;
         }
-    }).await.map_err(|_| "爱听写页面加载超时，请检查原站窗口")?
+    }).await.map_err(|_| "爱听写连接加载超时，请稍后重试")?
 }
 
 fn window(app: &AppHandle) -> Result<WebviewWindow, String> {
@@ -79,13 +94,29 @@ impl Drop for RequestSlot<'_> {
     }
 }
 
+const OPERATIONS: &[&str] = &[
+    "account", "books", "chapters", "words", "readerCatalog", "readerDocument",
+    "trainingWords", "trainingDictionary", "trainingPreferences", "trainingAnswer", "trainingAudio",
+    "trainingFinish", "trainingMastery", "articleChapters", "articleDocument", "articleAudio",
+    "readingCatalog", "readingExam", "readingSubmit",
+    "synonymBooks", "synonymChapters", "synonymChapter",
+    "listeningCatalog", "listeningExam",
+    "listeningJijingCatalog", "listeningJijingExam", "listeningJijingPart",
+    "writingCatalog", "writingExam", "mistakeWords", "articleCollections", "readerCollections",
+    "writingJijingTask1", "writingJijingTask2", "writingGeneralTask2", "writingExtraPrompt",
+    "speakingPart1", "speakingPart2", "speakingTopic",
+    "articleCloze", "articleSentenceScore",
+    "articleMark", "articleCollect",
+    "articleDictationSave",
+    "readerBookmark",
+    "readerProgress", "readerCompletion",
+    "readerAnnotationSave", "readerAnnotationDelete",
+];
+
 /// Internal closed operation set: callers cannot supply a URL, signing fields,
 /// payment request, script, or arbitrary body from the main frontend.
 pub async fn read(app: &AppHandle, operation: &'static str, body: Value) -> Result<Value, String> {
-    if !matches!(operation, "account" | "books" | "chapters" | "words" | "readerCatalog" | "readerDocument"
-        | "trainingWords" | "trainingDictionary" | "trainingPreferences" | "trainingAnswer" | "trainingAudio"
-        | "trainingFinish" | "trainingMastery" | "articleChapters" | "articleDocument" | "articleAudio"
-        | "readingCatalog" | "readingExam" | "readingSubmit") {
+    if !OPERATIONS.contains(&operation) {
         return Err("不支持的爱听写读取操作".into());
     }
     let window = window(app)?;
@@ -119,17 +150,23 @@ pub async fn read(app: &AppHandle, operation: &'static str, body: Value) -> Resu
         cleanup.keep_audio = matches!(operation,"trainingAudio"|"articleAudio");
         return Ok(response["value"].clone());
     }
+    if response["error"] == "expired" {
+        open(app)?;
+    }
     Err(match response["error"].as_str() {
         Some("expired") => "爱听写会话已过期，请在登录窗口重新登录",
         Some("version") => "爱听写页面版本已变化，请更新适配器",
         Some("account") => "爱听写账号已改变，已停止写入，请重新连接",
+        Some("writingImage") => "原站图表暂无法安全加载，本次未加入题库",
+        Some("cloze") => "此原站版本的挖空组件暂不可用，请切换为整句听写",
+        Some("readerConflict") => "原站记录已在其他窗口更新，请重新打开文章",
         _ => "爱听写未返回可用数据，请检查原站登录状态和权限",
     }.into())
 }
 
 pub fn disconnect(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WINDOW) {
-        window.close().map_err(|_| "无法关闭爱听写窗口")?;
+        window.destroy().map_err(|_| "无法关闭爱听写连接")?;
     }
     Ok(())
 }
@@ -150,11 +187,12 @@ pub fn prepare_article_play(app:&AppHandle,session:&str){
     if let Ok(window)=window(app){let scope=json!(session);let _=window.eval(format!("if(window.__atlasArticlePausedSession==={scope})delete window.__atlasArticlePausedSession;"));}
 }
 pub async fn article_audio_control(app:&AppHandle,session:&str,action:&str,value:Option<f64>)->Result<Value,String>{
-    if !matches!(action,"state"|"pause"|"seek"|"rate"){return Err("不支持的播放操作".into());}
+    if !matches!(action,"state"|"pause"|"seek"|"rate"|"volume"){return Err("不支持的播放操作".into());}
     if action=="rate"&&!value.is_some_and(|v|v.is_finite()&&(0.5..=2.0).contains(&v)){return Err("播放速度无效".into());}
     if action=="seek"&&!value.is_some_and(|v|v.is_finite()&&v>=0.0){return Err("播放位置无效".into());}
+    if action=="volume"&&!value.is_some_and(|v|v.is_finite()&&(0.0..=1.0).contains(&v)){return Err("音量无效".into());}
     let window=window(app)?;
-    evaluate(&window,format!("(()=>{{const s=window.__atlasArticleAudio;if(!s||s.sessionId!=={})return null;const action={},value={};if(action==='pause')s.pause();if(action==='seek'){{if(!Number.isFinite(s.audio.duration))return null;s.audio.currentTime=Math.max(s.start,Math.min(value,s.end??s.audio.duration));}}if(action==='rate')s.audio.playbackRate=value;return s.snapshot();}})()",json!(session),json!(action),json!(value))).await
+    evaluate(&window,format!("(()=>{{const s=window.__atlasArticleAudio;if(!s||s.sessionId!=={})return null;const action={},value={};if(action==='pause')s.pause();if(action==='seek'){{if(!Number.isFinite(s.audio.duration))return null;s.audio.currentTime=Math.max(s.start,Math.min(value,s.end??s.audio.duration));}}if(action==='rate')s.audio.playbackRate=value;if(action==='volume')s.audio.volume=value;return s.snapshot();}})()",json!(session),json!(action),json!(value))).await
 }
 
 pub fn stop_session_audio(app: &AppHandle, session: Option<&str>) {
@@ -163,3 +201,7 @@ pub fn stop_session_audio(app: &AppHandle, session: Option<&str>) {
         let _ = window.eval(format!("(()=>{{const id={scope};if(id)window.__atlasVocabularyStoppedSession=id;const pending=window.__atlasVocabularyAudioRequest;if(pending&&(!id||pending.sessionId===id))pending.cancel();const audio=window.__atlasVocabularyAudio;if(audio&&(!id||audio.atlasSessionId===id)){{audio.pause();audio.src='';delete window.__atlasVocabularyAudio;}}}})();"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../developer/tests/rust/idictation_transport.rs"]
+mod tests;

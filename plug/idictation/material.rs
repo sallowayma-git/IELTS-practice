@@ -44,7 +44,7 @@ fn escape(value: &str) -> String {
 }
 
 /// Only media origins observed in normal playback. No fetching or redirects.
-fn media_url(value: &str) -> Option<String> {
+pub(super) fn media_url(value: &str) -> Option<String> {
     let url = tauri::Url::parse(value).ok()?;
     let allowed = [
         "idictation-article.oss-cn-beijing.aliyuncs.com",
@@ -199,8 +199,68 @@ pub fn article(
     ))
 }
 
+pub(super) const COLLECTION_PAGE_SIZE: u64 = 50;
+
+pub(super) fn article_collection(owner: &str, page: u64, response: &Value) -> Result<Material, String> {
+    let title = "爱听写精听收藏";
+    if !(1..=10_000).contains(&page) { return Err("精听收藏页码无效".into()); }
+    let total = response["total"].as_u64().filter(|total| *total <= 500_000)
+        .ok_or("精听收藏总数无效")?;
+    let pages = total.div_ceil(COLLECTION_PAGE_SIZE).max(1);
+    let expected = total.saturating_sub((page - 1) * COLLECTION_PAGE_SIZE).min(COLLECTION_PAGE_SIZE);
+    let data = rows(response, "data")?;
+    if response["current_page"].as_u64() != Some(page)
+        || response["per_page"].as_u64() != Some(COLLECTION_PAGE_SIZE)
+        || response["last_page"].as_u64() != Some(pages)
+        || page > pages
+        || data.len() as u64 != expected {
+        return Err("精听收藏页未完整返回，请重新打开收藏列表".into());
+    }
+    let mut seen = HashSet::new();
+    let mut sentences = Vec::new();
+    let mut media = Vec::new();
+    let mut source_rows = Vec::new();
+    for row in data {
+        let collection_id = id(&row["id"])?;
+        if id(&row["user_id"])? != owner || !seen.insert(collection_id.clone()) {
+            return Err("精听收藏账号或记录身份不一致".into());
+        }
+        let content = &row["article_content"];
+        if content.is_null() {
+            continue;
+        }
+        let article_id = id(&content["id"])?;
+        // A collection ID identifies one row; a source article may be
+        // collected in more than one context. Keep both IDs distinct.
+        let sentence_id = format!("idictation-collection-{collection_id}");
+        let original = text(content, "content").trim();
+        if original.is_empty() || original.len() > 32_768 {
+            return Err("精听收藏缺少可用原文".into());
+        }
+        let translation = text(content, "translate");
+        if translation.len() > 32_768 { return Err("精听收藏译文过长".into()); }
+        let audio = article_audio(content, &sentence_id);
+        sentences.push(json!({
+            "id":sentence_id, "index":sentences.len(), "text":original, "translation":translation,
+            "words":[], "audio": audio.as_ref().map(|track| json!({
+                "mediaId":track["id"], "kind":track["kind"],
+                "startSeconds":track["startSeconds"], "endSeconds":track["endSeconds"]
+            }))
+        }));
+        media.extend(audio);
+        source_rows.push(json!([collection_id,article_id,original,translation]));
+    }
+    let unavailable = data.len() - sentences.len();
+    let part = json!({"id":"article-collection","section":1,"title":title,
+        "paragraphs":[{"id":"collected-sentences","sentences":sentences}]});
+    let source = json!({"kind":"articleCollection","page":page,"total":total,"sentences":source_rows});
+    let mut result = complete("article", title, source, vec![part], vec![], media);
+    result.payload["collectionPage"] = json!({"page":page,"pages":pages,"total":total,"unavailable":unavailable});
+    Ok(result)
+}
+
 /// Convert JS UTF-16 code-unit offsets without trimming or normalizing text.
-fn utf16_bytes(value: &str, offset: u64) -> Result<usize, String> {
+pub(super) fn utf16_bytes(value: &str, offset: u64) -> Result<usize, String> {
     let mut units = 0;
     for (byte, ch) in value.char_indices() {
         if units == offset {

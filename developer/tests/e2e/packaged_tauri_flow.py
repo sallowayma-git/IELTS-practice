@@ -773,6 +773,19 @@ def completion_wire(snapshot: dict, model: str) -> dict:
     return body
 
 
+def evidence_agent_wire(snapshot: dict, model: str) -> dict:
+    messages = []
+    for message in snapshot['messages']:
+        row = dict(message)
+        if row['role'] == 'assistant':
+            row['tool_calls'] = [{"id": call['id'], "type": "function", "function": {
+                "name": call['name'], "arguments": call['argumentsJson']}} for call in row.pop('toolCalls', [])]
+        messages.append(row)
+    return {"model": model, "messages": messages, "temperature": snapshot['temperature'],
+            "max_tokens": snapshot['maxTokens'], "tool_choice": "auto",
+            "tools": [{"type": "function", "function": tool} for tool in snapshot['tools']]}
+
+
 def assert_coach_evidence(conn, request: dict, asset_payload: dict, attempt_id: str, asset_id: str):
     messages = request.get("messages") or []
     evidence_messages = [item for item in messages if item.get("role") == "user"
@@ -787,9 +800,8 @@ def assert_coach_evidence(conn, request: dict, asset_payload: dict, attempt_id: 
             and evidence["identity"].get("assetFingerprint") == attempt["submitted_asset_fingerprint"],
             "Coach request attempt identity mismatch")
     source = evidence.get("source") or {}
-    require(all(source.get(key) == asset_payload.get(key) and source.get(key) is not None
-                for key in ("passage", "questionGroups", "questionDisplayMap")),
-            "Coach request canonical asset evidence mismatch")
+    require('passage' not in source and 'questionGroups' not in source,
+            "Coach agent must not send the complete passage/questions in its seed")
     result = evidence.get("result") or {}
     require(result.get("status") == attempt["status"] and result.get("score") == attempt["score_value"]
             and result.get("scoreScale") == attempt["score_scale"]
@@ -798,11 +810,16 @@ def assert_coach_evidence(conn, request: dict, asset_payload: dict, attempt_id: 
             "Coach request canonical attempt result mismatch")
     answers = conn.execute("SELECT question_id,answer_json,is_correct FROM attempt_answers WHERE attempt_id=? ORDER BY question_id",
                            (attempt_id,)).fetchall()
-    rendered_answers = sorted(result.get("answers") or [], key=lambda item: item["questionId"])
-    require(len(rendered_answers) == len(answers) and all(
-        item["questionId"] == row["question_id"] and item["answer"] == json.loads(row["answer_json"])
-        and item.get("isCorrect") == (None if row["is_correct"] is None else bool(row["is_correct"]))
-        for item, row in zip(rendered_answers, answers)), "Coach request canonical attempt answers mismatch")
+    require(result.get('questionIndexColumns') == ['id', 'label', 'answered', 'correct'],
+            'Coach compact index columns mismatch')
+    index = sorted((dict(zip(result['questionIndexColumns'], row)) for row in result.get('questionIndex') or []), key=lambda row: row['id'])
+    require(len(index) == len(answers) and all(
+        item['id'] == row['question_id'] and item['correct'] == (None if row['is_correct'] is None else bool(row['is_correct']))
+        and item['answered'] == bool(json.loads(row['answer_json'])) for item, row in zip(index, answers)),
+        'Coach compact question index mismatches official answers')
+    require('answers' not in result and result['answeredCount'] == sum(item['answered'] for item in index)
+            and result['unansweredCount'] == sum(not item['answered'] for item in index),
+            'Coach compact completion summary is inaccurate')
 
 
 def assert_coach_receipt(conn, payload: dict, message: dict, provider: FakeCoachProvider, index: int, failed: bool):
@@ -829,7 +846,7 @@ def assert_coach_receipt(conn, payload: dict, message: dict, provider: FakeCoach
             and plan["invocationId"] == invocation_id and snapshot["scope"] == f"coach:{message['thread_id']}",
             "Coach snapshot plan linkage mismatch")
     require(conn.execute("SELECT COUNT(*) FROM llm_invocations WHERE run_id=?", (run_id,)).fetchone()[0] == 1
-            and conn.execute("SELECT COUNT(*) FROM agent_context_snapshots WHERE run_id=?", (run_id,)).fetchone()[0] == 1,
+            and conn.execute("SELECT COUNT(*) FROM agent_context_snapshots WHERE run_id=?", (run_id,)).fetchone()[0] == 2,
             "Coach duplicated snapshot/invocation receipts")
     rendered = snapshot["rendered_context"]
     digest = hashlib.sha256(rendered.encode()).hexdigest()
@@ -838,7 +855,11 @@ def assert_coach_receipt(conn, payload: dict, message: dict, provider: FakeCoach
     require(len(items) == 1 and items[0]["item_id"] == user["id"]
             and json.loads(items[0]["provenance_json"])["contentHash"] == digest,
             "Coach context item provenance mismatch")
-    wire = completion_wire(json.loads(rendered), "packaged-coach-requested")
+    round_snapshot = conn.execute("SELECT * FROM agent_context_snapshots WHERE id=?", (f'context-{run_id}-round-1',)).fetchone()
+    require(round_snapshot is not None and round_snapshot['scope'] == f"coach:{message['thread_id']}"
+            and round_snapshot['content_hash'] == hashlib.sha256(round_snapshot['rendered_context'].encode()).hexdigest(),
+            'Coach evidence round snapshot hash/linkage mismatch')
+    wire = evidence_agent_wire(json.loads(round_snapshot['rendered_context']), "packaged-coach-requested")
     actual = provider.requests[index]
     # Rust serializes f32 temperature as its exact widened value on the wire.
     require({k: v for k, v in wire.items() if k != "temperature"}

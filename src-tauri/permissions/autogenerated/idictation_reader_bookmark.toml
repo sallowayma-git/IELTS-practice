@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-reader-bookmark"
+description = "Enables the idictation_reader_bookmark command without any pre-configured scope."
+commands.allow = ["idictation_reader_bookmark"]
+
+[[permission]]
+identifier = "deny-idictation-reader-bookmark"
+description = "Denies the idictation_reader_bookmark command without any pre-configured scope."
+commands.deny = ["idictation_reader_bookmark"]

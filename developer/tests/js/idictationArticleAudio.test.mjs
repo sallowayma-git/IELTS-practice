@@ -22,8 +22,13 @@ test('track range uses original offsets, ends at boundary, clip plays entire med
   const result=await h.start(input,controller.signal,slot)
   assert.equal(result.currentTime,117.526);assert.equal(result.playing,true)
   h.media[0].currentTime=119.75;h.tick();assert.equal(h.media[0].paused,true)
+  assert.equal(h.window.__atlasArticleAudio.snapshot().ended,true)
   const clip=await h.start({...input,mediaId:'clip',start:0,end:null},controller.signal,{})
   assert.equal(clip.currentTime,0);h.media[1].currentTime=150;h.tick();assert.equal(h.media[1].paused,false)
+  h.media[1].pause()
+  assert.equal(h.window.__atlasArticleAudio.snapshot().ended,false)
+  h.media[1].onended()
+  assert.equal(h.window.__atlasArticleAudio.snapshot().ended,true)
 })
 test('lost host receipt stops successful Audio; confirmed host handoff preserves it',async()=>{
   for(const accepted of [false,true]){

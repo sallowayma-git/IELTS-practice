@@ -34,8 +34,8 @@ function createModule(api) {
   return module.exports
 }
 
-function harness({ query, listMessages, selected = null } = {}) {
-  const state = { submission: { sessionId: 'attempt-1', examId: 'exam-1' } }
+function harness({ query, listMessages, selected = null, activeQuestion = '' } = {}) {
+  const state = { submission: { sessionId: 'attempt-1', examId: 'exam-1' }, activeQuestion }
   const api = {
     query: query || (async () => ({ threadId: 't1', answer: 'answer', messages: [userRow('u1', 'q'), answerRow('a1')] })),
     listMessages: listMessages || (async () => ({ threadId: 't1', messages: [] })),
@@ -44,10 +44,40 @@ function harness({ query, listMessages, selected = null } = {}) {
   const exports = createModule(api)
   const coach = exports.useReadingCoach({
     submissionSource: () => state.submission,
-    readSelectedContext: () => selected
+    readSelectedContext: () => selected,
+    readActiveQuestionId: () => state.activeQuestion
   })
   return { coach, state, exports }
 }
+
+test('current-question actions follow review navigation instead of the first wrong questions', async () => {
+  const payloads = []
+  const { coach, state } = harness({
+    activeQuestion: 'q2',
+    query: async payload => { payloads.push(payload); return { answer: 'explanation' } }
+  })
+  state.submission.coachContext = { wrongQuestions: ['10', '11', '12'] }
+  await coach.runCoachQuickAction('explain')
+  assert.deepEqual(payloads[0].focusQuestionNumbers, ['2'])
+  assert.match(payloads[0].content, /重点看 Q2/)
+  state.activeQuestion = 'q27'
+  await coach.runCoachQuickAction('hint')
+  assert.deepEqual(payloads[1].focusQuestionNumbers, ['27'])
+  state.activeQuestion = ''
+  await coach.runCoachQuickAction('explain')
+  assert.deepEqual(payloads[2].focusQuestionNumbers, ['10', '11', '12'])
+})
+
+test('an explicit text selection takes precedence over the review navigation focus', async () => {
+  let sent
+  const { coach } = harness({
+    activeQuestion: 'q2',
+    selected: { scope: 'question', text: 'Selected question', questionNumbers: ['7'] },
+    query: async payload => { sent = payload; return { answer: 'explanation' } }
+  })
+  await coach.runCoachQuickAction('explain')
+  assert.deepEqual(sent.focusQuestionNumbers, ['7'])
+})
 
 test('the question shows as soon as it is sent, and the stored rows replace it', async () => {
   let release

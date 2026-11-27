@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-walkman-open"
+description = "Enables the idictation_walkman_open command without any pre-configured scope."
+commands.allow = ["idictation_walkman_open"]
+
+[[permission]]
+identifier = "deny-idictation-walkman-open"
+description = "Denies the idictation_walkman_open command without any pre-configured scope."
+commands.deny = ["idictation_walkman_open"]

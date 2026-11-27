@@ -121,6 +121,11 @@ const router = createRouter({
             component: () => import('./views/TopicManagePage.vue')
         },
         {
+            path: '/speaking',
+            name: 'IdictationSpeaking',
+            component: () => import('../../../plug/idictation/SpeakingTopics.vue')
+        },
+        {
             path: '/history',
             name: 'History',
             component: () => import('./views/HistoryPage.vue')

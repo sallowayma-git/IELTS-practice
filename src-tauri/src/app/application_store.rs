@@ -86,6 +86,19 @@ impl WritingEvaluationStore for ApplicationStore<'_> {
 }
 
 impl CoachStore for ApplicationStore<'_> {
+    fn supports_evidence_tools(&self) -> bool { true }
+    fn begin_evidence_round(&self,run:&str,round:u32,request:&Value,budget:u32)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::begin_coach_evidence_round(conn,run,round,request,budget)).map_err(enrichment_error)
+    }
+    fn finish_evidence_round(&self,run:&str,round:u32,response:&Value,error:Option<&Value>)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::finish_coach_evidence_round(conn,run,round,response,error)).map_err(enrichment_error)
+    }
+    fn begin_evidence_tool(&self,call:&BeginAgentToolCallCommand)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::begin_agent_tool_call(conn,call)).map_err(enrichment_error)
+    }
+    fn finish_evidence_tool(&self,call:&FinishAgentToolCallCommand)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::finish_agent_tool_call(conn,call)).map_err(enrichment_error)
+    }
     fn begin_trace(&self, thread: &str, user: &str, request: &Value, provider: &str, model: &str, budget: u32) -> Result<String, ApplicationError> {
         self.db.with_conn(|conn| ielts_db::begin_coach_trace(conn, thread, user, request, provider, model, budget)).map_err(enrichment_error)
     }

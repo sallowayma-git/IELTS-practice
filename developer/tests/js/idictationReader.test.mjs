@@ -67,11 +67,15 @@ test('material reading takes the early branch before exam initialization', async
   const fn=source.slice(start,end)
   const ref=value=>({value})
   let initialized=0
+  const position = {blockKey:'p1',textOffset:8}
+  const restored = []
   const unexpected=()=>{throw new Error('material reached exam side effect')}
   const noop=()=>{}
   const context={assetLoadGeneration:0,pageAlive:ref(true),examReady:ref(true),draftAutosaveTimer:null,tauriAttemptId:'old',
-    props:{assetId:'idictation-material-test'},route:{params:{}},error:ref(''),submitError:ref(''),submission:ref(null),
+    props:{assetId:'idictation-material-test'},route:{params:{},query:{}},error:ref(''),submitError:ref(''),submission:ref(null),
     materialError:ref(''),locatedSentences:ref([]),suiteSession:ref(null),endlessNextAssetId:ref(''),materialMode:ref(true),
+    readerProgressError:ref(''),readerProgressMessage:ref(''),readerState:ref({position}),
+    nextTick:async()=>{},readingPassagePane:ref({restoreReadingPosition:value=>restored.push(value)}),
     detachHighlightDocumentListeners:noop,normalizeLegacyMemorizeQuery:()=>false,clearReadingAssetError:noop,
     clearSnapshotMessage:noop,resetAttemptReviewState:noop,resetAttemptMetadata:noop,resetReadingCoachState:noop,
     closeFloatingPanels:noop,resetHighlightUiStateFromComposable:noop,clearReadingNotesDraft:noop,clearEndlessTimer:noop,
@@ -84,6 +88,7 @@ test('material reading takes the early branch before exam initialization', async
   const run=new Function('context',`with(context){${fn}; return loadAsset();}`)
   await run(context)
   assert.equal(initialized,1)
+  assert.deepEqual(restored,[position])
   assert.equal(context.tauriAttemptId,'')
   assert.equal(context.examReady.value,false)
 })

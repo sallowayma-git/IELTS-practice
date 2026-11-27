@@ -86,9 +86,16 @@ pub fn run() {
             .js_init_script(include_str!("app/prototype-guard.js"))
             .build())
         .on_window_event(|window, event| {
+            if window.label() == "idictation-product" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    let _ = window.set_skip_taskbar(true);
+                }
+            }
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 if let Some(product) = window.app_handle().get_webview_window("idictation-product") {
-                    let _ = product.close();
+                    let _ = product.destroy();
                 }
             }
         })
@@ -307,6 +314,11 @@ pub fn run() {
             idictation::reader::idictation_reader_catalog,
             idictation::reader::idictation_open_reader,
             idictation::reader::idictation_reader_payload,
+            idictation::reader::idictation_reader_bookmark,
+            idictation::reader::idictation_reader_progress,
+            idictation::reader_annotations::idictation_reader_annotation,
+            idictation::reader::idictation_reader_collections,
+            idictation::reader::idictation_open_reader_collection,
             idictation::training::idictation_training_start,
             idictation::training::idictation_training_answer,
             idictation::training::idictation_training_audio,
@@ -317,11 +329,26 @@ pub fn run() {
             idictation::article::idictation_open_article,
             idictation::article::idictation_article_payload,
             idictation::article::idictation_article_audio,
+            idictation::article_dictation::idictation_article_dictation,
+            idictation::article_marking::idictation_article_mark,
+            idictation::walkman::idictation_walkman_open,
+            idictation::article::idictation_article_collections,
             idictation::reading::idictation_reading_catalog,
             idictation::reading::idictation_reading_open,
             idictation::reading::idictation_reading_save,
             idictation::reading::idictation_reading_submit,
             idictation::reading::idictation_reading_review,
+            idictation::listening::idictation_listening_catalog,
+            idictation::listening::idictation_listening_open,
+            idictation::listening::idictation_listening_payload,
+            idictation::writing::idictation_writing_catalog,
+            idictation::writing::idictation_writing_import,
+            idictation::speaking::idictation_speaking_catalog,
+            idictation::speaking::idictation_speaking_open,
+            idictation::mistakes::idictation_import_mistakes,
+            idictation::synonym::idictation_synonym_books,
+            idictation::synonym::idictation_synonym_chapters,
+            idictation::synonym::idictation_synonym_chapter,
             commands::reading::reading_pick_practice_asset,
             commands::reading::reading_get_asset_payload,
             commands::reading::reading_get_pdf_data_url,

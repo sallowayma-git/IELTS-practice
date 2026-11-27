@@ -26,6 +26,14 @@
     >
       <template v-if="materialMode" #heading><strong>{{ pageTitle }}</strong></template>
       <template v-if="materialMode" #controls>
+        <button v-if="readerState" class="btn-text" type="button" :disabled="Boolean(readerProgressBusy)" @click="saveReaderPosition">
+          {{ readerProgressBusy === 'save' ? '正在保存…' : '保存位置' }}
+        </button>
+        <button v-if="readerState" class="btn-text" type="button" :disabled="Boolean(readerProgressBusy || readerState.completedAt)" @click="updateReaderProgress({ kind: 'complete' })">
+          {{ readerState.completedAt ? '已读完' : readerProgressBusy === 'complete' ? '正在标记…' : '标记读完' }}
+        </button>
+        <span v-if="readerProgressError" role="alert">{{ readerProgressError }}</span>
+        <span v-else-if="readerState" role="status">{{ readerProgressMessage }}</span>
         <label>字号 <select :value="fontSize" @change="selectFontSize($event.target.value)"><option value="small">小</option><option value="normal">中</option><option value="large">大</option></select></label>
         <button class="btn-text" type="button" @click="setDarkMode(!darkMode)">{{ darkMode ? '浅色' : '深色' }}</button>
         <button class="btn-text" type="button" @click="handleLeave">返回阅读题库</button>
@@ -183,8 +191,20 @@
         :material="reviewMode || materialMode ? payload.studyMaterial : null"
         :material-error="materialError"
         :located-sentences="locatedSentences"
+        :highlighted-sentences="readerHighlights"
         @retry-material="loadStudyMaterial"
-      />
+      >
+        <template v-if="readerBookmarks" #sentence-actions="{ sentence }">
+          <button class="btn-text" type="button" :disabled="Boolean(readerBookmarkBusy)"
+            :aria-pressed="readerBookmarks.includes(sentence.id)" @click.stop="toggleReaderBookmark(sentence.id)">
+            {{ readerBookmarkBusy === sentence.id ? '正在保存…' : readerBookmarks.includes(sentence.id) ? '取消收藏' : '收藏本句' }}
+          </button>
+          <span v-if="readerBookmarkError?.id === sentence.id" role="alert">{{ readerBookmarkError.message }}</span>
+          <ReaderSentenceAnnotations v-if="readerAnnotations" :key="asset.id + ':' + sentence.id"
+            :asset-id="asset.id" :sentence-id="sentence.id" :annotations="readerAnnotations[sentence.id]"
+            @update="rows => readerAnnotations[sentence.id] = rows" />
+        </template>
+      </ReadingPassagePane>
 
       <div
         v-if="!materialMode"
@@ -349,6 +369,7 @@ import { useNativeAnswerControls } from '@/modules/reading-unified/composables/u
 import { applyResultsToQuestionArea } from '@/modules/reading-unified/reviewMarks.js'
 import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
 import { idictation, isIdictationMaterial, isIdictationReading } from '@/api/idictation.js'
+import ReaderSentenceAnnotations from '../../../../plug/idictation/ReaderSentenceAnnotations.vue'
 import { useReadingAsset } from '@/modules/practice-reading/useReadingAsset'
 import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
 import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
@@ -522,8 +543,62 @@ const { isMarkedQuestion, toggleMarkedQuestion } = useMarkedQuestions({
   onUserChange: () => scheduleDraftAutosave()
 })
 const readingPassagePane = ref(null)
+const readerState = computed(() => materialMode.value ? payload.value?.readerState : null)
+const readerProgressBusy = ref('')
+const readerProgressError = ref('')
+const readerProgressMessage = ref('')
+const readerBookmarks = computed(() => materialMode.value && Array.isArray(payload.value?.readerBookmarks)
+  ? payload.value.readerBookmarks : null)
+const readerAnnotations = computed(() => materialMode.value ? payload.value?.readerAnnotations : null)
+const readerHighlights = computed(() => Object.entries(readerAnnotations.value || {})
+  .filter(([, rows]) => rows.some(row => row.kind === 'highlight')).map(([id]) => id))
+const readerBookmarkBusy = ref('')
+const readerBookmarkError = ref(null)
 const materialError = ref('')
 const locatedSentences = ref([])
+
+function saveReaderPosition() {
+  const position = readingPassagePane.value?.readingPosition()
+  if (position) void updateReaderProgress({ kind: 'save', ...position })
+}
+
+async function updateReaderProgress(action) {
+  if (!readerState.value || readerProgressBusy.value || !asset.value?.id) return
+  const current = payload.value
+  readerProgressBusy.value = action.kind
+  readerProgressError.value = ''
+  readerProgressMessage.value = ''
+  try {
+    const state = await idictation.readerProgress(asset.value.id, action)
+    if (payload.value === current) {
+      current.readerState = state
+      readerProgressMessage.value = action.kind === 'save' ? '阅读位置已保存' : '已标记读完'
+    }
+  } catch (error) {
+    if (payload.value === current) readerProgressError.value = error?.message || String(error)
+  } finally {
+    readerProgressBusy.value = ''
+  }
+}
+
+async function toggleReaderBookmark(id) {
+  if (readerBookmarkBusy.value || !readerBookmarks.value || !asset.value?.id) return
+  const current = payload.value
+  const desired = !readerBookmarks.value.includes(id)
+  readerBookmarkBusy.value = id
+  readerBookmarkError.value = null
+  try {
+    const collected = await idictation.readerBookmark(asset.value.id, id, desired)
+    if (payload.value === current) {
+      current.readerBookmarks = current.readerBookmarks.filter(bookmark => bookmark !== id)
+      if (collected) current.readerBookmarks.push(id)
+    }
+  } catch (error) {
+    if (payload.value === current) readerBookmarkError.value = { id, message: error?.message || String(error) }
+  } finally {
+    readerBookmarkBusy.value = ''
+  }
+}
 
 async function loadStudyMaterial() {
   const id = asset.value?.id
@@ -817,6 +892,7 @@ const {
   },
   readCoachEnabled: () => readingCoachEnabled.value && !materialMode.value,
   readSelectedContext: () => readSelectedContext(getDisplayLabel),
+  readActiveQuestionId: () => activeQuestionId.value,
   getDisplayLabel,
   formatReviewAnswer,
   flushActiveQuestionVisit,
@@ -1267,6 +1343,8 @@ async function loadAsset() {
   submission.value = null
   materialError.value = ''
   locatedSentences.value = []
+  readerProgressError.value = ''
+  readerProgressMessage.value = ''
   resetAttemptReviewState()
   suiteSession.value = null
   resetAttemptMetadata()
@@ -1283,6 +1361,19 @@ async function loadAsset() {
     if (!isCurrent() || !data) return
     if (materialMode.value) {
       initializeReadingAnswers(data.payload)
+      await nextTick()
+      if (!isCurrent()) return
+      const sentenceId = route.query.sentenceId
+      if (typeof sentenceId === 'string' && /^idictation-reader-\d+-v\d+-s\d+$/.test(sentenceId)) {
+        const node = [...document.querySelectorAll('#left [data-study-sentence]')]
+          .find(node => node.dataset.studySentence === sentenceId)
+        if (node) {
+          locatedSentences.value = [sentenceId]
+          node.scrollIntoView({ block: 'center' })
+          return
+        }
+      }
+      readingPassagePane.value?.restoreReadingPosition(readerState.value?.position)
       return
     }
     examReady.value = true
@@ -1821,6 +1912,8 @@ async function scrollToQuestion(questionId) {
     const section = idictationSections.value?.find(part => part.questionIds.includes(normalized))
     if (section && section.section !== idictationPart.value) await openReadingPart(section.section)
   }
+  // Review navigation changes the visible focus without adding practice telemetry.
+  activeQuestionId.value = normalized
   recordQuestionVisit(normalized)
   const aliases = resolveAnswerAliases(normalized).map((entry) => escapeCss(entry))
   const directSelectors = aliases.flatMap((alias) => [

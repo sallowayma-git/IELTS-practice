@@ -7,6 +7,7 @@
           <h1>写作题库</h1>
         </div>
         <div class="page-header-actions header-actions">
+          <WritingTopicPicker @choose="openImportedTopic" />
           <button class="btn btn-secondary btn-warm-sand" type="button" @click="showImportDialog = true">
             批量导入
           </button>
@@ -340,6 +341,7 @@
 
 <script setup>
 import MascotState from '@/components/mascot/MascotState.vue'
+import WritingTopicPicker from '../../../../plug/idictation/WritingTopicPicker.vue'
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { topics as topicsApi } from '@/api/client.js'
@@ -504,6 +506,10 @@ function hasThumb(topic) {
 // 练习入口：题目 ID 与任务类型交给写作页读取，卡片本身不是链接。
 function startWriting(topic) {
   router.push({ name: 'Compose', query: { topicId: topic.id, taskType: topic.type } })
+}
+
+function openImportedTopic({ topicId, taskType }) {
+  startWriting({ id: topicId, type: taskType })
 }
 
 // 打开编辑器

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-synonym-chapter"
+description = "Enables the idictation_synonym_chapter command without any pre-configured scope."
+commands.allow = ["idictation_synonym_chapter"]
+
+[[permission]]
+identifier = "deny-idictation-synonym-chapter"
+description = "Denies the idictation_synonym_chapter command without any pre-configured scope."
+commands.deny = ["idictation_synonym_chapter"]

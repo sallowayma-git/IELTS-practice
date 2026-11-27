@@ -25,6 +25,38 @@ fn reader_response() -> Value {
 }
 
 #[test]
+fn article_collection_has_its_own_row_identity_and_no_exam_or_owner_data() {
+    let raw = json!({"current_page":2,"per_page":50,"last_page":2,"total":52,"data":[
+        {"id":7,"user_id":"123456","notes":"private note","article_content":{
+            "id":17,"content":"Example sentence","translate":"示例句","start_time":"1000","end_time":"2000",
+            "phonetic":"https://audio-1-cdn.idictation.cn/sample.mp3"
+        }},
+        {"id":8,"user_id":"123456","article_content":null}
+    ]});
+    let result = article_collection("123456", 2, &raw).unwrap();
+    let p = &result.payload;
+    assert_eq!(p["collectionPage"], json!({"page":2,"pages":2,"total":52,"unavailable":1}));
+    assert_eq!(p["questionCount"], 0);
+    assert_eq!(p["capabilities"]["remoteSubmit"], false);
+    assert_eq!(p["studyMaterial"]["parts"][0]["paragraphs"][0]["sentences"][0]["id"], "idictation-collection-7");
+    assert_eq!(p["studyMaterial"]["media"][0]["startSeconds"], 1.0);
+    assert_eq!(p["studyMaterial"]["media"][0]["endSeconds"], 2.0);
+    assert!(!p.to_string().contains("123456"));
+    assert!(!p.to_string().contains("private note"));
+    assert!(article_collection("123",2,&raw).is_err());
+    assert!(article_collection("123456",1,&raw).is_err());
+}
+
+#[test]
+fn empty_article_collection_remains_a_valid_read_only_page() {
+    let empty = json!({"current_page":1,"per_page":50,"last_page":1,"total":0,"data":[]});
+    let result = article_collection("7", 1, &empty).unwrap();
+    assert_eq!(result.payload["collectionPage"]["total"],0);
+    assert_eq!(result.payload["studyMaterial"]["media"],json!([]));
+    assert!(article_collection("7",0,&empty).is_err());
+}
+
+#[test]
 fn article_preserves_shared_content_identity_and_has_no_exam_score() {
     let result = article("1197472", "short", "Observed sample", &article_response()).unwrap();
     let payload = result.payload;

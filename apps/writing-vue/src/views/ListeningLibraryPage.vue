@@ -4,8 +4,27 @@
       <p class="page-header-kicker">LISTENING · 听力</p>
       <h1 class="heading-serif listening-library__title">听力题库</h1>
       <p class="page-header-desc">按场景和频率挑选一套听力，逐节作答。</p>
-      <LibraryFilters v-model:source="sourceFilter" v-model:part="partFilter" :parts="listeningParts" :extra-sources="[{value:'idictation',label:'爱听写精听'}]" />
+      <LibraryFilters v-model:source="sourceFilter" v-model:part="partFilter" :parts="listeningParts"
+        :extra-sources="[{ value: 'idictation', label: '爱听写精听' }, { value: 'idictation-exam', label: '爱听写真题' }, { value: 'idictation-jijing', label: '爱听写机经' }]" />
       <ArticleFilters v-if="sourceFilter==='idictation'" />
+      <template v-if="sourceFilter==='idictation-exam'">
+        <button class="btn btn-secondary" type="button" :disabled="listeningBusy" @click="loadListeningCatalog()">
+          {{ listeningBusy ? '正在加载剑雅听力…' : '加载剑雅 A 类听力' }}
+        </button>
+        <p v-if="listeningError" role="alert">{{ listeningError }}</p>
+      </template>
+      <template v-if="sourceFilter==='idictation-jijing'">
+        <button class="btn btn-secondary" type="button" :disabled="listeningBusy" @click="loadListeningCatalog('jijing')">
+          {{ listeningBusy ? '正在加载机经听力…' : '加载机经听力' }}
+        </button>
+        <label>练习范围
+          <select v-model="jijingScope" class="input">
+            <option value="suite">整套</option>
+            <option value="part">单 Part</option>
+          </select>
+        </label>
+        <p v-if="listeningError" role="alert">{{ listeningError }}</p>
+      </template>
     </header>
 
     <p v-if="openError" role="alert">{{ openError }}</p>
@@ -30,7 +49,7 @@
     />
 
     <template v-else>
-      <div v-if="sourceFilter!=='idictation'" class="listening-library__toolbar" role="search" aria-label="听力筛选">
+      <div v-if="!sourceFilter.startsWith('idictation')" class="listening-library__toolbar" role="search" aria-label="听力筛选">
         <label class="listening-library__filter">
           <span>场景</span>
           <select v-model="categoryFilter" class="input">
@@ -68,7 +87,7 @@
           <div class="listening-card__main">
             <h2 class="heading-serif listening-card__title">{{ item.title || '未命名听力' }}</h2>
             <p class="listening-card__meta">
-              <span v-if="item.provider">{{ item.provider==='idictation'?'爱听写':'九分学长' }}</span>
+              <span v-if="item.provider">{{ item.provider.startsWith('idictation') ? '爱听写' : '九分学长' }}</span>
               <span v-if="item.category">{{ item.category }}</span>
               <span v-if="item.difficulty">{{ difficultyLabel(item.difficulty) }}</span>
               <span v-if="item.frequency">{{ frequencyLabel(item.frequency) }}</span>
@@ -84,7 +103,9 @@
             </div>
           </div>
           <span v-if="item.available === false">暂无权限</span>
-          <button v-else-if="item.provider" class="btn btn-primary listening-card__start" type="button" :disabled="openingRemote" @click="openRemote(item)">{{ item.practiceKind==='material'?'打开精听':'开始练习' }}</button>
+          <button v-else-if="item.provider" class="btn btn-primary listening-card__start" type="button" :disabled="openingRemote" @click="openRemote(item)">
+            {{ item.practiceKind === 'material' ? '打开精听' : item.provider.startsWith('idictation') ? '打开试卷' : '开始练习' }}
+          </button>
           <router-link v-else
             class="btn btn-primary listening-card__start"
             :to="{ name: 'PracticeListening', params: { assetId: item.id } }"
@@ -102,6 +123,7 @@ import { listListeningAssets as listeningListAssets } from '@/api/listening-repo
 import LibraryFilters from '../../../../plug/jiufen/LibraryFilters.vue'
 import ArticleFilters from '../../../../plug/idictation/ArticleFilters.vue'
 import {articleCards,openArticle} from '../../../../plug/idictation/articleLibrary.js'
+import { listeningExamCards, listeningBusy, listeningError, loadListeningCatalog, openListening } from '../../../../plug/idictation/listeningLibrary.js'
 import {remoteCards, openNativeUnit} from '../../../../plug/jiufen/library.js'
 import MascotState from '@/components/mascot/MascotState.vue'
 import {
@@ -116,20 +138,24 @@ const assets = ref([])
 const categoryFilter = ref('all')
 const frequencyFilter = ref('all')
 const hotlistOnly = ref(false)
+const jijingScope = ref('suite')
 
 const onlineListening = remoteCards('listening')
 const listeningParts = ['P1','P2','P3','P4']
 const sourceFilter = ref('all'), partFilter = ref('all')
-const allAssets = computed(() => [...assets.value, ...onlineListening.value, ...articleCards.value].sort((a,b)=>a.title.localeCompare(b.title)))
+const allAssets = computed(() => [...assets.value, ...onlineListening.value, ...articleCards.value, ...listeningExamCards.value].sort((a,b)=>a.title.localeCompare(b.title)))
 const categories = computed(() => uniqueValues(allAssets.value.map((asset) => asset.category)))
 const frequencies = computed(() => uniqueValues(
   allAssets.value.map((asset) => String(asset.frequency || '').trim().toLowerCase())
 ))
 const filteredAssets = computed(() => allAssets.value.filter((asset) => {
   if (sourceFilter.value !== 'all' && sourceFilter.value !== (asset.provider || 'local')) return false
+  if (sourceFilter.value === 'idictation-jijing' && Boolean(asset.paperId) !== (jijingScope.value === 'part')) return false
+  if (sourceFilter.value === 'all' && asset.provider === 'idictation-jijing' && asset.paperId) return false
   if(asset.practiceKind==='material')return true
   const parts = asset.parts?.length ? asset.parts : [asset.category]
   if (partFilter.value !== 'all' && !parts.includes(partFilter.value)) return false
+  if (sourceFilter.value === 'idictation-exam' || sourceFilter.value === 'idictation-jijing') return true
   const category = String(asset.category || '').trim()
   const frequency = String(asset.frequency || '').trim().toLowerCase()
   if (categoryFilter.value !== 'all' && category !== categoryFilter.value) return false
@@ -170,7 +196,8 @@ async function openRemote(item) {
   openError.value = ''
   const origin = route.fullPath
   try {
-    const target = await (item.provider==='idictation'?openArticle(item):openNativeUnit(item))
+    const open = { idictation: openArticle, 'idictation-exam': openListening, 'idictation-jijing': openListening }[item.provider] || openNativeUnit
+    const target = await open(item)
     if (route.fullPath === origin) await router.push(target)
   } catch (failure) {
     openError.value = failure?.message || String(failure)

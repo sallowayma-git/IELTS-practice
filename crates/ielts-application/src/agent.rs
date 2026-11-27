@@ -162,6 +162,11 @@ pub trait AgentModel: Send + Sync {
         &self,
         request: AgentModelRequest,
     ) -> Result<AgentModelResponse, AgentModelFailure>;
+
+    /// Caller owns invocation receipts; avoid a second unlinked usage entry.
+    async fn respond_traced(&self, request: AgentModelRequest) -> Result<AgentModelResponse, AgentModelFailure> {
+        self.respond(request).await
+    }
 }
 
 pub use ielts_db::{

@@ -1852,6 +1852,7 @@ dependencies = [
  "hex",
  "ielts-db",
  "ielts-domain",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",

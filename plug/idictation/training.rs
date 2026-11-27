@@ -85,6 +85,10 @@ fn sound(row: &Value, pronunciation: u8, sentence: bool) -> Result<String, Strin
     let selected = if special(row) && sentence { text(row,"answer_sentence_audio_url") }
         else if special(row) && !text(row,"word_audio_url").trim().is_empty() { text(row,"word_audio_url") }
         else { text(row,if pronunciation==2 {"phonetic-m"} else {"phonetic-y"}) };
+    validated_audio(selected)
+}
+
+pub(super) fn validated_audio(selected: &str) -> Result<String, String> {
     let url=tauri::Url::parse(selected.trim()).map_err(|_| "该词音频不可用")?;
     if url.scheme()!="https" || url.port().is_some() || !url.username().is_empty() || url.password().is_some()
         || !matches!(url.host_str(),Some("idictation-article.oss-cn-beijing.aliyuncs.com"|"lbxl-audio.oss-cn-beijing.aliyuncs.com"|"itx-jingting.oss-cn-beijing.aliyuncs.com"|"audio-1-cdn.idictation.cn")) {
@@ -249,6 +253,34 @@ fn start(owner: &str, book: &SourceBook, chapter: &SourceChapter, value: Value, 
     Ok(training)
 }
 
+pub(super) fn source_unit(db: &AppDb, owner: &str, book_id: &str, unit_id: &str)
+    -> Result<ielts_db::vocab::books::SourceUnit, String>
+{
+    let source = db.with_conn(|conn| ielts_db::vocab::books::source_unit(conn, book_id, unit_id))
+        .map_err(|_| "请先同步并选择爱听写章节")?;
+    if source.provider != "idictation" || source.owner_key != hex::encode(Sha256::digest(owner.as_bytes())) {
+        return Err("请连接导入该词书时的爱听写账号".into());
+    }
+    Ok(source)
+}
+
+pub(super) async fn authorized_chapter(app: &AppHandle, source: &ielts_db::vocab::books::SourceUnit,
+    book_value: u64) -> Result<(SourceBook, SourceChapter), String>
+{
+    let mut found=None;
+    for scope in [2,158] {
+        let catalog=transport::read(app,"books",json!({"s_id":scope,"check_data":1,"scene_type":1})).await?;
+        found=catalog.as_array().ok_or("词书目录无效")?.iter().find(|r|r["type"]=="lexicon"&&vocabulary::id(&r["id"]).ok().as_deref()==Some(&source.book_id)).cloned();
+        if found.is_some() {break;}
+    }
+    let book:SourceBook=serde_json::from_value(found.ok_or("当前账号目录中未找到该词书，请在原站确认访问权限")?).map_err(|_|"词书目录无效")?;
+    if vocabulary::enabled(&book.need_buy)&&!vocabulary::enabled(&book.already_buy) {return Err("该词书需要原站授权".into());}
+    let chapters=transport::read(app,"chapters",json!({"g_id":book_value})).await?;
+    let chapters:super::vocabulary::Chapters=serde_json::from_value(chapters).map_err(|_|"章节目录无效")?;
+    let chapter=chapters.chapters.into_iter().flat_map(|g|g.list).find(|r|vocabulary::id(&r.id).ok().as_deref()==Some(&source.chapter_id)).ok_or("章节已不在当前词书")?;
+    Ok((book, chapter))
+}
+
 #[tauri::command]
 pub async fn idictation_training_start(app: AppHandle, account: State<'_,Account>, db: State<'_,AppDb>, book_id:String, unit_id:String, mode:u8, resume:bool) -> Result<Prompt,String> {
     let mut session=account.0.lock().await;
@@ -257,23 +289,12 @@ pub async fn idictation_training_start(app: AppHandle, account: State<'_,Account
     transport::stop_article_audio(&app,None);
     session.training=None;
     let owner=session.owner.as_deref().ok_or("尚未连接账号")?.to_owned();
-    let source=db.with_conn(|conn|ielts_db::vocab::books::source_unit(conn,&book_id,&unit_id)).map_err(|_|"请先同步并选择爱听写章节")?;
-    if source.provider!="idictation" || source.owner_key!=hex::encode(Sha256::digest(owner.as_bytes())) {return Err("请连接导入该词书时的爱听写账号".into());}
+    let source=source_unit(&db,&owner,&book_id,&unit_id)?;
     let book_value=source.book_id.parse::<u64>().map_err(|_|"词书来源编号无效")?;
     let chapter_value=source.chapter_id.parse::<u64>().map_err(|_|"章节来源编号无效")?;
     ensure_confirmed(&db,&write_scope(&owner,&json!(book_value),&json!(chapter_value)))?;
-    let mut found=None;
-    for scope in [2,158] {
-        let catalog=transport::read(&app,"books",json!({"s_id":scope,"check_data":1,"scene_type":1})).await?;
-        found=catalog.as_array().ok_or("词书目录无效")?.iter().find(|r|r["type"]=="lexicon"&&vocabulary::id(&r["id"]).ok().as_deref()==Some(&source.book_id)).cloned();
-        if found.is_some() {break;}
-    }
-    let book:SourceBook=serde_json::from_value(found.ok_or("当前账号目录中未找到该词书，请在原站确认访问权限")?).map_err(|_|"词书目录无效")?;
-    if vocabulary::enabled(&book.need_buy)&&!vocabulary::enabled(&book.already_buy) {return Err("该词书需要原站授权".into());}
     if !(1..=4).contains(&mode) || SPECIAL.contains(&book_value)&&mode!=1 {return Err("模式不可用：号码类词书仅支持听写".into());}
-    let chapters=transport::read(&app,"chapters",json!({"g_id":book_value})).await?;
-    let chapters:super::vocabulary::Chapters=serde_json::from_value(chapters).map_err(|_|"章节目录无效")?;
-    let chapter=chapters.chapters.into_iter().flat_map(|g|g.list).find(|r|vocabulary::id(&r.id).ok().as_deref()==Some(&source.chapter_id)).ok_or("章节已不在当前词书")?;
+    let (book,chapter)=authorized_chapter(&app,&source,book_value).await?;
     verify(&app,&mut session).await?;
     let words=transport::read(&app,"trainingWords",json!({"c_id":chapter_value,"compact":if SPECIAL.contains(&book_value){0}else{1},"pagesize":9999})).await?;
     let dictionary=transport::read(&app,"trainingDictionary",json!({})).await?;

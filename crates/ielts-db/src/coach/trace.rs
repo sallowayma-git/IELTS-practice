@@ -127,6 +127,35 @@ fn prompt_layout(request: &Value) -> Value {
     })
 }
 
+/// One internal Agent request DTO per round (not the provider HTTP envelope).
+/// Reasoning echoes are omitted. Usage is counted once in the
+/// parent invocation; these snapshots retain per-call metadata without duplicate
+/// llm_invocations. Scope/run links preserve the history-deletion redaction path.
+pub fn begin_coach_evidence_round(conn:&Connection,run:&str,round:u32,request:&Value,budget:u32)->DbResult<()> {
+    let tx=conn.unchecked_transaction()?;
+    let (thread,transient):(String,bool)=tx.query_row("SELECT json_extract(r.result_json,'$.threadId'), EXISTS(SELECT 1 FROM agent_context_snapshots s WHERE s.id='context-'||r.id AND json_extract(CASE WHEN json_valid(s.rendered_context) THEN s.rendered_context ELSE '{}' END,'$.storage')='remote_evidence_digest') FROM agent_runs r WHERE r.id=?1 AND r.status='running'",[run],|r|Ok((r.get(0)?,r.get(1)?)))?;
+    let rendered=request.to_string();let used=estimate_tokens(&rendered);
+    if round==0||round>4||used>budget {return Err(DbError::Validation("invalid evidence round budget".into()));}
+    let hash=rendered_hash(&rendered);
+    let stored=if transient {json!({"storage":"remote_evidence_digest","requestHash":hash,"usedTokens":used}).to_string()} else {rendered};
+    let id=format!("context-{run}-round-{round}");
+    tx.execute("INSERT INTO agent_context_snapshots(id,run_id,planner_version,scope,query_plan_json,token_budget,used_tokens,rendered_context,content_hash,created_at) VALUES(?1,?2,'coach-evidence-v1',?3,?4,?5,?6,?7,?8,?9)",params![id,run,format!("coach:{thread}"),json!({"round":round,"status":"running","requestHash":hash,"requestFormat":"internal-agent-request-v1","reasoningEchoStored":false}).to_string(),budget,used,stored,rendered_hash(&stored),chrono::Utc::now().to_rfc3339()])?;
+    tx.execute("UPDATE agent_runs SET rounds=?2 WHERE id=?1",params![run,round])?;
+    if round==1 {
+        tx.execute("UPDATE agent_runs SET result_json=json_set(result_json,'$.evidenceAgent',json('true'),'$.invocationAccounting','aggregate','$.requestSnapshotKind','seed') WHERE id=?1",[run])?;
+        tx.execute("UPDATE agent_context_snapshots SET planner_version='coach-evidence-seed-v1' WHERE id=?1",[format!("context-{run}")])?;
+    }
+    tx.commit()?;Ok(())
+}
+
+pub fn finish_coach_evidence_round(conn:&Connection,run:&str,round:u32,response:&Value,error:Option<&Value>)->DbResult<()> {
+    let receipt=json!({"status":if error.is_some(){"failed"}else{"completed"},"responseHash":rendered_hash(&response.to_string()),
+        "actualModel":response["model"],"usage":response["usage"],"latencyMs":response["latencyMs"],"retryCount":response["retryCount"],"providerRequestId":response["providerRequestId"],
+        "toolCallCount":response["toolCalls"].as_array().map_or(0,Vec::len),"error":error});
+    let n=conn.execute("UPDATE agent_context_snapshots SET query_plan_json=json_patch(query_plan_json,?2) WHERE id=?1 AND json_extract(query_plan_json,'$.status')='running' AND run_id IN(SELECT id FROM agent_runs WHERE status='running')",params![format!("context-{run}-round-{round}"),receipt.to_string()])?;
+    if n!=1{return Err(DbError::Validation("evidence round is not active".into()));} Ok(())
+}
+
 /// Success message + invocation + run terminal receipt commit together.
 pub fn complete_traced_coach(
     conn: &Connection,
@@ -288,7 +317,10 @@ fn close_trace(
         return Err(DbError::Validation("coach invocation is not active".into()));
     }
     let now = chrono::Utc::now().to_rfc3339();
-    let changed = conn.execute("UPDATE agent_runs SET status=?1,rounds=1,error_json=?2,updated_at=?3,completed_at=?3,
+    // A dropped model/tool future cannot leave a running child of a closed run.
+    conn.execute("UPDATE agent_tool_calls SET status='interrupted',completed_at=?2 WHERE run_id=?1 AND status='running'",params![run_id,now])?;
+    conn.execute("UPDATE agent_context_snapshots SET query_plan_json=json_set(query_plan_json,'$.status','interrupted') WHERE run_id=?1 AND planner_version='coach-evidence-v1' AND json_extract(query_plan_json,'$.status')='running'",[run_id])?;
+    let changed = conn.execute("UPDATE agent_runs SET status=?1,rounds=MAX(rounds,1),tool_call_count=(SELECT COUNT(*) FROM agent_tool_calls WHERE run_id=?10),error_json=?2,updated_at=?3,completed_at=?3,
         result_json=json_patch(json_set(result_json,'$.assistantMessageId',?4,'$.actualModel',?5,'$.usage',json(?6),'$.latencyMs',?7,'$.providerRequestId',?8,'$.retryCount',?9),COALESCE(?11,'{}'))
         WHERE id=?10 AND status='running'",
         params![if error.is_some(){"failed"}else{"completed"},error_json,now,assistant,model,usage.unwrap_or_else(||"null".into()),latency,request_id,retries,run_id,notes_patch])?;

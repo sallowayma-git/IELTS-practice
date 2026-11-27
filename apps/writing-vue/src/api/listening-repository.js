@@ -8,6 +8,7 @@
  */
 
 import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
+import { idictation, isIdictationListeningPreview } from '@/api/idictation.js'
 import { invokeCommand, isTauriRuntime, unwrapCommandResponse } from '@/api/tauri-bridge.js'
 
 export function newKey(prefix = 'l') {
@@ -29,6 +30,7 @@ export async function getListeningAssetPayload(assetId) {
     throw error
   }
   if (isJiufenAsset(normalizedAssetId)) return (await jiufen.payload(normalizedAssetId)).payload
+  if (isIdictationListeningPreview(normalizedAssetId)) return idictation.listeningPayload(normalizedAssetId)
 
   const response = await invokeCommand('listening_get_asset_payload', {
     assetId: normalizedAssetId
@@ -51,6 +53,7 @@ export async function getListeningAudioDataUrl(assetId) {
 }
 
 export async function saveListeningDraft(payload) {
+  if (isIdictationListeningPreview(payload.assetId)) throw new Error('此试卷仅支持临时作答')
   const response = await invokeCommand('listening_save_draft', {
     cmd: {
       attemptId: payload.attemptId,
@@ -69,6 +72,7 @@ export async function saveListeningDraft(payload) {
 }
 
 export async function getOpenListeningDraft(assetId) {
+  if (isIdictationListeningPreview(assetId)) return { source: 'tauri', attempt: null }
   const response = await invokeCommand('listening_get_open_draft', {
     assetId: String(assetId || '').trim()
   })
@@ -79,6 +83,7 @@ export async function getOpenListeningDraft(assetId) {
 }
 
 export async function submitListeningAttempt(payload) {
+  if (isIdictationListeningPreview(payload.assetId)) throw new Error('此试卷尚不支持官方交卷')
   if (isJiufenAsset(payload.assetId)) {
     return { source: 'tauri', result: await jiufen.submit('listening', payload) }
   }

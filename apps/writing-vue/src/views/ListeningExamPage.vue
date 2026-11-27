@@ -24,11 +24,17 @@
         <ListeningAudioBar
           ref="audioBar"
           :audio-url="onlineAudio ? onlineAudio[activeSection] : audioUrl"
-          :loading="audioLoading" :error="audioError" :duration-seconds="durationSeconds"
+          :source-playback="sourcePlayback"
+          :loading="audioLoading || (isPreview && previewPlayback.busy.value)"
+          :error="audioError || (isPreview ? previewAudioError : '')" :duration-seconds="durationSeconds"
           @retry="loadPracticeAudio"
           @timeupdate="audioTime = $event"
           @playing-change="audioPlaying = $event"
         />
+        <p v-if="isPreview" class="listening-practice__notice">
+          {{ previewPartTracks ? '按 Part 播放，切换后可播放该 Part 的录音。' : '整卷播放，换 Part 不会重置音轨。' }}
+          作答仅保留在本页。
+        </p>
         <div v-if="reviewMode && review" class="listening-score" data-listening-score aria-label="听力成绩">
           <p class="listening-score__value">答对 <strong>{{ review.correctCount }}</strong><span>/ {{ review.questionCount }}</span></p>
           <p class="listening-score__percent">{{ review.percentage }}%</p>
@@ -145,8 +151,8 @@
       :sections="navSections" :question-order="activeQuestionOrder" :display-map="displayMap"
       :category="`P${activeSection}`" :has-answer="hasAnswer" :active-question-id="activeQuestionId"
       :review-mode="reviewMode" :answer-comparison="answerComparison"
-      :submit-disabled="loading || !payload || submitting || reviewMode"
-      :submit-label="submitting ? '提交中…' : reviewMode ? '已提交' : '提交作答'"
+      :submit-disabled="loading || !payload || submitting || reviewMode || isPreview"
+      :submit-label="isPreview ? '暂不支持交卷' : submitting ? '提交中…' : reviewMode ? '已提交' : '提交作答'"
       @open-part="selectSection" @scroll-to-question="focusQuestion" @submit="submitAnswers"
     />
   </div>
@@ -158,6 +164,8 @@ import '@/modules/practice-reading/styles/host-extras.css'
 import ReadingCoachPanel from '@/modules/practice-reading/components/ReadingCoachPanel.vue'
 import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
 import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
+import { isIdictationListeningPreview } from '@/api/idictation.js'
+import { useArticlePlayback } from '../../../../plug/idictation/useArticlePlayback.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ListeningAudioBar from '@/modules/practice-listening/components/ListeningAudioBar.vue'
@@ -187,6 +195,7 @@ const props = defineProps({
 
 const route = useRoute()
 const router = useRouter()
+const isPreview = computed(() => isIdictationListeningPreview(props.assetId))
 
 const reviewMode = computed(() => Boolean(props.attemptId) || route.name === 'PracticeListeningReview')
 const reviewReplay = computed(() => String(route.query?.replay || '') === '1')
@@ -254,6 +263,24 @@ const {
   loadAudio
 } = useListeningAudio()
 const listeningAttempt = useListeningAttempt()
+const previewPlayback = useArticlePlayback()
+const previewSource = ref(null)
+const previewPartTracks = computed(() => previewSource.value?.trackIds)
+const previewTrack = computed(() => previewPartTracks.value?.[activeSection.value] || previewSource.value?.trackId || '')
+const previewAudioError = computed(() => previewTrack.value
+  ? previewPlayback.error.value || previewPlayback.state.value?.error || ''
+  : '当前试题没有可播放音轨')
+const sourcePlayback = computed(() => {
+  if (!isPreview.value || !previewTrack.value) return null
+  const state = previewPlayback.state.value?.mediaId === previewTrack.value ? previewPlayback.state.value : null
+  return {
+    state,
+    toggle: () => state && state.currentTime < state.duration - 0.02
+      ? previewPlayback.toggle() : previewPlayback.play(previewTrack.value),
+    seek: previewPlayback.seek,
+    volume: previewPlayback.changeVolume
+  }
+})
 
 const attemptId = ref(String(props.attemptId || '').trim())
 let draftKey = ''
@@ -383,7 +410,7 @@ const sectionNav = computed(() => [1, 2, 3, 4].map((section) => ({
   label: sectionLabel(section),
   count: sectionCounts.value.get(section) || 0,
   disabled: !(sectionCounts.value.get(section) > 0)
-})))
+})).filter(entry => !payload.value?.idictationJijing || questionCount.value !== 10 || !entry.disabled))
 const activeGroups = computed(() => (payload.value?.questionGroups || [])
   .filter((group) => Number(group?.section) === activeSection.value))
 const activeQuestionOrder = computed(() => activeGroups.value.flatMap(group => group.questionIds || []))
@@ -449,6 +476,7 @@ function selectSection(section) {
   activeQuestionId.value = firstQuestion
   if (firstQuestion && !reviewMode.value) timeline.recordQuestionVisit(firstQuestion)
   if (section === activeSection.value) return
+  if (previewPartTracks.value) previewPlayback.suspend()
   activeSection.value = section
   locatedSentences.value = []
   void nextTick(() => {
@@ -464,7 +492,7 @@ function handleQuestionInput(event) {
 }
 
 function scheduleDraftSave() {
-  if (reviewMode.value || !payload.value) return
+  if (isPreview.value || reviewMode.value || !payload.value) return
   if (draftTimer) clearTimeout(draftTimer)
   draftTimer = setTimeout(() => {
     draftTimer = null
@@ -475,7 +503,7 @@ function scheduleDraftSave() {
 }
 
 async function saveDraftNow() {
-  if (reviewMode.value || !payload.value || !asset.value?.id) return
+  if (isPreview.value || reviewMode.value || !payload.value || !asset.value?.id) return
   if (!attemptId.value) attemptId.value = listeningAttempt.newAttemptId()
   if (!draftKey) draftKey = listeningAttempt.newIdempotencyKey('draft')
   // Flush first: the open question's elapsed time belongs to this save.
@@ -561,7 +589,7 @@ async function loadReview() {
 }
 
 async function submitAnswers() {
-  if (submitting.value || reviewMode.value || !payload.value) return
+  if (isPreview.value || submitting.value || reviewMode.value || !payload.value) return
   submitting.value = true
   submitError.value = ''
   if (draftTimer) {
@@ -612,6 +640,10 @@ function formatDurationMs(value) {
 }
 
 async function loadPracticeAudio() {
+  if (isPreview.value) {
+    if (previewTrack.value) await previewPlayback.play(previewTrack.value)
+    return
+  }
   if (!isJiufenAsset(props.assetId)) return loadAudio(props.assetId)
   audioLoading.value = true
   audioError.value = ''
@@ -636,14 +668,21 @@ async function initialize() {
   dirty = false
   timeline.reset()
   try {
+    if (isPreview.value && reviewMode.value) throw new Error('此试卷没有可复盘的交卷记录')
     await loadListeningAsset(props.assetId)
     initializeAnswers(payload.value)
     activeSection.value = firstPresentSection()
     activeQuestionId.value = sectionFirstQuestion(activeSection.value)
-    void loadPracticeAudio()
+    if (isPreview.value) {
+      const source = payload.value?.idictationPlayback
+      previewSource.value = source || null
+      if (source?.sessionId) await previewPlayback.attach(source.sessionId)
+    } else {
+      void loadPracticeAudio()
+    }
     if (reviewMode.value) {
       await loadReview()
-    } else {
+    } else if (!isPreview.value) {
       await restoreDraft()
     }
   } catch (loadError) {
@@ -664,7 +703,7 @@ onBeforeUnmount(() => {
     draftTimer = null
   }
   timeline.flushActiveQuestionVisit()
-  if (!reviewMode.value && !submitted.value && dirty) {
+  if (!isPreview.value && !reviewMode.value && !submitted.value && dirty) {
     void saveDraftNow().catch((saveError) => {
       console.warn('离开听力页面前保存草稿失败:', saveError)
     })

@@ -17,6 +17,10 @@ use crate::{
     ApplicationError, ChatMessage, CoachStore, CompletionRequest, LanguageModel, ModelError,
 };
 
+mod evidence;
+mod evidence_agent;
+mod review;
+
 /// How many recent coach turns are loaded as candidate history. The store
 /// returns the NEWEST `n`; the history budget below decides how many survive.
 /// Large enough that no realistic thread ever slides this window (a slide would
@@ -46,11 +50,18 @@ const COACH_FINAL_TURN_RESERVE: u32 = 1_000;
 const COACH_INPUT_TOKEN_BUDGET: u32 =
     CONTEXT_HARD_TOKEN_CEILING.saturating_sub(COACH_OUTPUT_TOKEN_CEILING);
 
-/// Round-3 audit (7.8): provider-side output ceiling. The coach reply is a
-/// small `{"strategy":"...","answer":"...","teachingNotes":[...]}` JSON document, so a tight cap is correct here. This
-/// is deliberately coach-local: `ielts_domain::MAX_TOKEN_BUDGET` is dream-scoped
-/// and asserted against 4000 by the Python dream contract tests.
-const COACH_OUTPUT_TOKEN_CEILING: u32 = 2_000;
+/// Provider-side output ceiling. The reply itself is a small
+/// `{"strategy":"...","answer":"...","teachingNotes":[...]}` JSON document
+/// (a few hundred tokens), but `max_tokens` also bounds the model's hidden or
+/// leaked reasoning. Measured on reasoning models: ordinary chat spends 400-700
+/// tokens, a whole-attempt review 2000-4000 before its first JSON character. A
+/// cap sized for the reply alone cuts the review off mid-thought
+/// (`coach.output_truncated`), so the ceiling leaves room for that reasoning;
+/// models that answer directly never use it. Spend is limited by shrinking what
+/// we ask the model to deliberate over, not by starving it. This is deliberately
+/// coach-local: `ielts_domain::MAX_TOKEN_BUDGET` is dream-scoped and asserted
+/// against 4000 by the Python dream contract tests.
+const COACH_OUTPUT_TOKEN_CEILING: u32 = 6_000;
 
 /// Short single-shot actions answer one narrow question, so they need far less
 /// room than a whole-attempt review or an ordinary chat turn. The input budget
@@ -189,7 +200,7 @@ impl CoachService {
         store: &S,
         command: RunCoachCommand,
         load_model: F,
-        on_visible: Option<&mut (dyn for<'a> FnMut(&'a str) + Send)>,
+        mut on_visible: Option<&mut (dyn for<'a> FnMut(&'a str) + Send)>,
     ) -> Result<CoachRunResult, ApplicationError>
     where
         S: CoachStore,
@@ -222,13 +233,18 @@ impl CoachService {
         let learner_free_input = is_learner_free_input(&context.message_metadata);
         let profile = store.learner_profile(&command.thread_id, context.activity)?;
         let history = store.load_history(&command.thread_id, COACH_HISTORY_MESSAGE_LIMIT)?;
-        let mut request = build_request(&history, Some(&context), &profile, &command.content)?;
+        let tools = (context.activity == Activity::Reading && store.supports_evidence_tools())
+            .then(|| evidence::EvidenceTools::new(&context));
+        let compact = tools.as_ref().map(|tools| tools.project(&context, &command.content)).transpose()?;
+        let recent = tools.as_ref().map(|_| evidence::recent_history(&history));
+        let effective = compact.as_ref().unwrap_or(&context);
+        let mut request = build_request(recent.as_deref().unwrap_or(&history), Some(effective), &profile, &command.content)?;
         request.cache_key = Some(coach_cache_key(&command.thread_id));
         let user_message = store.append_message(&AppendCoachMessageCommand {
             thread_id: command.thread_id.clone(),
             role: "user".into(),
             content: command.content.clone(),
-            structured_payload: Some(context.message_metadata),
+            structured_payload: Some(effective.message_metadata.clone()),
             status: "completed".into(),
         })?;
         let model = match load_model() {
@@ -249,7 +265,10 @@ impl CoachService {
             }
         };
         let mut trace = CoachTraceGuard { store, run_id, armed: true, pending_error: json!({"code":"coach.interrupted","message":"coach execution dropped before terminal receipt","retryable":true}), pending_response: None };
-        let reply = match on_visible {
+        let reply = if let (Some(tools), Some(agent)) = (&tools, model.evidence_agent()) {
+            evidence_agent::run(store, agent, &model, tools, &trace.run_id,
+                &request, provider, requested_model).await
+        } else { match on_visible.as_mut() {
             None => model.complete_with_trace(request).await,
             Some(sink) => {
                 let mut visible = coach_stream::AnswerStream::default();
@@ -261,7 +280,7 @@ impl CoachService {
                 };
                 model.complete_with_trace_streaming(request, &mut forward).await
             }
-        };
+        }};
         let (response, retry_count) = match reply {
             Ok(response) => response,
             Err(failure) => {
@@ -287,6 +306,9 @@ impl CoachService {
         }) {
             Ok((assistant_message, remember)) => {
                 trace.armed = false;
+                if tools.is_some() && model.evidence_agent().is_some() {
+                    if let Some(sink) = on_visible { sink(&assistant_message.content); }
+                }
                 // A failed preference write must never cost the learner the
                 // answer; it just means nothing was remembered this turn.
                 let remembered = remember.as_deref().and_then(|text| {
@@ -517,14 +539,53 @@ fn keep_teaching_notes(payload: &mut Value, learner_free_input: bool) -> usize {
     review.rejected
 }
 
+/// Models routinely put a literal newline inside a JSON string (a multi-line
+/// answer). That is the only malformation worth repairing: escape raw control
+/// characters inside string literals, touch nothing else.
+fn escape_control_chars_in_strings(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len() + 16);
+    let (mut in_string, mut escaped) = (false, false);
+    for ch in raw.chars() {
+        match (in_string, escaped, ch) {
+            (true, true, _) => escaped = false,
+            (true, false, '\\') => escaped = true,
+            (true, false, '"') => in_string = false,
+            (true, false, '\n') => { out.push_str("\\n"); continue; }
+            (true, false, '\r') => { out.push_str("\\r"); continue; }
+            (true, false, '\t') => { out.push_str("\\t"); continue; }
+            (true, false, c) if c < ' ' => { out.push_str(&format!("\\u{:04x}", c as u32)); continue; }
+            (false, _, '"') => in_string = true,
+            _ => {}
+        }
+        out.push(ch);
+    }
+    out
+}
+
+/// Some models write their reasoning in the reply before the JSON object. When
+/// the whole text is not JSON, take the object that starts at the contract's
+/// own first key and ends at the last closing brace.
+fn json_object_after_prose(raw: &str) -> Option<&str> {
+    let start = ["{\"strategy\"", "{\"answer\""].iter().filter_map(|key| raw.find(key)).min()?;
+    let end = raw.rfind('}')?;
+    (end > start).then(|| &raw[start..=end])
+}
+
 fn parse_answer(raw: &str) -> Result<(String, Value), ApplicationError> {
-    let mut payload: Value = serde_json::from_str(raw).map_err(|error| {
-        ApplicationError::new(
-            "coach.provider_failed",
-            format!("coach response JSON invalid: {error}"),
-            false,
-        )
-    })?;
+    let mut payload: Value = serde_json::from_str(raw)
+        .or_else(|first| serde_json::from_str(&escape_control_chars_in_strings(raw)).map_err(|_| first))
+        .or_else(|first| {
+            json_object_after_prose(raw)
+                .and_then(|object| serde_json::from_str(&escape_control_chars_in_strings(object)).ok())
+                .ok_or(first)
+        })
+        .map_err(|error| {
+            ApplicationError::new(
+                "coach.provider_failed",
+                format!("coach response JSON invalid: {error}"),
+                false,
+            )
+        })?;
     let answer = payload
         .get("answer")
         .and_then(Value::as_str)
@@ -1436,7 +1497,7 @@ Why?"));
             .collect();
         assert_eq!(contents, vec!["first", "second", "third"]);
         // No resolved context at all keeps the full normal-answer ceiling.
-        assert_eq!(request.max_tokens, 2_000);
+        assert_eq!(request.max_tokens, 6_000);
         assert_eq!(request.max_tokens, COACH_OUTPUT_TOKEN_CEILING);
     }
 
@@ -1464,13 +1525,13 @@ Why?"));
     }
 
     #[test]
-    fn the_review_and_every_other_action_keep_the_2000_token_ceiling() {
-        assert_eq!(COACH_OUTPUT_TOKEN_CEILING, 2_000);
+    fn the_review_and_every_other_action_keep_the_full_token_ceiling() {
+        assert_eq!(COACH_OUTPUT_TOKEN_CEILING, 6_000);
         for action in [REVIEW_ACTION, "chat", "unknown_action"] {
             let request =
                 build_request(&[], Some(&context_with_action(action)), &no_profile(), "Why?")
                     .unwrap();
-            assert_eq!(request.max_tokens, 2_000, "{action}");
+            assert_eq!(request.max_tokens, 6_000, "{action}");
             assert_eq!(
                 request.max_tokens, COACH_OUTPUT_TOKEN_CEILING,
                 "{action}"
@@ -1628,7 +1689,8 @@ Why?"));
         let ctx = context("");
         let text = "x".repeat(2_400);
         let history = turns(10, &text);
-        let long_question = "w".repeat(4 * 26_000);
+        // Fills the input budget to within ~4k tokens, whatever the budget is tuned to.
+        let long_question = "w".repeat(4 * (COACH_INPUT_TOKEN_BUDGET as usize - 4_000));
         let request = build_request(&history, Some(&ctx), &no_profile(), &long_question).unwrap();
         assert!(estimate_tokens(&serde_json::to_string(&request).unwrap()) <= COACH_INPUT_TOKEN_BUDGET);
         let digest = request.messages.get(2).filter(|m| m.content.starts_with("Earlier in this thread")).expect("dropped rounds are digested");

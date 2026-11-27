@@ -19,6 +19,10 @@ pub(super) struct Session {
     pub(super) training: Option<super::training::Training>,
     pub(super) article: super::article::ArticleSession,
     pub(super) reading: super::reading::ReadingSession,
+    pub(super) listening: super::listening::ListeningSession,
+    pub(super) writing: super::writing::WritingSession,
+    pub(super) synonym: super::synonym::SynonymSession,
+    pub(super) speaking: super::speaking::SpeakingSession,
 }
 
 impl Session {
@@ -55,7 +59,7 @@ pub(super) async fn verify(app: &AppHandle, session: &mut Session) -> Result<Con
     };
     let owner = match vocabulary::id(&value["id"]) {
         Ok(owner) => owner,
-        Err(_) => { session.reset(); transport::stop_audio(app); transport::stop_article_audio(app,None); return Err("请先在爱听写窗口完成登录".into()); }
+        Err(_) => { session.reset(); transport::stop_audio(app); transport::stop_article_audio(app,None); transport::open(app)?; return Err("请先在爱听写窗口完成登录".into()); }
     };
     if let Err(error)=session.accept_owner(owner) {transport::stop_audio(app);transport::stop_article_audio(app,None);return Err(error);}
     Ok(ConnectionStatus {
@@ -90,7 +94,9 @@ pub async fn idictation_open_login(app: AppHandle, account: State<'_, Account>) 
 #[tauri::command]
 pub async fn idictation_connect(app: AppHandle, account: State<'_, Account>) -> Result<ConnectionStatus, String> {
     let mut session = account.0.lock().await;
-    verify(&app, &mut session).await
+    let status = verify(&app, &mut session).await?;
+    transport::hide(&app)?;
+    Ok(status)
 }
 
 #[tauri::command]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-import-mistakes"
+description = "Enables the idictation_import_mistakes command without any pre-configured scope."
+commands.allow = ["idictation_import_mistakes"]
+
+[[permission]]
+identifier = "deny-idictation-import-mistakes"
+description = "Denies the idictation_import_mistakes command without any pre-configured scope."
+commands.deny = ["idictation_import_mistakes"]

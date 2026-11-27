@@ -133,12 +133,23 @@ fn kind(subject: Subject, t: u64) -> Result<(&'static str, Control, bool)> {
 }
 
 pub fn convert(subject: Subject, expected_test: &str, source: &Value) -> Result<Exam> {
+    convert_scope(subject, expected_test, source, None)
+}
+
+pub(super) fn convert_listening_part(expected_id: &str, source: &Value, section: usize) -> Result<Exam> {
+    if !(1..=4).contains(&section) {
+        return Err("机经听力 Part 编号无效".into());
+    }
+    convert_scope(Subject::Listening, expected_id, source, Some(section))
+}
+
+fn convert_scope(subject: Subject, expected_test: &str, source: &Value, single_section: Option<usize>) -> Result<Exam> {
     let test_id = number(source, "test_id")?.to_string();
     if test_id != expected_test {
         return Err("爱听写真题套卷身份不一致".into());
     }
     let parts = rows(source, "parts")?;
-    let expected_parts = if subject == Subject::Reading { 3 } else { 4 };
+    let expected_parts = if single_section.is_some() { 1 } else if subject == Subject::Reading { 3 } else { 4 };
     if parts.len() != expected_parts {
         return Err("爱听写整套题目不完整".into());
     }
@@ -153,6 +164,7 @@ pub fn convert(subject: Subject, expected_test: &str, source: &Value) -> Result<
     let mut seen_ids = HashSet::new();
     let mut seen_numbers = HashSet::new();
     for (index, part) in parts.iter().enumerate() {
+        let section = single_section.unwrap_or(index + 1);
         markup::reject_image(part)?;
         let part_id = number(part, "paper_id")?;
         if !seen_parts.insert(part_id) {
@@ -166,7 +178,7 @@ pub fn convert(subject: Subject, expected_test: &str, source: &Value) -> Result<
             if sentences.is_empty() {
                 return Err("爱听写听力原文缺失".into());
             }
-            transcript.push(json!({"section":index+1,"sentences":sentences.iter().map(|s|json!({
+            transcript.push(json!({"section":section,"sentences":sentences.iter().map(|s|json!({
                 "text":text(s,"en_text"),"translation":text(s,"cn_text"),"startMs":s["start_time"],"endMs":s["end_time"]
             })).collect::<Vec<_>>()}));
         }
@@ -262,7 +274,7 @@ pub fn convert(subject: Subject, expected_test: &str, source: &Value) -> Result<
             );
             groups.push(
                 json!({"groupId":format!("idictation-{part_id}-{group_id}"),"kind":group_kind,
-                "section":index+1,"questionIds":keys,"leadHtml":lead,"bodyHtml":body}),
+                "section":section,"questionIds":keys,"leadHtml":lead,"bodyHtml":body}),
             );
         }
         let listed: Vec<u64> = rows(part, "question_number")?
@@ -273,18 +285,29 @@ pub fn convert(subject: Subject, expected_test: &str, source: &Value) -> Result<
             return Err("爱听写Part题号与题组内容不一致".into());
         }
     }
-    if questions.len() != 40 || !(1..=40).all(|n| seen_numbers.contains(&n)) {
-        return Err("爱听写整卷必须完整包含40题".into());
-    }
+    let count = if let Some(section) = single_section {
+        let start = (section as u64 - 1) * 10 + 1;
+        if questions.len() != 10 || (!(1..=10).all(|n| seen_numbers.contains(&n))
+            && !(start..start + 10).all(|n| seen_numbers.contains(&n))) {
+            return Err("机经听力单 Part 必须完整包含 10 道连续题号".into());
+        }
+        10
+    } else {
+        if questions.len() != 40 || !(1..=40).all(|n| seen_numbers.contains(&n)) {
+            return Err("爱听写整卷必须完整包含40题".into());
+        }
+        40
+    };
     let order: Vec<_> = questions.iter().map(|q| q.key.clone()).collect();
     let title = format!(
         "爱听写 · {} {}",
         text(source, "jianya_name"),
         text(source, "test_name")
     );
+    let category = single_section.map(|section| format!("P{section}")).unwrap_or_else(|| "整套".into());
     let payload = json!({"schemaVersion":if subject==Subject::Reading {json!("ReadingExamSourceV1")}else{json!(1)},
-        "meta":{"title":title,"category":"整套"},"passage":{"blocks":blocks},"questionGroups":groups,
-        "questionOrder":order,"questionCount":40,"questionDisplayMap":display,"answerKey":{},
+        "meta":{"title":title,"category":category},"passage":{"blocks":blocks},"questionGroups":groups,
+        "questionOrder":order,"questionCount":count,"questionDisplayMap":display,"answerKey":{},
         "capabilities":{"localScoring":false,"remoteSubmit":false},
         "idictation":{"subject":subject,"testId":test_id,"questions":questions}});
     let fingerprint = hex::encode(Sha256::digest(

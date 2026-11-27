@@ -11,6 +11,7 @@ use ielts_domain::ErrorEnvelope;
 use tauri::{Manager, State};
 
 use crate::app::state::AppDb;
+use crate::idictation::listening::PREVIEW_PREFIX;
 use ielts_db::{
     get_open_listening_draft, list_listening_assets, load_listening_audio_data_url,
     load_listening_payload_for_view, save_listening_draft, submit_listening_attempt,
@@ -84,6 +85,9 @@ pub fn listening_save_draft(
     db: State<'_, AppDb>,
     cmd: ListeningDraftCommand,
 ) -> CommandResponse<AttemptRecord> {
+    if cmd.asset_id.starts_with(PREVIEW_PREFIX) {
+        return CommandResponse::failure(error("爱听写预览作答不保存".into()));
+    }
     match db.with_conn(|conn| save_listening_draft(conn, &cmd)) {
         Ok(attempt) => CommandResponse::success(attempt),
         Err(err) => CommandResponse::failure(map_err(err)),
@@ -106,6 +110,9 @@ pub fn listening_submit_attempt(
     db: State<'_, AppDb>,
     cmd: ListeningSubmitCommand,
 ) -> CommandResponse<ListeningSubmitResult> {
+    if cmd.asset_id.starts_with(PREVIEW_PREFIX) {
+        return CommandResponse::failure(error("爱听写预览不支持交卷".into()));
+    }
     match db.with_conn(|conn| submit_listening_attempt(conn, &cmd)) {
         Ok(result) => CommandResponse::success(result),
         Err(err) => CommandResponse::failure(map_err(err)),
