@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import vm from 'node:vm'
-import {createHash} from 'node:crypto'
+import {createHash, randomUUID} from 'node:crypto'
 
 const source = await readFile(new URL('../../../plug/idictation/product-bridge.js', import.meta.url), 'utf8')
 const expectedHash='51d0c314236baeb59da92c76d2f551b92a7420d15894440e3a24e7d3992823eb'
@@ -66,7 +66,8 @@ async function run({operation='account',value={},input={},origin='https://www.id
 }
 
 test('account projection never exposes credentials or account configuration',async()=>{
-  const {result,calls}=await run({value:{id:7,password:'do-not-return',session_id:'do-not-return',phone_number:'do-not-return',config:{private:'do-not-return'},member:{status:'未开通'},review_auth:false}})
+  // Generated fixture only: no real account credential is used by this test.
+  const {result,calls}=await run({value:{id:7,password:randomUUID(),session_id:'do-not-return',phone_number:'do-not-return',config:{private:'do-not-return'},member:{status:'未开通'},review_auth:false}})
   assert.deepEqual(result,{ok:true,value:{id:7,memberStatus:'未开通',enterpriseAllowed:false}})
   assert.equal(calls[1].url,'/api/study/customer/v1/login/msg')
 })

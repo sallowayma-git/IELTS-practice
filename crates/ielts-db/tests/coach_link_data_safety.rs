@@ -191,10 +191,13 @@ fn rechecksum(package: &mut ielts_domain::dto::BackupPackage) {
 }
 
 /// A current snapshot minus every table a genuine format-18 package cannot
-/// carry: context snapshots arrived in format 19, soul_revisions in format 21.
+/// carry: context snapshots arrived in format 19, soul_revisions in format 21,
+/// and vocabulary book membership in format 23.
 fn as_format_18(package: &mut ielts_domain::dto::BackupPackage) {
     package.database.retain(|table| {
         !table.name.starts_with("agent_context_") && table.name != "soul_revisions"
+            && !matches!(table.name.as_str(),
+                "vocabulary_books" | "vocabulary_book_units" | "vocabulary_book_entries")
     });
     package.manifest.schema_version = 18;
     rechecksum(package);
@@ -246,8 +249,8 @@ fn older_backup_without_context_snapshots_still_restores() {
 
     let mut package = ielts_db::create_backup_package(&source, "test").unwrap();
     // Fabricate a genuine format-18 payload: context snapshots (format 19) and
-    // soul_revisions (format 21) did not exist yet, so the package cannot carry
-    // them. Keeping either is an unsupported table and must stay rejected.
+    // soul_revisions (format 21) and vocabulary books (format 23) did not exist
+    // yet, so the package cannot carry them. Newer tables must stay rejected.
     as_format_18(&mut package);
 
     // A non-empty target: its own later snapshots must not survive a restore
@@ -276,7 +279,7 @@ fn format_18_packages_with_tables_from_a_newer_format_are_still_rejected() {
     // `soul_revisions` is canonical in the current format but not in format 18;
     // `future_only` is unknown to every format. The unsupported-table gate must
     // reject both rather than silently dropping rows it cannot restore.
-    for table in ["soul_revisions", "future_only"] {
+    for table in ["soul_revisions", "vocabulary_books", "vocabulary_book_units", "vocabulary_book_entries", "future_only"] {
         let mut package = package.clone();
         as_format_18(&mut package);
         package.database.push(ielts_domain::dto::BackupTable {
