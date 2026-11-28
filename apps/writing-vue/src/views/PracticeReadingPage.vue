@@ -160,18 +160,26 @@
 
     <p v-if="error" class="runified-status is-error" role="alert">
       <span>{{ error }}</span>
-      <button class="btn-text" type="button" @click="loadAsset">重试</button>
+      <button class="btn-text" type="button" :disabled="loading || localRecordLoading" @click="loadAsset">重试</button>
+      <router-link v-if="localRecord" :to="returnRoute">返回题库</router-link>
     </p>
     <p v-else-if="submitError" class="runified-status is-error" role="alert">{{ submitError }}</p>
     <p v-else-if="highlightRestoreWarning" class="runified-status is-error" role="status">{{ highlightRestoreWarning }}</p>
     <p v-else-if="snapshotMessage" class="runified-status snapshot-message" role="status" aria-live="polite">{{ snapshotMessage }}</p>
-    <p v-if="loading" class="runified-status" role="status" aria-live="polite" aria-busy="true">正在加载阅读内容…</p>
-    <p v-else-if="!asset" class="runified-status" role="status">未找到阅读题目，返回练习库重新选择资源。</p>
+    <p v-if="reviewLoadError" class="runified-status is-error" role="alert" data-reading-review-error>
+      <span>{{ reviewLoadError }}</span>
+      <button class="btn-text" type="button" :disabled="reviewLoading" @click="retryProviderReview">{{ reviewLoading ? '正在重试…' : '重试复盘材料' }}</button>
+    </p>
+    <p v-if="submission?.recoveredDraftId" class="runified-status" role="status">已核对首次提交。等待期间修改的答案另存为未提交草稿，再次打开本题可继续。</p>
+    <DraftSaveNotice v-if="!readOnlyMode" :error="draftError" :saving="draftSaving" @retry="draftQueue.flush()" />
+    <LocalPracticeRecord v-if="localRecord && (!examReady || (reviewMode && !submission))" :record="localRecord" />
+    <p v-if="loading || localRecordLoading" class="runified-status" role="status" aria-live="polite" aria-busy="true">正在加载阅读内容…</p>
+    <p v-else-if="!asset && !error" class="runified-status" role="status">未找到阅读题目，返回练习库重新选择资源。</p>
 
     <p class="sr-only" aria-live="polite">{{ dragInteractionStatus }}</p>
 
     <div
-      v-if="!loading && asset && payload"
+      v-if="!loading && !localRecordLoading && asset && payload && (!localRecord || examReady)"
       ref="shellRef"
       class="shell"
       :class="{ 'review-mode': reviewMode, 'memorize-mode': isMemorizeMode }"
@@ -317,7 +325,7 @@
     />
 
     <UnifiedPracticeNav
-      v-if="!loading && asset && payload && !materialMode"
+      v-if="!loading && !localRecordLoading && asset && payload && !materialMode && (!localRecord || examReady)"
       :question-order="idictationSections?.[idictationPart - 1]?.questionIds || payload.questionOrder || []"
       :display-map="payload.questionDisplayMap || {}"
       :category="idictationExam ? `P${idictationPart}` : navCategory"
@@ -346,8 +354,14 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import DraftSaveNotice from '@/components/DraftSaveNotice.vue'
+import { useDraftSaveQueue } from '@/modules/reading-unified/composables/useDraftSaveQueue.js'
+import { useDraftLeaveGuard } from '@/modules/reading-unified/composables/useDraftLeaveGuard.js'
 import { practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
+import { loadLocalCompletedDetail } from '@/api/local-practice-record.js'
+import { mapHistoryDetailToSubmission } from '@/api/history-repository.js'
+import LocalPracticeRecord from '@/components/LocalPracticeRecord.vue'
 import { learningRepository } from '@/api/learning-repository.js'
 import { readingCoachSettingsApi } from '@/modules/practice-reading/api'
 import { featureFlags } from '@/config/feature-flags.js'
@@ -555,6 +569,10 @@ const readerHighlights = computed(() => Object.entries(readerAnnotations.value |
 const readerBookmarkBusy = ref('')
 const readerBookmarkError = ref(null)
 const materialError = ref('')
+const reviewLoadError = ref('')
+const localRecord = ref(null)
+const localRecordLoading = ref(false)
+const reviewLoading = ref(false)
 const locatedSentences = ref([])
 
 function saveReaderPosition() {
@@ -633,23 +651,19 @@ async function locateAnswer(questionId) {
 const readingAttempt = useReadingAttempt()
 let tauriAttemptId = ''
 let nativeControls = null
-let draftAutosaveTimer = null
-let idictationDraftInFlight = null
-onBeforeRouteLeave(async () => {
-  if (!idictationExam.value || readOnlyMode.value) return
-  try {
-    if (draftAutosaveTimer) {
-      clearTimeout(draftAutosaveTimer)
-      draftAutosaveTimer = null
-      await persistTauriDraft()
-    } else {
-      await idictationDraftInFlight
-    }
-  } catch (error) {
-    submitError.value = error?.message || String(error)
-    return false
-  }
-})
+const draftQueue = useDraftSaveQueue(writeTauriDraft)
+const { error: draftError, saving: draftSaving } = draftQueue
+useDraftLeaveGuard(async () => {
+  if (!canWriteDraft()) return
+  if (submitting.value) return false
+  if (activeSuiteSessionId.value || isEndlessMode.value) return draftQueue.flush()
+  const wasRunning = timerRunning.value
+  stopPracticeTimer()
+  const saved = await (tauriAttemptId ? draftQueue.save() : draftQueue.flush())
+  if (!saved && wasRunning) startPracticeTimer()
+  return saved
+}, (to, from) => to.path !== from.path ||
+  ['mode', 'practiceMode', 'suiteSessionId'].some(key => to.query[key] !== from.query[key]))
 let snapshotMessageTimer = null
 
 const {
@@ -746,8 +760,9 @@ const returnRoute = computed(() => (
     : { name: 'PracticeLibrary' }
 ))
 const returnLabel = computed(() => (activeSuiteSessionId.value ? '返回套题进度' : '返回练习库'))
-const reviewMode = computed(() => Boolean(submission.value))
-watch(reviewMode, ready => { if (ready) void loadStudyMaterial() })
+const replaySessionId = computed(() => String(props.sessionId || route.params.sessionId || '').trim())
+const reviewMode = computed(() => Boolean(replaySessionId.value || submission.value))
+watch(submission, ready => { if (ready) void loadStudyMaterial() })
 const readOnlyMode = computed(() => materialMode.value || reviewMode.value || isMemorizeMode.value)
 const {
   answeredCount,
@@ -942,7 +957,7 @@ const {
     return tauriAttemptId
   },
   onAttemptEnsured: () => {
-    void persistTauriDraft()
+    if (canWriteDraft()) void draftQueue.save()
   },
   onInteraction: () => recordInteraction(),
   notesText,
@@ -1257,17 +1272,9 @@ onBeforeUnmount(() => {
   resetReadingCoachState()
   flushActiveQuestionVisit()
   stopPracticeTimer()
-  if (!reviewMode.value && !isMemorizeMode.value && !isEndlessMode.value) {
-    void persistTauriDraft().catch((error) => {
-      console.warn('阅读页面卸载时保存草稿失败', error)
-    })
-  }
+  draftQueue.reset()
   clearEndlessTimer()
   if (isMemorizeMode.value) void finishActiveMemorizeSession()
-  if (draftAutosaveTimer) {
-    clearTimeout(draftAutosaveTimer)
-    draftAutosaveTimer = null
-  }
   clearSnapshotMessage()
   detachHighlightDocumentListeners()
   clearReadingAsset()
@@ -1325,10 +1332,12 @@ async function loadAsset() {
   const isCurrent = () => pageAlive.value && generation === assetLoadGeneration
   examReady.value = false
   detachHighlightDocumentListeners()
-  if (draftAutosaveTimer) { clearTimeout(draftAutosaveTimer); draftAutosaveTimer = null }
+  draftQueue.reset()
   tauriAttemptId = ''
   const normalizedAssetId = String(props.assetId || route.params.assetId || '').trim()
   const replaySessionId = String(props.sessionId || route.params.sessionId || '').trim()
+  if (localRecord.value?.assetId !== normalizedAssetId
+    || (replaySessionId && localRecord.value?.id !== replaySessionId)) localRecord.value = null
   if (!normalizedAssetId) {
     error.value = '缺少阅读资源编号'
     return
@@ -1342,6 +1351,8 @@ async function loadAsset() {
   clearSnapshotMessage()
   submission.value = null
   materialError.value = ''
+  reviewLoadError.value = ''
+  reviewLoading.value = false
   locatedSentences.value = []
   readerProgressError.value = ''
   readerProgressMessage.value = ''
@@ -1356,7 +1367,26 @@ async function loadAsset() {
   resetPracticeTimerClock()
   endlessNextAssetId.value = ''
   let restoredTimer = null
+  localRecordLoading.value = isJiufenAsset(normalizedAssetId) && Boolean(replaySessionId || route.query.resume === '1')
   try {
+    let savedDraft = null
+    let savedDetail = null
+    if (isJiufenAsset(normalizedAssetId)) {
+      if (replaySessionId) {
+        savedDetail = await loadLocalCompletedDetail('reading', normalizedAssetId, replaySessionId).catch(failure => {
+          if (isCurrent()) localRecord.value = null
+          throw failure
+        })
+        if (!isCurrent()) return
+        localRecord.value = savedDetail.attempt
+      } else if (route.query.resume === '1') {
+        savedDraft = await getOpenReadingDraft(normalizedAssetId)
+        if (!isCurrent()) return
+        localRecord.value = savedDraft.attempt
+        if (!localRecord.value) throw new Error('这份草稿已不存在，请返回题库。')
+      }
+    }
+    localRecordLoading.value = false
     const data = await loadReadingAsset(normalizedAssetId)
     if (!isCurrent() || !data) return
     if (materialMode.value) {
@@ -1398,20 +1428,25 @@ async function loadAsset() {
       }
     }
     if (replaySessionId) {
-      await loadSubmittedSession(replaySessionId, isCurrent)
+      await loadSubmittedSession(replaySessionId, isCurrent, savedDetail)
     } else if (isTauriRuntime() && !isMemorizeMode.value) {
       restoredTimer = await hydrateOpenDraft(
         normalizedAssetId,
         activeSuiteSessionId.value || null,
         activeEndlessSessionId.value || null,
-        isCurrent
+        isCurrent,
+        savedDraft
       )
     }
   } catch (loadError) {
     if (!isCurrent()) return
     console.error('加载阅读资源失败:', loadError)
+    const message = loadError?.message || String(loadError)
+    error.value = localRecord.value ? `九分题面暂不可用，已保留本地作答：${message}` : message
+  } finally {
+    if (isCurrent()) localRecordLoading.value = false
   }
-  if (isCurrent() && !materialMode.value && asset.value && payload.value) {
+  if (isCurrent() && examReady.value && !materialMode.value && asset.value && payload.value) {
     await ensureMemorizeSession(isCurrent)
     if (!isCurrent()) return
     await nextTick()
@@ -1445,10 +1480,11 @@ watch(
   { flush: 'post' }
 )
 
-async function loadSubmittedSession(sessionId, isCurrent = () => true) {
-  const state = await practiceSessions.getState('reading', sessionId)
+async function loadSubmittedSession(sessionId, isCurrent = () => true, savedDetail = null) {
+  const loadedSubmission = savedDetail
+    ? mapHistoryDetailToSubmission(savedDetail)
+    : (await practiceSessions.getState('reading', sessionId))?.submission
   if (!isCurrent() || materialMode.value) return
-  const loadedSubmission = state?.submission || null
   if (!loadedSubmission) {
     throw new Error('未找到可回放的阅读提交记录')
   }
@@ -1456,16 +1492,6 @@ async function loadSubmittedSession(sessionId, isCurrent = () => true) {
   const actualAssetId = String(loadedSubmission.assetId || loadedSubmission.examId || '').trim()
   if (expectedAssetId && actualAssetId && expectedAssetId !== actualAssetId) {
     throw new Error('阅读回放记录与当前题目不匹配')
-  }
-  if (isJiufenAsset(expectedAssetId)) {
-    const review = await jiufen.review(expectedAssetId, sessionId)
-    if (!isCurrent() || materialMode.value) return
-    Object.assign(payload.value, review)
-  }
-  if (isIdictationReading(expectedAssetId)) {
-    const review = await idictation.readingReview(expectedAssetId, sessionId)
-    if (!isCurrent() || materialMode.value) return
-    Object.assign(payload.value, review)
   }
   submission.value = loadedSubmission
   // Field contraction: store may omit correctAnswer; fill from asset answerKey for review UI.
@@ -1502,12 +1528,41 @@ async function loadSubmittedSession(sessionId, isCurrent = () => true) {
   setReadOnlyDomControls(true)
   restoreHighlightsFromRecords(highlightSnapshot.value)
   restoreSubmittedViewport(loadedSubmission)
+  await loadProviderReview(sessionId, isCurrent)
 }
 
-async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null, isCurrent = () => true) {
+async function loadProviderReview(sessionId, isCurrent) {
+  const currentPayload = payload.value
+  const currentSubmission = submission.value
+  const assetId = asset.value?.id
+  const fetch = isJiufenAsset(assetId) ? jiufen.review : isIdictationReading(assetId) ? idictation.readingReview : null
+  if (!fetch) return
+  const active = () => isCurrent() && payload.value === currentPayload && submission.value === currentSubmission
+  reviewLoading.value = true
+  reviewLoadError.value = ''
+  try {
+    const review = await fetch(assetId, sessionId)
+    if (!active()) return
+    Object.assign(currentPayload, review)
+    fillCorrectAnswersFromPayload(currentSubmission)
+  } catch (failure) {
+    if (active()) reviewLoadError.value = `官方复盘材料暂未加载，本地成绩和作答已保留：${failure?.message || String(failure)}`
+  } finally {
+    if (active()) reviewLoading.value = false
+  }
+}
+
+function retryProviderReview() {
+  if (reviewLoading.value || !submission.value) return
+  const generation = assetLoadGeneration
+  const sessionId = replaySessionId.value || submission.value.attemptId || submission.value.sessionId
+  return loadProviderReview(sessionId, () => pageAlive.value && generation === assetLoadGeneration)
+}
+
+async function hydrateOpenDraft(assetId, suiteId = null, endlessSessionId = null, isCurrent = () => true, savedDraft = null) {
   try {
     const scope = { suiteId, endlessSessionId }
-    const { attempt, timer } = await getOpenReadingDraft(
+    const { attempt, timer } = savedDraft || await getOpenReadingDraft(
       assetId,
       String(suiteId || '').trim() || null,
       String(endlessSessionId || '').trim() || null
@@ -1643,6 +1698,7 @@ function resetAnswers() {
   }
   startPracticeTimer()
   syncDomAnswers()
+  if (tauriAttemptId && canWriteDraft()) void draftQueue.save()
   showSnapshotMessage('已清空本页作答。')
 }
 
@@ -1672,7 +1728,7 @@ async function snapshotAnswers() {
   if (!canSnapshot.value) return false
   // Durable truth is Tauri SQLite draft; no Web Storage dual-write.
   try {
-    await persistTauriDraft()
+    if (!await draftQueue.save()) return false
     showSnapshotMessage('作答快照已保存。')
     return true
   } catch (_) {
@@ -1693,21 +1749,16 @@ function syncNativeControl(questionId, explicitValue) {
 }
 
 function scheduleDraftAutosave() {
-  if (!isTauriRuntime() || !examReady.value || readOnlyMode.value) {
-    return
-  }
-  if (draftAutosaveTimer) clearTimeout(draftAutosaveTimer)
-  draftAutosaveTimer = setTimeout(() => {
-    draftAutosaveTimer = null
-    void persistTauriDraft().catch((error) => {
-      if (idictationExam.value) submitError.value = error?.message || String(error)
-      else console.warn('阅读草稿自动保存失败', error)
-    })
-  }, 800)
+  if (canWriteDraft()) draftQueue.schedule()
 }
 
-async function persistTauriDraft() {
-  if (!isTauriRuntime() || !examReady.value || !asset.value?.id || readOnlyMode.value) return
+function canWriteDraft() {
+  return isTauriRuntime() && examReady.value && Boolean(asset.value?.id) && !readOnlyMode.value
+}
+
+async function writeTauriDraft() {
+  if (!canWriteDraft()) return
+  flushActiveQuestionVisit()
   if (activeSuiteSessionId.value) {
     const { result } = await saveSuitePassageDraft({
       suiteId: activeSuiteSessionId.value,
@@ -1740,7 +1791,7 @@ async function persistTauriDraft() {
     return
   }
   if (!tauriAttemptId) tauriAttemptId = readingAttempt.newAttemptId()
-  const saving = readingAttempt.persistDraft({
+  await readingAttempt.persistDraft({
     attemptId: tauriAttemptId,
     assetId: asset.value.id,
     assetRevision: asset.value.schemaVersion ?? null,
@@ -1751,25 +1802,16 @@ async function persistTauriDraft() {
     titleSnapshot: asset.value.title || asset.value.name || null,
     timerSnapshot: getPracticeTimerSnapshot()
   })
-  if (idictationExam.value) idictationDraftInFlight = saving
-  try {
-    await saving
-  } finally {
-    if (idictationDraftInFlight === saving) idictationDraftInFlight = null
-  }
 }
 
 function toggleTimer() {
   if (materialMode.value || !examReady.value) return
   togglePracticeTimer()
-  if (isTauriRuntime() && !readOnlyMode.value) {
-    void persistTauriDraft().catch((error) => {
-      console.warn('切换阅读计时时保存草稿失败', error)
-    })
-  }
+  if (canWriteDraft()) void draftQueue.save()
 }
 
 const modeFlow = useReadingModeFlow({
+  flushDraft: draftQueue.flush,
   router,
   routeQuerySource: () => route.query,
   assetSource: () => asset.value,
@@ -1834,7 +1876,7 @@ function findSuiteReviewNavigationTarget(direction) { return modeFlow.findSuiteR
 function navigateSuiteReview(direction) { return modeFlow.navigateSuiteReview(direction) }
 function goToNextEndlessAsset() { return modeFlow.goToNextEndlessAsset() }
 function stopEndlessMode() { return modeFlow.stopEndlessMode() }
-function handleLeave() {
+async function handleLeave() {
   if (materialMode.value) return router.push({ name: 'PracticeLibrary', query: { view: 'browse' } })
   return modeFlow.handleLeave()
 }

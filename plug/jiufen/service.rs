@@ -9,10 +9,12 @@ use tokio::sync::Mutex;
 const BASE: &str = "https://www.9fnnn.com/api";
 pub(super) const NS: &str = "jiufen.online";
 
-// Serialise this provider's commands, including logout, without locking the Atlas DB over I/O.
+// Foreground operations keep their existing ordering. Background refreshes use
+// a separate lock and only briefly hold the session lock to publish results.
 #[derive(Default)]
-pub struct Account(pub(super) Mutex<Option<Session>>);
+pub struct Account(pub(super) Mutex<Option<Session>>, pub(super) Mutex<()>);
 pub(super) struct Session {
+    generation: uuid::Uuid,
     pub owner: String,
     credential: String,
     renewed: Option<std::time::Instant>,
@@ -20,6 +22,9 @@ pub(super) struct Session {
     pub catalog: super::catalog::Access,
     pub materials: std::collections::HashMap<String, Value>,
     pub reviews: std::collections::HashMap<String, Value>,
+    pub listening_reviews: std::collections::HashMap<String, super::practice::ListeningReviewEntry>,
+    #[cfg(test)]
+    transport: Option<test_transport::Transport>,
 }
 
 pub(super) fn identifier(value: &Value) -> Option<String> {
@@ -57,6 +62,7 @@ impl Session {
         let mut token = reqwest::header::HeaderValue::from_str(raw).map_err(|_| "会话格式异常")?;
         token.set_sensitive(true);
         Ok(Self {
+            generation: uuid::Uuid::new_v4(),
             owner,
             credential: String::new(),
             renewed: None,
@@ -64,20 +70,63 @@ impl Session {
             catalog: Default::default(),
             materials: Default::default(),
             reviews: Default::default(),
+            listening_reviews: Default::default(),
+            #[cfg(test)]
+            transport: None,
         })
+    }
+
+    pub(super) fn snapshot(&self) -> Self {
+        Self {
+            generation: self.generation,
+            owner: self.owner.clone(),
+            token: self.token.clone(),
+            // A detached request must never clear another session's credentials/cache.
+            credential: String::new(),
+            renewed: self.renewed,
+            catalog: Default::default(),
+            materials: Default::default(),
+            reviews: Default::default(),
+            listening_reviews: Default::default(),
+            #[cfg(test)]
+            transport: self.transport.clone(),
+        }
+    }
+}
+
+pub(super) fn same_session(current: &Option<Session>, snapshot: &Session) -> bool {
+    current
+        .as_ref()
+        .is_some_and(|s| s.generation == snapshot.generation)
+}
+
+pub(super) fn expire(session: &mut Option<Session>) {
+    if let Some(previous) = session.take() {
+        if !previous.credential.is_empty() {
+            ielts_db::transient_assets::clear_provider("jiufen");
+            let _ = clear_saved(&previous.credential);
+        }
     }
 }
 
 #[derive(Debug)]
 pub(super) enum Failure {
     Expired,
+    RejectedBeforeWrite,
+    SubmissionConflict,
     Cooldown(u64),
     Message(String),
 }
 impl Failure {
-    fn message(self) -> String {
+    pub(super) fn message(self) -> String {
         match self {
             Self::Expired => "九分学长会话已过期，请重新登录原账号".into(),
+            Self::RejectedBeforeWrite => {
+                "提交内容未通过校验，服务端确认尚未写入。作答已保留，请修正后重新提交".into()
+            }
+            Self::SubmissionConflict => {
+                "本次提交与首次请求冲突。作答已保留，请核对首次结果，不要另开提交".into()
+            }
             Self::Cooldown(s) => format!("请在 {s} 秒后再次请求验证码"),
             Self::Message(text) => text,
         }
@@ -90,6 +139,14 @@ fn seconds(value: &Value) -> Option<u64> {
         .filter(|v| *v > 0)
 }
 fn classify(status: u16, v: &Value, auth: bool) -> Result<(), Failure> {
+    match v["data"]["submissionState"]
+        .as_str()
+        .or_else(|| v["submissionState"].as_str())
+    {
+        Some("rejected_before_write") => return Err(Failure::RejectedBeforeWrite),
+        Some("conflict") => return Err(Failure::SubmissionConflict),
+        _ => {}
+    }
     let code = identifier(&v["code"]).unwrap_or_default();
     if auth
         && (matches!(status, 401 | 403)
@@ -138,6 +195,10 @@ async fn request(
     session: Option<&Session>,
     client_id: Option<&str>,
 ) -> Result<Value, Failure> {
+    #[cfg(test)]
+    if let Some(transport) = session.and_then(|s| s.transport.as_ref()) {
+        return transport.request(path, body).await;
+    }
     let failure = |text: &str| Failure::Message(text.into());
     let client = Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -191,17 +252,26 @@ pub(super) async fn authorized(
     path: &str,
     body: Option<&Value>,
 ) -> Result<Value, String> {
-    let current = session.as_ref().ok_or("请先登录九分学长账号")?;
+    authorized_result(session, path, body)
+        .await
+        .map_err(Failure::message)
+}
+
+pub(super) async fn authorized_result(
+    session: &mut Option<Session>,
+    path: &str,
+    body: Option<&Value>,
+) -> Result<Value, Failure> {
+    let current = session
+        .as_ref()
+        .ok_or_else(|| Failure::Message("请先登录九分学长账号".into()))?;
     request(path, body, Some(current), None)
         .await
         .map_err(|err| {
             if matches!(err, Failure::Expired) {
-                ielts_db::transient_assets::clear_provider("jiufen");
-                if let Some(previous) = session.take() {
-                    let _ = clear_saved(&previous.credential);
-                }
+                expire(session);
             }
-            err.message()
+            err
         })
 }
 
@@ -219,15 +289,7 @@ pub(super) async fn question_analyses(
             let Some((key, path)) = requests.next() else {
                 break;
             };
-            let authorization = Session {
-                owner: session.owner.clone(),
-                token: session.token.clone(),
-                credential: String::new(),
-                renewed: None,
-                catalog: Default::default(),
-            materials: Default::default(),
-            reviews: Default::default(),
-            };
+            let authorization = session.snapshot();
             tasks.spawn(
                 async move { (key, request(&path, None, Some(&authorization), None).await) },
             );
@@ -362,6 +424,11 @@ pub async fn jiufen_restore(
     db: tauri::State<'_, AppDb>,
     account: tauri::State<'_, Account>,
 ) -> Result<bool, String> {
+    restore(&db, &account).await
+}
+
+async fn restore(db: &AppDb, account: &Account) -> Result<bool, String> {
+    let _refresh = account.1.lock().await;
     let mut session = account.0.lock().await;
     if session.is_none() {
         *session = restore_saved(install_id(&db)?)?;
@@ -375,28 +442,36 @@ pub async fn jiufen_restore(
     {
         return Ok(true);
     }
-    let owner = current.owner.clone();
-    let id = current.credential.clone();
+    let snapshot = current.snapshot();
+    let mut detached = Some(current.snapshot());
+    drop(session);
     let response = authorized(
-        &mut session,
+        &mut detached,
         "/user-auth/v1/session/renew",
         Some(&json!({})),
     )
-    .await?;
+    .await;
+    let mut session = account.0.lock().await;
+    if !same_session(&session, &snapshot) {
+        return Err("登录状态已变化，请重试同步".into());
+    }
+    if detached.is_none() {
+        expire(&mut session);
+    }
+    let response = response?;
     let mut next = Session::parse(&response["data"])?;
-    if next.owner != owner {
-        ielts_db::transient_assets::clear_provider("jiufen");
-        clear_saved(&id)?;
-        *session = None;
+    if next.owner != snapshot.owner {
+        expire(&mut session);
         return Err("账号已改变，请重新登录".into());
     }
-    next.credential = id;
+    next.credential = session.as_ref().unwrap().credential.clone();
     next.renewed = Some(std::time::Instant::now());
     save_session(&next)?;
     if let Some(current) = session.as_mut() {
         next.catalog = std::mem::take(&mut current.catalog);
         next.materials = std::mem::take(&mut current.materials);
         next.reviews = std::mem::take(&mut current.reviews);
+        next.listening_reviews = std::mem::take(&mut current.listening_reviews);
     }
     *session = Some(next);
     Ok(true)
@@ -430,3 +505,11 @@ mod api_audit;
 #[cfg(test)]
 #[path = "../../developer/tests/rust/jiufen_localization.rs"]
 mod localization_tests;
+
+#[cfg(test)]
+#[path = "../../developer/tests/rust/jiufen_transport.rs"]
+mod test_transport;
+
+#[cfg(test)]
+#[path = "../../developer/tests/rust/jiufen_recovery.rs"]
+mod recovery_tests;

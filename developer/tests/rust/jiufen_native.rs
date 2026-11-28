@@ -57,6 +57,7 @@ fn native_reading_preserves_controls_and_official_review() {
         asset_id: cmd.asset_id.clone(),
         body,
         receipt: Some("attempt-01".into()),
+        ..Default::default()
     };
     let asset = serde_json::from_value(
         json!({"schemaVersion":2,"id":cmd.asset_id,"activity":"reading","sourceKind":"imported",

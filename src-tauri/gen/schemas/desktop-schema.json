@@ -1071,6 +1071,12 @@
           "markdownDescription": "Enables the jiufen_disconnect command without any pre-configured scope."
         },
         {
+          "description": "Enables the jiufen_draft_assets command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jiufen-draft-assets",
+          "markdownDescription": "Enables the jiufen_draft_assets command without any pre-configured scope."
+        },
+        {
           "description": "Enables the jiufen_is_connected command without any pre-configured scope.",
           "type": "string",
           "const": "allow-jiufen-is-connected",
@@ -2425,6 +2431,12 @@
           "type": "string",
           "const": "deny-jiufen-disconnect",
           "markdownDescription": "Denies the jiufen_disconnect command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jiufen_draft_assets command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jiufen-draft-assets",
+          "markdownDescription": "Denies the jiufen_draft_assets command without any pre-configured scope."
         },
         {
           "description": "Denies the jiufen_is_connected command without any pre-configured scope.",

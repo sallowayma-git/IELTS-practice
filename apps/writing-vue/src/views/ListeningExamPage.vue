@@ -14,6 +14,7 @@
     </UnifiedExamHeader>
 
     <main class="listening-exam__workspace">
+      <LocalPracticeRecord v-if="localRecord && (loading || !payload)" :record="localRecord" />
       <p v-if="loading" class="listening-practice__status" role="status" aria-live="polite">正在加载听力内容…</p>
       <section v-else-if="error" class="listening-state" role="alert">
         <h2 class="listening-state__title">无法打开这套听力</h2>
@@ -27,10 +28,14 @@
           :source-playback="sourcePlayback"
           :loading="audioLoading || (isPreview && previewPlayback.busy.value)"
           :error="audioError || (isPreview ? previewAudioError : '')" :duration-seconds="durationSeconds"
-          @retry="loadPracticeAudio"
-          @timeupdate="audioTime = $event"
-          @playing-change="audioPlaying = $event"
+          :resume-seconds="pendingAudioPosition"
+          @retry="retryPracticeAudio"
+          @timeupdate="handleAudioTime"
+          @playing-change="handleAudioPlaying"
+          @position-restored="completeAudioRestore"
+          @user-seek="scheduleDraftSave"
         />
+        <DraftSaveNotice v-if="!reviewMode && !isPreview" :error="draftError" :saving="draftSaving" @retry="draftQueue.flush()" />
         <p v-if="isPreview" class="listening-practice__notice">
           {{ previewPartTracks ? '按 Part 播放，切换后可播放该 Part 的录音。' : '整卷播放，换 Part 不会重置音轨。' }}
           作答仅保留在本页。
@@ -41,10 +46,13 @@
           <p v-if="review.durationMs" class="listening-score__time">用时 {{ formatDurationMs(review.durationMs) }}</p>
           <p v-if="replayNotice" class="listening-score__note">{{ replayNotice }}</p>
         </div>
-        <p v-if="reviewLoading" class="listening-practice__status" role="status">正在加载复盘记录…</p>
-        <section v-else-if="reviewMode && !review" class="listening-state" role="alert">
+        <p v-if="reviewLoading" class="listening-practice__status" role="status">正在加载复盘材料…</p>
+        <p v-if="review && reviewError" class="listening-practice__error" role="alert">
+          {{ reviewError }} <button type="button" :disabled="reviewLoading" @click="loadReview()">重试复盘材料</button>
+        </p>
+        <section v-if="reviewMode && !review" class="listening-state" role="alert">
           <p>{{ reviewError || '这条听力记录不存在或已被删除。' }}</p>
-          <button type="button" @click="loadReview">重试</button>
+          <button type="button" @click="loadReview()">重试</button>
         </section>
         <div v-else ref="shellRef" class="listening-exam__content" :class="{ shell: reviewMode }">
           <section v-if="reviewMode" id="left" class="listening-exam__pane listening-transcript" data-study-transcript aria-labelledby="listening-transcript-heading">
@@ -53,9 +61,12 @@
               <label v-if="hasTranslation" class="listening-transcript__toggle"><input v-model="showTranslation" type="checkbox"> 逐句翻译</label>
             </header>
             <div class="listening-exam__pane-body" tabindex="0" aria-label="听力原文与逐句翻译">
-              <p v-if="materialError" class="listening-practice__error" role="alert">{{ materialError }} <button type="button" @click="loadStudyMaterial">重试</button></p>
-              <p v-else-if="materialLoading" class="listening-practice__status" role="status">正在加载原文…</p>
-              <p v-else-if="!activeMaterial?.paragraphs?.length" class="listening-practice__status">本节暂无原文。</p>
+              <p v-if="materialError || (missingMaterial && !materialLoading)" class="listening-practice__error" role="status" data-listening-material-warning>
+                {{ materialError || missingMaterial }}
+                <button type="button" :disabled="materialLoading" @click="loadStudyMaterial(true)">重试缺失材料</button>
+              </p>
+              <p v-if="materialLoading" class="listening-practice__status" role="status">正在加载复盘材料…</p>
+              <p v-if="!materialLoading && !activeMaterial?.paragraphs?.length" class="listening-practice__status">本节暂无原文。</p>
               <template v-else>
                 <div v-for="(paragraph, index) in activeMaterial.paragraphs" :key="paragraph.id" class="listening-transcript__paragraph">
                   <p v-if="paragraph.speaker && paragraph.speaker !== activeMaterial.paragraphs[index - 1]?.speaker" class="listening-transcript__speaker">{{ paragraph.speaker }}</p>
@@ -164,10 +175,16 @@ import '@/modules/practice-reading/styles/host-extras.css'
 import ReadingCoachPanel from '@/modules/practice-reading/components/ReadingCoachPanel.vue'
 import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
 import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
+import { loadLocalCompletedDetail } from '@/api/local-practice-record.js'
+import LocalPracticeRecord from '@/components/LocalPracticeRecord.vue'
 import { isIdictationListeningPreview } from '@/api/idictation.js'
 import { useArticlePlayback } from '../../../../plug/idictation/useArticlePlayback.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import DraftSaveNotice from '@/components/DraftSaveNotice.vue'
+import { useDraftSaveQueue } from '@/modules/reading-unified/composables/useDraftSaveQueue.js'
+import { useDraftLeaveGuard } from '@/modules/reading-unified/composables/useDraftLeaveGuard.js'
+import { createListeningDraftClock, readListeningDraftPosition } from '@/modules/practice-listening/listeningDraftState.js'
 import ListeningAudioBar from '@/modules/practice-listening/components/ListeningAudioBar.vue'
 import ListeningQuestionPane from '@/modules/practice-listening/components/ListeningQuestionPane.vue'
 import ListeningReviewPanel from '@/modules/practice-listening/components/ListeningReviewPanel.vue'
@@ -175,6 +192,7 @@ import UnifiedExamHeader from '@/modules/reading-unified/components/UnifiedExamH
 import UnifiedPracticeNav from '@/modules/reading-unified/components/UnifiedPracticeNav.vue'
 import { useListeningAsset } from '@/modules/practice-listening/useListeningAsset.js'
 import { useListeningAudio } from '@/modules/practice-listening/useListeningAudio.js'
+import { mergeListeningStudyMaterial } from '@/modules/practice-listening/listeningStudyMaterial.js'
 import {
   buildListeningExplanationMap,
   isDraftForAsset,
@@ -199,7 +217,9 @@ const isPreview = computed(() => isIdictationListeningPreview(props.assetId))
 
 const reviewMode = computed(() => Boolean(props.attemptId) || route.name === 'PracticeListeningReview')
 const reviewReplay = computed(() => String(route.query?.replay || '') === '1')
-const replayNotice = computed(() => (reviewReplay.value ? '重复提交已按原结果返回。' : ''))
+const replayNotice = computed(() => route.query?.recovered === '1'
+  ? '已核对首次提交。等待期间修改的答案另存为未提交草稿，再次打开本题可继续。'
+  : reviewReplay.value ? '重复提交已按原结果返回。' : '')
 
 const loading = ref(true)
 const error = ref('')
@@ -211,6 +231,7 @@ const activeQuestionId = ref('')
 const onlineAudio = ref(null)
 const audioBar = ref(null)
 const audioTime = ref(0)
+const pendingAudioPosition = ref(null)
 const audioPlaying = ref(false)
 const materialLoading = ref(false)
 const materialError = ref('')
@@ -218,6 +239,7 @@ const reviewView = ref('answers')
 const showTranslation = ref(false)
 const locatedSentences = ref([])
 const review = ref(null)
+const localRecord = ref(null)
 const reviewLoading = ref(false)
 const reviewError = ref('')
 const coachSubmission = ref(null)
@@ -246,7 +268,7 @@ const {
   getDisplayLabel: id => payload.value?.questionDisplayMap?.[id] || id,
   formatReviewAnswer: value => Array.isArray(value) ? value.join(', ') : String(value ?? '')
 })
-const startedAtMs = ref(Date.now())
+const draftClock = createListeningDraftClock()
 const submitted = ref(false)
 const { shellRef, dividerRef, dragging, valueNow, startDrag, handleKeydown } = useUnifiedDivider()
 
@@ -285,9 +307,10 @@ const sourcePlayback = computed(() => {
 const attemptId = ref(String(props.attemptId || '').trim())
 let draftKey = ''
 let submitKey = ''
-let draftTimer = null
 let hydrating = false
-let dirty = false
+let audioCheckpoint = 0
+const draftQueue = useDraftSaveQueue(saveDraftNow)
+const { error: draftError, saving: draftSaving } = draftQueue
 
 // The ledger stores changeCount / visitCount / elapsedMs / firstTryCorrect per
 // question. A page that submits an empty timeline makes all four zero, so the
@@ -317,7 +340,6 @@ const {
   onTrack: timeline.recordAnswerTimeline,
   onMutate: (_questionId, _value, metadata) => {
     if (!hydrating && metadata?.changed) {
-      dirty = true
       scheduleDraftSave()
     }
   }
@@ -345,20 +367,29 @@ const durationSeconds = computed(() => Number(asset.value?.durationSeconds) || 0
 const explanationMap = computed(() => buildListeningExplanationMap(payload.value?.reviewExplanations))
 const activeMaterial = computed(() => payload.value?.studyMaterial?.parts?.find(part => Number(part.section) === activeSection.value))
 const hasTranslation = computed(() => activeMaterial.value?.paragraphs?.some(paragraph => paragraph.sentences.some(sentence => sentence.translation)))
+const missingMaterial = computed(() => {
+  const missing = payload.value?.studyMaterial?.missing
+  const labels = []
+  if (missing?.translationParts?.length) labels.push(`${missing.translationParts.length} 个 Part 的译文`)
+  if (missing?.analysisQuestions?.length) labels.push(`${missing.analysisQuestions.length} 题的解析`)
+  return labels.length ? `暂未加载完整：${labels.join('、')}。` : ''
+})
 
-async function loadStudyMaterial() {
-  if (!isJiufenAsset(props.assetId) || !reviewMode.value) return
+async function loadStudyMaterial(retryMissing = false) {
+  if (!isJiufenAsset(props.assetId) || !reviewMode.value || materialLoading.value || !payload.value) return
   const id = props.assetId
   const attempt = props.attemptId
+  const currentPayload = payload.value
+  const active = () => props.assetId === id && props.attemptId === attempt && payload.value === currentPayload
   materialError.value = ''
   materialLoading.value = true
   try {
-    const material = await jiufen.studyMaterial(id, 'listening', attempt)
-    if (props.assetId === id && props.attemptId === attempt) payload.value.studyMaterial = material
+    const material = await jiufen.studyMaterial(id, 'listening', attempt, retryMissing)
+    if (active()) currentPayload.studyMaterial = mergeListeningStudyMaterial(currentPayload.studyMaterial, material)
   } catch (failure) {
-    if (props.assetId === id && props.attemptId === attempt) materialError.value = failure?.message || String(failure)
+    if (active()) materialError.value = failure?.message || String(failure)
   } finally {
-    if (props.assetId === id && props.attemptId === attempt) materialLoading.value = false
+    if (active()) materialLoading.value = false
   }
 }
 
@@ -426,16 +457,23 @@ const answerComparison = computed(() => Object.fromEntries(
 
 async function focusQuestion(questionId) {
   activeQuestionId.value = questionId
-  if (!reviewMode.value) timeline.recordQuestionVisit(questionId)
+  if (!reviewMode.value) {
+    timeline.recordQuestionVisit(questionId)
+    scheduleDraftSave()
+  }
   await nextTick()
   if (reviewMode.value && reviewView.value === 'answers') {
     document.querySelector(`[data-review-question-id="${questionId}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
     return
   }
+  scrollToPracticeQuestion(questionId, !reviewMode.value)
+}
+
+function scrollToPracticeQuestion(questionId, focus = false) {
   const control = Array.from(document.querySelectorAll('#question-groups [name]'))
     .find(node => nativeControls.resolveNativeQuestionIds(node).includes(questionId))
-  control?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  if (!reviewMode.value) control?.focus({ preventScroll: true })
+  control?.scrollIntoView({ block: 'center', behavior: focus ? 'smooth' : 'instant' })
+  if (focus) control?.focus({ preventScroll: true })
 }
 
 async function showReviewQuestion(questionId) {
@@ -475,9 +513,19 @@ function selectSection(section) {
   const firstQuestion = sectionFirstQuestion(section)
   activeQuestionId.value = firstQuestion
   if (firstQuestion && !reviewMode.value) timeline.recordQuestionVisit(firstQuestion)
-  if (section === activeSection.value) return
+  if (section === activeSection.value) {
+    scheduleDraftSave()
+    return
+  }
   if (previewPartTracks.value) previewPlayback.suspend()
+  if (isJiufenAsset(props.assetId) && (!onlineAudio.value?.[section]
+    || onlineAudio.value[section] !== onlineAudio.value[activeSection.value])) {
+    pendingAudioPosition.value = null
+    audioTime.value = 0
+    audioCheckpoint = 0
+  }
   activeSection.value = section
+  scheduleDraftSave()
   locatedSentences.value = []
   void nextTick(() => {
     syncDomAnswers()
@@ -492,22 +540,44 @@ function handleQuestionInput(event) {
 }
 
 function scheduleDraftSave() {
-  if (isPreview.value || reviewMode.value || !payload.value) return
-  if (draftTimer) clearTimeout(draftTimer)
-  draftTimer = setTimeout(() => {
-    draftTimer = null
-    void saveDraftNow().catch((saveError) => {
-      console.warn('听力草稿自动保存失败:', saveError)
-    })
-  }, 800)
+  if (canWriteDraft() && !loading.value && !hydrating) draftQueue.schedule()
+}
+
+function canWriteDraft() {
+  return !isPreview.value && !reviewMode.value && !submitted.value && Boolean(payload.value && asset.value?.id)
+}
+
+function handleAudioTime(seconds) {
+  if (pendingAudioPosition.value != null) return
+  audioTime.value = seconds
+  if (Math.abs(seconds - audioCheckpoint) >= 5) scheduleDraftSave()
+}
+
+function handleAudioPlaying(playing) {
+  const wasPlaying = audioPlaying.value
+  audioPlaying.value = playing
+  if (wasPlaying && !playing) scheduleDraftSave()
+}
+
+function completeAudioRestore(seconds) {
+  pendingAudioPosition.value = null
+  audioTime.value = seconds
+  audioCheckpoint = seconds
+}
+
+function pauseDraftPlayback() {
+  const position = audioBar.value?.pauseAtCurrentPosition()
+  if (Number.isFinite(position) && pendingAudioPosition.value == null) audioTime.value = position
 }
 
 async function saveDraftNow() {
-  if (isPreview.value || reviewMode.value || !payload.value || !asset.value?.id) return
+  if (!canWriteDraft()) return
   if (!attemptId.value) attemptId.value = listeningAttempt.newAttemptId()
   if (!draftKey) draftKey = listeningAttempt.newIdempotencyKey('draft')
   // Flush first: the open question's elapsed time belongs to this save.
   timeline.flushActiveQuestionVisit()
+  const audioPosition = pendingAudioPosition.value ?? audioTime.value
+  audioCheckpoint = audioPosition
   await listeningAttempt.persistDraft({
     attemptId: attemptId.value,
     assetId: asset.value.id,
@@ -517,13 +587,18 @@ async function saveDraftNow() {
     markedQuestions: timeline.markedQuestions.value.slice(),
     questionTimeline: timeline.buildPersistedQuestionTimeline(),
     titleSnapshot: pageTitle.value,
-    timerSnapshot: null,
+    timerSnapshot: draftClock.snapshot(),
+    resumePosition: {
+      part: activeSection.value,
+      questionId: activeQuestionOrder.value.includes(activeQuestionId.value) ? activeQuestionId.value : null,
+      audioPositionMs: Math.min(86_400_000, Math.max(0, Math.round(audioPosition * 1000) || 0))
+    },
     idempotencyKey: draftKey
   })
 }
 
-async function restoreDraft() {
-  const draft = await listeningAttempt.fetchOpenDraft(props.assetId)
+async function restoreDraft(savedDraft = null) {
+  const draft = savedDraft || await listeningAttempt.fetchOpenDraft(props.assetId)
   if (!draft) return
   if (!isDraftForAsset(draft, props.assetId)) {
     console.warn('忽略不属于当前听力资源的草稿', {
@@ -534,8 +609,15 @@ async function restoreDraft() {
     return
   }
   attemptId.value = String(draft.id || '').trim()
-  const startedAt = Date.parse(draft.startedAt || '')
-  if (Number.isFinite(startedAt) && startedAt > 0) startedAtMs.value = startedAt
+  draftClock.restore(Number(draft.durationMs))
+  const position = readListeningDraftPosition(draft.resumePosition, payload.value?.questionGroups)
+  if (position) {
+    activeSection.value = position.section
+    activeQuestionId.value = position.questionId
+    pendingAudioPosition.value = position.audioSeconds > 0 ? position.audioSeconds : null
+    audioCheckpoint = position.audioSeconds
+  }
+  draftRestored.value = true
   hydrating = true
   try {
     // Restore the timeline before answers: assigning a hydrated answer must
@@ -547,42 +629,45 @@ async function restoreDraft() {
       if (!questionId) continue
       const answer = entry.answer
       if (answer == null || answer === '') continue
-      if (assignAnswer(questionId, answer)) draftRestored.value = true
+      assignAnswer(questionId, answer)
     }
   } finally {
     hydrating = false
   }
 }
 
-async function loadReview() {
-  if (!reviewMode.value) return
+async function loadReview(savedDetail = null) {
+  if (!reviewMode.value || reviewLoading.value) return
   reviewLoading.value = true
   reviewError.value = ''
   try {
-    const detail = await listeningAttempt.fetchReviewDetail(props.attemptId)
+    const detail = savedDetail || await listeningAttempt.fetchReviewDetail(props.attemptId)
     const mapped = mapHistoryDetailToListeningReview(detail)
     if (mapped.assetId && mapped.assetId !== props.assetId) {
       throw new Error('复盘记录与当前听力资源不匹配')
     }
-    if (isJiufenAsset(props.assetId)) {
-      Object.assign(payload.value, await jiufen.review(props.assetId, props.attemptId))
-    }
     review.value = mapped
+    Object.entries(mapped.answers).forEach(([id, answer]) => assignAnswer(id, answer))
+    await nextTick()
+    syncDomAnswers()
     if (isJiufenAsset(props.assetId)) {
+      const currentPayload = payload.value
+      const { studyMaterial, ...official } = await jiufen.review(props.assetId, props.attemptId)
+      if (payload.value !== currentPayload) return
+      Object.assign(currentPayload, official)
+      if (studyMaterial) {
+        currentPayload.studyMaterial = mergeListeningStudyMaterial(currentPayload.studyMaterial, studyMaterial)
+      }
       coachSubmission.value = { ...mapped, sessionId: props.attemptId, examId: props.assetId,
         answerComparison: Object.fromEntries(mapped.rows.map(row => [row.questionId, row])) }
       hydrateReadingCoachFromSubmission(coachSubmission.value)
     }
-    void loadStudyMaterial()
-    Object.entries(mapped.answers).forEach(([id, answer]) => assignAnswer(id, answer))
-    await nextTick()
-    syncDomAnswers()
   } catch (loadError) {
     console.warn('加载听力复盘记录失败:', loadError)
-    review.value = null
-    reviewError.value = loadError?.message
-      ? `复盘记录加载失败：${loadError.message}`
-      : '复盘记录加载失败，请稍后重试'
+    const message = loadError?.message || String(loadError)
+    reviewError.value = review.value
+      ? `官方复盘材料暂未加载，已保留本地作答：${message}`
+      : `复盘记录加载失败：${message}`
   } finally {
     reviewLoading.value = false
   }
@@ -592,11 +677,10 @@ async function submitAnswers() {
   if (isPreview.value || submitting.value || reviewMode.value || !payload.value) return
   submitting.value = true
   submitError.value = ''
-  if (draftTimer) {
-    clearTimeout(draftTimer)
-    draftTimer = null
-  }
+  draftClock.pause()
+  pauseDraftPlayback()
   try {
+    if (!await draftQueue.save()) return
     if (!attemptId.value) attemptId.value = listeningAttempt.newAttemptId()
     if (!submitKey) submitKey = listeningAttempt.newIdempotencyKey('submit')
     // Flush first: the open question's elapsed time belongs to this submit.
@@ -609,7 +693,7 @@ async function submitAnswers() {
       answers: snapshotAnswers(),
       markedQuestions: timeline.markedQuestions.value.slice(),
       questionTimeline: timeline.buildPersistedQuestionTimeline(),
-      durationMs: Math.max(0, Date.now() - startedAtMs.value),
+      durationMs: draftClock.elapsed(),
       titleSnapshot: pageTitle.value,
       idempotencyKey: submitKey
     })
@@ -620,7 +704,7 @@ async function submitAnswers() {
     await router.replace({
       name: 'PracticeListeningReview',
       params: { assetId: asset.value.id, attemptId: submission.attemptId },
-      query: submission.idempotentReplay ? { replay: '1' } : {}
+      query: { ...(submission.idempotentReplay ? { replay: '1' } : {}), ...(submission.recoveredDraftId ? { recovered: '1' } : {}) }
     })
   } catch (submitFailure) {
     console.warn('提交听力作答失败:', submitFailure)
@@ -629,6 +713,7 @@ async function submitAnswers() {
       : '提交失败，请稍后重试'
   } finally {
     submitting.value = false
+    if (!submitted.value) draftClock.start()
   }
 }
 
@@ -637,6 +722,11 @@ function formatDurationMs(value) {
   const minutes = Math.floor(totalSeconds / 60)
   const rest = totalSeconds % 60
   return minutes > 0 ? `${minutes} 分 ${rest} 秒` : `${rest} 秒`
+}
+
+function retryPracticeAudio(seconds) {
+  if (canWriteDraft() && Number.isFinite(seconds) && seconds > 0) pendingAudioPosition.value = seconds
+  return loadPracticeAudio()
 }
 
 async function loadPracticeAudio() {
@@ -663,12 +753,33 @@ async function initialize() {
   submitError.value = ''
   review.value = null
   reviewError.value = ''
+  materialError.value = ''
+  materialLoading.value = false
   draftRestored.value = false
   submitted.value = false
-  dirty = false
+  draftQueue.reset()
+  draftClock.restore(0)
+  pendingAudioPosition.value = null
+  audioTime.value = 0
+  audioCheckpoint = 0
   timeline.reset()
   try {
     if (isPreview.value && reviewMode.value) throw new Error('此试卷没有可复盘的交卷记录')
+    let savedDraft = null
+    let savedDetail = null
+    if (isJiufenAsset(props.assetId)) {
+      if (reviewMode.value) {
+        savedDetail = await loadLocalCompletedDetail('listening', props.assetId, props.attemptId).catch(failure => {
+          localRecord.value = null
+          throw failure
+        })
+        localRecord.value = savedDetail.attempt
+      } else if (route.query.resume === '1') {
+        savedDraft = await listeningAttempt.fetchOpenDraft(props.assetId)
+        localRecord.value = savedDraft
+        if (!savedDraft) throw new Error('这份草稿已不存在，请返回题库。')
+      }
+    }
     await loadListeningAsset(props.assetId)
     initializeAnswers(payload.value)
     activeSection.value = firstPresentSection()
@@ -677,38 +788,43 @@ async function initialize() {
       const source = payload.value?.idictationPlayback
       previewSource.value = source || null
       if (source?.sessionId) await previewPlayback.attach(source.sessionId)
-    } else {
-      void loadPracticeAudio()
     }
     if (reviewMode.value) {
-      await loadReview()
+      if (savedDetail) loading.value = false
+      void loadPracticeAudio()
+      await loadReview(savedDetail)
+      if (savedDetail) void loadStudyMaterial()
     } else if (!isPreview.value) {
-      await restoreDraft()
+      await restoreDraft(savedDraft)
+      draftClock.start()
+      void loadPracticeAudio()
     }
   } catch (loadError) {
     console.error('加载听力练习失败:', loadError)
-    error.value = assetError.value || loadError?.message || '听力练习加载失败'
+    const message = assetError.value || loadError?.message || String(loadError)
+    error.value = localRecord.value ? `九分题面暂不可用，已保留本地作答：${message}` : message
   } finally {
     loading.value = false
     await nextTick()
     syncDomAnswers()
+    if (!error.value && draftRestored.value && activeQuestionId.value) {
+      scrollToPracticeQuestion(activeQuestionId.value)
+    }
   }
 }
 
 onMounted(initialize)
 
-onBeforeUnmount(() => {
-  if (draftTimer) {
-    clearTimeout(draftTimer)
-    draftTimer = null
-  }
-  timeline.flushActiveQuestionVisit()
-  if (!isPreview.value && !reviewMode.value && !submitted.value && dirty) {
-    void saveDraftNow().catch((saveError) => {
-      console.warn('离开听力页面前保存草稿失败:', saveError)
-    })
-  }
-})
+useDraftLeaveGuard(async () => {
+  if (!canWriteDraft()) return
+  if (submitting.value) return false
+  draftClock.pause()
+  pauseDraftPlayback()
+  const saved = await (attemptId.value ? draftQueue.save() : draftQueue.flush())
+  if (!saved) draftClock.start()
+  return saved
+}, (to, from) => to.path !== from.path)
+onBeforeUnmount(() => draftQueue.reset())
 </script>
 
 <style src="../modules/practice-listening/styles/listening.css"></style>

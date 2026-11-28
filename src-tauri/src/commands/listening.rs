@@ -12,9 +12,13 @@ use tauri::{Manager, State};
 
 use crate::app::state::AppDb;
 use crate::idictation::listening::PREVIEW_PREFIX;
+use ielts_db::listening::attempt::{
+    get_open_listening_draft_with_position, save_listening_draft_with_position,
+    ListeningDraftPosition, OpenListeningDraft,
+};
 use ielts_db::{
-    get_open_listening_draft, list_listening_assets, load_listening_audio_data_url,
-    load_listening_payload_for_view, save_listening_draft, submit_listening_attempt,
+    list_listening_assets, load_listening_audio_data_url,
+    load_listening_payload_for_view, submit_listening_attempt,
     ListeningDraftCommand, ListeningSubmitCommand, ListeningSubmitResult,
 };
 
@@ -84,11 +88,12 @@ pub fn listening_get_audio_data_url(
 pub fn listening_save_draft(
     db: State<'_, AppDb>,
     cmd: ListeningDraftCommand,
+    resume_position: Option<ListeningDraftPosition>,
 ) -> CommandResponse<AttemptRecord> {
     if cmd.asset_id.starts_with(PREVIEW_PREFIX) {
         return CommandResponse::failure(error("爱听写预览作答不保存".into()));
     }
-    match db.with_conn(|conn| save_listening_draft(conn, &cmd)) {
+    match db.with_conn(|conn| save_listening_draft_with_position(conn, &cmd, resume_position.as_ref())) {
         Ok(attempt) => CommandResponse::success(attempt),
         Err(err) => CommandResponse::failure(map_err(err)),
     }
@@ -98,8 +103,8 @@ pub fn listening_save_draft(
 pub fn listening_get_open_draft(
     db: State<'_, AppDb>,
     asset_id: String,
-) -> CommandResponse<Option<AttemptRecord>> {
-    match db.with_conn(|conn| get_open_listening_draft(conn, &asset_id)) {
+) -> CommandResponse<Option<OpenListeningDraft>> {
+    match db.with_conn(|conn| get_open_listening_draft_with_position(conn, &asset_id)) {
         Ok(draft) => CommandResponse::success(draft),
         Err(err) => CommandResponse::failure(map_err(err)),
     }

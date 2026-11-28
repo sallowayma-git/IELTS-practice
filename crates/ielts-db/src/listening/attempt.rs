@@ -29,6 +29,25 @@ pub type ListeningDraftCommand = ReadingDraftCommand;
 pub type ListeningSubmitCommand = ReadingSubmitCommand;
 pub type ListeningQuestionProgress = ReadingQuestionProgress;
 
+const DRAFT_POSITION_NS: &str = "listening_draft";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ListeningDraftPosition {
+    pub part: u8,
+    pub question_id: Option<String>,
+    pub audio_position_ms: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenListeningDraft {
+    #[serde(flatten)]
+    pub attempt: AttemptRecord,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resume_position: Option<ListeningDraftPosition>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListeningSubmitResult {
@@ -43,11 +62,19 @@ pub fn save_listening_draft(
     conn: &Connection,
     cmd: &ListeningDraftCommand,
 ) -> DbResult<AttemptRecord> {
+    save_listening_draft_with_position(conn, cmd, None)
+}
+
+pub fn save_listening_draft_with_position(
+    conn: &Connection,
+    cmd: &ListeningDraftCommand,
+    position: Option<&ListeningDraftPosition>,
+) -> DbResult<AttemptRecord> {
     if cmd.idempotency_key.trim().is_empty() {
         return Err(DbError::Validation("idempotency_key required".into()));
     }
     let tx = conn.unchecked_transaction()?;
-    let attempt = save_listening_draft_in_transaction(&tx, cmd)?;
+    let attempt = save_listening_draft_in_transaction(&tx, cmd, position)?;
     tx.commit()?;
     Ok(attempt)
 }
@@ -55,6 +82,7 @@ pub fn save_listening_draft(
 fn save_listening_draft_in_transaction(
     conn: &Connection,
     cmd: &ListeningDraftCommand,
+    position: Option<&ListeningDraftPosition>,
 ) -> DbResult<AttemptRecord> {
     ensure_open_listening_attempt(conn, &cmd.attempt_id, &cmd.asset_id)?;
     let loaded = load_answerable_listening_asset(
@@ -67,18 +95,18 @@ fn save_listening_draft_in_transaction(
     let now = chrono::DateTime::from_timestamp_millis(now_ms)
         .unwrap_or_else(chrono::Utc::now)
         .to_rfc3339();
-    let started_at: Option<String> = conn
+    let previous: Option<(String, u64)> = conn
         .query_row(
-            "SELECT started_at FROM attempts WHERE id = ?1",
+            "SELECT started_at, duration_ms FROM attempts WHERE id = ?1",
             params![cmd.attempt_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?;
     let duration_ms = cmd
         .timer_snapshot
         .as_ref()
         .map(|timer| timer.elapsed_ms(now_ms))
-        .unwrap_or(0);
+        .unwrap_or_else(|| previous.as_ref().map_or(0, |(_, duration)| *duration));
     let attempt = AttemptRecord {
         schema_version: AttemptRecord::SCHEMA_VERSION,
         id: cmd.attempt_id.clone(),
@@ -87,7 +115,7 @@ fn save_listening_draft_in_transaction(
         mode: AttemptMode::Single,
         suite_id: None,
         status: AttemptStatus::Draft,
-        started_at: started_at.unwrap_or_else(|| now.clone()),
+        started_at: previous.map_or_else(|| now.clone(), |(started_at, _)| started_at),
         submitted_at: None,
         completed_at: None,
         duration_ms,
@@ -107,6 +135,21 @@ fn save_listening_draft_in_transaction(
         annotations: vec![],
     };
     upsert_attempt(conn, &attempt)?;
+    if let Some(position) = position {
+        if !(1..=4).contains(&position.part) || position.audio_position_ms > 86_400_000
+            || !loaded.payload["questionGroups"].as_array().is_some_and(|groups| {
+                groups.iter().any(|group| {
+                    group["section"].as_u64() == Some(u64::from(position.part))
+                        && position.question_id.as_ref().is_none_or(|id| {
+                            group["questionIds"].as_array().is_some_and(|ids| ids.iter().any(|q| q.as_str() == Some(id)))
+                        })
+                })
+            })
+        {
+            return Err(DbError::Validation("听力草稿位置与试题不匹配".into()));
+        }
+        crate::settings::upsert_setting(conn, DRAFT_POSITION_NS, &attempt.id, &serde_json::json!(position))?;
+    }
     conn.execute(
         "INSERT INTO attempt_idempotency (scope, idempotency_key, attempt_id, evaluation_id, response_json, created_at)
          VALUES ('listening.draft', ?1, ?2, NULL, NULL, ?3)
@@ -114,6 +157,32 @@ fn save_listening_draft_in_transaction(
         params![cmd.idempotency_key, cmd.attempt_id, now],
     )?;
     Ok(attempt)
+}
+
+pub fn get_open_listening_draft_with_position(
+    conn: &Connection,
+    asset_id: &str,
+) -> DbResult<Option<OpenListeningDraft>> {
+    let Some(attempt) = get_open_listening_draft(conn, asset_id)? else {
+        return Ok(None);
+    };
+    let resume_position = crate::settings::get_setting(conn, DRAFT_POSITION_NS, &attempt.id)?
+        .and_then(|row| serde_json::from_value(row.value).ok());
+    Ok(Some(OpenListeningDraft { attempt, resume_position }))
+}
+
+pub fn finish_listening_draft(
+    conn: &Connection,
+    attempt_id: &str,
+    replacement: Option<&str>,
+) -> DbResult<()> {
+    if let Some(id) = replacement {
+        if let Some(row) = crate::settings::get_setting(conn, DRAFT_POSITION_NS, attempt_id)? {
+            crate::settings::upsert_setting(conn, DRAFT_POSITION_NS, id, &row.value)?;
+        }
+    }
+    crate::settings::delete_setting(conn, DRAFT_POSITION_NS, attempt_id)?;
+    Ok(())
 }
 
 pub fn get_open_listening_draft(
@@ -131,7 +200,8 @@ pub fn get_open_listening_draft(
              WHERE activity = 'listening' AND asset_id = ?1
                AND lower(status) IN ('draft', 'active')
                AND mode = 'single' AND suite_id IS NULL
-             ORDER BY started_at DESC
+             ORDER BY CASE WHEN asset_id LIKE 'jiufen-native-%' THEN updated_at ELSE started_at END DESC,
+                      started_at DESC, id DESC
              LIMIT 1",
             params![asset_id],
             |row| row.get(0),
@@ -266,6 +336,7 @@ fn submit_listening_attempt_in_transaction(
         annotations: vec![],
     };
     persist_completed_attempt(conn, &attempt, &loaded.asset.fingerprint)?;
+    finish_listening_draft(conn, &attempt.id, None)?;
 
     let result = ListeningSubmitResult {
         attempt: attempt.clone(),

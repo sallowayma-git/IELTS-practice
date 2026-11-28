@@ -13,14 +13,51 @@ use tauri::State;
 use super::{
     catalog::{fetch_unit, media_url},
     native::{array, exam, plain, section, string, SourceQuestion},
-    service::{authorized, identifier, question_analyses, Account, NS},
+    service::{authorized, authorized_result, identifier, question_analyses, Account, Failure, NS},
 };
 
 #[path = "remote.rs"]
 mod remote;
+#[path = "listening_review.rs"]
+mod listening_review;
+pub(super) use listening_review::Entry as ListeningReviewEntry;
 pub(crate) use remote::{migrate_local_records, prepare_coach_context};
 
 const PREFIX: &str = "jiufen-native-";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftAsset {
+    asset_id: String,
+    title: String,
+    updated_at: String,
+}
+
+#[tauri::command]
+pub fn jiufen_draft_assets(db: State<'_, AppDb>, channel: String) -> Result<Vec<DraftAsset>, String> {
+    draft_assets(&db, &channel)
+}
+
+pub(super) fn draft_assets(db: &AppDb, channel: &str) -> Result<Vec<DraftAsset>, String> {
+    activity(channel)?;
+    db.with_conn(|conn| {
+        let mut query = conn.prepare(
+            "SELECT p.id, p.title, MAX(a.updated_at) AS last_saved
+             FROM attempts a JOIN practice_assets p ON p.id = a.asset_id
+             WHERE a.activity = ?1 AND a.mode = 'single' AND a.suite_id IS NULL
+               AND lower(a.status) IN ('draft', 'active')
+               AND p.id LIKE 'jiufen-native-%'
+               AND json_extract(p.metadata_json, '$.remoteProvider') = 'jiufen'
+             GROUP BY p.id, p.title ORDER BY last_saved DESC, p.id",
+        )?;
+        let rows = query.query_map([channel], |row| Ok(DraftAsset {
+            asset_id: row.get(0)?,
+            title: row.get(1)?,
+            updated_at: row.get(2)?,
+        }))?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }).map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub async fn jiufen_study_material(
@@ -29,12 +66,24 @@ pub async fn jiufen_study_material(
     asset_id: String,
     channel: String,
     attempt_id: Option<String>,
+    retry_missing: Option<bool>,
 ) -> Result<Value, String> {
-    let loaded = load(&db, &asset_id, &channel)?;
-    if let Some(attempt) = &attempt_id {
+    study_material(&account, &db, &asset_id, &channel, attempt_id.as_deref(), retry_missing.unwrap_or(false)).await
+}
+
+pub(super) async fn study_material(
+    account: &Account,
+    db: &AppDb,
+    asset_id: &str,
+    channel: &str,
+    attempt_id: Option<&str>,
+    retry_missing: bool,
+) -> Result<Value, String> {
+    let loaded = load(db, asset_id, channel)?;
+    if let Some(attempt) = attempt_id {
         db.with_conn(|conn| {
             let detail = ielts_db::get_history_detail(conn, attempt)?;
-            if detail.attempt.asset_id.as_deref() != Some(asset_id.as_str())
+            if detail.attempt.asset_id.as_deref() != Some(asset_id)
                 || detail.attempt.status != AttemptStatus::Completed
             {
                 return Err(DbError::Validation("复盘与题目不匹配".into()));
@@ -48,7 +97,15 @@ pub async fn jiufen_study_material(
         &loaded.asset,
         &session.as_ref().ok_or("请先登录九分学长")?.owner,
     )?;
-    let key = format!("{asset_id}:{}", attempt_id.as_deref().unwrap_or("practice"));
+    if channel == "listening" {
+        if let Some(attempt) = attempt_id {
+            let questions = source_questions(&loaded)?;
+            return Ok(listening_review::study(
+                session.as_mut().unwrap(), &loaded, attempt, &questions, retry_missing,
+            ).await);
+        }
+    }
+    let key = format!("{asset_id}:{}", attempt_id.unwrap_or("practice"));
     let mut material = session
         .as_ref()
         .unwrap()
@@ -84,9 +141,7 @@ pub async fn jiufen_study_material(
         super::material::translations(&mut material, &id, &response);
     }
     if attempt_id.is_some() && material["analysesComplete"] != true {
-        let questions: Vec<SourceQuestion> =
-            serde_json::from_value(loaded.payload["jiufen"]["questions"].clone())
-                .map_err(|_| "本机题源映射损坏")?;
+        let questions = source_questions(&loaded)?;
         let requests = analysis_requests(&questions);
         let analyses = question_analyses(
             session.as_ref().ok_or("请先登录九分学长")?,
@@ -152,6 +207,15 @@ fn load(db: &AppDb, asset_id: &str, channel: &str) -> Result<PracticeAssetV2Payl
 pub async fn jiufen_open_unit(
     account: State<'_, Account>,
     db: State<'_, AppDb>,
+    unit_id: String,
+    channel: String,
+) -> Result<String, String> {
+    open_unit(&account, &db, unit_id, channel).await
+}
+
+pub(super) async fn open_unit(
+    account: &Account,
+    db: &AppDb,
     unit_id: String,
     channel: String,
 ) -> Result<String, String> {
@@ -226,9 +290,8 @@ pub async fn jiufen_listening_audio(
         &loaded.asset,
         &session.as_ref().ok_or("请先登录九分学长")?.owner,
     )?;
-    let unit_id = loaded.asset.source_key.as_deref().ok_or("缺少题源标识")?;
     // Refresh URLs on open because the media service may issue temporary URLs.
-    let unit = fetch_unit(&mut session, unit_id).await?;
+    let (unit, _) = remote::bound_unit(&mut session, &loaded.asset).await?;
     let mut urls = Map::new();
     for (index, part) in array(&unit, "parts").iter().enumerate() {
         if let Some(url) = media_url(string(part, "audioUrl")) {
@@ -238,7 +301,7 @@ pub async fn jiufen_listening_audio(
     Ok(urls)
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Submit {
     asset_id: String,
@@ -251,11 +314,15 @@ pub struct Submit {
     question_timeline: Vec<ielts_db::reading::ReadingQuestionProgress>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize)]
 struct Pending {
     asset_id: String,
     body: Value,
     receipt: Option<String>,
+    #[serde(default)]
+    command: Option<Submit>,
+    #[serde(default)]
+    rejected_before_write: bool,
 }
 
 fn submission(unit: &str, questions: &[SourceQuestion], cmd: &Submit) -> Result<Value, String> {
@@ -443,9 +510,10 @@ fn official_result(
         started_at: meta["createdAt"].as_str().unwrap_or(&submitted_at).into(),
         submitted_at: Some(submitted_at.clone()),
         completed_at: Some(submitted_at),
-        duration_ms: meta["elapsedSeconds"]
-            .as_u64()
-            .and_then(|n| n.checked_mul(1000))
+        duration_ms: (loaded.asset.activity == Activity::Listening)
+            .then_some(cmd.duration_ms)
+            .flatten()
+            .or_else(|| meta["elapsedSeconds"].as_u64().and_then(|n| n.checked_mul(1000)))
             .or(cmd.duration_ms)
             .unwrap_or(0),
         score_value: Some(ratio),
@@ -517,14 +585,116 @@ fn analysis_requests(questions: &[SourceQuestion]) -> Vec<(String, String)> {
         .collect()
 }
 
+fn source_questions(loaded: &PracticeAssetV2Payload) -> Result<Vec<SourceQuestion>, String> {
+    serde_json::from_value(loaded.payload["jiufen"]["questions"].clone())
+        .map_err(|_| "本机题源映射损坏".into())
+}
+
+fn prepare_pending(
+    db: &AppDb,
+    loaded: &PracticeAssetV2Payload,
+    cmd: &Submit,
+    questions: &[SourceQuestion],
+    unit: &str,
+    pending_key: &str,
+) -> Result<Pending, String> {
+    let mut frozen: Pending = match load_setting(&db, &pending_key)? {
+        Some(value) => serde_json::from_value(value).map_err(|_| "本机交卷状态损坏")?,
+        None => Pending {
+            asset_id: cmd.asset_id.clone(),
+            body: submission(unit, &questions, &cmd)?,
+            rejected_before_write: true,
+            ..Default::default()
+        },
+    };
+    if frozen.asset_id != cmd.asset_id
+        || frozen.body["unitId"] != unit
+        || frozen.body["channel"] != cmd.channel
+    {
+        return Err("该作答编号已被使用".into());
+    }
+    if identifier(&frozen.body["clientSubmissionId"]).is_none() {
+        return Err("本机提交身份损坏，请保留作答并核对首次结果".into());
+    }
+    if frozen.rejected_before_write {
+        let mut body = submission(unit, &questions, &cmd)?;
+        body["clientSubmissionId"] = frozen.body["clientSubmissionId"].clone();
+        frozen.body = body;
+        frozen.command = Some(cmd.clone());
+        frozen.rejected_before_write = false;
+        frozen.receipt = None;
+        let draft = ielts_db::reading::ReadingDraftCommand {
+            attempt_id: cmd.attempt_id.clone(),
+            asset_id: cmd.asset_id.clone(),
+            answers: json!(cmd.answers),
+            marked_questions: cmd.marked_questions.clone(),
+            question_timeline: cmd.question_timeline.clone(),
+            asset_revision: Some(loaded.asset.schema_version),
+            asset_fingerprint: Some(loaded.asset.fingerprint.clone()),
+            title_snapshot: Some(loaded.asset.title.clone()),
+            timer_snapshot: None,
+            idempotency_key: format!("jiufen-draft-{}", uuid::Uuid::new_v4()),
+        };
+        db.with_conn(|conn| {
+            if loaded.asset.activity == Activity::Listening {
+                ielts_db::save_listening_draft(conn, &draft)?;
+            } else {
+                ielts_db::reading::save_reading_draft(conn, &draft)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())?;
+        save_setting(&db, &pending_key, &json!(frozen))?;
+    }
+    Ok(frozen)
+}
+
+async fn recover_receipt(
+    db: &AppDb,
+    session: &mut Option<super::service::Session>,
+    frozen: &mut Pending,
+    pending_key: &str,
+) -> Result<(), String> {
+    // The official client retries exactly this frozen body and submission ID.
+    // Unknown outcomes (including lost responses) must never mint a new ID.
+    if frozen.receipt.is_none() {
+        let response = match authorized_result(session, "/practice/v1/attempts", Some(&frozen.body))
+            .await
+        {
+            Ok(response) => response,
+            Err(failure) => {
+                if matches!(failure, Failure::RejectedBeforeWrite) {
+                    frozen.rejected_before_write = true;
+                    save_setting(db, &pending_key, &json!(frozen))?;
+                    return Err(failure.message());
+                }
+                return Err(format!("{}。首次作答已保留，请恢复网络或登录原账号后再次点击提交，以核对同一次提交（{}）",
+                        failure.message(), frozen.body["clientSubmissionId"]));
+            }
+        };
+        frozen.receipt = ["resultId", "attemptId", "id"]
+            .iter()
+            .find_map(|field| identifier(&response["data"][field]));
+        save_setting(&db, &pending_key, &json!(frozen))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn jiufen_submit(
     account: State<'_, Account>,
     db: State<'_, AppDb>,
     cmd: Submit,
 ) -> Result<Value, String> {
-    let loaded = load(&db, &cmd.asset_id, &cmd.channel)?;
+    submit(&account, &db, cmd).await
+}
+
+pub(super) async fn submit(account: &Account, db: &AppDb, cmd: Submit) -> Result<Value, String> {
     let mut session = account.0.lock().await;
+    let loaded = remote::payload(db, &mut session, &cmd.asset_id).await?;
+    if loaded.asset.activity != activity(&cmd.channel)? {
+        return Err("题目科目不匹配".into());
+    }
     let owner = session.as_ref().ok_or("请先登录九分学长")?.owner.clone();
     check_owner(&loaded.asset, &owner)?;
     let pending_key = scoped_key("submit-v1", &cmd.attempt_id)?;
@@ -536,71 +706,25 @@ pub async fn jiufen_submit(
         Ok(())
     }).map_err(|e|e.to_string())?;
     if remote::completed(&db, &cmd.attempt_id)? {
-        let mut result = remote::review(&db, &mut session, &loaded, &cmd.attempt_id).await?;
+        let mut result = remote::review(db, &mut session, &loaded, &cmd.attempt_id, false).await?;
         result["idempotentReplay"] = json!(true);
         return Ok(result);
     }
     let unit = loaded.asset.source_key.as_deref().ok_or("缺少题源标识")?;
-    let questions: Vec<SourceQuestion> =
-        serde_json::from_value(loaded.payload["jiufen"]["questions"].clone())
-            .map_err(|_| "本机题源映射损坏")?;
-    let frozen: Pending = match load_setting(&db, &pending_key)? {
-        Some(value) => serde_json::from_value(value).map_err(|_| "本机交卷状态损坏")?,
-        None => {
-            let mut frozen = Pending {
-                asset_id: cmd.asset_id.clone(),
-                body: submission(unit, &questions, &cmd)?,
-                receipt: None,
-            };
-            let draft = ielts_db::reading::ReadingDraftCommand {
-                attempt_id: cmd.attempt_id.clone(),
-                asset_id: cmd.asset_id.clone(),
-                answers: json!(cmd.answers),
-                marked_questions: cmd.marked_questions.clone(),
-                question_timeline: cmd.question_timeline.clone(),
-                asset_revision: Some(loaded.asset.schema_version),
-                asset_fingerprint: Some(loaded.asset.fingerprint.clone()),
-                title_snapshot: Some(loaded.asset.title.clone()),
-                timer_snapshot: None,
-                idempotency_key: format!("jiufen-draft-{}", cmd.attempt_id),
-            };
-            db.with_conn(|conn| {
-                if loaded.asset.activity == Activity::Listening {
-                    ielts_db::save_listening_draft(conn, &draft)?;
-                } else {
-                    ielts_db::reading::save_reading_draft(conn, &draft)?;
-                }
-                Ok(())
-            })
-            .map_err(|e| e.to_string())?;
-            save_setting(&db, &pending_key, &json!(frozen))?;
-            let response = authorized(&mut session, "/practice/v1/attempts", Some(&frozen.body))
-                .await
-                .map_err(|e| {
-                    format!(
-                        "{e}。请核对交卷状态，提交编号 {}",
-                        frozen.body["clientSubmissionId"]
-                    )
-                })?;
-            frozen.receipt = ["resultId", "attemptId", "id"]
-                .iter()
-                .find_map(|field| identifier(&response["data"][field]));
-            save_setting(&db, &pending_key, &json!(frozen))?;
-            frozen
-        }
-    };
-    if frozen.asset_id != cmd.asset_id {
-        return Err("该作答编号已被使用".into());
-    }
+    let questions = source_questions(&loaded)?;
+    let mut frozen = prepare_pending(db, &loaded, &cmd, &questions, unit, &pending_key)?;
+    recover_receipt(db, &mut session, &mut frozen, &pending_key).await?;
     let receipt = frozen.receipt.as_deref().ok_or_else(|| {
         format!(
-            "交卷状态待确认，提交编号 {}",
+            "交卷回执尚未取得，首次作答已保留，请再次点击提交核对（{}）",
             frozen.body["clientSubmissionId"]
         )
     })?;
     if identifier(&json!(receipt)).is_none() {
         return Err("本机回执损坏".into());
     }
+    let latest_cmd = &cmd;
+    let cmd = frozen.command.as_ref().unwrap_or(latest_cmd);
     let response = authorized(
         &mut session,
         &format!("/practice/v1/results/{receipt}/review"),
@@ -617,11 +741,12 @@ pub async fn jiufen_submit(
         &response["data"],
         &HashMap::new(),
     )?;
-    let analyses = question_analyses(
-        session.as_ref().ok_or("请先登录九分学长")?,
-        analysis_requests(&questions),
-    )
-    .await;
+    let current = session.as_mut().ok_or("请先登录九分学长")?;
+    let analyses = if loaded.asset.activity == Activity::Listening {
+        listening_review::analyses(current, &loaded, &cmd.attempt_id, &questions, false).await
+    } else {
+        question_analyses(current, analysis_requests(&questions)).await
+    };
     if !analyses.is_empty() {
         (record, _, result) = official_result(
             &loaded,
@@ -636,8 +761,19 @@ pub async fn jiufen_submit(
     db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
         let draft = ielts_db::get_history_detail(&tx, &cmd.attempt_id)?.attempt;
+        let recovered_draft = preserve_changed_draft(&tx, draft.clone(), latest_cmd, &questions, &frozen)
+            .map_err(DbError::Validation)?;
         for answer in &mut record.answers {
-            if let Some(saved) = draft
+            if let Some(saved) = frozen.command.as_ref().and_then(|cmd| {
+                cmd.question_timeline
+                    .iter()
+                    .find(|q| q.question_id == answer.question_id)
+            }) {
+                answer.elapsed_ms = saved.elapsed_ms;
+                answer.visit_count = saved.visit_count;
+                answer.change_count = saved.change_count;
+                answer.answered_at = saved.answered_at.clone();
+            } else if let Some(saved) = draft
                 .answers
                 .iter()
                 .find(|a| a.question_id == answer.question_id)
@@ -649,12 +785,18 @@ pub async fn jiufen_submit(
             }
         }
         result["attempt"] = json!(record);
+        result["recoveredDraftId"] = json!(recovered_draft);
         ielts_db::persist_completed_attempt(&tx, &record, &loaded.asset.fingerprint)?;
+        if loaded.asset.activity == Activity::Listening {
+            ielts_db::listening::attempt::finish_listening_draft(
+                &tx, &record.id, recovered_draft.as_deref(),
+            )?;
+        }
         settings::upsert_setting(
             &tx,
             NS,
             &scoped_key("receipt-v2", &cmd.attempt_id).map_err(DbError::Validation)?,
-            &json!({"assetId":cmd.asset_id,"receipt":receipt,"owner":owner_scope(&owner)}),
+            &json!({"assetId":cmd.asset_id,"receipt":receipt,"owner":owner_scope(&owner),"recoveredDraftId":recovered_draft}),
         )?;
         settings::delete_setting(&tx, NS, &pending_key)?;
         ielts_db::history::prune_terminal_attempts_in_transaction(&tx)?;
@@ -662,7 +804,72 @@ pub async fn jiufen_submit(
         Ok(())
     })
     .map_err(|e| e.to_string())?;
+    if loaded.asset.activity == Activity::Listening {
+        listening_review::remember(current, &loaded, &cmd.attempt_id, &result);
+    }
     Ok(result)
+}
+
+fn preserve_changed_draft(
+    conn: &rusqlite::Connection,
+    mut draft: AttemptRecord,
+    latest: &Submit,
+    questions: &[SourceQuestion],
+    frozen: &Pending,
+) -> Result<Option<String>, String> {
+    let unit = string(&frozen.body, "unitId");
+    let latest_body = submission(unit, questions, latest)?;
+    let saved = remote::command(&draft);
+    let saved_body = submission(unit, questions, &saved)?;
+    if latest_body["parts"] == frozen.body["parts"] && saved_body["parts"] == frozen.body["parts"] {
+        return Ok(None);
+    }
+    // Keep edits made while the first submission was unresolved as an ordinary
+    // local draft. They must neither overwrite that result nor be sent silently.
+    if latest_body["parts"] != frozen.body["parts"] {
+        draft.answers = questions
+            .iter()
+            .map(|q| {
+                let progress = latest
+                    .question_timeline
+                    .iter()
+                    .find(|p| p.question_id == q.key);
+                AttemptAnswer {
+                    question_id: q.key.clone(),
+                    answer: latest.answers.get(&q.key).cloned().unwrap_or(Value::Null),
+                    marked: latest.marked_questions.contains(&q.key),
+                    question_kind: Some(q.kind.clone()),
+                    is_correct: None,
+                    weight: 1.0,
+                    elapsed_ms: progress.map_or(0, |p| p.elapsed_ms),
+                    visit_count: progress.map_or(0, |p| p.visit_count),
+                    change_count: progress.map_or(0, |p| p.change_count),
+                    answered_at: progress.and_then(|p| p.answered_at.clone()),
+                }
+            })
+            .collect();
+        draft.duration_ms = latest.duration_ms.unwrap_or(draft.duration_ms);
+    }
+    draft.id = format!("jiufen-recovered-{}", uuid::Uuid::new_v4());
+    ielts_db::upsert_attempt(conn, &draft).map_err(|e| e.to_string())?;
+    if draft.activity == Activity::Reading {
+        use ielts_db::modes::timer::{
+            load_reading_timer_state, save_reading_timer_state, TimerOwnerScope, TimerState,
+        };
+        let now = chrono::Utc::now().timestamp_millis();
+        let mut timer =
+            load_reading_timer_state(conn, TimerOwnerScope::Attempt, &latest.attempt_id)
+                .map_err(|e| e.to_string())?
+                .unwrap_or_else(|| {
+                    TimerState::new_suite(
+                        now.saturating_sub(draft.duration_ms.min(i64::MAX as u64) as i64),
+                    )
+                });
+        timer.pause(now);
+        save_reading_timer_state(conn, TimerOwnerScope::Attempt, &draft.id, &timer)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(Some(draft.id))
 }
 
 #[tauri::command]
@@ -684,8 +891,12 @@ pub async fn jiufen_review(
 ) -> Result<Value, String> {
     let mut session = account.0.lock().await;
     let loaded = remote::payload(&db, &mut session, &asset_id).await?;
-    let result = remote::review(&db, &mut session, &loaded, &attempt_id).await?;
-    Ok(result["review"].clone())
+    let result = remote::review(&db, &mut session, &loaded, &attempt_id, false).await?;
+    let mut review = result["review"].clone();
+    if loaded.asset.activity == Activity::Listening {
+        review["studyMaterial"] = result["studyMaterial"].clone();
+    }
+    Ok(review)
 }
 
 #[cfg(test)]

@@ -801,6 +801,7 @@ fn delete_attempt_graph_gated(conn: &Connection, attempt_id: &str) -> DbResult<b
         "DELETE FROM settings WHERE namespace = 'reading_draft' AND key = ?1",
         params![attempt_id],
     )?;
+    crate::listening::attempt::finish_listening_draft(conn, attempt_id, None)?;
     conn.execute(
         "DELETE FROM reading_timer_states WHERE scope = 'attempt' AND owner_id = ?1",
         params![attempt_id],

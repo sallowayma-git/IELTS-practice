@@ -70,6 +70,7 @@ export interface ReadingModeFlowOptions {
   getCurrentScrollY: () => number
   flushActiveQuestionVisit: () => void
   stopPracticeTimer: () => void
+  flushDraft?: () => Promise<boolean>
   startPracticeTimer: () => void
   setPracticeTimerElapsedSeconds: (seconds: number) => void
   assignAnswer: (questionId: string, value: unknown) => void
@@ -134,6 +135,7 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
     options.leaving.value = true
     try {
       if (isEndlessMode()) {
+        if (options.flushDraft && !await options.flushDraft()) return false
         // Stop the local timer first: it must not route to the next asset while
         // Rust is still deciding whether the authoritative session was cancelled.
         clearEndlessTimer()
@@ -296,6 +298,10 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
     options.flushActiveQuestionVisit()
     options.stopPracticeTimer()
     try {
+      if (options.flushDraft && !await options.flushDraft()) {
+        options.startPracticeTimer()
+        return
+      }
       const currentAsset = asset()
       const timerSnapshot = options.getPracticeTimerSnapshot()
       const timing = options.resolvePracticeTiming(1, timerSnapshot)
@@ -411,7 +417,8 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
         || resolveSource(options.highlightSnapshot)
         || []
       )
-      options.setPracticeTimerElapsedSeconds(Math.max(durationSec, Number(options.submission.value?.duration || 0)))
+      const completedDuration = Number(options.submission.value?.duration ?? durationSec)
+      options.setPracticeTimerElapsedSeconds(Number.isFinite(completedDuration) ? Math.max(0, completedDuration) : durationSec)
       snapshotSubmission()
       maybeAdvanceSuitePassage()
       await scheduleEndlessNext(result?.nextEndlessAssetId || null)

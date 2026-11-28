@@ -66,6 +66,16 @@ fn convert_sentence(sentence: &Value, segment: &Value, part_id: &str) -> Option<
 }
 
 pub(super) fn translations(material: &mut Value, part_id: &str, response: &Value) {
+    apply_translations(material, part_id, response, false);
+}
+
+pub(super) fn fill_listening_translations(material: &mut Value, part_id: &str, response: &Value) {
+    if response["translations"].is_array() {
+        apply_translations(material, part_id, response, true);
+    }
+}
+
+fn apply_translations(material: &mut Value, part_id: &str, response: &Value, fill_missing: bool) {
     let Some(part) = material["parts"]
         .as_array_mut()
         .and_then(|parts| parts.iter_mut().find(|p| p["id"] == part_id))
@@ -75,8 +85,12 @@ pub(super) fn translations(material: &mut Value, part_id: &str, response: &Value
     part["sourceArticleHash"] = response["sourceArticleHash"].clone();
     part["translationStatus"] = json!("ready");
     let mut stale = false;
+    let mut missing = false;
     for paragraph in part["paragraphs"].as_array_mut().into_iter().flatten() {
         for sentence in paragraph["sentences"].as_array_mut().into_iter().flatten() {
+            if fill_missing && !string(sentence, "translation").trim().is_empty() {
+                continue;
+            }
             let translated = array(response, "translations").iter().find(|row| {
                 index(&row["sentenceIndex"]).or_else(|| {
                     string(row, "sentenceKey")
@@ -96,10 +110,13 @@ pub(super) fn translations(material: &mut Value, part_id: &str, response: &Value
                 sentence["translation"] = json!(string(row, "zhText"));
                 sentence["sourceTextHash"] = row["sourceTextHash"].clone();
             }
+            missing |= string(sentence, "translation").trim().is_empty();
         }
     }
     if stale {
         part["translationStatus"] = json!("stale");
+    } else if fill_missing && missing {
+        part["translationStatus"] = json!("partial");
     }
 }
 

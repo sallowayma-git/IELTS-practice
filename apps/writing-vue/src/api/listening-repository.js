@@ -55,6 +55,7 @@ export async function getListeningAudioDataUrl(assetId) {
 export async function saveListeningDraft(payload) {
   if (isIdictationListeningPreview(payload.assetId)) throw new Error('此试卷仅支持临时作答')
   const response = await invokeCommand('listening_save_draft', {
+    resumePosition: payload.resumePosition || null,
     cmd: {
       attemptId: payload.attemptId,
       assetId: payload.assetId,

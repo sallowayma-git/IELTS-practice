@@ -134,7 +134,7 @@ async fn live_localization_records_and_coach_evidence() {
     let session = restore_saved(install)
         .unwrap()
         .expect("Sign in through Atlas first");
-    let account = Account(Mutex::new(Some(session)));
+    let account = Account(Mutex::new(Some(session)), Mutex::new(()));
     crate::jiufen::practice::migrate_local_records(&db).unwrap();
     crate::jiufen::practice::migrate_local_records(&db).unwrap();
     let records=db.with_conn(|conn| {

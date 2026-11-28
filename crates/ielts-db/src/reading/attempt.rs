@@ -533,7 +533,8 @@ fn get_open_reading_draft_for_identity(
                AND lower(status) IN ('draft', 'active')
                AND mode = ?2
                AND ((?3 IS NULL AND suite_id IS NULL) OR suite_id = ?3)
-             ORDER BY started_at DESC
+             ORDER BY CASE WHEN asset_id LIKE 'jiufen-native-%' THEN updated_at ELSE started_at END DESC,
+                      started_at DESC, id DESC
              LIMIT 1",
             params![asset_id, mode_name, owner_id],
             |row| row.get(0),

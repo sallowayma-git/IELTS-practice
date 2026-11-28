@@ -141,18 +141,7 @@ pub(super) async fn payload(
     if let Ok(payload) = db.with_conn(|conn| ielts_db::transient_assets::get(conn, asset_id)) {
         return Ok(PracticeAssetV2Payload { asset, payload });
     }
-    let unit = asset.source_key.as_deref().ok_or("缺少题源标识")?;
-    let response = authorized(session, &format!("/practice/v1/units/{unit}/exam"), None).await?;
-    if !same_identifier(&response["data"]["id"], unit)
-        || activity(string(&response["data"], "channel"))? != asset.activity
-    {
-        return Err("返回题面不匹配".into());
-    }
-    let mut payload = exam(&response["data"])?;
-    let meta = asset.metadata.as_ref().ok_or("缺少本机题源映射")?;
-    if meta["sourceFingerprint"] != source_fingerprint(&payload) {
-        return Err("官方题面已更新，当前版本与这次作答不一致".into());
-    }
+    let (_, mut payload) = bound_unit(session, &asset).await?;
     payload["examId"] = json!(asset_id);
     // A converter upgrade may add transient study fields. The submitted core is checked above.
     db.with_conn(|conn| ielts_db::transient_assets::put(conn, "jiufen", asset_id, payload.clone()))
@@ -160,7 +149,27 @@ pub(super) async fn payload(
     Ok(PracticeAssetV2Payload { asset, payload })
 }
 
-fn command(attempt: &AttemptRecord) -> Submit {
+pub(super) async fn bound_unit(
+    session: &mut Option<Session>,
+    asset: &PracticeAssetV2,
+) -> Result<(Value, Value), String> {
+    let unit = asset.source_key.as_deref().ok_or("缺少题源标识")?;
+    let unit = identifier(&json!(unit)).ok_or("题源标识无效")?;
+    let response = authorized(session, &format!("/practice/v1/units/{unit}/exam"), None).await?;
+    if !same_identifier(&response["data"]["id"], &unit)
+        || activity(string(&response["data"], "channel"))? != asset.activity
+    {
+        return Err("返回题面不匹配".into());
+    }
+    let payload = exam(&response["data"])?;
+    let meta = asset.metadata.as_ref().ok_or("缺少本机题源映射")?;
+    if meta["sourceFingerprint"] != source_fingerprint(&payload) {
+        return Err("官方题面已更新，当前版本与这次作答不一致".into());
+    }
+    Ok((response["data"].clone(), payload))
+}
+
+pub(super) fn command(attempt: &AttemptRecord) -> Submit {
     Submit {
         asset_id: attempt.asset_id.clone().unwrap_or_default(),
         attempt_id: attempt.id.clone(),
@@ -245,6 +254,7 @@ async fn find_receipt(
                 asset_id: loaded.asset.id.clone(),
                 body: submission(unit, questions, cmd)?,
                 receipt: Some(receipt.clone()),
+                ..Default::default()
             };
             if let Ok((official, _, _)) = official_result(
                 loaded,
@@ -282,6 +292,7 @@ pub(super) async fn review(
     session: &mut Option<Session>,
     loaded: &PracticeAssetV2Payload,
     attempt_id: &str,
+    retry_listening_analyses: bool,
 ) -> Result<Value, String> {
     let attempt = db
         .with_conn(|conn| Ok(ielts_db::get_history_detail(conn, attempt_id)?.attempt))
@@ -297,11 +308,23 @@ pub(super) async fn review(
         return Ok(cached.clone());
     }
     let cmd = command(&attempt);
-    let questions: Vec<SourceQuestion> =
-        serde_json::from_value(loaded.payload["jiufen"]["questions"].clone())
-            .map_err(|_| "题号映射损坏")?;
+    let questions = source_questions(loaded)?;
+    let listening = loaded.asset.activity == Activity::Listening;
+    if listening {
+        let current = session.as_mut().unwrap();
+        if let Some(result) = listening_review::result(current, loaded, attempt_id, &questions) {
+            if !retry_listening_analyses || result["analysesComplete"] == true {
+                return Ok(result);
+            }
+            listening_review::analyses(current, loaded, attempt_id, &questions, true).await;
+            return listening_review::result(current, loaded, attempt_id, &questions)
+                .ok_or_else(|| "听力复盘缓存已失效，请重试".into());
+        }
+    }
     let key = scoped_key("receipt-v2", attempt_id)?;
-    let receipt = match load_setting(db, &key)? {
+    let receipt_record = load_setting(db, &key)?;
+    let recovered_draft = receipt_record.as_ref().and_then(|value| value.get("recoveredDraftId")).cloned().unwrap_or(Value::Null);
+    let receipt = match receipt_record {
         Some(value) => {
             if value["assetId"] != loaded.asset.id || value["owner"] != owner_scope(&owner) {
                 return Err("回执归属不匹配".into());
@@ -324,6 +347,7 @@ pub(super) async fn review(
             &cmd,
         )?,
         receipt: Some(receipt.clone()),
+        ..Default::default()
     };
     let (official, _, _) = official_result(
         loaded,
@@ -336,7 +360,13 @@ pub(super) async fn review(
     )?;
     verify_retained(&attempt, &official)?;
     let requests = analysis_requests(&questions);
-    let analyses = question_analyses(session.as_ref().unwrap(), requests.clone()).await;
+    let analyses = if listening {
+        listening_review::analyses(
+            session.as_mut().unwrap(), loaded, attempt_id, &questions, retry_listening_analyses,
+        ).await
+    } else {
+        question_analyses(session.as_ref().unwrap(), requests.clone()).await
+    };
     let (_, _, mut result) = official_result(
         loaded,
         &cmd,
@@ -346,6 +376,20 @@ pub(super) async fn review(
         &data["data"],
         &analyses,
     )?;
+    result["attempt"] = json!(attempt);
+    result["recoveredDraftId"] = recovered_draft.clone();
+    result["analysesComplete"] = json!(analyses.len() == requests.len());
+    save_setting(
+        db,
+        &key,
+        &json!({"assetId":loaded.asset.id,"receipt":receipt,"owner":owner_scope(&owner),"recoveredDraftId":recovered_draft}),
+    )?;
+    if listening {
+        let current = session.as_mut().unwrap();
+        listening_review::remember(current, loaded, attempt_id, &result);
+        return listening_review::result(current, loaded, attempt_id, &questions)
+            .ok_or_else(|| "听力复盘缓存已失效，请重试".into());
+    }
     let mut material = loaded.payload["studyMaterial"].clone();
     for q in &questions {
         if let Some(response) = analyses.get(&q.key) {
@@ -355,13 +399,6 @@ pub(super) async fn review(
         }
     }
     result["studyMaterial"] = material;
-    result["attempt"] = json!(attempt);
-    result["analysesComplete"] = json!(analyses.len() == requests.len());
-    save_setting(
-        db,
-        &key,
-        &json!({"assetId":loaded.asset.id,"receipt":receipt,"owner":owner_scope(&owner)}),
-    )?;
     if analyses.len() == requests.len() {
         let cache = &mut session.as_mut().unwrap().reviews;
         if cache.len() >= 16 {
@@ -395,7 +432,7 @@ pub(crate) async fn prepare_coach_context(
     let attempt = thread.attempt_id.as_deref().ok_or("Coach缺少作答记录")?;
     let mut session = account.0.lock().await;
     let loaded = payload(db, &mut session, asset_id).await?;
-    let result = review(db, &mut session, &loaded, attempt).await?;
+    let result = review(db, &mut session, &loaded, attempt, true).await?;
     if result["analysesComplete"] != true {
         return Err("官方解析尚未加载完整，请重试".into());
     }

@@ -1,4 +1,4 @@
-use super::service::{authorized, identifier, Account};
+use super::service::{authorized, expire, identifier, same_session, Account};
 use crate::app::state::AppDb;
 use ielts_db::settings;
 use serde::{Deserialize, Serialize};
@@ -371,6 +371,19 @@ pub async fn jiufen_library(
     db: State<'_, AppDb>,
     refresh: bool,
 ) -> Result<Catalog, String> {
+    library(&account, &db, refresh).await
+}
+
+pub(super) async fn library(
+    account: &Account,
+    db: &AppDb,
+    refresh: bool,
+) -> Result<Catalog, String> {
+    let _refresh = if refresh {
+        Some(account.1.lock().await)
+    } else {
+        None
+    };
     let mut session = account.0.lock().await;
     let Some(current) = session.as_ref() else {
         return Ok(Catalog {
@@ -383,7 +396,18 @@ pub async fn jiufen_library(
         hex::encode(Sha256::digest(current.owner.as_bytes()))
     );
     let catalog = if refresh {
-        let rows = fetch_catalog(&mut session).await?;
+        let snapshot = current.snapshot();
+        let mut detached = Some(current.snapshot());
+        drop(session);
+        let result = fetch_catalog(&mut detached).await;
+        session = account.0.lock().await;
+        if !same_session(&session, &snapshot) {
+            return Err("登录状态已变化，请重试同步".into());
+        }
+        if detached.is_none() {
+            expire(&mut session);
+        }
+        let rows = result?;
         db.with_conn(|c| {
             settings::upsert_setting(c, super::service::NS, &key, &serde_json::json!(rows))
         })

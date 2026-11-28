@@ -49,6 +49,7 @@
     </div>
 
     <div class="library-body">
+    <JiufenDrafts channel="reading" />
     <DashboardOverview
       v-if="activeView === 'overview'"
       @mood="overviewMood = $event"
@@ -170,6 +171,7 @@
 
 <script setup>
 import LibraryFilters from '../../../../plug/jiufen/LibraryFilters.vue'
+import JiufenDrafts from '@/components/JiufenDrafts.vue'
 import { remoteCards, openNativeUnit } from '../../../../plug/jiufen/library.js'
 import ReaderFilters from '../../../../plug/idictation/ReaderFilters.vue'
 import { readerCards, openReader } from '../../../../plug/idictation/readerLibrary.js'

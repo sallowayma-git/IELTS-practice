@@ -71,9 +71,9 @@ test('material reading takes the early branch before exam initialization', async
   const restored = []
   const unexpected=()=>{throw new Error('material reached exam side effect')}
   const noop=()=>{}
-  const context={assetLoadGeneration:0,pageAlive:ref(true),examReady:ref(true),draftAutosaveTimer:null,tauriAttemptId:'old',
+  const context={assetLoadGeneration:0,pageAlive:ref(true),examReady:ref(true),draftQueue:{reset:noop},tauriAttemptId:'old',
     props:{assetId:'idictation-material-test'},route:{params:{},query:{}},error:ref(''),submitError:ref(''),submission:ref(null),
-    materialError:ref(''),locatedSentences:ref([]),suiteSession:ref(null),endlessNextAssetId:ref(''),materialMode:ref(true),
+    materialError:ref(''),reviewLoadError:ref(''),reviewLoading:ref(false),localRecord:ref(null),localRecordLoading:ref(false),isJiufenAsset:()=>false,locatedSentences:ref([]),suiteSession:ref(null),endlessNextAssetId:ref(''),materialMode:ref(true),
     readerProgressError:ref(''),readerProgressMessage:ref(''),readerState:ref({position}),
     nextTick:async()=>{},readingPassagePane:ref({restoreReadingPosition:value=>restored.push(value)}),
     detachHighlightDocumentListeners:noop,normalizeLegacyMemorizeQuery:()=>false,clearReadingAssetError:noop,

@@ -300,6 +300,7 @@ pub fn run() {
             jiufen::catalog::jiufen_library,
             jiufen::practice::jiufen_open_unit,
             jiufen::practice::jiufen_asset_payload,
+            jiufen::practice::jiufen_draft_assets,
             jiufen::practice::jiufen_submit,
             jiufen::practice::jiufen_review,
             jiufen::practice::jiufen_listening_audio,

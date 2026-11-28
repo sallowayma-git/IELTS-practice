@@ -2,6 +2,7 @@
   <section class="listening-audio" data-listening-audio>
     <audio
       ref="audio"
+      :key="audioUrl"
       v-if="audioUrl"
       class="listening-audio__element"
       preload="metadata"
@@ -15,17 +16,17 @@
       @pause="setPlaying(false); buffering = false"
       @ended="setPlaying(false); clearClip()"
       @waiting="buffering = true"
-      @canplay="buffering = false"
+      @canplay="buffering = false; readDuration($event)"
       @volumechange="volume = audio.muted ? 0 : audio.volume"
       @error="playError = '录音加载失败，请重试'; buffering = false; setPlaying(false)"
     ></audio>
-    <button class="listening-audio__play" type="button" :disabled="!available || loading || Boolean(error)"
+    <button class="listening-audio__play" type="button" :disabled="!available || loading || Boolean(error) || resumeSeconds != null"
       :aria-label="isPlaying ? '暂停录音' : '播放录音'" :title="isPlaying ? '暂停录音' : '播放录音'" @click="togglePlayback">
       <span aria-hidden="true">{{ isPlaying ? 'Ⅱ' : '▶' }}</span>
     </button>
     <span class="listening-audio__time">{{ formatTime(position) }} <span>/ {{ formatTime(duration) }}</span></span>
     <input class="listening-audio__seek" type="range" min="0" :max="duration || 1" step="0.1" :value="position"
-      :disabled="!available || !duration || loading" aria-label="录音进度" :aria-valuetext="`${formatTime(position)} / ${formatTime(duration)}`"
+      :disabled="!available || !duration || loading || resumeSeconds != null" aria-label="录音进度" :aria-valuetext="`${formatTime(position)} / ${formatTime(duration)}`"
       @input="!sourcePlayback && seek($event)" @change="sourcePlayback?.seek(Number($event.target.value))">
     <label class="listening-audio__volume">音量
       <input type="range" min="0" max="1" step="0.05" :value="sourcePlayback?.state?.volume ?? volume"
@@ -52,10 +53,11 @@ const props = defineProps({
   sourcePlayback: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
+  resumeSeconds: { type: Number, default: null },
   durationSeconds: { type: Number, default: 0 }
 })
 
-const emit = defineEmits(['retry', 'timeupdate', 'playing-change'])
+const emit = defineEmits(['retry', 'timeupdate', 'playing-change', 'position-restored', 'user-seek'])
 const audio = ref(null)
 const playError = ref('')
 const playing = ref(false)
@@ -64,7 +66,7 @@ const currentTime = ref(0)
 const mediaDuration = ref(0)
 const volume = ref(1)
 const available = computed(() => Boolean(props.sourcePlayback || props.audioUrl))
-const position = computed(() => props.sourcePlayback?.state?.currentTime ?? currentTime.value)
+const position = computed(() => props.sourcePlayback?.state?.currentTime ?? props.resumeSeconds ?? currentTime.value)
 const isPlaying = computed(() => props.sourcePlayback?.state?.playing ?? playing.value)
 const duration = computed(() => props.sourcePlayback?.state?.duration || mediaDuration.value || props.durationSeconds || 0)
 let clip = null
@@ -78,9 +80,26 @@ function setPlaying(value) {
   playing.value = value
   emit('playing-change', value)
 }
-function readDuration() {
-  const value = audio.value?.duration
+function readDuration(event) {
+  const player = audio.value
+  if (!player || (event && event.target !== player)) return
+  const value = player.duration
   mediaDuration.value = Number.isFinite(value) ? value : 0
+  if (props.loading || props.resumeSeconds == null || player.readyState < 1 || !mediaDuration.value) return
+  const restored = Math.min(mediaDuration.value, Math.max(0, props.resumeSeconds))
+  try {
+    player.pause()
+    player.currentTime = restored
+    currentTime.value = restored
+    emit('position-restored', restored)
+  } catch {
+    // Another metadata/canplay event can finish a seek rejected during load.
+  }
+}
+function pauseAtCurrentPosition() {
+  const player = audio.value
+  player?.pause()
+  return props.resumeSeconds ?? player?.currentTime ?? currentTime.value
 }
 function setVolume(event) {
   if (!audio.value) return
@@ -92,13 +111,14 @@ function seek(event) {
   clearClip()
   audio.value.currentTime = Number(event.target.value)
   updateTime()
+  emit('user-seek')
 }
 function retryAudio() {
   clearClip()
   playError.value = ''
   buffering.value = false
+  emit('retry', position.value)
   audio.value?.load()
-  emit('retry')
 }
 async function togglePlayback() {
   if (props.sourcePlayback) return props.sourcePlayback.toggle()
@@ -166,6 +186,7 @@ watch(() => props.audioUrl, () => {
   setPlaying(false)
   emit('timeupdate', 0)
 })
+watch(() => props.loading, loading => { if (!loading) readDuration() }, { flush: 'post' })
 onBeforeUnmount(clearClip)
-defineExpose({ playSegment })
+defineExpose({ playSegment, pauseAtCurrentPosition })
 </script>

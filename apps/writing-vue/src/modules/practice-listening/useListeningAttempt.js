@@ -57,6 +57,7 @@ export function mapListeningSubmitResult(result, extras = {}) {
     percentage: questionCount > 0 ? Math.round((correctCount / questionCount) * 1000) / 10 : 0,
     durationMs: toNumber(attempt.durationMs ?? extras.durationMs, 0),
     idempotentReplay: Boolean(result?.idempotentReplay),
+    recoveredDraftId: text(result?.recoveredDraftId) || null,
     rows: answerRows(attempt).map(normalizeAnswerRow).filter(Boolean)
   }
 }

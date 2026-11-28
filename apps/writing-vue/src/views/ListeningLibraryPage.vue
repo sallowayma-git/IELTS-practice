@@ -4,6 +4,7 @@
       <p class="page-header-kicker">LISTENING · 听力</p>
       <h1 class="heading-serif listening-library__title">听力题库</h1>
       <p class="page-header-desc">按场景和频率挑选一套听力，逐节作答。</p>
+      <JiufenDrafts channel="listening" />
       <LibraryFilters v-model:source="sourceFilter" v-model:part="partFilter" :parts="listeningParts"
         :extra-sources="[{ value: 'idictation', label: '爱听写精听' }, { value: 'idictation-exam', label: '爱听写真题' }, { value: 'idictation-jijing', label: '爱听写机经' }]" />
       <ArticleFilters v-if="sourceFilter==='idictation'" />
@@ -121,6 +122,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { computed, onMounted, ref } from 'vue'
 import { listListeningAssets as listeningListAssets } from '@/api/listening-repository.js'
 import LibraryFilters from '../../../../plug/jiufen/LibraryFilters.vue'
+import JiufenDrafts from '@/components/JiufenDrafts.vue'
 import ArticleFilters from '../../../../plug/idictation/ArticleFilters.vue'
 import {articleCards,openArticle} from '../../../../plug/idictation/articleLibrary.js'
 import { listeningExamCards, listeningBusy, listeningError, loadListeningCatalog, openListening } from '../../../../plug/idictation/listeningLibrary.js'

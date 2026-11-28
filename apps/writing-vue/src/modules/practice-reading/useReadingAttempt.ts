@@ -152,6 +152,7 @@ export function mapSubmitResultToSubmission(
   const correctCount = score.correct ?? attempt.correctCount ?? 0
   const questionCount = score.total ?? attempt.questionCount ?? 0
   const accuracy = score.accuracy ?? attempt.scoreValue ?? null
+  const retainedAnswers = result.review && Array.isArray(attempt.answers) ? attempt.answers : null
   return {
     sessionId: attempt.id || extras.attemptId || null,
     attemptId: attempt.id || extras.attemptId || null,
@@ -162,13 +163,18 @@ export function mapSubmitResultToSubmission(
     correctCount,
     questionCount,
     percentage: score.percentage ?? (accuracy != null ? Math.round(Number(accuracy) * 1000) / 10 : null),
-    duration: Math.round((attempt.durationMs || extras.durationMs || 0) / 1000),
-    durationMs: attempt.durationMs || extras.durationMs || 0,
+    duration: Math.round((attempt.durationMs ?? extras.durationMs ?? 0) / 1000),
+    durationMs: attempt.durationMs ?? extras.durationMs ?? 0,
     answers: result.review
       ? Object.fromEntries(Object.entries(comparison).map(([id, entry]) => [id, entry.userAnswer]))
       : extras.answers || {},
-    markedQuestions: extras.markedQuestions || [],
-    questionTimelineLite: extras.questionTimeline || [],
+    markedQuestions: retainedAnswers
+      ? retainedAnswers.filter(entry => entry.marked).map(entry => entry.questionId)
+      : extras.markedQuestions || [],
+    questionTimelineLite: retainedAnswers
+      ? retainedAnswers.map(entry => ({ questionId: entry.questionId, elapsedMs: entry.elapsedMs,
+        visitCount: entry.visitCount, changeCount: entry.changeCount, answeredAt: entry.answeredAt }))
+      : extras.questionTimeline || [],
     answerComparison: comparison,
     scoreSummary: score,
     scoreInfo: {
@@ -180,6 +186,7 @@ export function mapSubmitResultToSubmission(
     title: attempt.titleSnapshot || extras.titleSnapshot || null,
     source: 'tauri',
     idempotentReplay: Boolean(result.idempotentReplay),
+    recoveredDraftId: result.recoveredDraftId || null,
     analysisSignals: result.analysisSignals ?? null,
     singleAttemptAnalysis: result.singleAttemptAnalysis ?? null
   }

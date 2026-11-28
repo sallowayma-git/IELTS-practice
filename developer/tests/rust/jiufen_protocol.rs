@@ -33,6 +33,16 @@ fn session_identity_and_expiry_are_independent_of_network_errors() {
 }
 
 #[test]
+fn submission_business_states_are_not_treated_as_generic_network_failures() {
+    for value in [json!({"code":400,"data":{"submissionState":"rejected_before_write"}}),
+        json!({"code":400,"submissionState":"rejected_before_write"})] {
+        assert!(matches!(classify(200,&value,true),Err(Failure::RejectedBeforeWrite)));
+    }
+    assert!(matches!(classify(409,&json!({"data":{"submissionState":"conflict"}}),true),Err(Failure::SubmissionConflict)));
+    assert!(matches!(classify(503,&json!({"code":503}),true),Err(Failure::Message(_))));
+}
+
+#[test]
 fn case_binds_real_question_ids_answers_and_receipt_before_import() {
     let mut exam: Value = serde_json::from_str(EXAM).unwrap();
     exam["data"]["id"] = json!(food_case::UNIT_ID);
