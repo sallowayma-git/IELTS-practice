@@ -323,7 +323,7 @@ fn format_18_backup_writes_attempts_once_and_writes_atomically() {
     let (dir, source) = open_db();
     upsert_attempt(&source, &terminal_attempt("bk1", 1)).unwrap();
     let package = create_backup_package(&source, "test").unwrap();
-    assert_eq!(package.manifest.schema_version, 22);
+    assert_eq!(package.manifest.schema_version, ielts_db::backup::BACKUP_SCHEMA_VERSION);
     assert!(package.attempts.is_empty());
     assert_eq!(package.manifest.attempt_count, 1);
 
@@ -355,6 +355,7 @@ fn format_17_backup_with_a_summary_array_still_restores_and_carries_digests() {
     legacy.manifest.schema_version = 17;
     legacy.database.retain(|table| {
         table.name != "weekly_digests" && table.name != "soul_revisions" && !table.name.starts_with("agent_context_")
+            && !matches!(table.name.as_str(), "vocabulary_books" | "vocabulary_book_units" | "vocabulary_book_entries")
     });
     legacy.manifest.table_count = legacy.database.len() as u32;
     legacy.manifest.row_count = legacy
@@ -406,8 +407,14 @@ fn a_pending_migration_is_preceded_by_a_snapshot_and_a_current_database_is_not()
     ielts_db::migrate_with_snapshot(&mut conn, &backups).unwrap();
     assert!(!backups.exists() || std::fs::read_dir(&backups).unwrap().next().is_none());
 
-    // Pretend the last migration has not run yet.
-    conn.execute("DELETE FROM schema_migrations WHERE version = (SELECT MAX(version) FROM schema_migrations)", []).unwrap();
+    // Recreate the empty v35 review table too: deleting only the migration record
+    // leaves a v36 table that cannot honestly represent a pending rebuild.
+    conn.execute_batch("DROP TABLE vocabulary_book_entries;
+        DROP TABLE vocabulary_book_units;
+        DROP TABLE vocabulary_books;
+        DROP TABLE vocabulary_review_state;").unwrap();
+    conn.execute_batch(include_str!("../../../developer/tests/fixtures/vocabulary_review_state_v35.sql")).unwrap();
+    conn.execute("DELETE FROM schema_migrations WHERE version >= 36", []).unwrap();
     assert!(ielts_db::has_pending_migrations(&conn).unwrap());
     ielts_db::migrate_with_snapshot(&mut conn, &backups).unwrap();
     let snapshots: Vec<_> = std::fs::read_dir(&backups)

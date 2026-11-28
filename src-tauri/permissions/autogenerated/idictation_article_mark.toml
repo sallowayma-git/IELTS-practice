@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-article-mark"
+description = "Enables the idictation_article_mark command without any pre-configured scope."
+commands.allow = ["idictation_article_mark"]
+
+[[permission]]
+identifier = "deny-idictation-article-mark"
+description = "Denies the idictation_article_mark command without any pre-configured scope."
+commands.deny = ["idictation_article_mark"]

@@ -253,7 +253,7 @@ def main() -> int:
         run_command("Notebook prose composition", ["node", "developer/tests/js/notebookCompose.test.mjs"]),
         run_command("Notebook phrasing bank", ["node", "developer/tests/js/notebookPhrasing.test.mjs"]),
         run_command("Notebook weekly report", ["node", "developer/tests/js/notebookWeekly.test.mjs"]),
-        run_command("Integrated UI and mock contracts", ["node", "--test", "developer/tests/js/integrationContracts.test.mjs", "developer/tests/js/dashboardCore.test.js", "developer/tests/js/readingTags.test.js", "developer/tests/js/moodFor.test.js"]),
+        run_command("Integrated UI and mock contracts", ["node", "--test", "developer/tests/js/integrationContracts.test.mjs", "developer/tests/js/dashboardCore.test.js", "developer/tests/js/readingTags.test.js", "developer/tests/js/moodFor.test.js", "developer/tests/js/jiufenLibraryListening.test.mjs"]),
         run_command("Reading Coach hydration contract", ["node", "developer/tests/js/readingCoachHydration.test.mjs"]),
         run_command("Reading Coach streaming, lifecycle and panel contract", ["node", "--test", "developer/tests/js/readingCoachStreaming.test.mjs", "developer/tests/js/readingCoachLifecycle.test.mjs", "developer/tests/js/readingCoachPanelContract.test.mjs"]),
         run_command("Reading Coach preference card and feedback entry points", ["node", "--test", "developer/tests/js/readingCoachMemoryCard.test.mjs"]),
@@ -261,6 +261,15 @@ def main() -> int:
         run_command("Reading notes dialog focus trap", ["node", "--test", "developer/tests/js/readingNotesFocusTrap.test.mjs"]),
         run_command("Reading AI review is opt-in",["node", "developer/tests/js/readingReviewOptIn.test.mjs"]),
         run_command("Coach feedback / re-ask contract", ["node", "developer/tests/js/coachFeedbackContract.test.mjs"]),
+        run_command("Vocabulary list view model", ["node", "developer/tests/js/vocabListView.test.mjs"]),
+        run_command("Vocabulary pagination", ["node", "--test", "developer/tests/js/vocabPagination.test.mjs"]),
+        run_command("Idictation product bridge boundaries", ["node", "--experimental-vm-modules", "--test", "developer/tests/js/idictationBridge.test.mjs"]),
+        run_command("Idictation Reader material lifecycle", ["node", "--test", "developer/tests/js/idictationReader.test.mjs"]),
+        run_command("Idictation vocabulary online lifecycle", ["node", "--test", "developer/tests/js/idictationTraining.test.mjs"]),
+        run_command("Idictation article playback and lifecycle", ["node", "--test", "developer/tests/js/idictationArticleAudio.test.mjs", "developer/tests/js/idictationArticleLifecycle.test.mjs"]),
+        run_command("Vocabulary session queue core", ["node", "developer/tests/js/vocabSessionCore.test.mjs"]),
+        run_command("Rust vocabulary book membership and backup", ["cargo", "test", "-p", "ielts-db", "--lib", "vocab::books", "--locked", "--offline"]),
+        run_command("Rust remote provider cache isolation", ["cargo", "test", "-p", "ielts-db", "--lib", "transient_assets", "--locked", "--offline"]),
         run_command("Vue production build", [NPM, "--prefix", "apps/writing-vue", "run", "build"]),
         run_command("Rust workspace check", ["cargo", "check", "--workspace", "--locked"]),
         run_command(
@@ -327,17 +336,28 @@ def main() -> int:
                 #   consolidation    — M8 memory lifecycle: user feedback and
                 #                      the stale sweep archive (never delete)
                 #                      and propagate to dependent supports.
-                #   context_snapshot — M5-08 snapshot identity: two identical
-                #                      renders must both persist, and one id
-                #                      must never be written twice.
+                #   cross_module     — W3-4 weekly promotion from activity
+                #                      scopes to global memory, idempotent and
+                #                      capacity-safe.
+                #   writing_coach_context — W3-3b host-resolved writing
+                #                      evidence: completed attempt + evaluation,
+                #                      no cross-scene fallback.
                 "--test",
                 "consolidation",
                 "--test",
-                "context_snapshot",
+                "cross_module",
+                "--test",
+                "writing_coach_context",
                 # Startup recovery must survive duplicate windows and must
                 # not reset terminal retry budgets on every reboot.
                 "--test",
                 "background_jobs",
+                # W3-2 listening data layer: pack seeding/index/audio and the
+                # draft/submit/ledger pipeline.
+                "--test",
+                "listening_assets",
+                "--test",
+                "listening_attempt",
             ],
         ),
         run_command(

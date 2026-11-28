@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-open-unit"
+description = "Enables the jiufen_open_unit command without any pre-configured scope."
+commands.allow = ["jiufen_open_unit"]
+
+[[permission]]
+identifier = "deny-jiufen-open-unit"
+description = "Denies the jiufen_open_unit command without any pre-configured scope."
+commands.deny = ["jiufen_open_unit"]

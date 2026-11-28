@@ -1,4 +1,4 @@
-//! The learner profile a reading coach thread is tailored with.
+//! The learner profile a coach thread is tailored with.
 //!
 //! Selected once, on the thread's first coach run, and frozen on the thread row
 //! (`coach_threads.learner_profile_json`). Every later turn replays the stored
@@ -6,10 +6,26 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use ielts_domain::Activity;
 
 use crate::sqlite::{DbError, DbResult};
 
 const PROFILE_USER_ID: &str = "local";
+
+pub const PROFILE_MAX_TEACHING_NOTES: usize = 3;
+
+/// Negative feedback kinds that become a standing teaching instruction, keyed
+/// by their wire spelling. Verdicts and style corrections are not instructions.
+static TEACHING_NOTE_MAP: [(&str, &str); 8] = [
+    ("too_long", "Keep every answer under 120 words."),
+    ("too_short", "Give the complete reasoning, not just the final answer."),
+    ("too_abstract", "Start with one concrete passage example, then state the rule."),
+    ("need_example", "Include one concrete example from the passage."),
+    ("need_step_by_step", "Walk through the reasoning in numbered steps."),
+    ("incorrect", "Re-check the official answer before explaining; never contradict it."),
+    ("not_relevant", "Answer the exact question asked and omit unrelated context."),
+    ("reask_same_question", "When the learner re-asks, explain differently instead of repeating."),
+];
 
 /// Per-list caps, then one total cap over the serialized snapshot.
 pub const PROFILE_MAX_PREFERENCES: usize = 5;
@@ -20,6 +36,12 @@ pub const PROFILE_TOKEN_BUDGET: u32 = 800;
 pub const WEAK_SKILL_MASTERY_CEILING: f64 = 0.6;
 /// ...and only with evidence from at least this many distinct articles.
 pub const WEAK_SKILL_MIN_DISTINCT_ASSETS: i64 = 2;
+
+/// The practice scene a profile is selected for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CoachScene {
+    pub activity: Activity,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +57,8 @@ pub struct LearnerProfileSnapshot {
     /// this field existed, and from the bytes of any profile that has none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recent_signals: Vec<ProfileStatement>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub teaching_notes: Vec<String>,
 }
 
 /// One preference, learned memory or recent signal. `id` is the memory id
@@ -58,11 +82,13 @@ pub struct WeakSkill {
 }
 
 impl LearnerProfileSnapshot {
+    /// Empty means no profile data message is needed.
     pub fn is_empty(&self) -> bool {
         self.preferences.is_empty()
             && self.memories.is_empty()
             && self.weak_skills.is_empty()
             && self.recent_signals.is_empty()
+            && self.teaching_notes.is_empty()
     }
 
     /// Memory item ids present in the snapshot, in prompt order.
@@ -74,19 +100,21 @@ impl LearnerProfileSnapshot {
             .filter(|id| id.starts_with("mem-"))
             .collect()
     }
+
 }
 
-/// Pure selection from current store state (no writes).
-pub fn select_learner_profile(conn: &Connection) -> DbResult<LearnerProfileSnapshot> {
-    crate::system_context::build_coach_system_context(conn, PROFILE_USER_ID)
+/// Select the validated profile for the bound practice activity.
+pub fn select_learner_profile_for_scene(conn: &Connection, scene: &CoachScene) -> DbResult<LearnerProfileSnapshot> {
+    crate::system_context::build_coach_system_context_for_activity(conn, PROFILE_USER_ID, scene.activity)
 }
 
 /// The thread's frozen profile, selected and stored on first use. The first
 /// freeze also counts one recall for every memory item it carries, in the same
 /// transaction. An empty profile is frozen too, so it stays empty.
-pub fn freeze_coach_learner_profile(
+pub fn freeze_coach_learner_profile_for_activity(
     conn: &Connection,
     thread_id: &str,
+    activity: Activity,
 ) -> DbResult<LearnerProfileSnapshot> {
     let tx = conn.unchecked_transaction()?;
     let stored: Option<Option<String>> = tx
@@ -100,9 +128,18 @@ pub fn freeze_coach_learner_profile(
         return Err(DbError::Message(format!("coach thread not found: {thread_id}")));
     };
     if let Some(raw) = stored {
-        return Ok(serde_json::from_str(&raw)?);
+        let mut profile: LearnerProfileSnapshot = serde_json::from_str(&raw)?;
+        let legacy: serde_json::Value = serde_json::from_str(&raw)?;
+        if let Some(lines) = legacy.get("soul").and_then(serde_json::Value::as_array) {
+            for (index, line) in lines.iter().filter_map(serde_json::Value::as_str).enumerate() {
+                if ielts_domain::is_safe_for_prompt(line) {
+                    profile.preferences.push(ProfileStatement { id: format!("soul:legacy:{index}"), statement: line.to_owned() });
+                }
+            }
+        }
+        return Ok(profile);
     }
-    let snapshot = select_learner_profile(&tx)?;
+    let snapshot = select_learner_profile_for_scene(&tx, &CoachScene { activity })?;
     tx.execute(
         "UPDATE coach_threads SET learner_profile_json=?1 WHERE id=?2 AND learner_profile_json IS NULL",
         params![serde_json::to_string(&snapshot)?, thread_id],
@@ -149,13 +186,63 @@ mod tests {
             memories: vec![statement("mem-a", "y")],
             weak_skills: vec![],
             recent_signals: vec![statement("signal:m:0", "z")],
+            ..Default::default()
         };
         assert_eq!(snapshot.memory_ids(), vec!["mem-p", "mem-a"]);
         assert!(LearnerProfileSnapshot::default().is_empty());
     }
 
     #[test]
+    fn profile_json_without_soul_still_deserializes() {
+        let old = r#"{"preferences":[{"id":"preference:global:tone","statement":"tone: brief"}],"memories":[],"weakSkills":[]}"#;
+        let snapshot: LearnerProfileSnapshot = serde_json::from_str(old).unwrap();
+        assert!(snapshot.recent_signals.is_empty());
+        assert_eq!(snapshot.preferences.len(), 1);
+        assert!(serde_json::from_str::<LearnerProfileSnapshot>("{}").unwrap().is_empty());
+    }
+
+    #[test]
     fn empty_snapshot_serializes_to_an_empty_object() {
         assert_eq!(serde_json::to_string(&LearnerProfileSnapshot::default()).unwrap(), "{}");
     }
+}
+
+pub(crate) fn teaching_note_lines(conn: &Connection) -> DbResult<Vec<String>> {
+    let cutoff = (chrono::Utc::now() - chrono::Duration::days(30)).to_rfc3339();
+    let mut statement = conn.prepare(
+        "SELECT kind, COUNT(*) FROM (
+           SELECT feedback_kind AS kind FROM coach_feedback
+            WHERE user_id=?1 AND created_at>=?2
+           UNION ALL
+           SELECT 'reask_same_question' AS kind FROM coach_reask_links
+            WHERE created_at>=?2
+         )
+         GROUP BY kind
+         ORDER BY COUNT(*) DESC, kind ASC",
+    )?;
+    let rows = statement.query_map(params![PROFILE_USER_ID, cutoff], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (kind, _count) = row?;
+        let Some((_, instruction)) = TEACHING_NOTE_MAP.iter().find(|(mapped, _)| *mapped == kind)
+        else {
+            continue;
+        };
+        out.push((*instruction).to_owned());
+        if out.len() == PROFILE_MAX_TEACHING_NOTES {
+            break;
+        }
+    }
+    Ok(out)
+}
+
+
+pub fn select_learner_profile(conn: &Connection) -> DbResult<LearnerProfileSnapshot> {
+    select_learner_profile_for_scene(conn, &CoachScene { activity: Activity::Reading })
+}
+
+pub fn freeze_coach_learner_profile(conn: &Connection, thread_id: &str) -> DbResult<LearnerProfileSnapshot> {
+    freeze_coach_learner_profile_for_activity(conn, thread_id, Activity::Reading)
 }

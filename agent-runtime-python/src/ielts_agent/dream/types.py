@@ -251,7 +251,9 @@ WEEKLY_MEMORY_HORIZONS: frozenset[str] = frozenset({"recent", "durable"})
 MEMORY_NAMESPACES: frozenset[str] = frozenset(
     {"knowledge", "language", "strategy", "behavior", "metacognition", "preference", "goal"}
 )
-MEMORY_ACTIVITIES: frozenset[str] = frozenset({"reading", "writing"})
+MEMORY_ACTIVITIES: frozenset[str] = frozenset(
+    {"reading", "writing", "listening", "vocabulary"}
+)
 
 
 # Bounds the host re-validates on the v3 weekly narrative (digest v3).

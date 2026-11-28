@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-review"
+description = "Enables the jiufen_review command without any pre-configured scope."
+commands.allow = ["jiufen_review"]
+
+[[permission]]
+identifier = "deny-jiufen-review"
+description = "Denies the jiufen_review command without any pre-configured scope."
+commands.deny = ["jiufen_review"]

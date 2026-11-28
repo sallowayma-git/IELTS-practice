@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-listening-get-asset-payload"
+description = "Enables the listening_get_asset_payload command without any pre-configured scope."
+commands.allow = ["listening_get_asset_payload"]
+
+[[permission]]
+identifier = "deny-listening-get-asset-payload"
+description = "Denies the listening_get_asset_payload command without any pre-configured scope."
+commands.deny = ["listening_get_asset_payload"]

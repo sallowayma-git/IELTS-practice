@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-sync-chapter"
+description = "Enables the idictation_sync_chapter command without any pre-configured scope."
+commands.allow = ["idictation_sync_chapter"]
+
+[[permission]]
+identifier = "deny-idictation-sync-chapter"
+description = "Denies the idictation_sync_chapter command without any pre-configured scope."
+commands.deny = ["idictation_sync_chapter"]

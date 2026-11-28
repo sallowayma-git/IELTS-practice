@@ -20,7 +20,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::coach_signal_digest::{payload_notes, read_coach_notes, NoteContent, NoteKind, NoteRange};
+use crate::coach_signal_digest::{payload_notes, read_coach_notes_for_activity, NoteContent, NoteKind, NoteRange};
 use crate::sqlite::DbResult;
 
 /// How far back earlier difficulty notes still count toward a card.
@@ -71,12 +71,18 @@ pub fn evaluate_coach_memory_card(
     message_id: Option<&str>,
     now: DateTime<Utc>,
 ) -> DbResult<Option<CoachMemoryCard>> {
+    evaluate_coach_memory_card_for_activity(conn, payload, message_id, now, "reading")
+}
+
+pub(crate) fn evaluate_coach_memory_card_for_activity(
+    conn: &Connection, payload: &Value, message_id: Option<&str>, now: DateTime<Utc>, activity: &str,
+) -> DbResult<Option<CoachMemoryCard>> {
     if coach_memory_card_handled(payload) {
         return Ok(None);
     }
     let since = (now - Duration::days(CARD_WINDOW_DAYS)).to_rfc3339();
     for (note_index, note) in payload_notes(payload) {
-        if !earns_card(conn, &note, message_id, &since)? || is_active_memory(conn, &note.text)? {
+        if !earns_card(conn, &note, message_id, &since, activity)? || is_active_memory(conn, &note.text, activity)? {
             continue;
         }
         return Ok(Some(CoachMemoryCard { note_index, text: note.text, skill_key: note.skill_key }));
@@ -84,12 +90,12 @@ pub fn evaluate_coach_memory_card(
     Ok(None)
 }
 
-fn earns_card(conn: &Connection, note: &NoteContent, message_id: Option<&str>, since: &str) -> DbResult<bool> {
+fn earns_card(conn: &Connection, note: &NoteContent, message_id: Option<&str>, since: &str, activity: &str) -> DbResult<bool> {
     match (note.kind, note.skill_key.as_deref()) {
         (NoteKind::Preference, _) => Ok(note.remember),
         (NoteKind::Difficulty, _) if note.remember => Ok(true),
         (NoteKind::Difficulty, Some(skill)) => {
-            Ok(earlier_difficulties(conn, skill, message_id, since)? + 1 >= CARD_DIFFICULTY_THRESHOLD)
+            Ok(earlier_difficulties(conn, skill, message_id, since, activity)? + 1 >= CARD_DIFFICULTY_THRESHOLD)
         }
         _ => Ok(false),
     }
@@ -98,8 +104,8 @@ fn earns_card(conn: &Connection, note: &NoteContent, message_id: Option<&str>, s
 /// Stored answers (any thread, other than `message_id`) since `since` that kept
 /// a `difficulty` note on `skill`. One answer counts once however many such
 /// notes it carries.
-fn earlier_difficulties(conn: &Connection, skill: &str, message_id: Option<&str>, since: &str) -> DbResult<i64> {
-    let answers: HashSet<String> = read_coach_notes(conn, NoteRange::since(since))?
+fn earlier_difficulties(conn: &Connection, skill: &str, message_id: Option<&str>, since: &str, activity: &str) -> DbResult<i64> {
+    let answers: HashSet<String> = read_coach_notes_for_activity(conn, NoteRange::since(since), activity)?
         .into_iter()
         .filter(|note| note.content.kind == NoteKind::Difficulty && note.content.skill_key.as_deref() == Some(skill))
         .filter(|note| Some(note.message_id.as_str()) != message_id)
@@ -109,13 +115,13 @@ fn earlier_difficulties(conn: &Connection, skill: &str, message_id: Option<&str>
 }
 
 /// Whether an active memory of this learner already says the same thing.
-fn is_active_memory(conn: &Connection, text: &str) -> DbResult<bool> {
+fn is_active_memory(conn: &Connection, text: &str, activity: &str) -> DbResult<bool> {
     let wanted = normalize(text);
     if wanted.is_empty() {
         return Ok(true);
     }
-    let mut statement = conn.prepare("SELECT content FROM memory_items WHERE user_id = ?1 AND status = 'active'")?;
-    let mut rows = statement.query([MEMORY_USER_ID])?;
+    let mut statement = conn.prepare("SELECT content FROM memory_items WHERE user_id = ?1 AND status = 'active' AND scope IN ('global',?2)")?;
+    let mut rows = statement.query(rusqlite::params![MEMORY_USER_ID, format!("activity:{activity}")])?;
     while let Some(row) = rows.next()? {
         let content: String = row.get(0)?;
         if normalize(&content) == wanted {

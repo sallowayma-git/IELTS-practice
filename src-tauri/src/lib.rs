@@ -8,6 +8,11 @@ pub(crate) mod ai;
 pub(crate) mod cognitive_runtime;
 pub mod app;
 pub mod commands;
+#[path = "../../plug/jiufen/host.rs"]
+mod jiufen;
+#[allow(dead_code)]
+#[path = "../../plug/idictation/host.rs"]
+mod idictation;
 #[cfg(test)]
 mod ipc_acl_tests;
 
@@ -77,6 +82,23 @@ pub fn run() {
     };
 
     let builder = tauri::Builder::default()
+        .plugin(tauri::plugin::Builder::<tauri::Wry>::new("local-prototype-guard")
+            .js_init_script(include_str!("app/prototype-guard.js"))
+            .build())
+        .on_window_event(|window, event| {
+            if window.label() == "idictation-product" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    let _ = window.set_skip_taskbar(true);
+                }
+            }
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(product) = window.app_handle().get_webview_window("idictation-product") {
+                    let _ = product.destroy();
+                }
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -89,6 +111,8 @@ pub fn run() {
         .manage(paths)
         .manage(db)
         .manage(vault)
+        .manage(jiufen::service::Account::default())
+        .manage(idictation::service::Account::default())
         .manage(agent::WorkspaceGrants::default())
         .manage(agent::AgentCancelRegistry::default())
         .manage(commands::backup::BackupImportGrants::default())
@@ -268,6 +292,64 @@ pub fn run() {
             commands::writing::writing_prompt_activate,
             commands::writing::writing_prompt_delete,
             commands::reading::reading_list_assets,
+            jiufen::service::jiufen_send_code,
+            jiufen::service::jiufen_login,
+            jiufen::service::jiufen_restore,
+            jiufen::service::jiufen_disconnect,
+            jiufen::service::jiufen_is_connected,
+            jiufen::catalog::jiufen_library,
+            jiufen::practice::jiufen_open_unit,
+            jiufen::practice::jiufen_asset_payload,
+            jiufen::practice::jiufen_draft_assets,
+            jiufen::practice::jiufen_submit,
+            jiufen::practice::jiufen_review,
+            jiufen::practice::jiufen_listening_audio,
+            jiufen::practice::jiufen_study_material,
+            idictation::service::idictation_open_login,
+            // Settings and libraries share saved-session recovery.
+            idictation::service::idictation_connect,
+            idictation::service::idictation_disconnect,
+            idictation::service::idictation_books,
+            idictation::service::idictation_chapters,
+            idictation::service::idictation_sync_chapter,
+            idictation::reader::idictation_reader_catalog,
+            idictation::reader::idictation_open_reader,
+            idictation::reader::idictation_reader_payload,
+            idictation::reader::idictation_reader_bookmark,
+            idictation::reader::idictation_reader_progress,
+            idictation::reader_annotations::idictation_reader_annotation,
+            idictation::reader::idictation_reader_collections,
+            idictation::reader::idictation_open_reader_collection,
+            idictation::training::idictation_training_start,
+            idictation::training::idictation_training_answer,
+            idictation::training::idictation_training_audio,
+            idictation::training::idictation_training_finish,
+            idictation::training::idictation_training_close,
+            idictation::article::idictation_article_books,
+            idictation::article::idictation_article_chapters,
+            idictation::article::idictation_open_article,
+            idictation::article::idictation_article_payload,
+            idictation::article::idictation_article_audio,
+            idictation::article_dictation::idictation_article_dictation,
+            idictation::article_marking::idictation_article_mark,
+            idictation::walkman::idictation_walkman_open,
+            idictation::article::idictation_article_collections,
+            idictation::reading::idictation_reading_catalog,
+            idictation::reading::idictation_reading_open,
+            idictation::reading::idictation_reading_save,
+            idictation::reading::idictation_reading_submit,
+            idictation::reading::idictation_reading_review,
+            idictation::listening::idictation_listening_catalog,
+            idictation::listening::idictation_listening_open,
+            idictation::listening::idictation_listening_payload,
+            idictation::writing::idictation_writing_catalog,
+            idictation::writing::idictation_writing_import,
+            idictation::speaking::idictation_speaking_catalog,
+            idictation::speaking::idictation_speaking_open,
+            idictation::mistakes::idictation_import_mistakes,
+            idictation::synonym::idictation_synonym_books,
+            idictation::synonym::idictation_synonym_chapters,
+            idictation::synonym::idictation_synonym_chapter,
             commands::reading::reading_pick_practice_asset,
             commands::reading::reading_get_asset_payload,
             commands::reading::reading_get_pdf_data_url,
@@ -277,6 +359,12 @@ pub fn run() {
             commands::reading::reading_get_open_draft,
             commands::reading::reading_patch_answer,
             commands::reading::reading_submit_attempt,
+            commands::listening::listening_list_assets,
+            commands::listening::listening_get_asset_payload,
+            commands::listening::listening_get_audio_data_url,
+            commands::listening::listening_save_draft,
+            commands::listening::listening_get_open_draft,
+            commands::listening::listening_submit_attempt,
             commands::modes::suite_create,
             commands::modes::suite_get,
             commands::modes::suite_submit_passage,
@@ -302,9 +390,13 @@ pub fn run() {
             commands::enrichment::vocab_list,
             commands::enrichment::vocab_review,
             commands::enrichment::vocab_delete,
+            commands::vocabulary_books::vocab_books,
+            commands::vocabulary_books::vocab_book_units,
+            commands::vocabulary_books::vocab_book_words,
             commands::enrichment::coach_ensure_thread,
             commands::enrichment::coach_list_messages,
             commands::enrichment::coach_run,
+            commands::enrichment::coach_forget_preference,
             #[cfg(feature = "learning-observation-v1")]
             commands::coach_feedback::coach_record_feedback,
             #[cfg(feature = "learning-observation-v1")]
@@ -333,8 +425,32 @@ pub fn run() {
             });
             let paths = app.state::<app::state::AppPaths>();
             let db = app.state::<app::state::AppDb>();
+            if let Err(error) = jiufen::practice::migrate_local_records(&db) {
+                tracing::error!(%error, "jiufen local record migration failed");
+            }
             // Bundled packs, or a newer signed content pack installed by OTA.
             commands::ota::seed_content_at_startup(app.handle(), &paths, &db)?;
+            // The listening pack is optional: a build without it stays usable,
+            // and a bad pack is logged instead of aborting startup.
+            let listening_pack = app.path().resource_dir()?.join("listening");
+            if listening_pack.join("manifest.json").is_file() {
+                match db
+                    .with_conn(|conn| ielts_db::seed_builtin_listening_pack(conn, &listening_pack))
+                {
+                    Ok(assets) => tracing::info!(
+                        assets,
+                        "validated and indexed bundled listening resources"
+                    ),
+                    Err(err) => {
+                        tracing::error!(error = %err, "failed to seed bundled listening resources")
+                    }
+                }
+            } else {
+                tracing::info!(
+                    path = %listening_pack.display(),
+                    "listening resource pack absent; skipping seed"
+                );
+            }
             match db.with_conn(|conn| ielts_db::recover_interrupted_sessions(conn)) {
                 Ok(n) if n > 0 => {
                     tracing::warn!(count = n, "marked interrupted evaluation sessions")

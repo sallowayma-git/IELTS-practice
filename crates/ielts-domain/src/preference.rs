@@ -17,8 +17,10 @@ use crate::{ExplicitPreferenceUpsert, MemoryScope};
 /// Key prefix for the learner's own free-text preference notes.
 pub const USER_NOTE_PREFERENCE_PREFIX: &str = "user_note.";
 /// A preference note is one short sentence, counted in characters (not bytes),
-/// so Chinese and English get the same room.
-pub const MAX_PREFERENCE_TEXT_CHARS: usize = 60;
+/// so Chinese and English get the same room. The coach's `remember` contract
+/// shares this ceiling; one limit keeps the write path free of key-specific
+/// exceptions.
+pub const MAX_PREFERENCE_TEXT_CHARS: usize = 120;
 /// Active free-text notes one learner may keep.
 pub const MAX_USER_NOTE_PREFERENCES: usize = 20;
 pub const MAX_PREFERENCE_KEY_BYTES: usize = 64;
@@ -64,7 +66,7 @@ impl ExplicitPreferenceIssue {
             Self::InvalidScope => "这条偏好的适用范围无效。",
             Self::InvalidValue => "偏好只能是一句简短的文字。",
             Self::EmptyText => "请先写下你的偏好。",
-            Self::TextTooLong => "偏好请控制在 60 个字以内。",
+            Self::TextTooLong => "偏好请控制在 120 个字以内。",
             Self::UnsafeText => "这句话里有不能交给教练的内容（像指令、密钥或健康、性格类判断），不能保存为偏好。请换一种说法。",
             Self::TooMany => "最多保存 20 条偏好，请先删掉不再需要的。",
         }

@@ -8,17 +8,23 @@ use ielts_application::{
     LanguageModel, ModelError,
 };
 use ielts_db::*;
+use ielts_domain::Activity;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
 #[derive(Clone)]
-struct Store(Arc<Mutex<Connection>>);
+struct Store(Arc<Mutex<Connection>>, bool);
 
 fn app_error(error: impl std::fmt::Display) -> ApplicationError {
     ApplicationError::new("coach.context_invalid", error.to_string(), false)
 }
 
 impl CoachStore for Store {
+    fn supports_evidence_tools(&self)->bool {self.1}
+    fn begin_evidence_round(&self,run:&str,round:u32,request:&Value,budget:u32)->Result<(),ApplicationError>{begin_coach_evidence_round(&self.0.lock().unwrap(),run,round,request,budget).map_err(app_error)}
+    fn finish_evidence_round(&self,run:&str,round:u32,response:&Value,error:Option<&Value>)->Result<(),ApplicationError>{finish_coach_evidence_round(&self.0.lock().unwrap(),run,round,response,error).map_err(app_error)}
+    fn begin_evidence_tool(&self,call:&BeginAgentToolCallCommand)->Result<(),ApplicationError>{begin_agent_tool_call(&self.0.lock().unwrap(),call).map_err(app_error)}
+    fn finish_evidence_tool(&self,call:&FinishAgentToolCallCommand)->Result<(),ApplicationError>{finish_agent_tool_call(&self.0.lock().unwrap(),call).map_err(app_error)}
     fn begin_trace(&self, thread: &str, user: &str, request: &Value, provider: &str, model: &str, budget: u32) -> Result<String, ApplicationError> {
         begin_coach_trace(&self.0.lock().unwrap(), thread, user, request, provider, model, budget).map_err(app_error)
     }
@@ -64,8 +70,19 @@ impl CoachStore for Store {
             .map(|_| ())
             .map_err(app_error)
     }
-    fn learner_profile(&self, thread: &str) -> Result<LearnerProfileSnapshot, ApplicationError> {
-        freeze_coach_learner_profile(&self.0.lock().unwrap(), thread).map_err(app_error)
+    fn learner_profile(
+        &self,
+        thread: &str,
+        activity: Activity,
+    ) -> Result<LearnerProfileSnapshot, ApplicationError> {
+        freeze_coach_learner_profile_for_activity(&self.0.lock().unwrap(), thread, activity).map_err(app_error)
+    }
+    fn remember_teaching_preference(
+        &self,
+        thread: &str,
+        text: &str,
+    ) -> Result<RememberedPreference, ApplicationError> {
+        remember_teaching_preference(&self.0.lock().unwrap(), thread, text).map_err(app_error)
     }
 }
 
@@ -140,8 +157,11 @@ fn fixture() -> (tempfile::TempDir, Store, CoachThread) {
         },
     )
     .unwrap();
-    (dir, Store(Arc::new(Mutex::new(conn))), thread)
+    (dir, Store(Arc::new(Mutex::new(conn)), false), thread)
 }
+
+#[path="../../../developer/tests/rust/coach_evidence_flow.rs"]
+mod evidence_flow;
 
 fn command(thread: &CoachThread, selector: Option<Value>) -> RunCoachCommand {
     RunCoachCommand {

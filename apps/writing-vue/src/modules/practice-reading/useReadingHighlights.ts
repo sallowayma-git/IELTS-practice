@@ -71,6 +71,8 @@ export interface ReadingHighlightControllerOptions {
   onInteraction?: () => void
   notesText?: Ref<string>
   toggleNotesPanel?: () => void
+  /** Right-click shows the selection bar only while this is true (post-submit coach). */
+  contextMenuEnabledSource?: () => boolean
 }
 
 function createDictionaryBubbleState() {
@@ -100,7 +102,11 @@ function resolveQuestionId(raw: unknown): string {
 
 export function useReadingHighlights(options: ReadingHighlightControllerOptions = {}) {
   const selectionToolbarVisible = ref(false)
-  const selectionToolbarStyle = reactive({ top: '0px', left: '0px' })
+  // isAbove flips the bar over a bottom-edge selection; the arrow mirrors it.
+  const selectionToolbarStyle = reactive({ top: '0px', left: '0px', isAbove: false })
+  // True while the active selection sits inside an existing .hl mark; drives
+  // the Remove button on the selection bar (fresh text has nothing to remove).
+  const selectionHasMark = ref(false)
   const keepSelectionToolbar = ref(false)
   const highlightSnapshot = ref<NormalizedHighlight[]>([])
   const highlightRestoreWarning = ref('')
@@ -279,7 +285,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     const element = node?.nodeType === Node.TEXT_NODE
       ? (node as Text).parentElement
       : (node as Element | null | undefined)
-    return Boolean(element?.closest?.('.reading-explanation-card, .reading-group-explanation, .reading-question-explanation, .reading-question-explanation-list'))
+    return Boolean(element?.closest?.('.reading-explanation-card, .reading-group-explanation, .reading-question-explanation, .reading-question-explanation-list, [data-study-extra]'))
   }
 
   function getTextNodes(root: HTMLElement | null | undefined) {
@@ -535,6 +541,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
 
   function closeSelectionToolbar() {
     selectionToolbarVisible.value = false
+    selectionHasMark.value = false
     keepSelectionToolbar.value = false
     lastSelectionRange = null
     currentHighlightNode = null
@@ -558,10 +565,19 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     currentHighlightNode = null
   }
 
-  function positionSelectionToolbar(rect: DOMRect) {
-    const top = window.scrollY + rect.top - 44
+  // Anchor below the selection: the ::before arrow points up at the word and a
+  // 53px bar above (offset 44) would cover the top of the selected text.
+  // Near the viewport bottom the bar (53px buttons + 2px borders + 6px arrow)
+  // would clip, so flip it above the selection instead.
+  const SELECTION_TOOLBAR_HEIGHT = 61
+  function positionSelectionToolbar(rect: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'width'>) {
     const left = window.scrollX + rect.left + (rect.width / 2) - 110
-    selectionToolbarStyle.top = `${Math.max(8, Math.round(top > 0 ? top : window.scrollY + rect.bottom + 8))}px`
+    const flipAbove = rect.bottom + SELECTION_TOOLBAR_HEIGHT + 8 > window.innerHeight
+      && rect.top - SELECTION_TOOLBAR_HEIGHT - 8 >= 0
+    selectionToolbarStyle.isAbove = flipAbove
+    selectionToolbarStyle.top = `${Math.max(8, Math.round(flipAbove
+      ? window.scrollY + rect.top - SELECTION_TOOLBAR_HEIGHT - 8
+      : window.scrollY + rect.bottom + 8))}px`
     selectionToolbarStyle.left = `${Math.max(8, Math.round(left))}px`
     selectionToolbarVisible.value = true
   }
@@ -589,8 +605,27 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
       }
       lastSelectionRange = range.cloneRange()
       currentHighlightNode = highlightNode
+      selectionHasMark.value = Boolean(highlightNode)
       positionSelectionToolbar(range.getBoundingClientRect())
     }, 10)
+  }
+
+  // Right-click on a non-empty passage/question selection shows the same bar at
+  // the pointer. Outside that case the native menu is left alone.
+  function handleSelectionContextMenu(event: MouseEvent) {
+    if (!options.contextMenuEnabledSource?.()) return
+    const selection = window.getSelection?.()
+    if (!selection || !selection.rangeCount || selection.isCollapsed || !selection.toString().trim()) return
+    const range = selection.getRangeAt(0)
+    const ancestor = range.commonAncestorContainer
+    const container = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement : ancestor as Element | null
+    const roots = Object.values(getHighlightRoots()).filter(Boolean) as HTMLElement[]
+    if (!roots.some((root) => root.contains(container))) return
+    event.preventDefault()
+    lastSelectionRange = range.cloneRange()
+    currentHighlightNode = container?.closest?.('.hl') as HTMLElement | null
+    selectionHasMark.value = Boolean(currentHighlightNode)
+    positionSelectionToolbar({ top: event.clientY, bottom: event.clientY, left: event.clientX, width: 0 })
   }
 
   function applySelectionHighlight(kind = 'highlight') {
@@ -673,7 +708,19 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     dictionaryBubble.found = false
     dictionaryBubble.saved = false
     dictionaryBubble.left = Math.max(12, Math.round(Math.min(rect.left, window.innerWidth - 360)))
-    dictionaryBubble.top = Math.max(12, Math.round(rect.bottom + 8))
+    // When the selection bar is open over the same anchor (selection ending in
+    // an existing highlight), drop the bubble below the bar instead of stacking
+    // the higher-z bubble over its lower half. Both are position:fixed, so the
+    // viewport rects are directly comparable.
+    let bubbleTop = rect.bottom + 8
+    const selbar = document.getElementById('selbar')
+    if (selbar?.classList.contains('is-open')) {
+      const selbarRect = selbar.getBoundingClientRect()
+      if (selbarRect.height > 0) {
+        bubbleTop = Math.max(bubbleTop, selbarRect.bottom + 8)
+      }
+    }
+    dictionaryBubble.top = Math.max(12, Math.round(bubbleTop))
     dictionaryBubble.visible = true
     currentHighlightNode = highlight
     const lookup = await lookupTermInDictionary(term)
@@ -725,7 +772,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
       void openDictionaryBubble(highlight)
       return
     }
-    if (target?.closest?.('#selbar, #review-highlight-dictionary-bubble, #settings-panel, #notes-panel, #settings-btn, #note-btn')) {
+    if (target?.closest?.('#selbar, #review-highlight-dictionary-bubble, #settings-panel, #settings-btn')) {
       return
     }
     if (!keepSelectionToolbar.value) {
@@ -745,6 +792,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     if (listenersAttached || typeof document === 'undefined') return
     document.addEventListener('selectionchange', handleSelectionChange)
     document.addEventListener('click', handleDocumentClick, true)
+    document.addEventListener('contextmenu', handleSelectionContextMenu, true)
     listenersAttached = true
   }
 
@@ -752,6 +800,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
     if (!listenersAttached || typeof document === 'undefined') return
     document.removeEventListener('selectionchange', handleSelectionChange)
     document.removeEventListener('click', handleDocumentClick, true)
+    document.removeEventListener('contextmenu', handleSelectionContextMenu, true)
     listenersAttached = false
   }
 
@@ -792,6 +841,7 @@ export function useReadingHighlights(options: ReadingHighlightControllerOptions 
   return {
     selectionToolbarVisible,
     selectionToolbarStyle,
+    selectionHasMark,
     keepSelectionToolbar,
     highlightSnapshot,
     highlightRestoreWarning,

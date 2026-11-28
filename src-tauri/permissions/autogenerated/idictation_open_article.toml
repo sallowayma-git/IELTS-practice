@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-open-article"
+description = "Enables the idictation_open_article command without any pre-configured scope."
+commands.allow = ["idictation_open_article"]
+
+[[permission]]
+identifier = "deny-idictation-open-article"
+description = "Denies the idictation_open_article command without any pre-configured scope."
+commands.deny = ["idictation_open_article"]

@@ -11,11 +11,13 @@ type StreamMode = 'coach' | 'review'
 type LlmReviewStatus = 'idle' | 'running' | 'success' | 'failed'
 
 export type ReadingCoachOptions = {
+  activity?: 'reading' | 'listening'
   submissionSource?: unknown
   assetIdSource?: unknown
   setSubmission?: (next: AnyRecord) => void
   readCoachEnabled?: () => boolean
   readSelectedContext?: () => AnyRecord | null | undefined
+  readActiveQuestionId?: () => string
   getDisplayLabel?: (questionId: string) => string
   formatReviewAnswer?: (value: unknown) => string
   resolveCoachMode?: () => string
@@ -150,6 +152,8 @@ type PayloadOptions = {
   compact?: boolean
   /** Persisted assistant message this query explicitly re-asks (M6-06 link). */
   reaskParentId?: string
+  /** Selection captured by the caller; when set, the live DOM selection is not re-read. */
+  selectionContext?: AnyRecord | null
 }
 
 type HydrateOptions = {
@@ -181,6 +185,15 @@ function readSource(source: unknown): any {
 
 function asRecord(value: unknown): AnyRecord | null {
   return value && typeof value === 'object' ? (value as AnyRecord) : null
+}
+
+/** A preference the coach chose to remember for this turn; absent or malformed reads as none. */
+function readRememberedPreference(response: unknown): { key: string; scope: string; text: string } | null {
+  const remembered = asRecord(asRecord(response)?.remembered)
+  const key = String(remembered?.key || '').trim()
+  const text = String(remembered?.text || '').trim()
+  if (!key || !text) return null
+  return { key, scope: String(remembered?.scope || '').trim(), text }
 }
 
 function errorField(error: unknown, key: 'code' | 'message'): string {
@@ -402,6 +415,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
   const coachLoading = ref(false)
   const coachError = ref('')
   const coachResponse = ref<any>(null)
+  const coachRemembered = ref<{ key: string; scope: string; text: string } | null>(null)
   const selectedContext = ref<AnyRecord | null>(null)
   const coachStreamMessage = ref('')
   const readingCoachOpen = ref(false)
@@ -545,7 +559,8 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     try {
       const result = asRecord(await readingCoachApi.listMessages(
         sessionId,
-        String(readSource(options.assetIdSource) || '') || null
+        String(readSource(options.assetIdSource) || '') || null,
+        options.activity || 'reading'
       )) || {}
       if (!isCurrentSubmission(sessionId) || hydrationId !== coachHydrationSequence) return
       coachThreadId.value = String(result.threadId || '')
@@ -713,17 +728,15 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     if (Array.isArray(context?.questionNumbers) && context.questionNumbers.length) {
       return context.questionNumbers
     }
-    const wrongQuestions = resolveCoachWrongQuestions()
-    if (wrongQuestions.length) {
-      return wrongQuestions.slice(0, 3)
-    }
+    const current = normalizeCoachQuestionNumber(options.readActiveQuestionId?.())
+    if (current) return [current]
     if (typeof document !== 'undefined') {
       const active = document.activeElement as HTMLElement | null
       const raw = active?.getAttribute?.('name') || active?.id || ''
       const focused = normalizeCoachQuestionNumber(raw)
       if (focused) return [focused]
     }
-    return []
+    return resolveCoachWrongQuestions().slice(0, 3)
   }
 
   function resolveCoachMode() {
@@ -744,8 +757,12 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     const surface = String(payloadOptions.surface || (action === 'review_set' ? 'review_workspace' : 'chat_widget')).trim()
     const promptKind = String(payloadOptions.promptKind || 'freeform').trim() || 'freeform'
     const compact = Boolean(payloadOptions.compact)
-    const context = compactSelectedContext(refreshSelectedContext(), compact)
+    const context = compactSelectedContext(
+      payloadOptions.selectionContext !== undefined ? payloadOptions.selectionContext : refreshSelectedContext(),
+      compact
+    )
     return {
+      activity: options.activity || 'reading',
       examId: submission.value?.examId || readSource(options.assetIdSource),
       sessionId: submission.value?.sessionId || '',
       mode: resolveCoachMode(),
@@ -875,7 +892,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
       return null
     }
     try {
-      const state = asRecord(await readingSessionApi.getState(expectedSessionId))
+      const state = asRecord(await readingSessionApi.getState(expectedSessionId, options.activity || 'reading'))
       const refreshedSubmission = asRecord(state?.submission)
       if (!refreshedSubmission || !isCurrentSubmission(expectedSessionId)) {
         return null
@@ -926,6 +943,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
         return response
       }
       applyCoachResponse(response)
+      coachRemembered.value = readRememberedPreference(response)
       const reaskParentId = String(queryOptions.reaskParentId || '').trim()
       const newUserMessageId = String(asRecord(asRecord(response)?.userMessage)?.id || '').trim()
       if (reaskParentId && newUserMessageId) {
@@ -970,6 +988,19 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     if (!retry || coachLoading.value) return Promise.resolve(null)
     if (retry.draft && coachQuery.value.trim() === retry.draft) coachQuery.value = ''
     return retry.run(mode)
+  }
+
+  async function forgetRememberedPreference() {
+    const remembered = coachRemembered.value
+    const threadId = String(coachThreadId.value || '').trim()
+    if (!remembered || !threadId) return
+    try {
+      await readingCoachApi.forgetPreference(threadId, remembered.key)
+      coachRemembered.value = null
+    } catch (forgetFailure) {
+      console.warn('撤销教练记忆失败:', forgetFailure)
+      coachError.value = '撤销失败，请稍后重试'
+    }
   }
 
   async function runAutomaticReviewCoach(reviewOptions: ReviewOptions = {}) {
@@ -1231,11 +1262,20 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     })
   }
 
-  async function runCoachSelectionAction(actionId: unknown) {
+  // An explicit selection (captured before focus moved) wins over the live DOM read.
+  async function runCoachSelectionAction(
+    actionId: unknown,
+    explicitSelection: AnyRecord | null = null,
+    surface = 'selection_popover'
+  ) {
     if (!isReadingCoachEnabled()) {
       return
     }
-    refreshSelectedContext()
+    if (explicitSelection) {
+      selectedContext.value = explicitSelection
+    } else {
+      refreshSelectedContext()
+    }
     if (!selectedContext.value?.text) {
       coachError.value = '请先选中题干或原文片段。'
       coachNotice.value = coachError.value
@@ -1243,14 +1283,15 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     }
     const action = String(actionId || 'explain_selection').trim()
     const queryMap: Record<string, string> = {
-      explain_selection: '解释我选中的内容，并说明它和题目定位有什么关系',
+      explain_selection: '请像老师一样给我讲这句话：先拆出句子主干和从句结构，再解释关键词和难词的中文意思，然后给出自然的中文翻译；如果它和某道题的题干或选项构成同义替换，请指出对应关系。',
       locate_evidence: '根据我选中的内容定位相关证据',
       find_paraphrases: '找出我选中内容里的同义替换和关键词'
     }
     await sendCoachQuery(queryMap[action] || queryMap.explain_selection, {
-      surface: 'selection_popover',
+      surface,
       action,
-      promptKind: 'preset'
+      promptKind: 'preset',
+      selectionContext: explicitSelection ? selectedContext.value : undefined
     })
   }
 
@@ -1259,6 +1300,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     coachLoading,
     coachError,
     coachResponse,
+    coachRemembered,
     selectedContext,
     coachStreamMessage,
     readingCoachOpen,
@@ -1292,6 +1334,7 @@ export function useReadingCoach(options: ReadingCoachOptions = {}) {
     runCoachQuickAction,
     runCoachSelectionAction,
     runAutomaticReviewCoach,
+    forgetRememberedPreference,
     isCurrentSubmission,
     buildCoachPayload
   }

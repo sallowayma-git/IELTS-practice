@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-connect"
+description = "Enables the idictation_connect command without any pre-configured scope."
+commands.allow = ["idictation_connect"]
+
+[[permission]]
+identifier = "deny-idictation-connect"
+description = "Denies the idictation_connect command without any pre-configured scope."
+commands.deny = ["idictation_connect"]

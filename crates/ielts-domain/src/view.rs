@@ -72,12 +72,16 @@ pub struct WritingResultVm {
 pub fn history_item_from_attempt(attempt: &AttemptRecord) -> HistoryListItemVm {
     let (score_label, score_display) =
         match (attempt.activity, attempt.score_value, attempt.score_scale) {
-            (Activity::Reading, Some(v), _) => {
+            // Listening/vocabulary are unreachable until the attempts table
+            // CHECK constraint admits them; they share reading's ratio scale.
+            (Activity::Reading | Activity::Listening | Activity::Vocabulary, Some(v), _) => {
                 let pct = (v * 100.0).round();
                 ("Accuracy".to_string(), format!("{pct:.0}%"))
             }
             (Activity::Writing, Some(v), _) => ("Overall Band".to_string(), format!("{v:.1}")),
-            (Activity::Reading, None, _) => ("Accuracy".to_string(), "—".to_string()),
+            (Activity::Reading | Activity::Listening | Activity::Vocabulary, None, _) => {
+                ("Accuracy".to_string(), "—".to_string())
+            }
             (Activity::Writing, None, _) => ("Overall Band".to_string(), "—".to_string()),
         };
 

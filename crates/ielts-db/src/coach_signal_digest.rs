@@ -170,19 +170,25 @@ impl<'a> NoteRange<'a> {
 /// that is not JSON, or whose `teachingNotes` is not an array of objects,
 /// contributes nothing instead of failing the read. Reads only.
 pub fn read_coach_notes(conn: &Connection, range: NoteRange<'_>) -> DbResult<Vec<CoachNote>> {
+    read_coach_notes_for_activity(conn, range, "reading")
+}
+
+pub(crate) fn read_coach_notes_for_activity(conn: &Connection, range: NoteRange<'_>, activity: &str) -> DbResult<Vec<CoachNote>> {
     let from_op = if range.from_included { ">=" } else { ">" };
     let mut query = conn.prepare(&format!(
         "SELECT m.id, COALESCE(t.attempt_id, ''), COALESCE(t.asset_id, a.asset_id, ''), m.created_at, m.structured_payload
            FROM coach_messages m
            LEFT JOIN coach_threads t ON t.id = m.thread_id
            LEFT JOIN attempts a ON a.id = t.attempt_id
+           LEFT JOIN practice_assets p ON p.id=COALESCE(t.asset_id,a.asset_id)
           WHERE m.role = 'assistant' AND m.status = 'completed'
+            AND COALESCE(a.activity,p.activity,'reading')=?3
             AND CASE WHEN json_valid(m.structured_payload) THEN json_extract(m.structured_payload, '$.teachingNotes') END IS NOT NULL
             AND julianday(m.created_at) {from_op} julianday(?1)
             AND (?2 IS NULL OR julianday(m.created_at) <= julianday(?2))
           ORDER BY julianday(m.created_at), m.id"
     ))?;
-    let rows = query.query_map(params![range.from, range.to], |row| {
+    let rows = query.query_map(params![range.from, range.to, activity], |row| {
         Ok((
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,

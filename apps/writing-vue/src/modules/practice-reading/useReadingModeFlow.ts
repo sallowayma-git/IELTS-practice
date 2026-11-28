@@ -70,6 +70,7 @@ export interface ReadingModeFlowOptions {
   getCurrentScrollY: () => number
   flushActiveQuestionVisit: () => void
   stopPracticeTimer: () => void
+  flushDraft?: () => Promise<boolean>
   startPracticeTimer: () => void
   setPracticeTimerElapsedSeconds: (seconds: number) => void
   assignAnswer: (questionId: string, value: unknown) => void
@@ -134,6 +135,7 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
     options.leaving.value = true
     try {
       if (isEndlessMode()) {
+        if (options.flushDraft && !await options.flushDraft()) return false
         // Stop the local timer first: it must not route to the next asset while
         // Rust is still deciding whether the authoritative session was cancelled.
         clearEndlessTimer()
@@ -173,7 +175,7 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
     return handleLeave()
   }
 
-  async function reconcileEndlessRoute() {
+  async function reconcileEndlessRoute(isCurrent: () => boolean = () => true) {
     if (!isEndlessMode() || activeSuiteSessionId() || !isTauriRuntime()) {
       return true
     }
@@ -184,6 +186,7 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
       return false
     }
     const { session } = await tauriGetEndless(sessionId)
+    if (!isCurrent() || !isEndlessMode() || asset()?.id !== currentAssetId) return false
     const authoritativeAssetId = String(session?.currentAssetId || '').trim()
     if (!authoritativeAssetId) {
       await stopEndlessMode()
@@ -295,6 +298,10 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
     options.flushActiveQuestionVisit()
     options.stopPracticeTimer()
     try {
+      if (options.flushDraft && !await options.flushDraft()) {
+        options.startPracticeTimer()
+        return
+      }
       const currentAsset = asset()
       const timerSnapshot = options.getPracticeTimerSnapshot()
       const timing = options.resolvePracticeTiming(1, timerSnapshot)
@@ -410,14 +417,16 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
         || resolveSource(options.highlightSnapshot)
         || []
       )
-      options.setPracticeTimerElapsedSeconds(Math.max(durationSec, Number(options.submission.value?.duration || 0)))
+      const completedDuration = Number(options.submission.value?.duration ?? durationSec)
+      options.setPracticeTimerElapsedSeconds(Number.isFinite(completedDuration) ? Math.max(0, completedDuration) : durationSec)
       snapshotSubmission()
       maybeAdvanceSuitePassage()
       await scheduleEndlessNext(result?.nextEndlessAssetId || null)
     } catch (submitFailure: any) {
       console.error('提交阅读练习失败:', submitFailure)
-      options.submitError.value = submitFailure?.message
-        ? `阅读提交失败：${submitFailure.message}`
+      const message = typeof submitFailure === 'string' ? submitFailure : submitFailure?.message
+      options.submitError.value = message
+        ? `阅读提交失败：${message}`
         : '阅读提交失败，请稍后重试'
       if (!reviewMode()) {
         options.startPracticeTimer()
@@ -427,7 +436,7 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
     }
   }
 
-  async function ensureMemorizeSession() {
+  async function ensureMemorizeSession(isCurrent: () => boolean = () => true) {
     const currentAsset = asset()
     if (!isMemorizeMode() || options.activeMemorizeAttemptId.value || !currentAsset?.id || !isTauriRuntime()) {
       return
@@ -436,6 +445,7 @@ export function useReadingModeFlow(options: ReadingModeFlowOptions) {
       assetId: String(currentAsset.id),
       titleSnapshot: currentAsset.title || null
     })
+    if (!isCurrent() || !isMemorizeMode() || asset()?.id !== currentAsset.id) return
     const attemptId = String(session?.attempt?.id || '').trim()
     if (!attemptId) throw new Error('memorize session missing attempt id')
     options.activeMemorizeAttemptId.value = attemptId

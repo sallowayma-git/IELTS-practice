@@ -13,7 +13,7 @@ pub mod coach_feedback;
 pub mod coach_signal_digest;
 pub mod cognitive_read;
 pub mod consolidation;
-pub mod context;
+pub mod cross_module;
 pub mod dictionary;
 pub mod dream;
 pub mod history;
@@ -21,6 +21,7 @@ pub mod journal;
 pub mod learning_events;
 pub mod learning_observations;
 pub mod learning_tools;
+pub mod listening;
 pub mod local_day;
 pub mod memory;
 pub mod memory_card;
@@ -31,6 +32,7 @@ pub mod llm_usage;
 pub mod migrate;
 pub mod modes;
 pub mod perf;
+pub mod transient_assets;
 pub mod reading;
 pub mod recent_signals;
 pub mod safety;
@@ -47,14 +49,14 @@ pub mod writing;
 pub use agent::*;
 pub use agent_thread::*;
 pub use annotations::*;
-pub use attempts::{count_attempts, ensure_asset_stub, upsert_attempt};
+pub use attempts::{count_attempts, ensure_asset_stub, persist_completed_attempt, upsert_attempt};
 pub use background_jobs::*;
 pub use backup::*;
 pub use coach::*;
 pub use coach_feedback::*;
 pub use cognitive_read::*;
 pub use consolidation::*;
-pub use context::*;
+pub use cross_module::*;
 pub use dictionary::*;
 pub use dream::*;
 pub use history::*;
@@ -62,9 +64,19 @@ pub use journal::*;
 pub use learning_events::*;
 pub use learning_observations::*;
 pub use learning_tools::*;
+pub use listening::assets::{
+    list_listening_assets, load_listening_audio_data_url, load_listening_payload,
+    load_listening_payload_for_view, load_listening_sections, load_sections,
+    seed_builtin_listening_pack, validate_exam_source, ListeningExamMeta, ListeningExamSourceV1,
+    ListeningQuestionGroup, ListeningResourceAsset, ListeningResourceManifestV1,
+};
+pub use listening::attempt::{
+    get_open_listening_draft, save_listening_draft, submit_listening_attempt,
+    ListeningDraftCommand, ListeningQuestionProgress, ListeningSubmitCommand, ListeningSubmitResult,
+};
 pub use memory::*;
 pub use memory_card::{
-    active_card_memory, load_memory_card, memory_card_key, set_memory_card_state, MemoryCardSource, CARD_CONFIRMED,
+    active_card_memory, load_memory_card, memory_card_key, memory_card_key_for_activity, set_memory_card_state, MemoryCardSource, CARD_CONFIRMED,
     CARD_DISMISSED,
 };
 pub use memory_forgetting::{

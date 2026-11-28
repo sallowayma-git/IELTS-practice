@@ -19,11 +19,19 @@ use super::state::AppDb;
 
 pub(crate) struct ApplicationStore<'a> {
     db: &'a AppDb,
+    coach_context: Option<ielts_db::ResolvedCoachContext>,
 }
 
 impl<'a> ApplicationStore<'a> {
     pub(crate) fn new(db: &'a AppDb) -> Self {
-        Self { db }
+        Self { db, coach_context: None }
+    }
+
+    pub(crate) fn with_coach_context(
+        db: &'a AppDb,
+        context: Option<ielts_db::ResolvedCoachContext>,
+    ) -> Self {
+        Self { db, coach_context: context }
     }
 }
 
@@ -78,6 +86,19 @@ impl WritingEvaluationStore for ApplicationStore<'_> {
 }
 
 impl CoachStore for ApplicationStore<'_> {
+    fn supports_evidence_tools(&self) -> bool { true }
+    fn begin_evidence_round(&self,run:&str,round:u32,request:&Value,budget:u32)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::begin_coach_evidence_round(conn,run,round,request,budget)).map_err(enrichment_error)
+    }
+    fn finish_evidence_round(&self,run:&str,round:u32,response:&Value,error:Option<&Value>)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::finish_coach_evidence_round(conn,run,round,response,error)).map_err(enrichment_error)
+    }
+    fn begin_evidence_tool(&self,call:&BeginAgentToolCallCommand)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::begin_agent_tool_call(conn,call)).map_err(enrichment_error)
+    }
+    fn finish_evidence_tool(&self,call:&FinishAgentToolCallCommand)->Result<(),ApplicationError>{
+        self.db.with_conn(|conn|ielts_db::finish_agent_tool_call(conn,call)).map_err(enrichment_error)
+    }
     fn begin_trace(&self, thread: &str, user: &str, request: &Value, provider: &str, model: &str, budget: u32) -> Result<String, ApplicationError> {
         self.db.with_conn(|conn| ielts_db::begin_coach_trace(conn, thread, user, request, provider, model, budget)).map_err(enrichment_error)
     }
@@ -92,7 +113,8 @@ impl CoachStore for ApplicationStore<'_> {
         thread_id: &str,
         selector: Option<&Value>,
     ) -> Result<ielts_db::ResolvedCoachContext, ApplicationError> {
-        self.db.with_conn(|conn| ielts_db::resolve_reading_coach_context(conn, thread_id, selector))
+        if let Some(context) = &self.coach_context { return Ok(context.clone()); }
+        self.db.with_conn(|conn| ielts_db::resolve_coach_context(conn, thread_id, selector))
             .map_err(enrichment_error)
     }
 
@@ -149,9 +171,23 @@ impl CoachStore for ApplicationStore<'_> {
     fn learner_profile(
         &self,
         thread_id: &str,
+        activity: ielts_domain::Activity,
     ) -> Result<ielts_db::LearnerProfileSnapshot, ApplicationError> {
         self.db
-            .with_conn(|conn| ielts_db::freeze_coach_learner_profile(conn, thread_id))
+            .with_conn(|conn| {
+                ielts_db::learner_projections_refresh(conn)?;
+                ielts_db::freeze_coach_learner_profile_for_activity(conn, thread_id, activity)
+            })
+            .map_err(enrichment_error)
+    }
+
+    fn remember_teaching_preference(
+        &self,
+        thread_id: &str,
+        text: &str,
+    ) -> Result<ielts_db::RememberedPreference, ApplicationError> {
+        self.db
+            .with_conn(|conn| ielts_db::remember_teaching_preference(conn, thread_id, text))
             .map_err(enrichment_error)
     }
 }

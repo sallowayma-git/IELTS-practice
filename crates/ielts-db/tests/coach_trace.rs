@@ -143,10 +143,15 @@ fn exact_snapshot_invocation_message_and_terminal_run_reopen() {
     assert_eq!(receipt["strategyId"], "evidence_first_v1");
     assert_eq!(receipt["actualModel"], "actual-model");
     assert_eq!(receipt["retryCount"], 2);
-    let snapshot = load_context_snapshot(&conn, receipt["snapshotId"].as_str().unwrap())
-        .unwrap()
+    let snapshot_id = receipt["snapshotId"].as_str().unwrap();
+    let (snapshot_run, rendered): (Option<String>, String) = conn
+        .query_row(
+            "SELECT run_id, rendered_context FROM agent_context_snapshots WHERE id=?1",
+            [snapshot_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
         .unwrap();
-    assert_eq!(snapshot.0.run_id.as_deref(), Some(run.as_str()));
+    assert_eq!(snapshot_run.as_deref(), Some(run.as_str()));
     let (assignment_id, strategy, skills, memories, bound_snapshot): (String, String, String, String, String) = conn.query_row(
         "SELECT id,strategy_id,skills_addressed_json,memory_ids_used_json,context_snapshot_id FROM coach_strategy_assignments_v0 WHERE coach_message_id=?1",
         [&message.id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
@@ -162,7 +167,7 @@ fn exact_snapshot_invocation_message_and_terminal_run_reopen() {
     let (request_hash,response_hash,model,usage,latency,id):(String,String,String,String,u64,String) = conn.query_row(
         "SELECT request_hash,response_hash,model,usage_json,latency_ms,provider_request_id FROM llm_invocations WHERE run_id=?1",[&run],
         |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?))).unwrap();
-    assert_eq!(request_hash, ielts_domain::rendered_hash(&snapshot.1));
+    assert_eq!(request_hash, ielts_domain::rendered_hash(&rendered));
     assert_eq!(
         response_hash,
         ielts_domain::rendered_hash(response()["content"].as_str().unwrap())

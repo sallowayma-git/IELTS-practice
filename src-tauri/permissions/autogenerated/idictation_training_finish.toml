@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-training-finish"
+description = "Enables the idictation_training_finish command without any pre-configured scope."
+commands.allow = ["idictation_training_finish"]
+
+[[permission]]
+identifier = "deny-idictation-training-finish"
+description = "Denies the idictation_training_finish command without any pre-configured scope."
+commands.deny = ["idictation_training_finish"]

@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use crate::sqlite::{DbError, DbResult};
 
 pub const LEARNING_OBSERVATION_PROJECTOR_KEY: &str = "learning_observation_v1";
-pub const LEARNING_OBSERVATION_PROJECTOR_VERSION: i64 = 2;
+pub const LEARNING_OBSERVATION_PROJECTOR_VERSION: i64 = 3;
 const SHORT_REPEAT_GAP_HOURS: f64 = 24.0;
 const PROJECTION_SUCCESS_RETENTION: i64 = 20;
 const PROJECTION_ERROR_RETENTION: i64 = 5;
@@ -266,6 +266,7 @@ struct ReadingQuestionPayload {
     attempt_id: String,
     asset_id: String,
     question_id: String,
+    #[serde(default)]
     attempt_ordinal: u64,
     #[serde(default)]
     is_correct: Option<bool>,
@@ -590,6 +591,7 @@ fn build_projection(events: &[LedgerEvent]) -> ProjectionBuild {
                 }
                 result
             }
+            Some(LearningEventType::ListeningQuestionOutcome) => project_listening_question(event),
             Some(LearningEventType::WritingEvaluationCompleted) => project_writing(event),
             Some(LearningEventType::CoachQuestionAsked)
             | Some(LearningEventType::CoachResponseGenerated) => project_coach(event),
@@ -738,6 +740,48 @@ fn project_reading_question(event: &LedgerEvent) -> Result<Vec<ObservationCandid
             json!({"eventId": event.id, "questionId": question_id, "elapsedMs": elapsed_ms}),
         ),
     ])
+}
+
+fn project_listening_question(event: &LedgerEvent) -> Result<Vec<ObservationCandidate>, String> {
+    if event.activity.as_deref() != Some("listening") {
+        return Err("listening event has incompatible activity".into());
+    }
+    let payload: ReadingQuestionPayload = decode_payload(event)?;
+    validate_question_identity(event, &payload)?;
+    let section = event.payload["section"]
+        .as_u64()
+        .filter(|number| (1..=4).contains(number))
+        .ok_or("listening question section missing")?;
+    let kind = payload
+        .question_kind
+        .as_deref()
+        .ok_or("listening question kind missing")?;
+    if event.payload["skillKey"] != format!("listening.{kind}") {
+        return Err("listening question skill mismatch".into());
+    }
+    let (polarity, score, outcome) = match payload.evidence_correct() {
+        Some(true) => (Some("positive".into()), Some(1.0), "correct"),
+        Some(false) => (Some("negative".into()), Some(0.0), "incorrect"),
+        None if payload.unanswered() => (None, None, "unanswered"),
+        None => (None, None, "unscored"),
+    };
+    Ok(vec![candidate(
+        event,
+        vec![event.id.clone()],
+        "listening.question.outcome",
+        "listening",
+        "question",
+        format!("{}:{}", payload.asset_id, payload.question_id),
+        polarity,
+        score,
+        Some(outcome.into()),
+        json!({
+            "eventId": event.id, "attemptId": payload.attempt_id, "assetId": payload.asset_id,
+            "questionId": payload.question_id, "questionKind": kind, "section": section,
+            "isCorrect": payload.is_correct, "answered": payload.answered,
+            "firstTryCorrect": payload.first_try_correct,
+        }),
+    )])
 }
 
 fn project_writing(event: &LedgerEvent) -> Result<Vec<ObservationCandidate>, String> {
@@ -1273,6 +1317,17 @@ fn validate_reading_question_payload(
     event: &LedgerEvent,
     payload: &ReadingQuestionPayload,
 ) -> Result<(), String> {
+    validate_question_identity(event, payload)?;
+    if payload.attempt_ordinal == 0 {
+        return Err("attemptOrdinal must be positive".into());
+    }
+    Ok(())
+}
+
+fn validate_question_identity(
+    event: &LedgerEvent,
+    payload: &ReadingQuestionPayload,
+) -> Result<(), String> {
     require_text(&payload.attempt_id, "attemptId")?;
     require_text(&payload.asset_id, "assetId")?;
     require_text(&payload.question_id, "questionId")?;
@@ -1287,9 +1342,6 @@ fn validate_reading_question_payload(
         &payload.question_id,
         "questionId",
     )?;
-    if payload.attempt_ordinal == 0 {
-        return Err("attemptOrdinal must be positive".into());
-    }
     if let Some(question_kind) = payload.question_kind.as_deref() {
         require_text(question_kind, "questionKind")?;
     }
@@ -1564,6 +1616,7 @@ fn parse_event_type(raw: &str) -> Option<LearningEventType> {
         "attempt_submitted" => Some(LearningEventType::AttemptSubmitted),
         "attempt_completed" => Some(LearningEventType::AttemptCompleted),
         "reading_question_outcome" => Some(LearningEventType::ReadingQuestionOutcome),
+        "listening_question_outcome" => Some(LearningEventType::ListeningQuestionOutcome),
         "writing_evaluation_completed" => Some(LearningEventType::WritingEvaluationCompleted),
         "coach_question_asked" => Some(LearningEventType::CoachQuestionAsked),
         "coach_response_generated" => Some(LearningEventType::CoachResponseGenerated),

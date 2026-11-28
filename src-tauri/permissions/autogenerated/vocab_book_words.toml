@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-vocab-book-words"
+description = "Enables the vocab_book_words command without any pre-configured scope."
+commands.allow = ["vocab_book_words"]
+
+[[permission]]
+identifier = "deny-vocab-book-words"
+description = "Denies the vocab_book_words command without any pre-configured scope."
+commands.deny = ["vocab_book_words"]

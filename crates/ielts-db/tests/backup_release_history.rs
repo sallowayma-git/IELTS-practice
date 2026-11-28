@@ -26,6 +26,11 @@ fn recount(package: &mut BackupPackage) {
 }
 
 fn rechecksum(package: &mut BackupPackage) {
+    // These fixtures model exports from older builds, which had no book tables.
+    if package.manifest.schema_version < 23 {
+        package.database.retain(|table| !matches!(table.name.as_str(),
+            "vocabulary_books" | "vocabulary_book_units" | "vocabulary_book_entries"));
+    }
     package.manifest.table_count = package.database.len() as u32;
     package.manifest.row_count = package
         .database
@@ -71,9 +76,9 @@ fn both_format19_families_restore_and_the_current_formats_preserve_soul_audit() 
     source.execute("INSERT INTO soul_revisions VALUES ('z-original', 'local', 'soul.tone', 'null', '\"warm\"', 'model', '[]', 'keep', ?1, NULL, 'now')", [&run.id]).unwrap();
     source.execute("INSERT INTO soul_revisions VALUES ('a-undo', 'local', 'soul.tone', '\"warm\"', 'null', 'undo', '[]', 'undo', ?1, 'z-original', 'later')", [&run.id]).unwrap();
     let unified = create_backup_package(&source, "unified").unwrap();
-    assert_eq!(unified.manifest.schema_version, 22);
+    assert_eq!(unified.manifest.schema_version, ielts_db::backup::BACKUP_SCHEMA_VERSION);
     let target = open_db(dir.path().join("target-22.db"));
-    for (format, local) in [(19, true), (19, false), (20, false), (21, true), (22, true)] {
+    for (format, local) in [(19, true), (19, false), (20, false), (21, true), (22, true), (23, true)] {
         let mut package = unified.clone();
         package.manifest.schema_version = format;
         if format < 21 {
@@ -184,6 +189,7 @@ fn every_snapshot_schema_before_release_history_remains_restorable() {
                 "weekly_digests" => 18,
                 "soul_revisions" => 21,
                 "agent_context_snapshots" | "agent_context_items" => 19,
+                "vocabulary_books" | "vocabulary_book_units" | "vocabulary_book_entries" => 23,
                 _ => 2,
             };
             schema >= introduced
@@ -209,7 +215,7 @@ fn format_19_package_with_tables_migration_0033_dropped_still_restores() {
     let dir = tempdir().unwrap();
     let source = open_db(dir.path().join("source.db"));
     let mut package = create_backup_package(&source, "dropped-tables").unwrap();
-    assert_eq!(package.manifest.schema_version, 22);
+    assert_eq!(package.manifest.schema_version, ielts_db::backup::BACKUP_SCHEMA_VERSION);
     assert!(package.database.iter().all(|table| table.name != "dream_candidates"));
 
     // A format 19 package still carries the evolution tables; their rows are

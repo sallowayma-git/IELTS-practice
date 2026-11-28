@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-speaking-open"
+description = "Enables the idictation_speaking_open command without any pre-configured scope."
+commands.allow = ["idictation_speaking_open"]
+
+[[permission]]
+identifier = "deny-idictation-speaking-open"
+description = "Denies the idictation_speaking_open command without any pre-configured scope."
+commands.deny = ["idictation_speaking_open"]

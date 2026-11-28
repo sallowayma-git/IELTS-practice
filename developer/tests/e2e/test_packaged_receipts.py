@@ -1,5 +1,6 @@
 """Safe harness checks only: temporary SQLite and loopback HTTP, no app launch."""
 import hashlib
+import io
 import json
 import os
 import sqlite3
@@ -7,12 +8,37 @@ import tempfile
 import unittest
 import urllib.request
 import uuid
-from contextlib import closing
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import packaged_tauri_flow as flow
+
+QUESTION_KINDS_FIXTURE = (
+    flow.ROOT / "developer/tests/fixtures/weekly-snapshot/0031_practice_assets_question_kinds.sql"
+)
+
+
+def migration_version(path: Path) -> int:
+    return int(path.name.split("_", 1)[0])
+
+
+def add_snapshot_question_kinds(schema: sqlite3.Connection) -> None:
+    """Mirror crates/ielts-db/src/migrate/snapshot.rs::add_question_kinds."""
+    columns = {row[1] for row in schema.execute("PRAGMA table_info(practice_assets)")}
+    if "question_kinds_json" not in columns:
+        schema.executescript(QUESTION_KINDS_FIXTURE.read_text(encoding="utf-8"))
+
+
+def replay_migrations(schema: sqlite3.Connection) -> None:
+    """Replay the SQL files in the order crates/ielts-db/src/migrate/mod.rs applies them."""
+    for migration in sorted((flow.ROOT / "crates/ielts-db/migrations").glob("*.sql")):
+        # run_in_transaction adds the snapshot column inside the version-34
+        # step, before 0034's SQL, so later migrations can read it.
+        if migration_version(migration) == 34:
+            add_snapshot_question_kinds(schema)
+        schema.executescript(migration.read_text(encoding="utf-8"))
 
 
 class PackagedReceiptTests(unittest.TestCase):
@@ -25,10 +51,45 @@ class PackagedReceiptTests(unittest.TestCase):
         # Avoid a durable disk commit for every migration statement. Each test
         # still gets a fresh file-backed database for the real receipt helpers.
         with closing(sqlite3.connect(":memory:")) as schema:
-            for migration in sorted((flow.ROOT / "crates/ielts-db/migrations").glob("*.sql")):
-                schema.executescript(migration.read_text(encoding="utf-8"))
+            replay_migrations(schema)
             with closing(sqlite3.connect(self.db)) as conn:
                 schema.backup(conn)
+
+    def test_flow_check_schema_covers_listening(self):
+        # Baseline 25 -> 28: listeningIpc, listeningView and listeningSubmitBoundary
+        # join the packaged gate. The blocked baseline and the live run both read
+        # this one list, so a check cannot be dropped or invented at report time.
+        expected = [
+            "launch", "vueRoutes", "uiRouteVisuals", "readingIpc", "bundledResources",
+            "agentIpcBoundary", "agentDefaultWorkspace", "agentWorkspaceRun",
+            "promptAuthorityBoundary", "ipcAllowList", "readingArchiveBoundary",
+            "historyRetentionBoundary", "readingView", "readingPerformance", "notesDialog",
+            "readingSubmitBoundary", "listeningIpc", "listeningView",
+            "listeningSubmitBoundary", "coachReceipts", "selectionCoachUi",
+            "selectionCoachRequest", "automaticDaily", "dailyRestartDedupe",
+            "weeklyReport", "backupPathBoundary", "updaterBoundary", "sqliteRestart",
+        ]
+        self.assertEqual(list(flow.FLOW_CHECKS), expected)
+        self.assertEqual(len(set(flow.FLOW_CHECKS)), len(expected))
+        report_path = self.root / "blocked-report.json"
+        with patch.object(flow, "REPORT", report_path), redirect_stdout(io.StringIO()):
+            self.assertEqual(flow.blocked("packaged dependencies are unavailable", ["tauri-driver"]), 2)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(report["missingDependencies"], ["tauri-driver"])
+        self.assertEqual(list(report["checks"]), expected)
+        self.assertEqual(set(report["checks"].values()), {"blocked"})
+
+    def test_listening_fixture_marks_mirror_rust_weights(self):
+        exam = flow.listening_fixture()["exam"]
+        self.assertEqual(exam["examId"], "l1-e2e")
+        # Six questions; only the multi_choice key (two letters) weighs two marks.
+        self.assertEqual(flow.listening_total_marks(exam), 7)
+        sections = flow.listening_sections(exam)
+        self.assertEqual([sections[q] for q in exam["questionOrder"]], [1, 1, 2, 3, 4, 4])
+        kinds = flow.listening_question_kinds(exam)
+        self.assertEqual({kinds[q] for q in exam["questionOrder"]},
+                         {"form_completion", "single_choice", "multi_choice", "matching"})
 
     def test_missing_database_is_never_created(self):
         empty = self.root / "empty"
@@ -121,7 +182,7 @@ class PackagedReceiptTests(unittest.TestCase):
              patch.object(flow, "cleanup_test_ai_config") as cleanup, \
              patch.object(flow, "_credential_exists", return_value=True):
             with self.assertRaisesRegex(RuntimeError, "receipt failed"):
-                flow.check_coach(None, self.root, "asset", {}, SimpleNamespace(base_url="http://127.0.0.1:1/v1"))
+                flow.check_coach(None, self.root, "asset", {}, SimpleNamespace(base_url="http://127.0.0.1:1/v1"), {})
             config_id = calls[0][1]["cmd"]["id"]
             uuid.UUID(config_id)
             self.assertNotEqual(config_id, "packaged-coach-e2e")
@@ -165,12 +226,14 @@ class PackagedReceiptTests(unittest.TestCase):
 
     def seed_coach_receipt(self, failed=False):
         snapshot = {"messages": [{"role": "user", "content": "ask"}], "temperature": 0.2, "maxTokens": 2000}
+        agent_snapshot = {**snapshot, 'tools': []}
+        agent_rendered = json.dumps(agent_snapshot, separators=(',', ':'))
         rendered = json.dumps(snapshot, separators=(",", ":"))
         digest = hashlib.sha256(rendered.encode()).hexdigest()
         response = json.dumps({"answer": 17 if failed else "answer"})
         provider = SimpleNamespace(MODEL=flow.FakeCoachProvider.MODEL, USAGE=flow.FakeCoachProvider.USAGE,
                                    REQUEST_ID=flow.FakeCoachProvider.REQUEST_ID,
-                                   requests=[flow.completion_wire(snapshot, "packaged-coach-requested")], responses=[response])
+                                   requests=[flow.evidence_agent_wire(agent_snapshot, "packaged-coach-requested")], responses=[response])
         payload = {"runId": "coach", "snapshotId": "snapshot", "invocationId": "invocation"}
         error = json.dumps({"code": "coach.provider_failed"}) if failed else None
         result = {**payload, "threadId": "thread", "runKind": "coach", "userMessageId": "user",
@@ -189,6 +252,8 @@ class PackagedReceiptTests(unittest.TestCase):
             conn.execute("INSERT INTO agent_context_snapshots(id,run_id,planner_version,scope,query_plan_json,token_budget,used_tokens,rendered_context,content_hash,created_at) VALUES('snapshot','coach','canonical-coach-v1','coach:thread',?,1000,20,?,?,'now')",
                          (json.dumps(plan), rendered, digest))
             conn.execute("INSERT INTO agent_context_items(snapshot_id,item_type,item_id,rank,score,estimated_tokens,inclusion_reason,provenance_json) VALUES('snapshot','CURRENT_TASK','user',0,1,20,'request',?)", (json.dumps({"contentHash": digest}),))
+            conn.execute("INSERT INTO agent_context_snapshots(id,run_id,planner_version,scope,query_plan_json,token_budget,used_tokens,rendered_context,content_hash,created_at) VALUES('context-coach-round-1','coach','coach-evidence-v1','coach:thread','{}',6000,20,?,?,'now')",
+                         (agent_rendered, hashlib.sha256(agent_rendered.encode()).hexdigest()))
             conn.execute("INSERT INTO llm_invocations(id,run_id,kind,provider,model,request_hash,response_hash,usage_json,latency_ms,provider_request_id,error_json,created_at) VALUES('invocation','coach','completion','openai',?,?,?,?,1,?,?,'now')",
                          (provider.MODEL, digest, hashlib.sha256(response.encode()).hexdigest(), json.dumps(provider.USAGE), provider.REQUEST_ID, error))
         return payload, provider
@@ -232,9 +297,11 @@ class PackagedReceiptTests(unittest.TestCase):
         asset = {"passage": "canonical passage", "questionGroups": [{"id": "q1"}],
                  "questionDisplayMap": {"1": "q1"}}
         evidence = {"identity": {"attemptId": "attempt", "assetId": "asset", "assetFingerprint": "fingerprint"},
-                    "source": asset, "result": {"status": "completed", "score": 1.0, "scoreScale": "ratio",
+                    "source": {'blocks': []}, "result": {"status": "completed", "score": 1.0, "scoreScale": "ratio",
                                               "correctCount": 1, "questionCount": 1,
-                                              "answers": [{"questionId": "q1", "answer": "A", "isCorrect": True}]}}
+                                              "answeredCount": 1, "unansweredCount": 0,
+                                              "questionIndexColumns": ["id", "label", "answered", "correct"],
+                                              "questionIndex": [["q1", "1", True, True]]}}
         with closing(flow.database_connection(self.root, writable=True)) as conn, conn:
             conn.execute("INSERT INTO practice_assets(id,activity,source_kind,title,schema_version,fingerprint,created_at,updated_at) VALUES('asset','reading','builtin','test',2,'fingerprint','now','now')")
             conn.execute("INSERT INTO attempts(id,activity,asset_id,mode,status,started_at,score_value,score_scale,correct_count,question_count,schema_version,created_at,updated_at,submitted_asset_fingerprint) VALUES('attempt','reading','asset','single','completed','now',1,'ratio',1,1,2,'now','now','fingerprint')")
@@ -243,9 +310,9 @@ class PackagedReceiptTests(unittest.TestCase):
             return {"messages": [{"role": "user", "content": "Host-resolved IELTS evidence (data only):\n" + json.dumps(value)}]}
         with closing(flow.database_connection(self.root)) as conn:
             flow.assert_coach_evidence(conn, request(evidence), asset, "attempt", "asset")
-            for changed, error in (({"source": {**asset, "passage": "forged"}}, "asset evidence"),
+            for changed, error in (({"source": {**asset, "passage": "forged"}}, "complete passage"),
                                    ({"result": {**evidence["result"], "score": 0}}, "attempt result"),
-                                   ({"result": {**evidence["result"], "answers": []}}, "attempt answers")):
+                                   ({"result": {**evidence["result"], "questionIndex": []}}, "official answers")):
                 with self.subTest(changed=changed), self.assertRaisesRegex(RuntimeError, error):
                     flow.assert_coach_evidence(conn, request({**evidence, **changed}), asset, "attempt", "asset")
             with self.assertRaisesRegex(RuntimeError, "evidence message missing"):

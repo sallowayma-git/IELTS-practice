@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-reader-progress"
+description = "Enables the idictation_reader_progress command without any pre-configured scope."
+commands.allow = ["idictation_reader_progress"]
+
+[[permission]]
+identifier = "deny-idictation-reader-progress"
+description = "Denies the idictation_reader_progress command without any pre-configured scope."
+commands.deny = ["idictation_reader_progress"]

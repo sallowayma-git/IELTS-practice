@@ -36,13 +36,13 @@ class ClosedModel(BaseModel):
 
 class CandidateScope(ClosedModel):
     type: Literal["activity"]
-    key: Literal["reading", "writing"]
+    key: Literal["reading", "writing", "listening", "vocabulary"]
 
 
 class ObservationSummary(ClosedModel):
     id: _Text
     namespace: Literal["knowledge", "language", "strategy", "behavior", "metacognition", "preference", "goal"]
-    activity: Literal["reading", "writing"]
+    activity: Literal["reading", "writing", "listening", "vocabulary"]
     normalized_label: _Text = Field(alias="normalizedLabel")
     statement: _Text
     canonical_key: str | None = Field(default=None, alias="canonicalKey")

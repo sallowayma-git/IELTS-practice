@@ -15,6 +15,7 @@ type TimerState = {
 }
 
 type ReadingTimerOptions = {
+  enabled?: unknown
   activeSuiteSessionId?: unknown
   reviewMode?: unknown
   suiteTimerSource?: unknown | (() => unknown)
@@ -77,6 +78,7 @@ export function useReadingTimer(options: ReadingTimerOptions = {}) {
 
   const activeSuiteSessionId = computed(() => String(unref(options.activeSuiteSessionId) || '').trim())
   const reviewMode = computed(() => Boolean(unref(options.reviewMode)))
+  const enabled = computed(() => unref(options.enabled) !== false)
   const suiteTimerState = computed(() => {
     const source = typeof options.suiteTimerSource === 'function'
       ? options.suiteTimerSource()
@@ -106,6 +108,7 @@ export function useReadingTimer(options: ReadingTimerOptions = {}) {
   }
 
   function applyPracticeTimerState(value: unknown) {
+    if (!enabled.value) return false
     const timer = normalizeSuiteTimerState(value)
     if (!timer) return false
     runtimeTimer.value = { ...timer }
@@ -147,7 +150,7 @@ export function useReadingTimer(options: ReadingTimerOptions = {}) {
 
   async function refreshFromRust() {
     const timer = runtimeTimer.value
-    if (!timer || tickPending) return
+    if (!enabled.value || !timer || tickPending) return
     tickPending = true
     try {
       const nowMs = Date.now()
@@ -155,6 +158,7 @@ export function useReadingTimer(options: ReadingTimerOptions = {}) {
         measureTimer(timer, nowMs),
         shouldAutoSubmit(timer, nowMs)
       ])
+      if (!enabled.value || runtimeTimer.value !== timer) return
       elapsedSeconds.value = elapsed
       if (expired && !autoSubmitTriggered && !reviewMode.value) {
         autoSubmitTriggered = true
@@ -167,7 +171,7 @@ export function useReadingTimer(options: ReadingTimerOptions = {}) {
   }
 
   function startPracticeTimer() {
-    if (reviewMode.value) return
+    if (!enabled.value || reviewMode.value) return
     if (practiceTimer != null) window.clearInterval(practiceTimer)
     const nowMs = Date.now()
     const timer = runtimeTimer.value ?? createLocalTimer(resolveTimerAnchorMs())
@@ -192,7 +196,7 @@ export function useReadingTimer(options: ReadingTimerOptions = {}) {
   }
 
   function toggleTimer() {
-    if (reviewMode.value) return
+    if (!enabled.value || reviewMode.value) return
     timerRunning.value ? stopPracticeTimer() : startPracticeTimer()
   }
 
@@ -218,6 +222,7 @@ export function useReadingTimer(options: ReadingTimerOptions = {}) {
   }
 
   watch(reviewMode, (isReview) => { if (isReview) stopPracticeTimer() })
+  watch(enabled, (active) => { if (!active) stopPracticeTimer() }, { flush: 'sync' })
 
   return {
     elapsedSeconds, timerRunning, startedAt, suiteTimerState, timerDisplaySeconds, formattedTimer,

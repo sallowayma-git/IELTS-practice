@@ -1,7 +1,7 @@
 # ADR-M10: Teaching Strategy Evolution / Procedural Memory
 
 日期：2026-08-16
-状态：Accepted
+状态：Superseded（对应表已在迁移 0033 删除，Rust 实现已移除）
 基线：`IELTS_Atlas_Agent_Self_Evolution_Engineering_Plan_v1.3_Post_M2_Python_First_RAG.md` 第 M10 章（行 8845-9038）
 
 ## Context

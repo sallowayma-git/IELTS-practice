@@ -1,6 +1,6 @@
 //! Bridge the published weekly snapshot's divergent migrations 31-33.
 //! Identify history before touching structure; never guess from MAX(version).
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::sqlite::{DbError, DbResult};
 
@@ -11,6 +11,7 @@ const LOCAL_NAMES: [&str; 3] = [
 ];
 
 pub(super) fn validate_history(conn: &Connection) -> DbResult<bool> {
+    let jiufen = has_jiufen_history(conn)?;
     let mut statement =
         conn.prepare("SELECT version, name FROM schema_migrations ORDER BY version")?;
     let rows = statement.query_map([], |row| {
@@ -19,13 +20,15 @@ pub(super) fn validate_history(conn: &Connection) -> DbResult<bool> {
     let mut local = false;
     for (index, row) in rows.enumerate() {
         let (version, name) = row?;
-        let expected = super::migrations().get(index).ok_or_else(|| {
+        let expected_index = if jiufen && version >= 36 { index + 1 } else { index };
+        let expected = super::migrations().get(expected_index).ok_or_else(|| {
             DbError::Migration(format!(
                 "database migration {version} is newer than this build"
             ))
         })?;
         let is_local = (31..=33).contains(&version) && name == LOCAL_NAMES[(version - 31) as usize];
-        if version != expected.version || (version >= 31 && name != expected.name && !is_local) {
+        let expected_version = if jiufen && version >= 36 { expected.version - 1 } else { expected.version };
+        if version != expected_version || (version >= 31 && name != expected.name && !is_local) {
             return Err(DbError::Migration(format!(
                 "unrecognized migration history at {version}: {name}"
             )));
@@ -46,7 +49,21 @@ pub(super) fn validate_history(conn: &Connection) -> DbResult<bool> {
     } else if super::current_version(conn)? >= 31 {
         require_column(conn, "coach_threads", "learner_profile_json", true)?;
     }
+    if jiufen {
+        require_column(conn, "vocabulary_review_state", "ease_factor", true)?;
+        require_column(conn, "vocabulary_review_state", "ease", false)?;
+        if local {
+            return Err(DbError::Migration("mixed weekly and Jiufen migration history".into()));
+        }
+    }
     Ok(local)
+}
+
+fn has_jiufen_history(conn: &Connection) -> DbResult<bool> {
+    let name: Option<String> = conn.query_row(
+        "SELECT name FROM schema_migrations WHERE version=36", [], |row| row.get(0)
+    ).optional()?;
+    Ok(name.as_deref() == Some("vocabulary_sm2_state"))
 }
 
 fn require_column(conn: &Connection, table: &str, column: &str, present: bool) -> DbResult<()> {
@@ -71,7 +88,25 @@ fn has_column(conn: &Connection, table: &str, column: &str) -> DbResult<bool> {
 }
 
 pub(super) fn reconcile(conn: &mut Connection) -> DbResult<Vec<i64>> {
-    if !validate_history(conn)? {
+    let weekly = validate_history(conn)?;
+    if has_jiufen_history(conn)? {
+        let tx = conn.transaction()?;
+        let history: String = tx.query_row(
+            "SELECT json_group_array(json_object('version',version,'name',name,'appliedAt',applied_at))
+             FROM (SELECT * FROM schema_migrations WHERE version>=36 ORDER BY version)",
+            [], |row| row.get(0),
+        )?;
+        tx.execute("INSERT INTO migration_meta(key,value) VALUES ('jiufen.original_migrations',?1)", [&history])?;
+        // Preserve applied timestamps and avoid primary-key collisions while shifting the fork's history.
+        tx.execute("UPDATE schema_migrations SET version=-version WHERE version>=36", [])?;
+        tx.execute("UPDATE schema_migrations SET version=1-version WHERE version<=-36", [])?;
+        let canonical = &super::migrations()[35];
+        tx.execute_batch(canonical.sql)?;
+        super::record(&tx, canonical)?;
+        tx.commit()?;
+        return Ok(vec![36]);
+    }
+    if !weekly {
         return Ok(Vec::new());
     }
     let tx = conn.transaction()?;

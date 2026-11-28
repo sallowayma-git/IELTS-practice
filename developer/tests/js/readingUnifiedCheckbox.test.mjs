@@ -283,3 +283,25 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 }
 
 console.log('reading unified checkbox answers: ok')
+
+// Explicit limits from a source contract must reject the extra click before
+// scalar distribution; the user's visible ticks and submitted values agree.
+{
+  const source = fs.readFileSync(path.join(root,
+    'apps/writing-vue/src/modules/reading-unified/composables/useNativeAnswerControls.js'), 'utf8')
+    .replace(/import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"]/g, '').replace(/export /g, '')
+  const boxes = ['A','B','C'].map(value => ({name:'q1_q2',value,checked:true,dataset:{maxSelections:'2'}}))
+  const answers = new Map([['q1','A'],['q2','B']])
+  const dependencies = {...idsModule.exports,...core,resolveNativeIds:()=>['q1','q2'],document:{querySelectorAll:()=>boxes}}
+  const create = new Function(...Object.keys(dependencies), `${source};return useNativeAnswerControls`)(...Object.values(dependencies))
+  const controls = create({payloadSource:()=>({}),readOnlySource:()=>false,getInteraction:()=>null,
+    getRawAnswer:id=>answers.get(id),getAnswerEntries:()=>[...answers],setAnswer:(id,value)=>answers.set(id,value),
+    isDragDropControl:()=>false,syncDropzoneControl:()=>{}})
+  boxes[2].type='checkbox'
+  controls.handleQuestionInput({target:boxes[2]})
+  assert.equal(boxes[2].checked,false)
+  assert.deepEqual([...answers],[['q1','A'],['q2','B']])
+  boxes[1].checked=false;boxes[1].type='checkbox'
+  controls.handleQuestionInput({target:boxes[1]})
+  assert.deepEqual([...answers],[['q1','A'],['q2','']])
+}

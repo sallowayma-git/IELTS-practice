@@ -1,0 +1,594 @@
+{
+  "source": "Actual minimal test submission and official result. Account/result/round IDs and timestamps substituted; no original identity, annotations or source AI analysis retained.",
+  "request": {
+    "key": 9,
+    "answer": [
+      {
+        "id": 40193,
+        "mark": false,
+        "type": 8,
+        "answer": "mining",
+        "group_id": 581
+      },
+      {
+        "type": 1,
+        "id": 40200,
+        "group_id": 582,
+        "answer": "T",
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40194,
+        "group_id": 581,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40195,
+        "group_id": 581,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40196,
+        "group_id": 581,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40197,
+        "group_id": 581,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40198,
+        "group_id": 581,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40199,
+        "group_id": 581,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40201,
+        "group_id": 582,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40202,
+        "group_id": 582,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40203,
+        "group_id": 582,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40204,
+        "group_id": 582,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40205,
+        "group_id": 582,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 3,
+        "id": 40206,
+        "group_id": 583,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 3,
+        "id": 40207,
+        "group_id": 583,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 3,
+        "id": 40208,
+        "group_id": 583,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 3,
+        "id": 40209,
+        "group_id": 583,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40210,
+        "group_id": 584,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40211,
+        "group_id": 584,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40212,
+        "group_id": 584,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 8,
+        "id": 40213,
+        "group_id": 584,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 2,
+        "id": 40214,
+        "group_id": 585,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 2,
+        "id": 40215,
+        "group_id": 585,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 2,
+        "id": 40216,
+        "group_id": 585,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 2,
+        "id": 40217,
+        "group_id": 585,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 2,
+        "id": 40218,
+        "group_id": 585,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 5,
+        "id": 40219,
+        "group_id": 586,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 5,
+        "id": 40220,
+        "group_id": 586,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 5,
+        "id": 40221,
+        "group_id": 586,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 5,
+        "id": 40222,
+        "group_id": 586,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 10,
+        "id": 40223,
+        "group_id": 587,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 10,
+        "id": 40224,
+        "group_id": 587,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 10,
+        "id": 40225,
+        "group_id": 587,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 10,
+        "id": 40226,
+        "group_id": 587,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 10,
+        "id": 40227,
+        "group_id": 587,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 10,
+        "id": 40228,
+        "group_id": 587,
+        "answer": "",
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40229,
+        "group_id": 588,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40230,
+        "group_id": 588,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40231,
+        "group_id": 588,
+        "answer": null,
+        "mark": false
+      },
+      {
+        "type": 1,
+        "id": 40232,
+        "group_id": 588,
+        "answer": null,
+        "mark": false
+      }
+    ],
+    "duration": 329,
+    "highlights": [],
+    "notes": [],
+    "jianya_test_id": "2101",
+    "action": "手动提交"
+  },
+  "result": {
+    "jianya_test_id": 2101,
+    "jianya_part_id": 0,
+    "jijing_test_id": 0,
+    "jijing_part_id": 0,
+    "g_jianya_test_id": 0,
+    "g_jianya_part_id": 0,
+    "class_exam_id": 0,
+    "answer": [
+      {
+        "id": 40193,
+        "mark": false,
+        "type": 8,
+        "answer": "mining",
+        "group_id": 581
+      },
+      {
+        "id": 40200,
+        "mark": false,
+        "type": 1,
+        "answer": "T",
+        "group_id": 582
+      },
+      {
+        "id": 40194,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 581
+      },
+      {
+        "id": 40195,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 581
+      },
+      {
+        "id": 40196,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 581
+      },
+      {
+        "id": 40197,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 581
+      },
+      {
+        "id": 40198,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 581
+      },
+      {
+        "id": 40199,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 581
+      },
+      {
+        "id": 40201,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 582
+      },
+      {
+        "id": 40202,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 582
+      },
+      {
+        "id": 40203,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 582
+      },
+      {
+        "id": 40204,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 582
+      },
+      {
+        "id": 40205,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 582
+      },
+      {
+        "id": 40206,
+        "mark": false,
+        "type": 3,
+        "answer": null,
+        "group_id": 583
+      },
+      {
+        "id": 40207,
+        "mark": false,
+        "type": 3,
+        "answer": null,
+        "group_id": 583
+      },
+      {
+        "id": 40208,
+        "mark": false,
+        "type": 3,
+        "answer": null,
+        "group_id": 583
+      },
+      {
+        "id": 40209,
+        "mark": false,
+        "type": 3,
+        "answer": null,
+        "group_id": 583
+      },
+      {
+        "id": 40210,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 584
+      },
+      {
+        "id": 40211,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 584
+      },
+      {
+        "id": 40212,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 584
+      },
+      {
+        "id": 40213,
+        "mark": false,
+        "type": 8,
+        "answer": null,
+        "group_id": 584
+      },
+      {
+        "id": 40214,
+        "mark": false,
+        "type": 2,
+        "answer": null,
+        "group_id": 585
+      },
+      {
+        "id": 40215,
+        "mark": false,
+        "type": 2,
+        "answer": null,
+        "group_id": 585
+      },
+      {
+        "id": 40216,
+        "mark": false,
+        "type": 2,
+        "answer": null,
+        "group_id": 585
+      },
+      {
+        "id": 40217,
+        "mark": false,
+        "type": 2,
+        "answer": null,
+        "group_id": 585
+      },
+      {
+        "id": 40218,
+        "mark": false,
+        "type": 2,
+        "answer": null,
+        "group_id": 585
+      },
+      {
+        "id": 40219,
+        "mark": false,
+        "type": 5,
+        "answer": null,
+        "group_id": 586
+      },
+      {
+        "id": 40220,
+        "mark": false,
+        "type": 5,
+        "answer": null,
+        "group_id": 586
+      },
+      {
+        "id": 40221,
+        "mark": false,
+        "type": 5,
+        "answer": null,
+        "group_id": 586
+      },
+      {
+        "id": 40222,
+        "mark": false,
+        "type": 5,
+        "answer": null,
+        "group_id": 586
+      },
+      {
+        "id": 40223,
+        "mark": false,
+        "type": 10,
+        "answer": null,
+        "group_id": 587
+      },
+      {
+        "id": 40224,
+        "mark": false,
+        "type": 10,
+        "answer": null,
+        "group_id": 587
+      },
+      {
+        "id": 40225,
+        "mark": false,
+        "type": 10,
+        "answer": null,
+        "group_id": 587
+      },
+      {
+        "id": 40226,
+        "mark": false,
+        "type": 10,
+        "answer": null,
+        "group_id": 587
+      },
+      {
+        "id": 40227,
+        "mark": false,
+        "type": 10,
+        "answer": null,
+        "group_id": 587
+      },
+      {
+        "id": 40228,
+        "mark": false,
+        "type": 10,
+        "answer": null,
+        "group_id": 587
+      },
+      {
+        "id": 40229,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 588
+      },
+      {
+        "id": 40230,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 588
+      },
+      {
+        "id": 40231,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 588
+      },
+      {
+        "id": 40232,
+        "mark": false,
+        "type": 1,
+        "answer": null,
+        "group_id": 588
+      }
+    ],
+    "result_blanks": "[{\"answer\": \"mining\", \"blank_id\": 40193, \"group_id\": 581, \"is_correct\": true, \"correct_answer\": \"mining\"}, {\"answer\": \"\", \"blank_id\": 40194, \"group_id\": 581, \"is_correct\": false, \"correct_answer\": \"education\"}, {\"answer\": \"\", \"blank_id\": 40195, \"group_id\": 581, \"is_correct\": false, \"correct_answer\": \"notes\"}, {\"answer\": \"\", \"blank_id\": 40196, \"group_id\": 581, \"is_correct\": false, \"correct_answer\": \"journals\"}, {\"answer\": \"\", \"blank_id\": 40197, \"group_id\": 581, \"is_correct\": false, \"correct_answer\": \"Venice\"}, {\"answer\": \"\", \"blank_id\": 40198, \"group_id\": 581, \"is_correct\": false, \"correct_answer\": \"canteen\"}, {\"answer\": \"\", \"blank_id\": 40199, \"group_id\": 581, \"is_correct\": false, \"correct_answer\": \"friends\"}, {\"answer\": \"T\", \"blank_id\": 40200, \"group_id\": 582, \"is_correct\": true, \"correct_answer\": \"T\"}, {\"answer\": \"\", \"blank_id\": 40201, \"group_id\": 582, \"is_correct\": false, \"correct_answer\": \"NG\"}, {\"answer\": \"\", \"blank_id\": 40202, \"group_id\": 582, \"is_correct\": false, \"correct_answer\": \"F\"}, {\"answer\": \"\", \"blank_id\": 40203, \"group_id\": 582, \"is_correct\": false, \"correct_answer\": \"NG\"}, {\"answer\": \"\", \"blank_id\": 40204, \"group_id\": 582, \"is_correct\": false, \"correct_answer\": \"T\"}, {\"answer\": \"\", \"blank_id\": 40205, \"group_id\": 582, \"is_correct\": false, \"correct_answer\": \"T\"}, {\"answer\": \"\", \"blank_id\": 40206, \"group_id\": 583, \"is_correct\": false, \"correct_answer\": \"C\"}, {\"answer\": \"\", \"blank_id\": 40207, \"group_id\": 583, \"is_correct\": false, \"correct_answer\": \"B\"}, {\"answer\": \"\", \"blank_id\": 40208, \"group_id\": 583, \"is_correct\": false, \"correct_answer\": \"A\"}, {\"answer\": \"\", \"blank_id\": 40209, \"group_id\": 583, \"is_correct\": false, \"correct_answer\": \"G\"}, {\"answer\": \"\", \"blank_id\": 40210, \"group_id\": 584, \"is_correct\": false, \"correct_answer\": \"breath\"}, {\"answer\": \"\", \"blank_id\": 40211, \"group_id\": 584, \"is_correct\": false, \"correct_answer\": \"questionnaire\"}, {\"answer\": \"\", \"blank_id\": 40212, \"group_id\": 584, \"is_correct\": false, \"correct_answer\": \"wellbeing\"}, {\"answer\": \"\", \"blank_id\": 40213, \"group_id\": 584, \"is_correct\": false, \"correct_answer\": \"depression\"}, {\"answer\": \"\", \"blank_id\": 40214, \"group_id\": 585, \"is_correct\": false, \"correct_answer\": \"C\"}, {\"answer\": \"\", \"blank_id\": 40215, \"group_id\": 585, \"is_correct\": false, \"correct_answer\": \"A\"}, {\"answer\": \"\", \"blank_id\": 40216, \"group_id\": 585, \"is_correct\": false, \"correct_answer\": \"B\"}, {\"answer\": \"\", \"blank_id\": 40217, \"group_id\": 585, \"is_correct\": false, \"correct_answer\": \"D\"}, {\"answer\": \"\", \"blank_id\": 40218, \"group_id\": 585, \"is_correct\": false, \"correct_answer\": \"C\"}, {\"answer\": \"\", \"blank_id\": 40219, \"group_id\": 586, \"is_correct\": false, \"correct_answer\": \"B\"}, {\"answer\": \"\", \"blank_id\": 40220, \"group_id\": 586, \"is_correct\": false, \"correct_answer\": \"A\"}, {\"answer\": \"\", \"blank_id\": 40221, \"group_id\": 586, \"is_correct\": false, \"correct_answer\": \"C\"}, {\"answer\": \"\", \"blank_id\": 40222, \"group_id\": 586, \"is_correct\": false, \"correct_answer\": \"A\"}, {\"answer\": \"\", \"blank_id\": 40223, \"group_id\": 587, \"is_correct\": false, \"correct_answer\": \"H\"}, {\"answer\": \"\", \"blank_id\": 40224, \"group_id\": 587, \"is_correct\": false, \"correct_answer\": \"E\"}, {\"answer\": \"\", \"blank_id\": 40225, \"group_id\": 587, \"is_correct\": false, \"correct_answer\": \"I\"}, {\"answer\": \"\", \"blank_id\": 40226, \"group_id\": 587, \"is_correct\": false, \"correct_answer\": \"A\"}, {\"answer\": \"\", \"blank_id\": 40227, \"group_id\": 587, \"is_correct\": false, \"correct_answer\": \"G\"}, {\"answer\": \"\", \"blank_id\": 40228, \"group_id\": 587, \"is_correct\": false, \"correct_answer\": \"C\"}, {\"answer\": \"\", \"blank_id\": 40229, \"group_id\": 588, \"is_correct\": false, \"correct_answer\": \"Y\"}, {\"answer\": \"\", \"blank_id\": 40230, \"group_id\": 588, \"is_correct\": false, \"correct_answer\": \"NG\"}, {\"answer\": \"\", \"blank_id\": 40231, \"group_id\": 588, \"is_correct\": false, \"correct_answer\": \"N\"}, {\"answer\": \"\", \"blank_id\": 40232, \"group_id\": 588, \"is_correct\": false, \"correct_answer\": \"Y\"}]",
+    "action": "手动提交",
+    "duration": 329,
+    "zhengquelv": 5,
+    "zhengquegeshu": 2,
+    "id": 1,
+    "user_id": "7",
+    "key": "9",
+    "created_at": "2000-01-01T00:00:00Z",
+    "updated_at": "2000-01-01T00:05:29Z"
+  }
+}

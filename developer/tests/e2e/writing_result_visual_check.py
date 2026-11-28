@@ -36,6 +36,7 @@ EXPECTED_SUPPORT_HEADINGS = [
     "评分表",
     "整体改进建议",
     "核心提分计划",
+    "写作教练",
     "段落详评",
     "任务诊断",
 ]
@@ -157,6 +158,7 @@ def install_tauri_mock(page, detail=None):
       window.__TAURI_INTERNALS__ = window.__TAURI_INTERNALS__ || {};
       const invoke = async (command, args = {}) => {
         window.__writingResultCalls.push({ command, args });
+        if (command === 'jiufen_restore') return false;
         if (command === 'get_history_detail') {
           return { ok: true, data: detail };
         }
@@ -388,6 +390,7 @@ def assert_geometry(name, width, data):
             raise AssertionError(f"{name}: stacked Result sidebar clips its content")
 
     if data["calls"] != [
+        {"command": "jiufen_restore", "args": {}},
         {"command": "get_history_detail", "args": {"attemptId": "writing-result-visual"}}
     ]:
         raise AssertionError(f"{name}: Result changed its Tauri read contract: {data['calls']}")

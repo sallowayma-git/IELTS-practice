@@ -1,0 +1,580 @@
+{
+  "source": "observed-product-responses-2026-11-20",
+  "article": {
+    "total": 84,
+    "sentenceMode": "short",
+    "data": [
+      {
+        "id": 902864,
+        "g_id": 872200,
+        "c_id": 1949109,
+        "content": "Hello, Oyster Bay Sailing Club.",
+        "translate": "你好，牡蛎湾帆船俱乐部。",
+        "grammar_analysis": {
+          "句型": "省略句（问候语+名词短语称呼，无主谓结构）",
+          "主句部分": [],
+          "句子时态": "一般现在时（无动词的称呼语/省略句）",
+          "语法成分": [
+            {
+              "原文": "Hello,",
+              "成分": "独立成分（问候语）",
+              "句子释义": "你好，",
+              "成分分析": "感叹性问候语，独立于句子结构之外，逗号随片段保留。"
+            },
+            {
+              "原文": "Oyster Bay Sailing Club.",
+              "成分": "称呼语",
+              "句子释义": "牡蛎湾帆船俱乐部。",
+              "成分分析": "专有名词短语，用作被称呼的对象（俱乐部名称），句末句号随片段保留。"
+            }
+          ],
+          "语法具体知识点": [
+            "Hello 为打招呼用语，独立使用，不作句子成分。",
+            "Oyster Bay Sailing Club 为专有名词短语，此处作称呼语，本身不构成完整主谓句。",
+            "句中没有谓语动词，因此不分析主语、谓语等主句成分。"
+          ]
+        },
+        "start_time": "117526",
+        "end_time": "119753",
+        "end_time_new": 119916,
+        "is_answer_sentence": 0,
+        "subtitle_alignment_details": [
+          {
+            "text": "Hello",
+            "end_time": 490,
+            "attribute": [],
+            "start_time": 30
+          },
+          {
+            "text": ", ",
+            "end_time": 490,
+            "attribute": [],
+            "start_time": 490
+          },
+          {
+            "text": "",
+            "end_time": 490,
+            "attribute": [],
+            "start_time": 490
+          },
+          {
+            "text": "Oyster ",
+            "end_time": 1130,
+            "attribute": [],
+            "start_time": 630
+          },
+          {
+            "text": "",
+            "end_time": 1130,
+            "attribute": [],
+            "start_time": 1130
+          },
+          {
+            "text": "Bay ",
+            "end_time": 1370,
+            "attribute": [],
+            "start_time": 1130
+          },
+          {
+            "text": "",
+            "end_time": 1370,
+            "attribute": [],
+            "start_time": 1370
+          },
+          {
+            "text": "Sailing ",
+            "end_time": 1810,
+            "attribute": [],
+            "start_time": 1370
+          },
+          {
+            "text": "",
+            "end_time": 1810,
+            "attribute": [],
+            "start_time": 1810
+          },
+          {
+            "text": "Club",
+            "end_time": 2153,
+            "attribute": [],
+            "start_time": 1810
+          },
+          {
+            "text": ".",
+            "end_time": 2392,
+            "attribute": [],
+            "start_time": 2153
+          }
+        ]
+      },
+      {
+        "id": 902865,
+        "g_id": 872200,
+        "c_id": 1949109,
+        "content": "How can I help you?",
+        "translate": "我能怎么帮您？",
+        "grammar_analysis": {
+          "句型": "特殊疑问句（主谓宾）",
+          "主句部分": {
+            "主语": "I",
+            "宾语": "you",
+            "谓语": "help"
+          },
+          "句子时态": "一般现在时",
+          "语法成分": [
+            {
+              "原文": "How",
+              "成分": "状语",
+              "句子释义": "怎样",
+              "成分分析": "疑问副词，询问方式，修饰谓语 help。"
+            },
+            {
+              "原文": "can",
+              "成分": "谓语",
+              "句子释义": "能够",
+              "成分分析": "情态动词，与主语 I 倒装构成疑问句，表示能力或可能性；与 help 被主语隔开。"
+            },
+            {
+              "原文": "I",
+              "成分": "主语",
+              "句子释义": "我",
+              "成分分析": "人称代词主格，是 help 的动作发出者。"
+            },
+            {
+              "原文": "help",
+              "成分": "谓语",
+              "句子释义": "帮助",
+              "成分分析": "实义动词原形，与情态动词 can 共同构成谓语。"
+            },
+            {
+              "原文": "you?",
+              "成分": "宾语",
+              "句子释义": "您",
+              "成分分析": "人称代词宾格，作 help 的宾语；问号随片段保留。"
+            }
+          ],
+          "语法具体知识点": [
+            "How 为疑问副词，作方式状语，置于句首构成特殊疑问句。",
+            "情态动词 can 与主语 I 倒装，构成疑问语序；can 与实义动词 help 被主语 I 隔开，不能连写为一个连续谓语片段。",
+            "help 为及物动词，后接宾语 you。"
+          ]
+        },
+        "start_time": "119926",
+        "end_time": "120833",
+        "end_time_new": 121436,
+        "is_answer_sentence": 0,
+        "subtitle_alignment_details": [
+          {
+            "text": "How ",
+            "end_time": 160,
+            "attribute": [],
+            "start_time": 0
+          },
+          {
+            "text": "",
+            "end_time": 160,
+            "attribute": [],
+            "start_time": 160
+          },
+          {
+            "text": "can ",
+            "end_time": 300,
+            "attribute": [],
+            "start_time": 160
+          },
+          {
+            "text": "",
+            "end_time": 300,
+            "attribute": [],
+            "start_time": 300
+          },
+          {
+            "text": "I ",
+            "end_time": 420,
+            "attribute": [],
+            "start_time": 300
+          },
+          {
+            "text": "",
+            "end_time": 420,
+            "attribute": [],
+            "start_time": 420
+          },
+          {
+            "text": "help ",
+            "end_time": 565,
+            "attribute": [],
+            "start_time": 420
+          },
+          {
+            "text": "",
+            "end_time": 565,
+            "attribute": [],
+            "start_time": 565
+          },
+          {
+            "text": "you",
+            "end_time": 845,
+            "attribute": [],
+            "start_time": 675
+          },
+          {
+            "text": "?",
+            "end_time": 1145,
+            "attribute": [],
+            "start_time": 845
+          }
+        ]
+      }
+    ],
+    "request": {
+      "c_id": 1197472,
+      "pagesize": 9999,
+      "sentence_mode": "short",
+      "is_only_listen_answer_collect_sentences": 0
+    },
+    "canonical_g_id": 444692,
+    "canonical_c_id": 1197472,
+    "partialSample": true
+  },
+  "reader": {
+    "schema_version": 1,
+    "document": {
+      "id": 2,
+      "provider": "jianya",
+      "subject": "reading",
+      "source_type": "jianya_reading",
+      "source_id": "2101",
+      "book_number": 21,
+      "test_number": 1,
+      "part_number": 1,
+      "track": "a"
+    },
+    "version": {
+      "id": 245,
+      "document_id": 2,
+      "version_no": 2,
+      "title": "The Davies Sisters",
+      "language": "en",
+      "word_count": 836,
+      "reading_seconds": 279,
+      "sentence_count": 37,
+      "content_hash": "899e4ffa566100eda80ac8f61c776f08e9896d7bcf5e1b9a757ae5907d6835c4",
+      "formatter_version": "2"
+    },
+    "blocks": [
+      {
+        "id": 2676,
+        "document_version_id": 245,
+        "block_key": "932211fc-3bc2-4325-b566-e5949537be94",
+        "type": "heading",
+        "sort": 0,
+        "label": null,
+        "text": "Between 1908 and 1924, Gwendoline and Margaret Davies amassed one of the largest collections of late-nineteenth and early-twentieth-century French paintings in Britain",
+        "sentences": []
+      },
+      {
+        "id": 2677,
+        "document_version_id": 245,
+        "block_key": "c4f7f76a-ba6e-4bb6-9234-40702ea000b1",
+        "type": "paragraph",
+        "sort": 1,
+        "label": null,
+        "text": "Gwendoline (1882-1951) and Margaret (1884-1963) Davies were the granddaughters of David Davies, a Welshman who amassed a fortune in the shipping and mining industries. In 1907, when Gwendoline came into her inheritance (Margaret would follow in 1909), the sisters were said to be the wealthiest unmarried women in Britain. Their religious upbringing in rural Wales gave them a deep sense of social responsibility and they chose to use their inheritance for cultural and philanthropic* purposes.",
+        "sentences": [
+          {
+            "id": 9027,
+            "document_version_id": 245,
+            "block_id": 2677,
+            "sentence_key": "ca050bca-b8ad-4e39-914f-6b0a9853b166",
+            "sort": 0,
+            "start_offset": 0,
+            "end_offset": 167,
+            "translation": "格温多琳（1882-1951）和玛格丽特（1884-1963）·戴维斯是大卫·戴维斯的孙女，大卫·戴维斯是一位在航运和矿业中积累了大量财富的威尔士人。",
+            "grammar_analysis": {
+              "句型": "简单句（系表结构，带同位语和定语从句）",
+              "主句部分": {
+                "主语": "Gwendoline (1882-1951) and Margaret (1884-1963) Davies",
+                "从句": "who amassed a fortune in the shipping and mining industries",
+                "宾语": "",
+                "状语": "",
+                "表语": "the granddaughters of David Davies",
+                "谓语": "were",
+                "系动词": "were",
+                "形式主语": "",
+                "真正主语": ""
+              },
+              "句子时态": "一般过去时",
+              "语法成分": [
+                {
+                  "原文": "Gwendoline (1882-1951) and Margaret (1884-1963) Davies",
+                  "成分": "主语",
+                  "句子释义": "格温多琳和玛格丽特·戴维斯",
+                  "成分分析": "并列专有名词短语，共同作主语；Davies 为共享姓氏"
+                },
+                {
+                  "原文": "were",
+                  "成分": "系动词",
+                  "句子释义": "是",
+                  "成分分析": "be 动词过去式，连接主语和表语"
+                },
+                {
+                  "原文": "the granddaughters of David Davies",
+                  "成分": "表语",
+                  "句子释义": "大卫·戴维斯的孙女",
+                  "成分分析": "名词短语作表语，说明主语的身份关系"
+                },
+                {
+                  "原文": "a Welshman who amassed a fortune in the shipping and mining industries",
+                  "成分": "同位语",
+                  "句子释义": "一位在航运和矿业中积累了大量财富的威尔士人",
+                  "成分分析": "补充说明 David Davies 的身份；其中 who 引导定语从句修饰 Welshman"
+                }
+              ],
+              "语法具体知识点": [
+                "一般过去时表示过去的事实或状态",
+                "be 动词 were 连接主语和表语",
+                "the granddaughters of ... 构成表语核心",
+                "a Welshman 为同位语，补充说明 David Davies",
+                "who 引导定语从句修饰 Welshman"
+              ]
+            }
+          },
+          {
+            "id": 9028,
+            "document_version_id": 245,
+            "block_id": 2677,
+            "sentence_key": "67e409b2-c6b2-42aa-b19a-ff91ae1d600a",
+            "sort": 1,
+            "start_offset": 168,
+            "end_offset": 322,
+            "translation": "1907年，当格温多琳继承遗产时（玛格丽特随后于1909年继承），据说这对姐妹是英国最富有的未婚女性。",
+            "grammar_analysis": {
+              "句型": "复合句（时间状语从句 + 被动报告结构）",
+              "主句部分": {
+                "主语": "the sisters",
+                "从句": "",
+                "宾语": "",
+                "状语": "In 1907, when Gwendoline came into her inheritance (Margaret would follow in 1909)",
+                "表语": "the wealthiest unmarried women in Britain",
+                "谓语": "were said to be",
+                "系动词": "",
+                "形式主语": "",
+                "真正主语": ""
+              },
+              "句子时态": "一般过去时",
+              "语法成分": [
+                {
+                  "原文": "In 1907, when Gwendoline came into her inheritance (Margaret would follow in 1909),",
+                  "成分": "状语",
+                  "句子释义": "1907年，当格温多琳继承遗产时（玛格丽特于1909年继承）",
+                  "成分分析": "时间状语前置；when 引导的时间从句中嵌入括号插入语，交代背景"
+                },
+                {
+                  "原文": "the sisters",
+                  "成分": "主语",
+                  "句子释义": "这对姐妹",
+                  "成分分析": "句子的被动承受者，也是后面被说明身份的对象"
+                },
+                {
+                  "原文": "were said to be",
+                  "成分": "谓语",
+                  "句子释义": "据说是",
+                  "成分分析": "被动报告结构，表示“据说是”"
+                },
+                {
+                  "原文": "the wealthiest unmarried women in Britain",
+                  "成分": "表语",
+                  "句子释义": "英国最富有的未婚女性",
+                  "成分分析": "be 后的表语性名词短语，说明主语的身份或地位"
+                }
+              ],
+              "语法具体知识点": [
+                "一般过去时用于叙述过去发生的背景和事实",
+                "when 引导时间状语从句，前置交代事件发生背景",
+                "were said to be 属于被动报告结构，表示“据说是”",
+                "be 后接表语性名词短语，说明主语的身份或地位",
+                "括号内内容是插入语，用于补充相关时间信息"
+              ]
+            }
+          },
+          {
+            "id": 9029,
+            "document_version_id": 245,
+            "block_id": 2677,
+            "sentence_key": "bcd92346-822b-4b4f-8de7-52babaec62e8",
+            "sort": 2,
+            "start_offset": 323,
+            "end_offset": 494,
+            "translation": "她们在威尔士乡村的宗教成长背景赋予了她们深厚的社会责任感，她们选择将遗产用于文化和慈善*事业。",
+            "grammar_analysis": {
+              "句型": "并列句（两个并列独立分句）",
+              "主句部分": {
+                "主语": "Their religious upbringing in rural Wales",
+                "从句": "",
+                "宾语": "them a deep sense of social responsibility",
+                "状语": "",
+                "表语": "",
+                "谓语": "gave",
+                "系动词": "",
+                "形式主语": "",
+                "真正主语": ""
+              },
+              "句子时态": "一般过去时",
+              "语法成分": [
+                {
+                  "原文": "Their religious upbringing in rural Wales",
+                  "成分": "主语",
+                  "句子释义": "她们在威尔士乡村的宗教成长背景",
+                  "成分分析": "名词短语作主语，in rural Wales 为后置介词短语，补充说明成长背景所在地"
+                },
+                {
+                  "原文": "gave them a deep sense of social responsibility",
+                  "成分": "谓语+双宾语",
+                  "句子释义": "赋予了她们深厚的社会责任感",
+                  "成分分析": "谓语 gave 后接间接宾语 them 和直接宾语 a deep sense of social responsibility"
+                },
+                {
+                  "原文": "and they chose",
+                  "成分": "并列分句核心",
+                  "句子释义": "并且她们选择了",
+                  "成分分析": "并列连词 and 连接第二个独立分句，they 为主语，chose 为谓语"
+                },
+                {
+                  "原文": "to use their inheritance for cultural and philanthropic* purposes",
+                  "成分": "不定式短语",
+                  "句子释义": "把遗产用于文化和慈善事业",
+                  "成分分析": "to use 为不定式，their inheritance 为宾语，for cultural and philanthropic* purposes 为用途短语"
+                }
+              ],
+              "语法具体知识点": [
+                "一般过去时表示过去发生的动作或状态",
+                "and 连接两个并列独立分句",
+                "gave 后可接双宾语结构（间接宾语 + 直接宾语）",
+                "choose to do 表示“选择去做……”",
+                "to use... for... 可表示用途或目的",
+                "in rural Wales 作为介词短语修饰 upbringing"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": 2678,
+        "document_version_id": 245,
+        "block_key": "d78c2e2c-0c5e-423d-941b-a790be965195",
+        "type": "paragraph",
+        "sort": 2,
+        "label": null,
+        "text": "While there was no real family history of art collecting, the sisters' education was rigorously geared toward such pursuits. Their London school focused on cultural rather than academic study, and they travelled extensively with their governess, Jane Blaker, visiting art galleries and making extensive notes on the collections there.",
+        "sentences": [
+          {
+            "id": 9030,
+            "document_version_id": 245,
+            "block_id": 2678,
+            "sentence_key": "e2a4c3d6-a905-4106-b73c-f8306bb785fd",
+            "sort": 0,
+            "start_offset": 0,
+            "end_offset": 124,
+            "translation": "尽管家族中没有真正的艺术收藏历史，但这姐妹俩的教育却严格地朝着此类追求而定向。",
+            "grammar_analysis": {
+              "句型": "主从复合句（While 引导让步状语从句 + 主句）",
+              "主句部分": {
+                "主语": "the sisters' education",
+                "从句": "While there was no real family history of art collecting",
+                "宾语": "",
+                "状语": "rigorously",
+                "表语": "",
+                "谓语": "was rigorously geared toward such pursuits",
+                "系动词": "",
+                "形式主语": "",
+                "真正主语": ""
+              },
+              "句子时态": "一般过去时",
+              "语法成分": [
+                {
+                  "原文": "While there was no real family history of art collecting,",
+                  "成分": "让步状语从句",
+                  "句子释义": "尽管没有真正的艺术收藏家族传统",
+                  "成分分析": "while 引导从句；there be 结构表示“存在/有”"
+                },
+                {
+                  "原文": "the sisters' education",
+                  "成分": "主语",
+                  "句子释义": "这姐妹俩的教育",
+                  "成分分析": "主句主语，education 是核心名词，the sisters' 作限定成分"
+                },
+                {
+                  "原文": "was rigorously geared toward such pursuits",
+                  "成分": "谓语",
+                  "句子释义": "被严格地朝着此类追求而定向",
+                  "成分分析": "was geared 构成被动/状态表达，rigorously 为方式状语，toward such pursuits 为介词短语补充方向"
+                }
+              ],
+              "语法具体知识点": [
+                "While 引导让步状语从句，表示“尽管/虽然”",
+                "there be 结构表示存在",
+                "be geared toward 表示“朝向/面向……而定向”",
+                "过去时描述过去背景下的状态"
+              ]
+            }
+          },
+          {
+            "id": 9031,
+            "document_version_id": 245,
+            "block_id": 2678,
+            "sentence_key": "0ed508a9-4bdc-420b-8bf9-acb17f2cc73e",
+            "sort": 1,
+            "start_offset": 125,
+            "end_offset": 334,
+            "translation": "她们的伦敦学校注重文化而非学术研究，并且她们与家庭教师简·布莱克广泛旅行，参观美术馆并对那里的藏品做了大量笔记。",
+            "grammar_analysis": {
+              "句型": "并列句（两个并列主句，后接现在分词短语作伴随状语）",
+              "主句部分": {
+                "主语": "Their London school",
+                "从句": "",
+                "宾语": "cultural rather than academic study",
+                "状语": "",
+                "表语": "",
+                "谓语": "focused on",
+                "系动词": "",
+                "形式主语": "",
+                "真正主语": ""
+              },
+              "句子时态": "一般过去时",
+              "语法成分": [
+                {
+                  "原文": "Their London school focused on cultural rather than academic study",
+                  "成分": "并列句中的第一个主句",
+                  "句子释义": "她们的伦敦学校注重文化而非学术研究",
+                  "成分分析": "主语（Their London school）+ 谓语（focused on）+ 宾语（cultural rather than academic study）"
+                },
+                {
+                  "原文": "and they travelled extensively with their governess, Jane Blaker",
+                  "成分": "并列主句",
+                  "句子释义": "并且她们与家庭教师简·布莱克广泛旅行",
+                  "成分分析": "连词（and）+ 主语（they）+ 谓语（travelled extensively）+ 伴随状语（with their governess, Jane Blaker）"
+                },
+                {
+                  "原文": "visiting art galleries and making extensive notes on the collections there",
+                  "成分": "现在分词短语作伴随状语",
+                  "句子释义": "参观美术馆并对那里的藏品做了大量笔记",
+                  "成分分析": "两个并列现在分词短语，说明前面动作伴随发生"
+                }
+              ],
+              "语法具体知识点": [
+                "一般过去时表示过去发生的动作或状态",
+                "and 连接两个并列主句",
+                "focused on 后接名词短语作宾语",
+                "rather than 表示对比选择",
+                "with 短语作方式/伴随状语",
+                "visiting 和 making 为现在分词短语，表示伴随动作"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "partialSample": true
+  }
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-article-dictation"
+description = "Enables the idictation_article_dictation command without any pre-configured scope."
+commands.allow = ["idictation_article_dictation"]
+
+[[permission]]
+identifier = "deny-idictation-article-dictation"
+description = "Denies the idictation_article_dictation command without any pre-configured scope."
+commands.deny = ["idictation_article_dictation"]

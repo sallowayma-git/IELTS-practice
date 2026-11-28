@@ -49,6 +49,7 @@
     </div>
 
     <div class="library-body">
+    <JiufenDrafts channel="reading" />
     <DashboardOverview
       v-if="activeView === 'overview'"
       @mood="overviewMood = $event"
@@ -71,12 +72,13 @@
       :browse-preference-panel-open="browsePreferencePanelOpen"
       v-model:browse-remember-position="browseRememberPosition"
       :browse-title="browseTitle"
-      :type-filters="typeFilters"
-      :selected-type="selectedType"
+
+
       :question-kind-label="questionKindLabel"
       v-model:keyword="keyword"
       :frequency-filters="frequencyFilters"
       :frequency-filter="frequencyFilter"
+      v-model:hotlist-only="hotlistOnly"
       v-model:sort-mode="sortMode"
       :error="error"
       :suite-error="suiteError"
@@ -91,7 +93,7 @@
       :icons="icons"
       @toggle-browse-preference="toggleBrowsePreference"
       @persist-browse-preference="persistBrowsePreference"
-      @filter-by-type="filterByType"
+
       @clear-question-kind="clearQuestionKind"
       @clear-search="clearSearch"
       @toggle-frequency-filter="toggleFrequencyFilter"
@@ -100,7 +102,16 @@
       @view-pdf="viewPdf"
       @confirm-custom-suite-selection="confirmCustomSuiteSelection"
       @cancel-custom-suite-selection="cancelCustomSuiteSelection"
-    />
+    >
+      <LibraryFilters v-if="!customSuiteDraft" v-model:part="selectedCategory" v-model:source="sourceFilter" :parts="customSuiteCategories" :extra-sources="[{value:'idictation',label:'爱听写精读'},{value:'idictation-exam',label:'爱听写真题'}]" />
+      <ReaderFilters v-if="!customSuiteDraft && sourceFilter === 'idictation'" />
+      <div v-if="!customSuiteDraft && sourceFilter === 'idictation-exam'">
+        <button type="button" class="btn btn-secondary" :disabled="readingBusy" @click="loadReadingCatalog">
+          {{ readingBusy ? '正在加载…' : '加载剑雅 A 类阅读' }}
+        </button>
+        <p v-if="readingError" role="alert">{{ readingError }}</p>
+      </div>
+    </ReadingBrowsePanel>
 
     <ReadingMoreToolsPanel
       :active-view="activeView"
@@ -159,6 +170,12 @@
 </template>
 
 <script setup>
+import LibraryFilters from '../../../../plug/jiufen/LibraryFilters.vue'
+import JiufenDrafts from '@/components/JiufenDrafts.vue'
+import { remoteCards, openNativeUnit } from '../../../../plug/jiufen/library.js'
+import ReaderFilters from '../../../../plug/idictation/ReaderFilters.vue'
+import { readerCards, openReader } from '../../../../plug/idictation/readerLibrary.js'
+import { examCards, openReading, loadReadingCatalog, readingBusy, readingError } from '../../../../plug/idictation/readingLibrary.js'
 import MoodMascot from '@/components/mascot/MoodMascot.vue'
 import { moodLabel } from '@/components/mascot/moodFor.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -206,11 +223,8 @@ const icons = {
 // Views are switched from the top nav through the `view` query.
 const LIBRARY_VIEWS = new Set(['overview', 'browse', 'more'])
 
-const typeFilters = [
-  { value: 'all', label: '全部' },
-  { value: 'reading', label: '阅读' },
-  { value: 'listening', label: '听力', hidden: true }
-]
+const onlineReading = remoteCards('reading')
+const sourceFilter = ref('all')
 
 const frequencyFilters = [
   { value: 'high', label: '高频' },
@@ -237,6 +251,7 @@ const activeView = ref('overview')
 const selectedCategory = ref('all')
 const selectedType = ref('all')
 const frequencyFilter = ref('all')
+const hotlistOnly = ref(false)
 const keyword = ref('')
 const sortMode = ref('default')
 const browsePreferencePanelOpen = ref(false)
@@ -282,12 +297,15 @@ const questionKind = computed(() => typeof route.query.kind === 'string' ? route
 const questionKindLabel = computed(() => QUESTION_KIND_LABELS[questionKind.value] || questionKind.value)
 
 const filteredReadingAssets = computed(() => {
-  return filterReadingAssets(readingAssets.value, {
+  const local = readingAssets.value.filter(a => !a.id.startsWith('jiufen-reading-') && !a.id.startsWith('idictation-reading-'))
+  const cards = customSuiteDraft.value ? local : [...local, ...onlineReading.value, ...readerCards.value, ...examCards.value].filter(a => sourceFilter.value === 'all' || (a.provider || 'local') === sourceFilter.value)
+  return filterReadingAssets(cards, {
     questionKind: questionKind.value,
     keyword: keyword.value,
     selectedType: selectedType.value,
     selectedCategory: selectedCategory.value,
     frequencyFilter: frequencyFilter.value,
+    hotlistOnly: hotlistOnly.value,
     sortMode: sortMode.value
   })
 })
@@ -445,14 +463,6 @@ function countByCategory(category) {
   return readingAssets.value.filter((asset) => normalizeCategory(asset.category) === category).length
 }
 
-function filterByType(type) {
-  selectedType.value = type === 'reading' ? 'reading' : 'all'
-  if (selectedType.value === 'all') {
-    selectedCategory.value = 'all'
-    return clearQuestionKind()
-  }
-}
-
 function clearQuestionKind() {
   if (!questionKind.value) return
   const { kind, ...query } = route.query
@@ -544,7 +554,23 @@ function startReading(asset) {
   })
 }
 
-function handleBrowsePrimaryAction(asset) {
+let openingRemote = false
+async function handleBrowsePrimaryAction(asset) {
+  if (['jiufen', 'idictation', 'idictation-exam'].includes(asset.provider)) {
+    if (openingRemote) return
+    openingRemote = true
+    const origin = route.fullPath
+    try {
+      const open = asset.provider === 'idictation-exam' ? openReading : asset.provider === 'idictation' ? openReader : openNativeUnit
+      const target = await open(asset)
+      if (route.fullPath === origin) await router.push(target)
+    } catch (failure) {
+      showLocalMessage(failure?.message || String(failure))
+    } finally {
+      openingRemote = false
+    }
+    return
+  }
   if (customSuiteDraft.value) {
     selectCustomSuiteAsset(asset)
     return
@@ -767,6 +793,7 @@ function startCustomSuiteSelection() {
   selectedCategory.value = 'P1'
   selectedType.value = 'reading'
   frequencyFilter.value = 'all'
+  hotlistOnly.value = false
   keyword.value = ''
   activeView.value = 'browse'
 }

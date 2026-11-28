@@ -423,6 +423,9 @@ pub fn create_suite_session(
 pub(crate) fn list_answerable_reading_assets(conn: &Connection) -> DbResult<Vec<AssetIndexEntry>> {
     let mut answerable = Vec::new();
     for asset in list_assets(conn, Some(Activity::Reading))? {
+        if asset.id.starts_with("idictation-reading-") {
+            continue;
+        }
         let Ok(loaded) = load_practice_asset_payload(conn, &asset.id) else {
             continue;
         };
@@ -656,6 +659,7 @@ mod pick_tests {
             activity: "reading".into(),
             pdf_only: false,
             question_kinds: Vec::new(),
+            parts: Vec::new(),
         }
     }
 

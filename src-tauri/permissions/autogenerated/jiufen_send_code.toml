@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-send-code"
+description = "Enables the jiufen_send_code command without any pre-configured scope."
+commands.allow = ["jiufen_send_code"]
+
+[[permission]]
+identifier = "deny-jiufen-send-code"
+description = "Denies the jiufen_send_code command without any pre-configured scope."
+commands.deny = ["jiufen_send_code"]

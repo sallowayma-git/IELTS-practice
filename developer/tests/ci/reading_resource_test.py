@@ -1,6 +1,7 @@
 """Regression tests for the Windows fresh-checkout startup failure."""
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import subprocess
@@ -102,7 +103,10 @@ class ReadingResourceTests(unittest.TestCase):
                 ["add", "."], ["checkout-index", "--all", f"--prefix={checkout.as_posix()}/"],
             ]
             for command in commands:
-                subprocess.run(["git", *command], cwd=source, check=True, capture_output=True)
+                # Windows putenv drops empty values when a preceding test restores
+                # os.environ. Pass the full mapping so Git's indexed config keeps
+                # intentional empty values alongside GIT_CONFIG_COUNT.
+                subprocess.run(["git", *command], cwd=source, env=dict(os.environ), check=True, capture_output=True)
             self.assertEqual(verify_reading_resources(checkout / relative)["verifiedPayloads"], 1)
 
     def test_actual_shipping_payloads_match_native_startup_hashes(self):

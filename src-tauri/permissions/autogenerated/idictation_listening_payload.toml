@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-listening-payload"
+description = "Enables the idictation_listening_payload command without any pre-configured scope."
+commands.allow = ["idictation_listening_payload"]
+
+[[permission]]
+identifier = "deny-idictation-listening-payload"
+description = "Denies the idictation_listening_payload command without any pre-configured scope."
+commands.deny = ["idictation_listening_payload"]

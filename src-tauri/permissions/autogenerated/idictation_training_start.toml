@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-training-start"
+description = "Enables the idictation_training_start command without any pre-configured scope."
+commands.allow = ["idictation_training_start"]
+
+[[permission]]
+identifier = "deny-idictation-training-start"
+description = "Denies the idictation_training_start command without any pre-configured scope."
+commands.deny = ["idictation_training_start"]

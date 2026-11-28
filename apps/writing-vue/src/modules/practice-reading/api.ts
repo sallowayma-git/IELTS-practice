@@ -49,13 +49,13 @@ export const readingSuiteApi = {
 }
 
 export const readingCoachApi = {
-  async listMessages(sessionId: string | null, assetId: string | null = null) {
+  async listMessages(sessionId: string | null, assetId: string | null = null, activity = READING_ACTIVITY) {
     const listMessages = practiceCoach.listMessages as (
       activity: string,
       attemptId: string | null,
       payload: Record<string, unknown>
     ) => Promise<unknown>
-    return listMessages(READING_ACTIVITY, sessionId, { assetId })
+    return listMessages(activity, sessionId, { assetId })
   },
 
   async query(payload: Record<string, unknown>, sessionId: string | null, options: CoachOptions = {}) {
@@ -65,7 +65,11 @@ export const readingCoachApi = {
       attemptId: string | null,
       requestOptions: CoachOptions
     ) => Promise<unknown>
-    return queryCoach(READING_ACTIVITY, payload, sessionId, options)
+    return queryCoach(String(payload.activity || READING_ACTIVITY), payload, sessionId, options)
+  },
+
+  async forgetPreference(threadId: string, preferenceKey: string) {
+    return practiceCoach.forgetPreference(threadId, preferenceKey)
   },
 
   async recordFeedback(coachMessageId: string, feedbackKind: CoachFeedbackKind) {
@@ -105,7 +109,7 @@ export const readingCoachSettingsApi = {
 }
 
 export const readingSessionApi = {
-  async getState(sessionId: string) {
-    return practiceSessions.getState(READING_ACTIVITY, normalizeReadingRecordId(sessionId))
+  async getState(sessionId: string, activity = READING_ACTIVITY) {
+    return practiceSessions.getState(activity, normalizeReadingRecordId(sessionId))
   }
 }

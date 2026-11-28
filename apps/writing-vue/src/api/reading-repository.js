@@ -2,6 +2,8 @@
  * Reading attempt repository — Tauri only.
  */
 
+import { jiufen, isJiufenAsset } from '@/api/jiufen.js'
+import { idictation, isIdictationMaterial, isIdictationReading } from '@/api/idictation.js'
 import { invokeCommand, isTauriRuntime, unwrapCommandResponse } from '@/api/tauri-bridge.js'
 import { normalizeReadingAssetList } from '@/api/reading-asset-list.js'
 
@@ -25,6 +27,9 @@ export async function getReadingAssetPayload(assetId) {
     error.code = 'reading.asset_id_required'
     throw error
   }
+
+  if (isJiufenAsset(normalizedAssetId)) return jiufen.payload(normalizedAssetId)
+  if (isIdictationMaterial(normalizedAssetId)) return idictation.readerPayload(normalizedAssetId)
 
   const response = await invokeCommand('reading_get_asset_payload', {
     assetId: normalizedAssetId
@@ -71,8 +76,7 @@ export function normalizeReadingAssetEnvelope(value) {
 }
 
 export async function saveReadingDraft(payload) {
-  const response = await invokeCommand('reading_save_draft', {
-    cmd: {
+  const cmd = {
       attemptId: payload.attemptId,
       assetId: payload.assetId,
       assetRevision: payload.assetRevision ?? null,
@@ -83,8 +87,9 @@ export async function saveReadingDraft(payload) {
       titleSnapshot: payload.titleSnapshot || null,
       timerSnapshot: payload.timerSnapshot || null,
       idempotencyKey: payload.idempotencyKey || newKey('draft')
-    }
-  })
+  }
+  if (isIdictationReading(cmd.assetId)) return { source: 'tauri', attempt: await idictation.saveReading(cmd) }
+  const response = await invokeCommand('reading_save_draft', { cmd })
   return { source: 'tauri', attempt: unwrapCommandResponse(response, 'reading_save_draft') }
 }
 
@@ -113,8 +118,10 @@ export async function patchReadingAnswer(attemptId, questionId, answer, marked =
 }
 
 export async function submitReadingAttempt(payload) {
-  const response = await invokeCommand('reading_submit_attempt', {
-    cmd: {
+  if (isJiufenAsset(payload.assetId)) {
+    return { source: 'tauri', result: await jiufen.submit('reading', payload) }
+  }
+  const cmd = {
       attemptId: payload.attemptId,
       assetId: payload.assetId,
       assetRevision: payload.assetRevision ?? null,
@@ -125,8 +132,9 @@ export async function submitReadingAttempt(payload) {
       durationMs: payload.durationMs ?? null,
       titleSnapshot: payload.titleSnapshot || null,
       idempotencyKey: payload.idempotencyKey || newKey('submit')
-    }
-  })
+  }
+  if (isIdictationReading(cmd.assetId)) return { source: 'tauri', result: await idictation.submitReading(cmd) }
+  const response = await invokeCommand('reading_submit_attempt', { cmd })
   return {
     source: 'tauri',
     result: unwrapCommandResponse(response, 'reading_submit_attempt')

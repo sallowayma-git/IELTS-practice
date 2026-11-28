@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-reading-review"
+description = "Enables the idictation_reading_review command without any pre-configured scope."
+commands.allow = ["idictation_reading_review"]
+
+[[permission]]
+identifier = "deny-idictation-reading-review"
+description = "Denies the idictation_reading_review command without any pre-configured scope."
+commands.deny = ["idictation_reading_review"]

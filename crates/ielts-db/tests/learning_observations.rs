@@ -81,7 +81,7 @@ fn replay_is_idempotent_and_reading_transitions_are_golden() {
     let first_ids = observation_ids(&conn);
     assert_eq!(
         first.output_hash,
-        "51554e40ee953c2a8524f889f2deb5d45a6efde6e007e59f8116d2a7c97f57db"
+        "d438a3e16ab5b58d4d8198ebc42a0b8876370c42886780043d0cbc6d65ef9bb1"
     );
     let repeat_types = observation_types(&conn, "reading.repeat.%");
     assert_eq!(

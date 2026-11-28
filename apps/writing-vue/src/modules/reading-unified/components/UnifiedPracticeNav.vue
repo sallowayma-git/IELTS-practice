@@ -15,8 +15,22 @@
         :class="{ 'is-linked': part.link }"
         @click="part.link && $emit('open-part', part.link)"
       >
-        <div class="part-nav-name" :class="{ inactive: !part.placeholder && part.key !== activePartKey }">Part {{ part.index }}</div>
-        <div class="part-nav-status">{{ part.answeredCount }} of {{ part.total }}</div>
+        <button
+          v-if="sections"
+          class="listening-section-nav__item"
+          type="button"
+          :disabled="part.total === 0"
+          :aria-pressed="part.key === activePartKey ? 'true' : 'false'"
+          :aria-label="`Part ${part.index}，${part.total} 题`"
+          @click.stop="$emit('open-part', part.index)"
+        >
+          <span class="part-nav-name">Part {{ part.index }}</span>
+          <span class="part-nav-status">{{ part.total }} 题<span v-if="!part.placeholder"> · 已答 {{ part.answeredCount }}</span></span>
+        </button>
+        <template v-else>
+          <div class="part-nav-name" :class="{ inactive: !part.placeholder && part.key !== activePartKey }">Part {{ part.index }}</div>
+          <div class="part-nav-status">{{ part.answeredCount }} of {{ part.total }}</div>
+        </template>
       </div>
       <div v-if="!part.placeholder" class="part-nav-questions" :class="{ 'has-flag': part.questions.some(showFlag) }">
         <!-- Hover/focus on the column (number + its flag) mounts the flag, so
@@ -71,7 +85,7 @@
         :title="submitLabel"
         :aria-label="submitLabel"
         :disabled="submitDisabled"
-        :class="{ 'is-submitted': reviewMode }"
+        :class="{ 'is-submitted': reviewMode, 'listening-practice__submit': Boolean(sections) }"
         @click="$emit('submit')"
       >
         <svg class="submit-btn-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
@@ -102,6 +116,7 @@ const props = defineProps({
   partSummaries: { type: Object, default: null },
   // Question flags: `isMarked(questionId)` is the page's normalizing lookup.
   // Read-only (review/replay) keeps marked flags visible but offers no toggle.
+  sections: { type: Array, default: null },
   isMarked: { type: Function, default: () => false },
   flagsReadOnly: { type: Boolean, default: false }
 })
@@ -143,6 +158,7 @@ function partKeyFromCategory(category) {
   const normalized = String(category || '').toUpperCase()
   if (normalized === 'P2') return 'p2'
   if (normalized === 'P3') return 'p3'
+  if (normalized === 'P4') return 'p4'
   return 'p1'
 }
 
@@ -161,7 +177,7 @@ function comparisonStatus(comparison, questionId, answered) {
 const activePartKey = computed(() => partKeyFromCategory(props.category))
 
 const partSections = computed(() => (
-  PART_KEYS.map((key, sectionIndex) => {
+  (props.sections ? props.sections.map((part) => `p${part.section}`) : PART_KEYS).map((key, sectionIndex) => {
     const placeholder = key !== activePartKey.value
     if (placeholder) {
       const summary = props.partSummaries?.[key] || null
@@ -170,7 +186,7 @@ const partSections = computed(() => (
         index: sectionIndex + 1,
         placeholder: true,
         answeredCount: summary?.answeredCount ?? 0,
-        total: summary?.total ?? PART_TOTALS[key],
+        total: props.sections?.[sectionIndex]?.questionIds.length ?? summary?.total ?? PART_TOTALS[key],
         link: summary?.link || null,
         questions: []
       }
@@ -190,7 +206,7 @@ const partSections = computed(() => (
       key,
       index: sectionIndex + 1,
       placeholder: false,
-      answeredCount: questions.filter((question) => question.status && question.status !== 'unknown').length,
+      answeredCount: questions.filter((question) => props.hasAnswer(question.questionId)).length,
       total: questions.length,
       link: null,
       questions

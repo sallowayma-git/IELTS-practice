@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-draft-assets"
+description = "Enables the jiufen_draft_assets command without any pre-configured scope."
+commands.allow = ["jiufen_draft_assets"]
+
+[[permission]]
+identifier = "deny-jiufen-draft-assets"
+description = "Denies the jiufen_draft_assets command without any pre-configured scope."
+commands.deny = ["jiufen_draft_assets"]

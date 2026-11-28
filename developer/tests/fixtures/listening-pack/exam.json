@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "examId": "l1-e2e",
+  "meta": {
+    "title": "Listening Test 1",
+    "category": "Section 1-4",
+    "difficulty": "medium",
+    "frequency": "high",
+    "audio": "audio/exam.wav",
+    "durationSeconds": 1800
+  },
+  "questionCount": 6,
+  "questionOrder": ["q1", "q2", "q3", "q4", "q5", "q6"],
+  "questionGroups": [
+    {
+      "groupId": "g1",
+      "section": 1,
+      "kind": "form_completion",
+      "questionIds": ["q1", "q2"],
+      "leadHtml": "<p>Complete the booking form. Write <strong>ONE WORD AND/OR A NUMBER</strong> for each answer.</p>",
+      "bodyHtml": "<p>1 Name of the course: <input type=\"text\" name=\"q1\" autocomplete=\"off\" /></p><p>2 Preferred material: <input type=\"text\" name=\"q2\" autocomplete=\"off\" /></p>"
+    },
+    {
+      "groupId": "g2",
+      "section": 2,
+      "kind": "single_choice",
+      "questionIds": ["q3"],
+      "leadHtml": "<p>Choose the correct letter, <strong>A</strong>, <strong>B</strong> or <strong>C</strong>.</p>",
+      "bodyHtml": "<p>3 What does the speaker recommend for the first visit?</p><label><input type=\"radio\" name=\"q3\" value=\"A\" /> A&nbsp; Book online</label><label><input type=\"radio\" name=\"q3\" value=\"B\" /> B&nbsp; Arrive early</label><label><input type=\"radio\" name=\"q3\" value=\"C\" /> C&nbsp; Bring a friend</label>"
+    },
+    {
+      "groupId": "g3",
+      "section": 3,
+      "kind": "multi_choice",
+      "questionIds": ["q4"],
+      "leadHtml": "<p>Choose <strong>TWO</strong> letters, <strong>A</strong>–<strong>C</strong>.</p>",
+      "bodyHtml": "<p>4 Which two facilities are included in the membership?</p><label><input type=\"checkbox\" name=\"q4\" value=\"A\" /> A&nbsp; The library</label><label><input type=\"checkbox\" name=\"q4\" value=\"B\" /> B&nbsp; The car park</label><label><input type=\"checkbox\" name=\"q4\" value=\"C\" /> C&nbsp; The study room</label>"
+    },
+    {
+      "groupId": "g4",
+      "section": 4,
+      "kind": "matching",
+      "questionIds": ["q5", "q6"],
+      "leadHtml": "<p>Choose the correct letter, <strong>A</strong> or <strong>B</strong>, for each item.</p>",
+      "bodyHtml": "<p>5 The morning session is aimed at:</p><label><input type=\"radio\" name=\"q5\" value=\"A\" /> A&nbsp; Beginners</label><label><input type=\"radio\" name=\"q5\" value=\"B\" /> B&nbsp; Advanced learners</label><p>6 The evening session is aimed at:</p><label><input type=\"radio\" name=\"q6\" value=\"A\" /> A&nbsp; Beginners</label><label><input type=\"radio\" name=\"q6\" value=\"B\" /> B&nbsp; Advanced learners</label>"
+    }
+  ],
+  "interactionModel": {
+    "q3": { "control": "radio" },
+    "q4": { "control": "checkbox" },
+    "q5": { "control": "radio" },
+    "q6": { "control": "radio" }
+  },
+  "answerKey": {
+    "q1": ["waterproof", "water proof"],
+    "q2": "silk",
+    "q3": "B",
+    "q4": ["A", "C"],
+    "q5": "A",
+    "q6": "B"
+  },
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6"
+  },
+  "reviewExplanations": {
+    "questionExplanations": [
+      {
+        "sectionTitle": "Section 1",
+        "items": [
+          {
+            "questionNumber": 1,
+            "questionId": "q1",
+            "text": "\"Waterproof\" is the word used in the booking form; the speaker repeats it twice."
+          },
+          {
+            "questionNumber": 2,
+            "questionId": "q2",
+            "text": "The material is silk; do not accept the cotton distractor."
+          }
+        ]
+      },
+      {
+        "sectionTitle": "Section 3",
+        "items": [
+          {
+            "questionNumber": 4,
+            "questionId": "q4",
+            "text": "The library and the study room are included; the car park costs extra."
+          }
+        ]
+      }
+    ]
+  }
+}

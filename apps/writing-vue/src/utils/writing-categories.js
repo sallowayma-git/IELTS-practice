@@ -6,7 +6,9 @@ const TASK1_CATEGORY_OPTIONS = Object.freeze([
   Object.freeze({ value: 'map', label: '地图' }),
   Object.freeze({ value: 'table', label: '表格' }),
   Object.freeze({ value: 'process', label: '过程' }),
-  Object.freeze({ value: 'mixed', label: '混合图' })
+  Object.freeze({ value: 'mixed', label: '混合图' }),
+  Object.freeze({ value: 'idictation_academic', label: '爱听写 · 剑雅 A 类' }),
+  Object.freeze({ value: 'idictation_jijing', label: '爱听写 · 机经' })
 ])
 
 const TASK2_CATEGORY_OPTIONS = Object.freeze([
@@ -17,7 +19,10 @@ const TASK2_CATEGORY_OPTIONS = Object.freeze([
   Object.freeze({ value: 'health', label: '健康' }),
   Object.freeze({ value: 'culture', label: '文化' }),
   Object.freeze({ value: 'government', label: '政府' }),
-  Object.freeze({ value: 'economy', label: '经济' })
+  Object.freeze({ value: 'economy', label: '经济' }),
+  Object.freeze({ value: 'idictation_academic', label: '爱听写 · 剑雅 A 类' }),
+  Object.freeze({ value: 'idictation_jijing', label: '爱听写 · 机经' }),
+  Object.freeze({ value: 'idictation_general', label: '爱听写 · 剑雅 G 类' })
 ])
 
 export const WRITING_CATEGORY_OPTIONS = Object.freeze({

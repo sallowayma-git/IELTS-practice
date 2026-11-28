@@ -22,22 +22,31 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
+import { syncLibrary } from '../../../plug/jiufen/library.js'
 import { useRoute } from 'vue-router'
 import NavBar from './components/NavBar.vue'
 import ShuiBackground from './components/ShuiBackground.vue'
 import UpdatePrompt from './components/UpdatePrompt.vue'
 import CrayonDefs from './modules/notebook/components/CrayonDefs.vue'
 
+let renewTimer
+onMounted(() => {
+  void syncLibrary()
+  renewTimer = window.setInterval(syncLibrary, 30 * 60 * 1000)
+})
+onUnmounted(() => window.clearInterval(renewTimer))
 const route = useRoute()
 const framelessRouteNames = new Set([
   'PracticeReading',
   'PracticeReadingSuite',
-  'PracticeReadingReview'
+  'PracticeReadingReview',
+  'PracticeListening',
+  'PracticeListeningReview'
 ])
 // The reading exam routes own their whole viewport under the unified IELTS
 // skin; neither shell skin applies, so they run under a neutral root class.
-const unifiedExamRouteNames = new Set(['PracticeReading', 'PracticeReadingReview'])
+const unifiedExamRouteNames = new Set(['PracticeReading', 'PracticeReadingReview', 'PracticeListening', 'PracticeListeningReview'])
 const shellSkinClass = computed(() => {
   if (unifiedExamRouteNames.has(route.name)) return 'atlas-unified'
   return showShellNav.value ? 'atlas-paper' : 'atlas-exam'
@@ -90,6 +99,10 @@ const routeViewKey = computed(() => route.path || String(route.name || route.ful
 @media (max-width: 900px) {
   .app-main--frameless {
     padding: 22px 16px 36px;
+  }
+
+  .app-main--frameless:has(> .listening-exam) {
+    padding: 0;
   }
 }
 

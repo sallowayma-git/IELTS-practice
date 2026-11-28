@@ -1,0 +1,178 @@
+{
+  "code": "200",
+  "data": {
+    "attempt": {
+      "id": "attempt-01",
+      "userId": "account-01",
+      "unitId": "unit-01",
+      "status": "submitted",
+      "accuracy": 100.0,
+      "correctCount": 13,
+      "totalCount": 13,
+      "elapsedSeconds": 584,
+      "timerMode": "timed",
+      "timerDurationMinutes": 20,
+      "submittedAt": "2026-11-18T12:00:00Z",
+      "createdAt": "2026-11-18T11:50:16+00:00"
+    },
+    "details": [
+      {
+        "questionId": "item-1",
+        "questionGroupId": "part-01-g1",
+        "partId": "part-01",
+        "qNumber": "1",
+        "type": "single-choice",
+        "userAnswer": "B",
+        "rightAnswer": "B",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-2",
+        "questionGroupId": "part-01-g1",
+        "partId": "part-01",
+        "qNumber": "2",
+        "type": "single-choice",
+        "userAnswer": "A",
+        "rightAnswer": "A",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-3",
+        "questionGroupId": "part-01-g1",
+        "partId": "part-01",
+        "qNumber": "3",
+        "type": "single-choice",
+        "userAnswer": "A",
+        "rightAnswer": "A",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-4",
+        "questionGroupId": "part-01-g1",
+        "partId": "part-01",
+        "qNumber": "4",
+        "type": "single-choice",
+        "userAnswer": "C",
+        "rightAnswer": "C",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-5",
+        "questionGroupId": "part-01-g1",
+        "partId": "part-01",
+        "qNumber": "5",
+        "type": "single-choice",
+        "userAnswer": "B",
+        "rightAnswer": "B",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-6",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "6",
+        "type": "fill-in-the-blank",
+        "userAnswer": "populations",
+        "rightAnswer": "populations",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-7",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "7",
+        "type": "fill-in-the-blank",
+        "userAnswer": "records",
+        "rightAnswer": "records",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-8",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "8",
+        "type": "fill-in-the-blank",
+        "userAnswer": "salt",
+        "rightAnswer": "salt",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-9",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "9",
+        "type": "fill-in-the-blank",
+        "userAnswer": "glass",
+        "rightAnswer": "glass",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-10",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "10",
+        "type": "fill-in-the-blank",
+        "userAnswer": "texture",
+        "rightAnswer": "texture",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-11",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "11",
+        "type": "fill-in-the-blank",
+        "userAnswer": "lightweight",
+        "rightAnswer": "lightweight",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-12",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "12",
+        "type": "fill-in-the-blank",
+        "userAnswer": "chisel",
+        "rightAnswer": "chisel",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      },
+      {
+        "questionId": "item-13",
+        "questionGroupId": "part-01-g2",
+        "partId": "part-01",
+        "qNumber": "13",
+        "type": "fill-in-the-blank",
+        "userAnswer": "meat",
+        "rightAnswer": "meat",
+        "state": "1",
+        "score": 1.0,
+        "bookmarked": false
+      }
+    ],
+    "correctness": 100.0
+  }
+}

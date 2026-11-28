@@ -38,19 +38,17 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde_json::{Map, Value};
 
-use ielts_domain::{estimate_tokens, is_safe_for_prompt};
+use ielts_domain::{estimate_tokens, is_safe_for_prompt, Activity, MemoryScope};
 
 use crate::coach::{
     LearnerProfileSnapshot, ProfileStatement, WeakSkill, PROFILE_MAX_MEMORIES,
     PROFILE_MAX_PREFERENCES, PROFILE_MAX_WEAK_SKILLS, PROFILE_TOKEN_BUDGET,
     WEAK_SKILL_MASTERY_CEILING, WEAK_SKILL_MIN_DISTINCT_ASSETS,
 };
-use crate::recent_signals::recent_signals;
+use crate::recent_signals::recent_signals_for_activity;
 use crate::soul::soul_profile;
 use crate::sqlite::DbResult;
 
-/// The activity scope of the reading coach's memories.
-const READING_SCOPE: &str = "activity:reading";
 /// A statement longer than this is skipped, never cut mid-sentence.
 const MAX_STATEMENT_CHARS: usize = 300;
 
@@ -90,25 +88,39 @@ pub fn build_coach_system_context_at(
     user_id: &str,
     now: DateTime<Utc>,
 ) -> DbResult<LearnerProfileSnapshot> {
+    build_coach_system_context_for_activity_at(conn, user_id, Activity::Reading, now)
+}
+
+pub fn build_coach_system_context_for_activity(conn: &Connection, user_id: &str, activity: Activity) -> DbResult<LearnerProfileSnapshot> {
+    build_coach_system_context_for_activity_at(conn, user_id, activity, Utc::now())
+}
+
+fn build_coach_system_context_for_activity_at(conn: &Connection, user_id: &str, activity: Activity, now: DateTime<Utc>) -> DbResult<LearnerProfileSnapshot> {
+    let scope = MemoryScope::Activity { key: activity }.storage_key();
     let soul = soul_profile(conn, user_id)?;
     let (stated, observed) = soul_statements(&soul);
 
     // The learner's own words (explicit preferences, then memories they stated)
     // share one cap, as before; Soul entries do not compete for it.
-    let mut said = explicit_preference_rows(conn, user_id)?;
-    said.extend(memory_rows(conn, user_id, true, now)?);
+    let mut said = explicit_preference_rows(conn, user_id, scope)?;
+    said.extend(memory_rows(conn, user_id, scope, true, now)?);
+    said.extend(memory_rows(conn, user_id, "global", true, now)?);
     said.truncate(PROFILE_MAX_PREFERENCES);
     let mut preferences = stated;
     preferences.extend(said);
 
-    let mut learned = memory_rows(conn, user_id, false, now)?;
-    learned.truncate(PROFILE_MAX_MEMORIES);
+    let mut learned = memory_rows(conn, user_id, scope, false, now)?;
+    let mut global = memory_rows(conn, user_id, "global", false, now)?;
+    global.truncate(2);
+    learned.truncate(PROFILE_MAX_MEMORIES - global.len());
+    learned.extend(global);
     let mut memories = observed;
     memories.extend(learned);
 
-    let weak_skills = weak_skill_rows(conn, user_id)?;
-    let recent_signals = recent_signals(conn, now)?;
-    let profile = LearnerProfileSnapshot { preferences, memories, weak_skills, recent_signals };
+    let weak_skills = weak_skill_rows(conn, user_id, scope.trim_start_matches("activity:"))?;
+    let recent_signals = recent_signals_for_activity(conn, now, scope.trim_start_matches("activity:"))?;
+    let teaching_notes = crate::coach::teaching_note_lines(conn)?;
+    let profile = LearnerProfileSnapshot { preferences, memories, weak_skills, recent_signals, teaching_notes };
     Ok(fit(profile, PROFILE_TOKEN_BUDGET))
 }
 
@@ -122,6 +134,7 @@ fn tokens(profile: &LearnerProfileSnapshot) -> u32 {
 fn fit(mut profile: LearnerProfileSnapshot, budget: u32) -> LearnerProfileSnapshot {
     while tokens(&profile) > budget {
         if profile.recent_signals.pop().is_none()
+            && profile.teaching_notes.pop().is_none()
             && profile.memories.pop().is_none()
             && profile.weak_skills.pop().is_none()
             && profile.preferences.pop().is_none()
@@ -176,14 +189,14 @@ fn soul_statements(soul: &Map<String, Value>) -> (Vec<ProfileStatement>, Vec<Pro
 
 /// Explicit preferences that are not Soul. A cleared preference is stored as an
 /// active JSON null and is not something the learner currently wants.
-fn explicit_preference_rows(conn: &Connection, user_id: &str) -> DbResult<Vec<ProfileStatement>> {
+fn explicit_preference_rows(conn: &Connection, user_id: &str, scope: &str) -> DbResult<Vec<ProfileStatement>> {
     let mut query = conn.prepare(
         "SELECT preference_key,scope,value_json FROM explicit_user_preferences
          WHERE user_id=?1 AND status='active' AND scope IN ('global',?2)
            AND preference_key NOT LIKE 'soul.%'
          ORDER BY preference_key,scope",
     )?;
-    let rows = query.query_map(params![user_id, READING_SCOPE], |row| {
+    let rows = query.query_map(params![user_id, scope], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
     })?;
     let mut out = Vec::new();
@@ -202,7 +215,7 @@ fn explicit_preference_rows(conn: &Connection, user_id: &str) -> DbResult<Vec<Pr
 /// Active, unexpired, normal-sensitivity reading memories. `explicit` selects
 /// the learner-stated ones (preferences) or the learned ones. `predicted`
 /// hypotheses are never offered: a prompt cannot present them as observed.
-fn memory_rows(conn: &Connection, user_id: &str, explicit: bool, now: DateTime<Utc>) -> DbResult<Vec<ProfileStatement>> {
+fn memory_rows(conn: &Connection, user_id: &str, scope: &str, explicit: bool, now: DateTime<Utc>) -> DbResult<Vec<ProfileStatement>> {
     let now = now.to_rfc3339();
     let mut query = conn.prepare(
         "SELECT id,content FROM memory_items
@@ -216,7 +229,7 @@ fn memory_rows(conn: &Connection, user_id: &str, explicit: bool, now: DateTime<U
                   importance DESC, confidence DESC,
                   julianday(COALESCE(last_observed_at,updated_at)) DESC, id",
     )?;
-    let rows = query.query_map(params![user_id, READING_SCOPE, explicit, now], |row| {
+    let rows = query.query_map(params![user_id, scope, explicit, now], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
     let mut out = Vec::new();
@@ -228,16 +241,16 @@ fn memory_rows(conn: &Connection, user_id: &str, explicit: bool, now: DateTime<U
 }
 
 /// Lowest mastery first. No claim without evidence from enough articles.
-fn weak_skill_rows(conn: &Connection, user_id: &str) -> DbResult<Vec<WeakSkill>> {
+fn weak_skill_rows(conn: &Connection, user_id: &str, activity: &str) -> DbResult<Vec<WeakSkill>> {
     let mut query = conn.prepare(
         "SELECT s.skill_key,c.label,s.mastery_mean,s.distinct_asset_count
          FROM learner_skill_state s
-         JOIN skill_catalog c ON c.skill_key=s.skill_key AND c.activity='reading' AND c.active=1
+         JOIN skill_catalog c ON c.skill_key=s.skill_key AND c.activity=?4 AND c.active=1
          WHERE s.user_id=?1 AND s.mastery_mean<?2 AND s.distinct_asset_count>=?3
          ORDER BY s.mastery_mean ASC,s.skill_key ASC",
     )?;
     let rows = query.query_map(
-        params![user_id, WEAK_SKILL_MASTERY_CEILING, WEAK_SKILL_MIN_DISTINCT_ASSETS],
+        params![user_id, WEAK_SKILL_MASTERY_CEILING, WEAK_SKILL_MIN_DISTINCT_ASSETS, activity],
         |row| {
             Ok(WeakSkill {
                 skill_key: row.get(0)?,
@@ -281,6 +294,7 @@ mod tests {
             memories: vec![entry("mem-1")],
             weak_skills: vec![skill()],
             recent_signals: vec![entry("signal:m:0"), entry("signal:m:1")],
+            ..Default::default()
         };
         let lists = |p: &LearnerProfileSnapshot| (p.recent_signals.len(), p.memories.len(), p.weak_skills.len(), p.preferences.len());
         assert_eq!(lists(&fit(full.clone(), u32::MAX)), (2, 1, 1, 1));

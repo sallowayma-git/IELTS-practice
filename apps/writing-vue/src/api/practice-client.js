@@ -2,6 +2,8 @@
  * Practice surface — Tauri repositories only (Fastify removed).
  */
 
+import { isJiufenAsset } from '@/api/jiufen.js'
+import { isIdictationMaterial, isIdictationReading } from '@/api/idictation.js'
 import {
   listReadingAssets,
   getReadingAssetPayload,
@@ -59,6 +61,10 @@ export const practiceAssets = {
 
   async get(activity, assetId) {
     const normalizedAssetId = String(assetId || '').trim()
+    if (isJiufenAsset(normalizedAssetId) || isIdictationMaterial(normalizedAssetId) || isIdictationReading(normalizedAssetId)) {
+      const loaded = await getReadingAssetPayload(normalizedAssetId)
+      return { ...loaded.asset, payload: loaded.payload }
+    }
     const { items } = await listReadingAssets()
     const meta = items.find((item) => String(item.id) === normalizedAssetId) || null
     if (!meta) {
@@ -253,7 +259,7 @@ export const practiceCoach = {
 
     const userText = payload?.content || ''
     if (!String(userText).trim()) {
-      const error = new Error('阅读教练问题不能为空')
+      const error = new Error('教练问题不能为空')
       error.code = 'coach.empty_question'
       throw error
     }
@@ -274,7 +280,7 @@ export const practiceCoach = {
             activity: activity || 'reading',
             sessionId: sessionId || null,
             assetId: payload?.assetId || payload?.examId || null,
-            mode: payload?.mode || 'single',
+            mode: payload?.mode || null,
             locale: payload?.locale || 'zh',
             surface: payload?.surface || 'chat_widget',
             action: payload?.action || 'chat',
@@ -297,7 +303,7 @@ export const practiceCoach = {
       const result = unwrapCommandResponse(response, 'coach_run') || {}
       const answer = String(result.assistantMessage?.content || '').trim()
       if (!answer) {
-        const error = new Error('阅读教练未返回有效回答')
+        const error = new Error('教练未返回有效回答')
         error.code = 'invalid_response_format'
         throw error
       }
@@ -309,10 +315,15 @@ export const practiceCoach = {
       notify('error', {
         threadId,
         code: error?.code || 'coach.error',
-        message: error?.message || '阅读教练请求失败'
+        message: error?.message || '教练请求失败'
       })
       throw error
     }
+  },
+
+  async forgetPreference(threadId, preferenceKey) {
+    const response = await invokeCommand('coach_forget_preference', { threadId, preferenceKey })
+    return unwrapCommandResponse(response, 'coach_forget_preference')
   }
 }
 

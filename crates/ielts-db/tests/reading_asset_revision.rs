@@ -333,10 +333,15 @@ fn migration_does_not_invent_a_revision_for_existing_completed_history() {
     conn.execute_batch(
         "ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
         ALTER TABLE coach_threads DROP COLUMN learner_profile_json;
+        DROP TABLE vocabulary_book_entries;
+        DROP TABLE vocabulary_book_units;
+        DROP TABLE vocabulary_books;
+        DROP TABLE vocabulary_review_state;
         DELETE FROM schema_migrations WHERE version>=26;",
     )
     .unwrap();
-    assert_eq!(migrate(&mut conn).unwrap(), vec![26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]);
+    conn.execute_batch(include_str!("../../../developer/tests/fixtures/vocabulary_review_state_v35.sql")).unwrap();
+    assert_eq!(migrate(&mut conn).unwrap(), vec![26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]);
     verify_idempotent(&mut conn).unwrap();
     assert!(revision(&conn, &result.attempt.id).is_none());
     let thread = ensure_coach_thread(
@@ -361,9 +366,14 @@ fn pre_revision_full_backup_restores_as_unversioned_history() {
         .execute_batch(
             "ALTER TABLE attempts DROP COLUMN submitted_asset_fingerprint;
         ALTER TABLE coach_threads DROP COLUMN learner_profile_json;
+        DROP TABLE vocabulary_book_entries;
+        DROP TABLE vocabulary_book_units;
+        DROP TABLE vocabulary_books;
+        DROP TABLE vocabulary_review_state;
         DELETE FROM schema_migrations WHERE version>=26;",
         )
         .unwrap();
+    source.execute_batch(include_str!("../../../developer/tests/fixtures/vocabulary_review_state_v35.sql")).unwrap();
     let package = create_backup_package(&source, "pre-revision-test").unwrap();
     let (_target_dir, target) = fixture();
     let report = import_backup(&target, &package, false).unwrap();

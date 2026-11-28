@@ -6,7 +6,7 @@
  * previous location *is* the view to restore.  No parameters are added to the
  * record's own URL (reading review URLs stay exactly as they were).
  */
-const DETAIL_ROUTES = new Set(['Result', 'PracticeReadingReview'])
+const DETAIL_ROUTES = new Set(['Result', 'PracticeReadingReview', 'PracticeListeningReview'])
 
 /**
  * The /history location a detail page was opened from, or null.

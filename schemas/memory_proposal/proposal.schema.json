@@ -15,13 +15,25 @@
   },
   "$defs": {
     "scope": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["type", "key"],
-      "properties": {
-        "type": { "const": "activity" },
-        "key": { "enum": ["reading", "writing"] }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "global" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "key"],
+          "properties": {
+            "type": { "const": "activity" },
+            "key": { "enum": ["reading", "writing", "listening", "vocabulary"] }
+          }
+        }
+      ]
     },
     "observationIds": {
       "type": "array",

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from ielts_agent.dream.types import (
     JOURNAL_FACTS_SCHEMA_VERSION,
+    MEMORY_ACTIVITIES,
     JournalEnrichment,
     JournalFacts,
     JournalMemoryEvent,
@@ -17,6 +18,14 @@ from ielts_agent.dream.types import (
     SkillDelta,
     WritingEvalSummary,
 )
+
+
+class MemoryActivityContractTests(unittest.TestCase):
+    def test_memory_activities_are_the_four_exam_activities(self) -> None:
+        self.assertEqual(
+            MEMORY_ACTIVITIES,
+            frozenset({"reading", "writing", "listening", "vocabulary"}),
+        )
 
 
 def _journal_facts(**overrides: object) -> JournalFacts:

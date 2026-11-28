@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-listening-get-open-draft"
+description = "Enables the listening_get_open_draft command without any pre-configured scope."
+commands.allow = ["listening_get_open_draft"]
+
+[[permission]]
+identifier = "deny-listening-get-open-draft"
+description = "Denies the listening_get_open_draft command without any pre-configured scope."
+commands.deny = ["listening_get_open_draft"]

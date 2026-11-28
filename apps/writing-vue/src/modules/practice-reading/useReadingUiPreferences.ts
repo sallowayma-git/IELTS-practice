@@ -1,4 +1,4 @@
-import { nextTick, ref, watch, type Ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { useTauriPreferences } from '@/composables/useTauriPreferences.js'
 import { upsertAnnotation, listAnnotations, deleteAnnotation } from '@/api/enrichment-repository.js'
 
@@ -10,6 +10,7 @@ type AssetLike = { id?: string | null } | null | undefined
 
 type ReadingUiPreferencesOptions = {
   assetSource: () => AssetLike
+  persistenceEnabled?: () => boolean
 }
 
 function peekLocal(key: string): string | null {
@@ -163,6 +164,7 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
   }
 
   function loadReadingNotes() {
+    if (options.persistenceEnabled?.() === false) return
     const loadSequence = ++notesLoadSequence
     suppressNotesPersist = true
     notesError.value = ''
@@ -229,11 +231,13 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
   }
 
   watch(notesText, (value) => {
-    if (suppressNotesPersist) return
+    if (suppressNotesPersist || options.persistenceEnabled?.() === false) return
     const assetId = options.assetSource()?.id
     if (!assetId) return
     if (notesPersistTimer) clearTimeout(notesPersistTimer)
+    const sequence = notesLoadSequence
     notesPersistTimer = setTimeout(() => {
+      if (sequence !== notesLoadSequence || options.persistenceEnabled?.() === false || options.assetSource()?.id !== assetId) return
       void (async () => {
         try {
           notesError.value = ''
@@ -259,6 +263,11 @@ export function useReadingUiPreferences(options: ReadingUiPreferencesOptions) {
         }
       })()
     }, 300)
+  }, { flush: 'sync' })
+
+  onBeforeUnmount(() => {
+    notesLoadSequence++
+    if (notesPersistTimer) clearTimeout(notesPersistTimer)
   })
 
   return {

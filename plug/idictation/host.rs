@@ -1,0 +1,20 @@
+//! 爱听写 source adapter. Product-owned transport, vocabulary and material contracts.
+pub mod vocabulary;
+mod material;
+mod transport;
+pub mod service;
+pub mod reader;
+mod reader_collections;
+pub mod reader_annotations;
+pub mod training;
+pub mod article;
+pub mod article_dictation;
+pub mod article_marking;
+pub mod exam;
+pub mod reading;
+pub mod listening;
+pub mod writing;
+pub mod synonym;
+pub mod mistakes;
+pub mod walkman;
+pub mod speaking;

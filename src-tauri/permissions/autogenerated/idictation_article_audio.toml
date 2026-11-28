@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-idictation-article-audio"
+description = "Enables the idictation_article_audio command without any pre-configured scope."
+commands.allow = ["idictation_article_audio"]
+
+[[permission]]
+identifier = "deny-idictation-article-audio"
+description = "Denies the idictation_article_audio command without any pre-configured scope."
+commands.deny = ["idictation_article_audio"]

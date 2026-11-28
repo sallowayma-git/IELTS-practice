@@ -28,17 +28,16 @@ ROUTE_VIEWS = {
     'history': '.history-page',
     'settings': '.settings-page',
 }
-# 总览 · 题库 · 写作 · 札记 · 历史 · 更多 · 设置 — the agent workbench is a
-# developer route. 题库 owns the 阅读 / 写作 secondary row.
-NAV_LABELS = ["总览", "题库", "写作", "札记", "历史", "更多", "设置"]
-SUB_LABELS = {"reading": ["阅读", "写作"]}
+# The library owns the three practice subjects in its secondary row.
+NAV_LABELS = ["总览", "题库", "札记", "生词", "历史", "更多", "设置"]
+SUB_LABELS = {"reading": ["阅读", "写作", "听力"]}
 
 
 def expected_href_for(label):
     return {
         "总览": "#/",
         "题库": "#/?view=browse",
-        "写作": "#/writing",
+        "生词": "#/vocabulary",
         "札记": "#/notebook",
         "历史": "#/history",
         "更多": "#/?view=more",

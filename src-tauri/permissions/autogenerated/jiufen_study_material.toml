@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-jiufen-study-material"
+description = "Enables the jiufen_study_material command without any pre-configured scope."
+commands.allow = ["jiufen_study_material"]
+
+[[permission]]
+identifier = "deny-jiufen-study-material"
+description = "Denies the jiufen_study_material command without any pre-configured scope."
+commands.deny = ["jiufen_study_material"]

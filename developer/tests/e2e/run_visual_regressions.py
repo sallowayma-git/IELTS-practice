@@ -81,6 +81,7 @@ SCRIPT_GROUPS = (
         "reading-library",
         (
             "reading_library_surface_visual_check.py",
+            "jiufen_hotlist_visual_check.py",
             "reading_library_tabs_visual_check.py",
             "reading_suite_selector_visual_check.py",
             "reading_custom_suite_visual_check.py",

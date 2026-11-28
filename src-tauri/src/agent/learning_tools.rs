@@ -59,7 +59,7 @@ impl AgentToolExecutor for LearningReadTools<'_> {
                 parameters: object_schema(json!({
                     "eventType": {"type":"string","maxLength":128},
                     "skillKey": {"type":"string","maxLength":256},
-                    "activity": {"type":"string","enum":["reading","writing"]},
+                    "activity": {"type":"string","enum":["reading","writing","listening","vocabulary"]},
                     "occurredAfter": {"type":"string","maxLength":64},
                     "occurredBefore": {"type":"string","maxLength":64},
                     "assetId": {"type":"string","maxLength":256},
@@ -80,7 +80,7 @@ impl AgentToolExecutor for LearningReadTools<'_> {
                 name: "search_active_memories".into(),
                 description: "Read a bounded active-memory preview for one activity. Returns only currently-active memories and explicit preferences relevant to the activity. This tool is read-only.".into(),
                 parameters: object_schema(json!({
-                    "activity": {"type":"string","enum":["reading","writing"]},
+                    "activity": {"type":"string","enum":["reading","writing","listening","vocabulary"]},
                     "currentInstruction": {"type":"string","maxLength":2048},
                     "limit": {"type":"integer","minimum":1,"maximum":50,"default":50}
                 }), &["activity"]),
@@ -583,7 +583,7 @@ mod tests {
         let invalid_enum = executor
             .execute(&call(
                 "search_active_memories",
-                json!({"activity":"listening"}),
+                json!({"activity":"unsupported"}),
             ))
             .await;
         assert_eq!(invalid_enum.status, AgentToolStatus::Rejected);
@@ -591,6 +591,13 @@ mod tests {
             invalid_enum.error.unwrap().code,
             "agent.invalid_tool_arguments"
         );
+
+        for activity in ["reading", "writing", "listening", "vocabulary"] {
+            let accepted = executor.execute(&call(
+                "search_active_memories", json!({"activity":activity}),
+            )).await;
+            assert_eq!(accepted.status, AgentToolStatus::Succeeded, "{activity}");
+        }
 
         // get_memory_evidence: missing required observationIds.
         let missing_ids = executor

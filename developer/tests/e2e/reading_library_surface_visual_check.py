@@ -230,7 +230,7 @@ def assert_page_geometry(name, geometry):
 def assert_tool_surface(name, geometry):
     assert_page_geometry(name, geometry)
     cards = geometry["toolCards"]
-    if [card["action"] for card in cards] != ["open-clock", "open-reading-memorize"]:
+    if [card["action"] for card in cards] != ["open-clock", "open-reading-memorize", "open-idictation-speaking"]:
         raise AssertionError(f"{name}: More Tools entries changed: {cards}")
 
 

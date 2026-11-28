@@ -497,8 +497,11 @@ fn load_attempt_minimal(conn: &Connection, id: &str) -> DbResult<AttemptRecord> 
                 schema_version: row.get::<_, i64>(17)? as u32,
                 id: row.get(0)?,
                 activity: match row.get::<_, String>(1)?.as_str() {
+                    "reading" => Activity::Reading,
                     "writing" => Activity::Writing,
-                    _ => Activity::Reading,
+                    "listening" => Activity::Listening,
+                    "vocabulary" => Activity::Vocabulary,
+                    value => return Err(crate::sqlite::invalid_column_value(1, value, "activity")),
                 },
                 asset_id: row.get(2)?,
                 mode: match row.get::<_, String>(3)?.as_str() {

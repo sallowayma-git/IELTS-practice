@@ -400,6 +400,8 @@ impl LanguageModel for AiRuntime {
 
     fn identity(&self) -> (&str, &str) { (&self.config.provider, &self.config.model) }
 
+    fn evidence_agent(&self) -> Option<&dyn AgentModel> { Some(self) }
+
     // The coach path owns its own trace row, so a refusal here is returned in
     // the failure for that trace and is not ledgered.
     async fn complete_with_trace(&self, mut request: CompletionRequest) -> Result<(CompletionResponse, u32), AgentModelFailure> {
@@ -421,6 +423,16 @@ impl LanguageModel for AiRuntime {
 
 #[async_trait]
 impl AgentModel for AiRuntime {
+    async fn respond_traced(&self, request: AgentModelRequest) -> Result<AgentModelResponse, AgentModelFailure> {
+        // Refuse instead of silently changing the traced output budget.
+        let admission = budget_for(&self.config.model, agent_input_tokens(&request.messages, &request.tools), request.max_tokens)
+            .admit().map_err(AgentModelFailure::new)?;
+        if admission.clamped.is_some_and(|limit| limit != request.max_tokens) {
+            return Err(AgentModelFailure::new(ModelError::provider_context_exceeded("evidence request exceeds model window", 400)));
+        }
+        let body = agent_request_body(&self.config.model, &self.config.base_url, &request);
+        self.send_agent(&body).await.and_then(AgentReply::into_result).map(|reply| reply.response)
+    }
     async fn respond(
         &self,
         mut request: AgentModelRequest,
@@ -1233,9 +1245,11 @@ fn agent_request_body(model: &str, base_url: &str, request: &AgentModelRequest) 
     let mut body = json!({
         "model": model,
         "messages": messages,
-        "tools": tools,
-        "tool_choice": "auto",
     });
+    if !tools.is_empty() {
+        body["tools"] = json!(tools);
+        body["tool_choice"] = json!("auto");
+    }
     apply_output_controls(&mut body, model, request.temperature, request.max_tokens);
     apply_cache_key(&mut body, base_url, request.cache_key.as_deref());
     body

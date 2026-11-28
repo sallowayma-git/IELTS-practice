@@ -132,6 +132,8 @@
           </ol>
         </section>
 
+        <WritingCoachPanel :attempt-id="sessionId" :asset-id="essayAssetId" />
+
         <section v-if="reviewBlocks && reviewBlocks.length > 0" class="result-section card">
           <div class="panel-header"><h2>段落详评</h2></div>
           <dl class="rationale-list">
@@ -162,6 +164,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { essays as essaysApi } from '@/api/client.js'
 import { historyReturnPath } from '@/modules/history/return.js'
 import { errorKindLabel, isErrorKind } from '@/modules/writing/errorKinds.js'
+import WritingCoachPanel from '@/modules/writing/components/WritingCoachPanel.vue'
 import {
   BAND_RATIONALE_LABELS,
   TASK_ANALYSIS_LABELS,
@@ -190,6 +193,7 @@ const sentences = ref([])
 const feedback = ref('')
 const essayText = ref('')
 const essayWordCount = ref(0)
+const essayAssetId = ref(null)
 const topicText = ref('')
 const topicSource = ref('')
 const taskAnalysis = ref({})
@@ -283,6 +287,7 @@ async function loadResult() {
 
       essayText.value = detail.content || detail.contentText || detail.content_text || ''
       essayWordCount.value = detail.word_count || detail.wordCount || 0
+      essayAssetId.value = detail.assetId || detail.asset_id || null
       applyEvaluationView(evaluationView)
       return
   } catch (error) {
@@ -459,9 +464,10 @@ function writeNew() {
   font-weight: var(--anth-weight-medium);
 }
 
-/* Essay body: serif reading column, bounded by the scroll region. */
+/* Essay body fills the card: the 66ch reading-measure token belongs to the
+   narrow single-column pages; clamping here strands ~190px of dead space on
+   the right of both the full-text and annotated views. */
 .essay-body {
-  max-width: var(--anth-measure);
   max-height: min(70vh, 900px);
   color: var(--anth-ink);
   white-space: pre-wrap;
